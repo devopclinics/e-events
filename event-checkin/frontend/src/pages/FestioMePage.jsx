@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useGuestPush } from "../hooks/useGuestPush";
+import "./FestioMePage.css";
 
 const KINDS = { discussion: "#", announcement: "📣", staff: "🔒" };
 const STAFF_ROLES = ["owner", "admin", "moderator"];
@@ -125,6 +126,10 @@ export default function FestioMePage() {
   const [leaderboard, setLeaderboard] = useState({ items: [], me: null }),
     [matches, setMatches] = useState([]),
     [profileForm, setProfileForm] = useState({ display_name: "", bio: "", tags: "" });
+  const [connections, setConnections] = useState([]),
+    [meetups, setMeetups] = useState([]),
+    [journey, setJourney] = useState(null),
+    [meetupDraft, setMeetupDraft] = useState({ title: "", location: "", starts_at: "", description: "" });
   const [scheduleAt, setScheduleAt] = useState(""),
     [showComposerTools, setShowComposerTools] = useState(false);
   const [pollQuestion, setPollQuestion] = useState(""),
@@ -155,8 +160,8 @@ export default function FestioMePage() {
   const me = members.find(
     (member) =>
       member.is_me ||
-      member.user_id === user?.id ||
-      member.email === user?.email,
+      (member.user_id && user?.id && member.user_id === user.id) ||
+      (member.email && user?.email && member.email === user.email),
   );
   const canManage =
     ["owner", "admin"].includes(me?.role) ||
@@ -248,6 +253,25 @@ export default function FestioMePage() {
     setChannelId("");
     if (groupId) loadGroupData();
   }, [groupId, loadGroupData]);
+
+  const loadCommunityNetwork = useCallback(async () => {
+    if (!groupId) return;
+    const guestContext = guestMode ? api.festiomeGuestContext() : null;
+    const results = await Promise.allSettled([
+      api.festiomeMatches(groupId),
+      api.festiomeConnections(groupId),
+      api.festiomeMeetups(groupId),
+      guestMode && guestContext?.eventId && guestContext?.passToken
+        ? api.guestExperience(guestContext.eventId, guestContext.passToken)
+        : Promise.resolve(null),
+    ]);
+    if (results[0].status === "fulfilled") setMatches(list(results[0].value));
+    if (results[1].status === "fulfilled") setConnections(list(results[1].value));
+    if (results[2].status === "fulfilled") setMeetups(list(results[2].value));
+    if (results[3].status === "fulfilled") setJourney(results[3].value);
+  }, [groupId, guestMode]);
+
+  useEffect(() => { loadCommunityNetwork(); }, [loadCommunityNetwork]);
 
   const loadCommunication = useCallback(async () => {
     if (!eventRef) return;
@@ -925,7 +949,7 @@ export default function FestioMePage() {
     );
 
   if (showHome) {
-    const displayName = name(user).split(" ")[0] || "there";
+    const displayName = (me?.display_name || name(user)).split(" ")[0] || "there";
     const unreadTotal = groups.reduce((total, group) => total + Number(group.unread_count || 0), 0)
       + channels.reduce((total, channel) => total + Number(channel.unread_count || 0), 0);
     const announcements = communication?.announcements || [];
@@ -937,6 +961,21 @@ export default function FestioMePage() {
     const latestHostMessage = [...hostMessages].reverse().find((item) => item.sender_type === "organizer") || hostMessages.at(-1);
     const nativeLatest = messages.at(-1);
     const dmChannels = channels.filter((channel) => channel.is_dm);
+    const currentSegment = journey?.program?.current_segments?.[0] || null;
+    const nextSegment = journey?.program?.next_segments?.[0] || null;
+    const sessionChannels = channels.filter((channel) => !channel.is_dm && /session|workshop|opening|keynote|panel/i.test(channel.name));
+    const people = (matches.length ? matches.map((match) => ({
+      ...members.find((member) => member.id === match.member_id),
+      ...match,
+      id: match.member_id,
+      interest_tags: match.shared_tags || [],
+    })) : members.filter((member) => !member.is_me)).slice(0, 6);
+    const upcomingMeetup = meetups.find((meetup) => meetup.status === "scheduled") || null;
+    const acceptedConnections = connections.filter((item) => item.status === "accepted");
+    const topicCounts = [...members.reduce((counts, member) => {
+      (member.interest_tags || []).forEach((tag) => counts.set(tag, (counts.get(tag) || 0) + 1));
+      return counts;
+    }, new Map()).entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
     const openWorkspace = (group = activeGroup, preferredChannel = "") => {
       if (group?.id) setGroupId(group.id);
       if (preferredChannel) setChannelId(preferredChannel);
@@ -944,8 +983,10 @@ export default function FestioMePage() {
     };
     const nav = [
       ["home", "⌂", "Home"],
-      ["feed", "▤", "Event feed"],
+      ["people", "♙", "People"],
       ["groups", "♧", "Groups"],
+      ["meetups", "▣", "Meetups"],
+      ["sessions", "▹", "Sessions"],
       ["messages", "✉", "Messages"],
     ];
     const sourceBadge = (children, tone = "teal") => <span className={`rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-wide ${tone === "purple" ? "border-purple-400/30 bg-purple-500/10 text-purple-300" : "border-teal-400/30 bg-teal-500/10 text-teal-300"}`}>{children}</span>;
@@ -965,29 +1006,59 @@ export default function FestioMePage() {
             <div className="flex items-center gap-3"><button onClick={() => { setShowHome(false); openPreferences(); }} className="relative grid h-10 w-10 place-items-center rounded-full border border-white/15" aria-label="Notifications">🔔{unreadTotal > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-purple-500 px-1.5 text-[10px] font-black">{unreadTotal}</span>}</button><span className="grid h-10 w-10 place-items-center rounded-full bg-teal-700 text-xs font-black">{initials(name(user))}</span></div>
           </header>
 
-          <div className="sticky top-0 z-30 border-b border-white/10 bg-[#061120]/95 p-1.5 backdrop-blur md:hidden"><div className="grid grid-cols-5 gap-0.5">{[...nav, ["profile", "◯", "Profile"]].map(([key, icon, label]) => <button key={key} onClick={() => setHomeSection(key)} className={`min-w-0 rounded-lg px-0.5 py-2 text-[9px] font-bold ${homeSection === key ? "bg-teal-600/30 text-teal-200" : "text-slate-400"}`}><span className="block text-sm">{icon}</span><span className="block truncate">{label}</span></button>)}</div></div>
+          <div className="sticky top-0 z-30 overflow-x-auto border-b border-white/10 bg-[#061120]/95 p-1.5 backdrop-blur md:hidden"><div className="flex min-w-max gap-1">{[...nav, ["profile", "◯", "Profile"]].map(([key, icon, label]) => <button key={key} onClick={() => setHomeSection(key)} className={`w-16 shrink-0 rounded-lg px-1 py-2 text-[9px] font-bold ${homeSection === key ? "bg-teal-600/30 text-teal-200" : "text-slate-400"}`}><span className="block text-sm">{icon}</span><span className="block truncate">{label}</span></button>)}</div></div>
 
           <main className="min-w-0 overflow-x-hidden p-3 pb-8 sm:p-7">
             {communicationError && <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100"><span>{communicationError}</span><button onClick={loadCommunication} className="font-black underline">Retry</button></div>}
             {communicationLoading && <div className="mb-5 text-xs font-bold text-teal-300">Refreshing Guest Communication…</div>}
 
-            {homeSection === "home" && <div className="space-y-6">
-              <div><h2 className="text-3xl font-black">Welcome back, {displayName}</h2><p className="mt-1 text-slate-400">Join the conversation. Sources stay separate and permission controlled.</p></div>
-              <form onSubmit={sendHomePost} className="rounded-2xl border border-white/10 bg-white/[0.035] p-4"><div className="flex gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-teal-700 text-sm font-black">{initials(name(user))}</span><textarea value={homeDraft} onChange={(event) => setHomeDraft(event.target.value)} rows={2} maxLength={1000} placeholder={guestMode && communication?.capabilities?.guest_chat_posting ? "Share something in Guest Chat…" : "Share something with your FestioMe community…"} className="min-h-16 flex-1 resize-none rounded-xl border border-white/15 bg-[#0b1a30] px-4 py-3 text-sm text-white outline-none focus:border-teal-400" /></div><div className="mt-3 flex justify-end"><button disabled={sending || !homeDraft.trim()} className="rounded-xl bg-teal-500 px-8 py-2.5 text-sm font-black text-slate-950 disabled:opacity-40">{sending ? "Posting…" : "Post"}</button></div></form>
+            {homeSection === "home" && <div className="fm-guest-dashboard">
+              <div className="fm-guest-welcome"><div><h2>Welcome back, {displayName}</h2><p>Your event community is live. Connect, learn, and make it count.</p></div><span><i/> {connection === "live" ? "Live updates" : "Reconnecting"}</span></div>
+              <div className="fm-guest-columns">
+                <div className="fm-guest-main">
+                  <div className="fm-guest-feature-row">
+                    <article className="fm-now-card">
+                      <div className="fm-card-heading"><h3>Happening now</h3><span><i/> LIVE</span></div>
+                      <div className="fm-session-hero"><div className="fm-session-art"><strong>MBF<br/><em>SUMMIT</em></strong><span>Building the future together.</span></div><div><span className="fm-session-number">{currentSegment?.category || "SESSION"}</span><h3>{currentSegment?.title || sessionChannels[0]?.name || "Community conversation"}</h3><p>{currentSegment?.description || "Meet peers, share ideas, and continue the session together."}</p><small>{currentSegment?.ends_at ? `Until ${new Date(currentSegment.ends_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : `${members.length} community members`}</small></div></div>
+                      <div className="fm-session-actions"><button onClick={() => openWorkspace(activeGroup, sessionChannels[0]?.id || channels.find((channel) => !channel.is_dm)?.id)}>◯ Join discussion</button>{guestMode && currentSegment && guestPushContext?.eventId && guestPushContext?.passToken ? <a href={`/live/guest?event=${encodeURIComponent(guestPushContext.eventId)}&pass=${encodeURIComponent(guestPushContext.passToken)}&session=${encodeURIComponent(currentSegment.step_id)}`}>Open Festio Live</a> : <button className="outline" onClick={() => setHomeSection("sessions")}>View session</button>}</div>
+                    </article>
+                    <article className="fm-announcement-card"><div className="fm-card-heading"><h3>📣 Organizer announcement</h3>{sourceBadge("Event update", "purple")}</div>{latestAnnouncement ? <><span>{time(latestAnnouncement.created_at || latestAnnouncement.sent_at)}</span><h3>{latestAnnouncement.title}</h3><p>{latestAnnouncement.body}</p></> : <><span>From the event team</span><h3>Welcome to the community</h3><p>Announcements, helpful updates, and important moments will appear here.</p></>}<button onClick={() => setHomeSection("feed")}>View all announcements →</button></article>
+                  </div>
 
-              <section><h3 className="mb-3 text-xl font-black">Happening now</h3><div className="grid gap-4 lg:grid-cols-2">
-                {communication?.capabilities?.guest_chat ? <article className="rounded-2xl border border-white/10 bg-white/[0.035] p-5"><div className="flex items-center justify-between gap-3"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-full bg-orange-500/30 text-xl">#</span><strong># General</strong></div>{sourceBadge("Guest Chat")}</div><div className="mt-4 space-y-3">{latestChat.length ? latestChat.map((item) => <div key={item.id} className="border-b border-white/10 pb-3 last:border-0"><div className="text-xs font-black">{name(item)} <span className="ml-1 font-normal text-slate-500">{time(item.created_at)}</span></div><p className="mt-1 line-clamp-2 text-sm text-slate-300">{text(item)}</p></div>) : <p className="text-sm text-slate-400">No guest messages yet.</p>}</div><button onClick={() => setHomeSection("guest-chat")} className="mt-4 w-full rounded-xl border border-teal-400/50 py-2.5 text-sm font-black text-teal-300">Join conversation</button></article> : <article className="rounded-2xl border border-dashed border-white/10 p-5 text-sm text-slate-500">Guest Chat is not enabled for this event.</article>}
-                {communication?.capabilities?.announcements ? <article className="rounded-2xl border border-white/10 bg-white/[0.035] p-5"><div className="flex items-center justify-between gap-3"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-full bg-purple-500/30">📣</span><strong>Event announcement</strong></div>{sourceBadge("Event Updates", "purple")}</div>{latestAnnouncement ? <><h4 className="mt-5 text-xl font-black">{latestAnnouncement.title}</h4><p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-300">{latestAnnouncement.body}</p></> : <><h4 className="mt-5 text-xl font-black">Welcome to your event community</h4><p className="mt-2 text-sm text-slate-400">Organizer updates will appear here.</p></>}<button onClick={() => setHomeSection("feed")} className="mt-4 w-full rounded-xl border border-purple-400/50 py-2.5 text-sm font-black text-purple-300">Read announcements</button></article> : null}
-              </div></section>
+                  <section className="fm-dashboard-section"><div className="fm-dashboard-title"><div><h3>People you should meet</h3><p>Suggested from interests you chose to share.</p></div><button onClick={() => setHomeSection("people")}>See all</button></div><div className="fm-people-preview">{people.slice(0, 3).map((person) => {
+                    const relationship = connections.find((item) => item.other_member?.id === person.id);
+                    return <article key={person.id}><span className="fm-preview-avatar">{initials(name(person))}</span><div><h4>{name(person)}</h4><p>{person.bio || "Event community member"}</p></div><div className="fm-preview-tags">{(person.interest_tags || []).slice(0, 3).map((tag) => <span key={tag}>{tag}</span>)}</div><div className="fm-preview-actions"><button onClick={async () => { try { const dm = await api.festiomeOpenDirectMessage(groupId, person.id); await loadGroupData(); openWorkspace(activeGroup, dm.id); } catch (error) { setNotice(errorText(error)); } }}>Message</button><button className="primary" disabled={relationship?.status === "accepted" || relationship?.status === "pending"} onClick={async () => { try { const next = await api.festiomeRequestConnection(groupId, person.id); setConnections((items) => [next, ...items.filter((item) => item.id !== next.id)]); } catch (error) { setNotice(errorText(error)); } }}>{relationship?.status === "accepted" ? "Connected" : relationship?.status === "pending" ? "Requested" : "Connect"}</button></div></article>})}{!people.length && <div className="fm-dashboard-empty">Add interests to your profile to unlock people suggestions.</div>}</div></section>
 
-              {(latestHostMessage || hostInbox.length || communication?.capabilities?.direct_host_messages) && <section className="rounded-2xl border border-blue-400/20 bg-blue-500/[0.06] p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="flex items-center gap-2"><strong>{guestMode ? "Message from host" : "Guest Questions Inbox"}</strong>{sourceBadge("Message Host")}</div><p className="mt-2 text-sm text-slate-300">{guestMode ? (latestHostMessage ? text(latestHostMessage) : "Your private organizer conversation is ready.") : (hostInbox.length ? `${hostInbox.length} private guest conversation${hostInbox.length === 1 ? "" : "s"}.` : "No guest questions yet.")}</p></div><div className="flex items-center gap-3"><span className="text-xs text-amber-200">🔒 Private</span><button onClick={() => setHomeSection("messages")} className="rounded-xl border border-blue-300/40 px-4 py-2 text-sm font-black text-blue-200">View messages</button></div></div></section>}
+                  <section className="fm-dashboard-section"><div className="fm-dashboard-title"><div><h3>Session conversations</h3><p>Continue the discussion around your program.</p></div><button onClick={() => setHomeSection("sessions")}>See all</button></div><div className="fm-session-list">{sessionChannels.slice(0, 4).map((channel, index) => <button key={channel.id} onClick={() => openWorkspace(activeGroup, channel.id)}><span className={`tone-${index % 4}`}>#{index + 1}</span><div><strong>{channel.name}</strong><small>{channel.description || "Join this session community"}</small></div><b>{channel.unread_count || 0}</b></button>)}{!sessionChannels.length && <button onClick={() => openWorkspace(activeGroup)}><span className="tone-0">#</span><div><strong>{activeChannel?.name || "General community"}</strong><small>Start the first event conversation</small></div><b>{activeChannel?.unread_count || 0}</b></button>}</div></section>
 
-              <section><h3 className="mb-3 text-xl font-black">People you may know</h3><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{members.filter((member) => !member.is_me).slice(0, 3).map((member) => <div key={member.id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4"><span className="grid h-11 w-11 place-items-center rounded-full bg-teal-700/70 text-xs font-black">{initials(name(member))}</span><div className="min-w-0 flex-1"><strong className="block truncate text-sm">{name(member)}</strong><span className="text-xs capitalize text-slate-400">{member.role || "Member"}</span></div><button onClick={() => { setShowHome(false); setPanel("people"); }} className="text-xs font-black text-teal-300">Message</button></div>)}</div></section>
+                  {upcomingMeetup && <section className="fm-upcoming-meetup"><div><span>UPCOMING MEETUP</span><h3>{upcomingMeetup.title}</h3><p>{new Date(upcomingMeetup.starts_at).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}{upcomingMeetup.location ? ` · ${upcomingMeetup.location}` : ""}</p><small>{upcomingMeetup.attendee_count} going · Hosted by {upcomingMeetup.creator_name}</small></div><button onClick={async () => { try { const updated = await api.festiomeRsvpMeetup(upcomingMeetup.id, "going"); setMeetups((items) => items.map((item) => item.id === updated.id ? updated : item)); } catch (error) { setNotice(errorText(error)); } }}>{upcomingMeetup.my_status === "going" ? "Going ✓" : "RSVP"}</button></section>}
+                </div>
+
+                <aside className="fm-guest-side">
+                  <article><div className="fm-dashboard-title"><h3>Your connections</h3><button onClick={() => setHomeSection("people")}>See all</button></div><div className="fm-connection-list">{acceptedConnections.slice(0, 4).map((item) => <button key={item.id} onClick={() => setHomeSection("messages")}><span>{initials(name(item.other_member))}</span><div><strong>{name(item.other_member)}</strong><small>{item.other_member.bio || "Connected"}</small></div><i/></button>)}{!acceptedConnections.length && <p>Connections you accept will appear here.</p>}</div></article>
+                  <article><div className="fm-dashboard-title"><h3>Trending topics</h3></div><div className="fm-trending-list">{topicCounts.map(([tag, count]) => <button key={tag} onClick={() => setHomeSection("people")}># {tag}<span>{count}</span></button>)}{!topicCounts.length && <p>Topics appear as members add profile interests.</p>}</div></article>
+                  <article className="fm-community-pulse"><div className="fm-dashboard-title"><h3>Community pulse</h3><span><i/> Live</span></div><div><span><strong>{members.length}</strong><small>Members</small></span><span><strong>{channels.filter((channel) => !channel.is_dm).length}</strong><small>Conversations</small></span><span><strong>{meetups.reduce((sum, item) => sum + Number(item.attendee_count || 0), 0)}</strong><small>Meetup RSVPs</small></span></div><p>Keep the energy going—jump into a conversation.</p></article>
+                  {nextSegment && <article className="fm-next-session"><span>NEXT UP</span><h3>{nextSegment.title}</h3><p>{new Date(nextSegment.starts_at).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}</p><button onClick={() => setHomeSection("sessions")}>View program</button></article>}
+                </aside>
+              </div>
             </div>}
 
             {homeSection === "feed" && <section><div className="mb-5"><h2 className="text-3xl font-black">Event feed</h2><p className="mt-1 text-sm text-slate-400">Organizer updates from Guest Communication.</p></div><div className="space-y-4">{announcements.length ? announcements.map((item) => <article key={item.id} className="rounded-2xl border border-purple-400/20 bg-white/[0.035] p-5"><div className="flex items-center justify-between gap-3">{sourceBadge("Event Updates", "purple")}<time className="text-xs text-slate-500">{time(item.created_at || item.sent_at)}</time></div><h3 className="mt-4 text-xl font-black">{item.title}</h3><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-300">{item.body}</p>{item.audience_type && <p className="mt-3 text-[10px] font-black uppercase tracking-wide text-slate-500">Audience: {item.audience_type.replaceAll("_", " ")}</p>}</article>) : <div className="rounded-2xl border border-dashed border-white/15 p-8 text-center text-slate-400">No event updates yet.</div>}</div></section>}
 
             {homeSection === "guest-chat" && <section><div className="mb-5 flex items-center justify-between gap-3"><div><h2 className="text-3xl font-black"># General</h2><p className="mt-1 text-sm text-slate-400">Shared Guest Chat · not merged with FestioMe channels</p></div>{sourceBadge("Guest Chat")}</div><div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.025] p-4">{guestChat.length ? guestChat.map((item) => <div key={item.id} className="flex gap-3 rounded-xl p-2"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-orange-500/20 text-xs font-black">{initials(name(item))}</span><div><div className="text-xs font-black">{name(item)} <span className="ml-1 font-normal text-slate-500">{time(item.created_at)}</span></div><p className="mt-1 text-sm text-slate-200">{text(item)}</p></div></div>) : <p className="p-4 text-sm text-slate-400">No messages yet.</p>}</div>{guestMode && communication?.capabilities?.guest_chat_posting && <form onSubmit={sendHomePost} className="mt-4 flex gap-2"><input value={homeDraft} onChange={(event) => setHomeDraft(event.target.value)} placeholder="Message Guest Chat…" className="min-w-0 flex-1 rounded-xl border border-white/15 bg-[#0b1a30] px-4 py-3 text-sm"/><button disabled={sending || !homeDraft.trim()} className="rounded-xl bg-teal-500 px-5 font-black text-slate-950 disabled:opacity-40">Send</button></form>}{!communication?.capabilities?.guest_chat_posting && <p className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/10 p-3 text-sm text-amber-100">Guest posting is paused. Existing messages remain visible.</p>}</section>}
+
+            {homeSection === "people" && <section className="fm-guest-page"><div className="fm-dashboard-title"><div><h2>People</h2><p>Discover attendees through interests they chose to share.</p></div><button onClick={openEditProfile}>Edit my interests</button></div><div className="fm-guest-people-grid">{members.filter((member) => !member.is_me).map((member) => {
+              const suggestion = matches.find((item) => item.member_id === member.id);
+              const relationship = connections.find((item) => item.other_member?.id === member.id);
+              return <article key={member.id}><span className="fm-preview-avatar">{initials(name(member))}</span><div><h3>{name(member)}</h3><p>{member.bio || "Event community member"}</p></div><div className="fm-preview-tags">{(suggestion?.shared_tags || member.interest_tags || []).slice(0, 4).map((tag) => <span key={tag}>{tag}</span>)}</div>{relationship?.direction === "incoming" && relationship.status === "pending" ? <div className="fm-preview-actions"><button className="primary" onClick={async () => { try { const updated = await api.festiomeDecideConnection(relationship.id, "accepted"); setConnections((items) => items.map((item) => item.id === updated.id ? updated : item)); } catch (error) { setNotice(errorText(error)); } }}>Accept</button><button onClick={async () => { try { const updated = await api.festiomeDecideConnection(relationship.id, "declined"); setConnections((items) => items.map((item) => item.id === updated.id ? updated : item)); } catch (error) { setNotice(errorText(error)); } }}>Decline</button></div> : <div className="fm-preview-actions"><button onClick={async () => { try { const dm = await api.festiomeOpenDirectMessage(groupId, member.id); await loadGroupData(); openWorkspace(activeGroup, dm.id); } catch (error) { setNotice(errorText(error)); } }}>Message</button><button className="primary" disabled={relationship?.status === "accepted" || relationship?.status === "pending"} onClick={async () => { try { const next = await api.festiomeRequestConnection(groupId, member.id); setConnections((items) => [next, ...items.filter((item) => item.id !== next.id)]); } catch (error) { setNotice(errorText(error)); } }}>{relationship?.status === "accepted" ? "Connected" : relationship?.status === "pending" ? "Requested" : "Connect"}</button></div>}</article>
+            })}</div></section>}
+
+            {homeSection === "meetups" && <section className="fm-guest-page"><div className="fm-dashboard-title"><div><h2>Meetups</h2><p>Turn online introductions into useful event connections.</p></div><button onClick={() => setDialog(dialog === "meetup" ? "" : "meetup")}>Create meetup</button></div>{dialog === "meetup" && <form className="fm-guest-meetup-form" onSubmit={async (event) => { event.preventDefault(); try { const created = await api.festiomeCreateMeetup(groupId, { ...meetupDraft, title: meetupDraft.title.trim(), description: meetupDraft.description.trim(), location: meetupDraft.location.trim() }); setMeetups((items) => [...items, created].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at))); setMeetupDraft({ title: "", location: "", starts_at: "", description: "" }); setDialog(""); } catch (error) { setNotice(errorText(error)); } }}><input required value={meetupDraft.title} onChange={(event) => setMeetupDraft((value) => ({ ...value, title: event.target.value }))} placeholder="Meetup title"/><input value={meetupDraft.location} onChange={(event) => setMeetupDraft((value) => ({ ...value, location: event.target.value }))} placeholder="Location"/><input required type="datetime-local" value={meetupDraft.starts_at} onChange={(event) => setMeetupDraft((value) => ({ ...value, starts_at: event.target.value }))}/><textarea value={meetupDraft.description} onChange={(event) => setMeetupDraft((value) => ({ ...value, description: event.target.value }))} placeholder="What should people expect?"/><button>Create meetup</button></form>}<div className="fm-guest-meetup-list">{meetups.map((meetup) => <article key={meetup.id}><div className="fm-meetup-day"><strong>{new Date(meetup.starts_at).getDate()}</strong><span>{new Date(meetup.starts_at).toLocaleDateString([], { month: "short" })}</span></div><div><span>{new Date(meetup.starts_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}{meetup.location ? ` · ${meetup.location}` : ""}</span><h3>{meetup.title}</h3><p>{meetup.description || `Hosted by ${meetup.creator_name}`}</p><small>{meetup.attendee_count} going{meetup.capacity ? ` · ${Math.max(0, meetup.capacity - meetup.attendee_count)} spots left` : ""}</small></div><button className={meetup.my_status === "going" ? "active" : ""} onClick={async () => { try { const updated = await api.festiomeRsvpMeetup(meetup.id, meetup.my_status === "going" ? "interested" : "going"); setMeetups((items) => items.map((item) => item.id === updated.id ? updated : item)); } catch (error) { setNotice(errorText(error)); } }}>{meetup.my_status === "going" ? "Going ✓" : "RSVP"}</button></article>)}{!meetups.length && <div className="fm-dashboard-empty">No upcoming meetups yet. Create the first one.</div>}</div></section>}
+
+            {homeSection === "sessions" && <section className="fm-guest-page"><div className="fm-dashboard-title"><div><h2>Sessions</h2><p>Your live program and its community conversations.</p></div></div><div className="fm-program-list">{(journey?.program?.days || []).flatMap((day) => day.segments).map((segment) => {
+              const channel = sessionChannels.find((item) => item.name.toLowerCase().includes(segment.title.toLowerCase().slice(0, 12))) || sessionChannels.find((item) => item.name.includes(segment.title.split(":")[0]));
+              return <article key={segment.step_id} className={segment.state}><div><span>{segment.state}</span><h3>{segment.title}</h3><p>{new Date(segment.starts_at).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}{segment.category ? ` · ${segment.category}` : ""}</p></div><div>{channel && <button onClick={() => openWorkspace(activeGroup, channel.id)}>Open discussion</button>}{guestMode && guestPushContext?.eventId && guestPushContext?.passToken && <a href={`/live/guest?event=${encodeURIComponent(guestPushContext.eventId)}&pass=${encodeURIComponent(guestPushContext.passToken)}&session=${encodeURIComponent(segment.step_id)}`}>Festio Live</a>}</div></article>;
+            })}{!(journey?.program?.days || []).length && sessionChannels.map((channel) => <article key={channel.id}><div><span>COMMUNITY</span><h3>{channel.name}</h3><p>{channel.description || "Session conversation"}</p></div><button onClick={() => openWorkspace(activeGroup, channel.id)}>Open discussion</button></article>)}{!(journey?.program?.days || []).length && !sessionChannels.length && <div className="fm-dashboard-empty">No session communities are available yet.</div>}</div></section>}
 
             {homeSection === "groups" && <section><div className="mb-5 flex items-center justify-between gap-3"><div><h2 className="text-3xl font-black">Groups</h2><p className="mt-1 text-sm text-slate-400">Native FestioMe communities.</p></div>{!guestMode && <button onClick={() => { setShowHome(false); setDialog("new-group"); setFormValue(""); }} className="rounded-xl bg-teal-500 px-4 py-2 text-sm font-black text-slate-950">New group</button>}</div><div className="space-y-3">{groups.map((group) => <div key={group.id} className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.035] p-4"><span className="grid h-12 w-12 place-items-center rounded-xl bg-teal-500/20 font-black text-teal-200">{initials(group.name)}</span><div className="min-w-0 flex-1"><strong className="block truncate">{group.name}</strong><span className="text-sm text-slate-400">{group.member_count || 0} members</span></div><button onClick={() => openWorkspace(group)} className="rounded-xl border border-teal-400/40 px-4 py-2 text-sm font-black text-teal-300">Open group</button></div>)}</div></section>}
 

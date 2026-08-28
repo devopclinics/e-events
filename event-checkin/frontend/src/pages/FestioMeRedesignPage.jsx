@@ -4,7 +4,7 @@ import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { api } from '../api'
 import './FestioMeRedesignPage.css'
 
-const HOME_SECTIONS = ['Feed', 'Guest Chat', 'Groups', 'Messages', 'Leaderboard', 'Profile']
+const HOME_SECTIONS = ['Overview', 'Community', 'People', 'Meetings', 'Content', 'Moderation', 'Analytics', 'Settings']
 
 const TYPE_ICON = { discussion: '#', announcement: '📣', staff: '🔒' }
 
@@ -32,7 +32,7 @@ function adaptMessage(message, members = []) {
 
 export default function FestioMeRedesignPage() {
   const [eventId] = useCurrentEvent()
-  const [homeSection, setHomeSection] = useState('Groups')
+  const [homeSection, setHomeSection] = useState('Overview')
   const [activeGroup, setActiveGroup] = useState('')
   const [active, setActive] = useState('')
   const [messages, setMessages] = useState([])
@@ -84,6 +84,12 @@ export default function FestioMeRedesignPage() {
   const [profileBio, setProfileBio] = useState('')
   const [profileTags, setProfileTags] = useState('')
   const [leaderboard, setLeaderboard] = useState({ items: [], me: null })
+  const [overview, setOverview] = useState(null)
+  const [meetups, setMeetups] = useState([])
+  const [connections, setConnections] = useState([])
+  const [meetupOpen, setMeetupOpen] = useState(false)
+  const [meetupForm, setMeetupForm] = useState({ title: '', description: '', location: '', starts_at: '', ends_at: '', capacity: '' })
+  const [connection, setConnection] = useState('polling')
 
   function notify(msg) {
     setToast(msg)
@@ -135,6 +141,19 @@ export default function FestioMeRedesignPage() {
   }, [eventId, activeGroup, status?.enabled])
 
   useEffect(() => {
+    if (!activeGroup || !status?.enabled) return
+    Promise.all([
+      api.festiomeCommunityOverview(activeGroup).catch(() => null),
+      api.festiomeMeetups(activeGroup).catch(() => []),
+      api.festiomeConnections(activeGroup).catch(() => []),
+    ]).then(([summary, meetupList, connectionList]) => {
+      setOverview(summary)
+      setMeetups(meetupList)
+      setConnections(connectionList)
+    })
+  }, [activeGroup, status?.enabled])
+
+  useEffect(() => {
     if (!active) { setMessages([]); return }
     api.festiomeMessages(active)
       .then((result) => {
@@ -145,6 +164,31 @@ export default function FestioMeRedesignPage() {
         if (newest?.id) api.festiomeRead(active, newest.id).catch(() => {})
       })
       .catch((e) => setError(e.message || 'Channel messages could not be loaded'))
+  }, [active, members])
+
+  useEffect(() => {
+    if (!active) return undefined
+    let source
+    let timer
+    let stopped = false
+    const refresh = () => api.festiomeMessages(active).then((result) => {
+      const listed = result.items || result.messages || result || []
+      setMessageCursor(result?.next_cursor || '')
+      setMessages(listed.map((message) => adaptMessage(message, members)))
+    }).catch(() => {})
+    const polling = () => {
+      setConnection('polling')
+      if (!timer) timer = window.setInterval(refresh, 5000)
+    }
+    api.festiomeRealtimeTicket(active).then(({ ticket }) => {
+      if (stopped) return
+      source = new EventSource(`/api/festiome/v1/channels/${encodeURIComponent(active)}/events?ticket=${encodeURIComponent(ticket)}`)
+      source.onopen = () => { setConnection('live'); if (timer) { window.clearInterval(timer); timer = null } }
+      const onChange = () => refresh()
+      ;['message.created', 'message.updated', 'message.deleted', 'reaction.updated', 'poll.created', 'poll.voted'].forEach((name) => source.addEventListener(name, onChange))
+      source.onerror = () => { source?.close(); polling() }
+    }).catch(polling)
+    return () => { stopped = true; source?.close(); if (timer) window.clearInterval(timer) }
   }, [active, members])
 
   const lastTypingPingRef = useRef(0)
@@ -294,16 +338,110 @@ export default function FestioMeRedesignPage() {
       )}
       <div className="rr-pagehead">
         <div>
-          <div className="rr-title-row"><h1>FestioMe</h1></div>
-          <div className="rr-meta">Community chat for {status?.name || 'the selected event'}</div>
+          <div className="rr-eyebrow">EVENT COMMUNITY</div>
+          <div className="rr-title-row"><h1>FestioMe</h1><span className="fm-live-pill"><i /> COMMUNITY LIVE</span></div>
+          <div className="rr-meta">Build connection before, during, and after {status?.name || 'the selected event'}.</div>
+        </div>
+        <div className="gr-actions">
+          <a className="rr-btn secondary" href="/communications-redesign?tab=hub"><Icon name="send" size={13} /> Create announcement</a>
+          <button className="rr-btn primary" onClick={() => { setHomeSection('Community'); window.setTimeout(() => document.querySelector('.fm-composer input')?.focus(), 50) }}><Icon name="chat" size={13} /> Seed discussion</button>
         </div>
       </div>
 
       <div className="rr-tabs">
-        {HOME_SECTIONS.map((s) => <button key={s} className={homeSection === s ? 'active' : ''} onClick={() => setHomeSection(s)}>{s}</button>)}
+        {HOME_SECTIONS.map((s) => <button key={s} className={homeSection === s ? 'active' : ''} onClick={() => setHomeSection(s)}>{s}{s === 'Moderation' && reports.filter((item) => ['open', 'reviewing'].includes(item.status)).length > 0 ? <b>{reports.filter((item) => ['open', 'reviewing'].includes(item.status)).length}</b> : null}</button>)}
       </div>
 
-      {homeSection === 'Feed' && (
+      {homeSection === 'Overview' && (() => {
+        const data = overview || {}
+        const memberCount = data.member_count ?? members.length
+        const activeCount = data.weekly_active_count ?? 0
+        const activation = data.activation_rate ?? 0
+        const connected = data.accepted_connections ?? connections.filter((item) => item.status === 'accepted').length
+        const meetupCount = data.upcoming_meetups ?? meetups.length
+        const responseHealth = data.response_health ?? 100
+        const activity = data.activity || []
+        const maxActivity = Math.max(1, ...activity.map((item) => item.messages || 0))
+        return (
+          <section className="fm-command-center">
+            <div className="fm-command-kpis">
+              {[
+                ['users', 'Activated', `${activation}%`, `${activeCount} of ${memberCount} active`, 'teal'],
+                ['trend', 'Weekly active', activeCount, `${data.messages_7d || 0} posts in 7 days`, 'blue'],
+                ['team', 'Connections', connected, `${data.pending_connections || 0} pending`, 'violet'],
+                ['calendar', 'Meetups', meetupCount, `${data.meeting_rsvps || 0} RSVPs`, 'orange'],
+                ['check', 'Response health', `${responseHealth}%`, `${data.open_reports || 0} open reports`, 'green'],
+              ].map(([icon, label, value, detail, tone]) => (
+                <article className={`fm-command-kpi ${tone}`} key={label}>
+                  <span className="fm-kpi-icon"><Icon name={icon} size={18} /></span>
+                  <div><small>{label}</small><strong>{value}</strong><span>{detail}</span></div>
+                </article>
+              ))}
+            </div>
+
+            <div className="fm-command-grid top">
+              <article className="fm-command-card fm-adoption">
+                <div className="fm-command-card-head"><div><h3>Community adoption</h3><p>From membership to meaningful connection</p></div><span className="fm-card-live"><i /> LIVE</span></div>
+                <div className="fm-funnel">
+                  {[
+                    ['Members', memberCount, 100],
+                    ['Activated', activeCount, activation],
+                    ['Participated', Math.min(memberCount, data.messages_7d || activeCount), memberCount ? Math.round((Math.min(memberCount, data.messages_7d || activeCount) / memberCount) * 100) : 0],
+                    ['Connected', connected, memberCount ? Math.round((connected / memberCount) * 100) : 0],
+                  ].map(([label, value, pct]) => <div key={label}><span>{label}</span><strong>{value}</strong><small>{pct}%</small></div>)}
+                </div>
+              </article>
+              <article className="fm-command-card fm-activity-card">
+                <div className="fm-command-card-head"><div><h3>Community activity</h3><p>Published posts during the last 7 days</p></div><span>{data.messages_7d || 0} total</span></div>
+                <div className="fm-activity-chart" aria-label="Community messages by day">
+                  {activity.length ? activity.map((item) => <div key={item.date} title={`${item.date}: ${item.messages} messages`}><i style={{ height: `${Math.max(8, ((item.messages || 0) / maxActivity) * 100)}%` }} /><small>{new Date(`${item.date}T12:00:00`).toLocaleDateString([], { weekday: 'short' })}</small></div>) : <p>No activity yet. Seed the first discussion.</p>}
+                </div>
+              </article>
+              <article className="fm-command-card fm-live-session">
+                <span className="fm-live-label">LIVE NOW</span>
+                <h3>{(overview?.channels || []).find((item) => item.name.toLowerCase().includes('session'))?.name || activeChannel?.name || 'Community conversation'}</h3>
+                <p>{activeCount} people active · {connection === 'live' ? 'Realtime connected' : 'Reconnecting'}</p>
+                <div className="fm-avatar-stack">{members.slice(0, 5).map((member) => <span key={member.id}>{(member.display_name || '?')[0]}</span>)}</div>
+                <button onClick={() => setHomeSection('Community')}>Open session community <Icon name="arrow" size={12}/></button>
+              </article>
+            </div>
+
+            <div className="fm-command-grid bottom">
+              <article className="fm-command-card">
+                <div className="fm-command-card-head"><div><h3>Group and channel health</h3><p>Where the community is moving</p></div><button onClick={() => setHomeSection('Community')}>View all</button></div>
+                <div className="fm-health-list">
+                  {(data.channels || []).slice(0, 5).map((channel) => <div key={channel.id}><span className="fm-health-hash">#</span><strong>{channel.name}</strong><span>{channel.messages_7d} posts</span><b className={channel.health}>{channel.health}</b></div>)}
+                  {!(data.channels || []).length && <p>No channels yet.</p>}
+                </div>
+              </article>
+              <article className="fm-command-card">
+                <div className="fm-command-card-head"><div><h3>Trending interests</h3><p>Member-selected profile topics</p></div></div>
+                <div className="fm-topic-list">
+                  {(data.trending_topics || []).map((topic) => <span key={topic.label}>{topic.label}<b>{topic.members}</b></span>)}
+                  {!(data.trending_topics || []).length && <p>Add interests to profiles to power privacy-safe matching.</p>}
+                </div>
+              </article>
+              <article className="fm-command-card">
+                <div className="fm-command-card-head"><div><h3>People needing a nudge</h3><p>Members without recent participation</p></div></div>
+                <div className="fm-nudge-list">
+                  {members.filter((member) => !member.is_me).slice(0, 3).map((member) => <div key={member.id}><span className="fm-dm-avatar">{(member.display_name || '?')[0]}</span><strong>{member.display_name}</strong><button onClick={() => { setInviteOpen(true); setInviteQuery(member.display_name) }}>Invite</button></div>)}
+                  {!members.filter((member) => !member.is_me).length && <p>Everyone is caught up.</p>}
+                </div>
+              </article>
+              <article className="fm-command-card">
+                <div className="fm-command-card-head"><div><h3>Moderation queue</h3><p>Keep the community safe</p></div><span>{data.open_reports || 0} open</span></div>
+                <div className="fm-moderation-preview">
+                  {reports.filter((item) => ['open', 'reviewing'].includes(item.status)).slice(0, 2).map((report) => <div key={report.id}><strong>{report.reason}</strong><span>{report.status}</span></div>)}
+                  {!reports.filter((item) => ['open', 'reviewing'].includes(item.status)).length && <div className="fm-all-clear"><Icon name="check" size={14}/> All clear</div>}
+                </div>
+                <button className="fm-command-action violet" onClick={() => setHomeSection('Moderation')}>Review queue</button>
+              </article>
+            </div>
+          </section>
+        )
+      })()}
+
+      {homeSection === 'Content' && (
         <div className="rd-panel">
           <div className="rd-panel-head"><h3>Organizer feed</h3><p>Announcements posted from Guest Communication</p></div>
           <div className="rd-panel-body">
@@ -322,7 +460,66 @@ export default function FestioMeRedesignPage() {
         </div>
       )}
 
-      {homeSection === 'Leaderboard' && (
+      {homeSection === 'People' && (
+        <section className="fm-modern-section">
+          <div className="fm-section-head"><div><span>ATTENDEE NETWORK</span><h2>People</h2><p>Help attendees discover relevant people without exposing private profile data.</p></div><button className="rr-btn primary" onClick={() => setInviteOpen(true)}><Icon name="plus" size={12}/> Invite member</button></div>
+          <div className="fm-people-grid">
+            {members.filter((member) => !member.is_me).map((member) => {
+              const relationship = connections.find((item) => item.other_member?.id === member.id)
+              return <article className="fm-person-card" key={member.id}>
+                <span className="fm-person-avatar">{(member.display_name || '?').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</span>
+                <div className="fm-person-copy"><h3>{member.display_name}</h3><p>{member.bio || `${member.role || 'Member'} in this event community`}</p></div>
+                {!!member.interest_tags?.length && <div className="fm-person-tags">{member.interest_tags.slice(0, 4).map((tag) => <span key={tag}>{tag}</span>)}</div>}
+                {relationship?.direction === 'incoming' && relationship.status === 'pending' ? <div className="fm-person-actions"><button onClick={async () => { const updated = await api.festiomeDecideConnection(relationship.id, 'accepted'); setConnections((items) => items.map((item) => item.id === updated.id ? updated : item)); notify(`Connected with ${member.display_name}`) }}>Accept</button><button className="outline" onClick={async () => { const updated = await api.festiomeDecideConnection(relationship.id, 'declined'); setConnections((items) => items.map((item) => item.id === updated.id ? updated : item)) }}>Decline</button></div> : <div className="fm-person-actions"><button disabled={relationship?.status === 'pending' || relationship?.status === 'accepted'} onClick={async () => { try { const next = await api.festiomeRequestConnection(activeGroup, member.id); setConnections((items) => [next, ...items.filter((item) => item.id !== next.id)]); notify(next.status === 'accepted' ? `Connected with ${member.display_name}` : 'Connection request sent') } catch (e) { setError(e.message) } }}>{relationship?.status === 'accepted' ? 'Connected' : relationship?.status === 'pending' ? 'Requested' : 'Connect'}</button><button className="outline" onClick={async () => { try { const dm = await api.festiomeOpenDirectMessage(activeGroup, member.id); await refreshChannels(); setActive(dm.id); setHomeSection('Community') } catch (e) { setError(e.message) } }}>Message</button></div>}
+              </article>
+            })}
+            {!members.filter((member) => !member.is_me).length && <div className="fm-empty-modern"><Icon name="users" size={24}/><h3>No attendees yet</h3><p>Sync guests or invite event members to begin networking.</p></div>}
+          </div>
+        </section>
+      )}
+
+      {homeSection === 'Meetings' && (
+        <section className="fm-modern-section">
+          <div className="fm-section-head"><div><span>COMMUNITY CALENDAR</span><h2>Meetups</h2><p>Small-group gatherings created by organizers and attendees.</p></div><button className="rr-btn primary" onClick={() => setMeetupOpen((value) => !value)}><Icon name="plus" size={12}/> New meetup</button></div>
+          {meetupOpen && <form className="fm-meetup-form" onSubmit={async (event) => {
+            event.preventDefault()
+            try {
+              const created = await api.festiomeCreateMeetup(activeGroup, { title: meetupForm.title.trim(), description: meetupForm.description.trim(), location: meetupForm.location.trim(), starts_at: meetupForm.starts_at, ends_at: meetupForm.ends_at || null, capacity: meetupForm.capacity ? Number(meetupForm.capacity) : null })
+              setMeetups((items) => [...items, created].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)))
+              setMeetupForm({ title: '', description: '', location: '', starts_at: '', ends_at: '', capacity: '' })
+              setMeetupOpen(false); notify('Meetup published')
+            } catch (e) { setError(e.message || 'Meetup could not be created') }
+          }}>
+            <div><label>Meetup title</label><input required value={meetupForm.title} onChange={(event) => setMeetupForm((value) => ({ ...value, title: event.target.value }))} placeholder="Coffee and community"/></div>
+            <div><label>Location</label><input value={meetupForm.location} onChange={(event) => setMeetupForm((value) => ({ ...value, location: event.target.value }))} placeholder="Atrium"/></div>
+            <div><label>Starts</label><input required type="datetime-local" value={meetupForm.starts_at} onChange={(event) => setMeetupForm((value) => ({ ...value, starts_at: event.target.value }))}/></div>
+            <div><label>Ends</label><input type="datetime-local" value={meetupForm.ends_at} onChange={(event) => setMeetupForm((value) => ({ ...value, ends_at: event.target.value }))}/></div>
+            <div><label>Capacity</label><input type="number" min="2" max="10000" value={meetupForm.capacity} onChange={(event) => setMeetupForm((value) => ({ ...value, capacity: event.target.value }))} placeholder="Optional"/></div>
+            <div className="wide"><label>Description</label><textarea value={meetupForm.description} onChange={(event) => setMeetupForm((value) => ({ ...value, description: event.target.value }))} placeholder="What should people expect?"/></div>
+            <div className="wide fm-meetup-form-actions"><button type="button" className="rr-btn secondary" onClick={() => setMeetupOpen(false)}>Cancel</button><button className="rr-btn primary">Publish meetup</button></div>
+          </form>}
+          <div className="fm-meetup-grid">
+            {meetups.map((meetup) => <article className="fm-meetup-card" key={meetup.id}>
+              <div className="fm-meetup-date"><strong>{new Date(meetup.starts_at).getDate()}</strong><span>{new Date(meetup.starts_at).toLocaleDateString([], { month: 'short' })}</span></div>
+              <div className="fm-meetup-copy"><span>{new Date(meetup.starts_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}{meetup.location ? ` · ${meetup.location}` : ''}</span><h3>{meetup.title}</h3><p>{meetup.description || `Hosted by ${meetup.creator_name}`}</p><small>{meetup.attendee_count} going{meetup.capacity ? ` · ${meetup.capacity - meetup.attendee_count} spots left` : ''}</small></div>
+              <div className="fm-meetup-actions"><button className={meetup.my_status === 'going' ? 'active' : ''} onClick={async () => { try { const updated = await api.festiomeRsvpMeetup(meetup.id, meetup.my_status === 'going' ? 'interested' : 'going'); setMeetups((items) => items.map((item) => item.id === updated.id ? updated : item)) } catch (e) { setError(e.message) } }}>{meetup.my_status === 'going' ? 'Going ✓' : 'RSVP'}</button>{meetup.can_manage && <button className="outline" onClick={async () => { const updated = await api.festiomeUpdateMeetup(meetup.id, { status: 'cancelled' }); setMeetups((items) => items.map((item) => item.id === updated.id ? updated : item)); notify('Meetup cancelled') }}>Cancel</button>}</div>
+            </article>)}
+            {!meetups.length && <div className="fm-empty-modern"><Icon name="calendar" size={24}/><h3>No upcoming meetups</h3><p>Create the first gathering for this community.</p></div>}
+          </div>
+        </section>
+      )}
+
+      {homeSection === 'Moderation' && (
+        <section className="fm-modern-section">
+          <div className="fm-section-head"><div><span>TRUST &amp; SAFETY</span><h2>Moderation queue</h2><p>Review reports without interrupting the rest of the event community.</p></div></div>
+          <div className="fm-report-grid">
+            {reports.map((report) => <article key={report.id} className="fm-modern-report"><div><span className={`fm-report-status ${report.status}`}>{report.status}</span><h3>{report.reason}</h3><p>{report.details || report.message_body || 'A community member reported this message.'}</p></div><div className="fm-person-actions"><button onClick={async () => { const updated = await api.festiomeUpdateReport(activeGroup, report.id, { status: 'resolved' }); setReports((items) => items.map((item) => item.id === updated.id ? updated : item)); notify('Report resolved') }}>Resolve</button><button className="outline" onClick={async () => { const updated = await api.festiomeUpdateReport(activeGroup, report.id, { status: 'dismissed' }); setReports((items) => items.map((item) => item.id === updated.id ? updated : item)) }}>Dismiss</button></div></article>)}
+            {!reports.length && <div className="fm-empty-modern"><Icon name="check" size={24}/><h3>All clear</h3><p>No community reports need attention.</p></div>}
+          </div>
+        </section>
+      )}
+
+      {homeSection === 'Analytics' && (
         <div className="rd-panel" style={{ maxWidth: 480 }}>
           <div className="rd-panel-head"><h3>Leaderboard</h3></div>
           <div className="rd-panel-body">
@@ -339,7 +536,7 @@ export default function FestioMeRedesignPage() {
           </div>
         </div>
       )}
-      {homeSection === 'Profile' && (
+      {homeSection === 'Settings' && (
         <div className="rd-panel" style={{ maxWidth: 420 }}>
           <div className="rd-panel-head"><h3>Your profile</h3></div>
           <div className="rd-panel-body">
@@ -389,7 +586,7 @@ export default function FestioMeRedesignPage() {
         </div>
       )}
 
-      {homeSection === 'Groups' && (
+      {homeSection === 'Community' && (
         <>
           <div className="fm-group-switcher">
             {groups.map((g) => (
@@ -490,7 +687,17 @@ export default function FestioMeRedesignPage() {
                   <span className="fm-connection"><i /> Live</span>
                   <button className="rr-link-btn" onClick={() => setManageMembersOpen((v) => !v)}>Manage group</button>
                   {!activeChannel?.is_dm && <button className="rr-link-btn" onClick={openChannelRoster}>Channel members ({visibleChannelMembers.length})</button>}
-                  <span className="rd-rowlink">Channel settings are read-only (no update-channel contract).</span>
+                  {!activeChannel?.is_dm && <button className="rr-link-btn" onClick={async () => {
+                    const nextName = window.prompt('Channel name', activeChannel?.name || '')
+                    if (!nextName?.trim()) return
+                    const nextDescription = window.prompt('Channel description', activeChannel?.description || '')
+                    if (nextDescription === null) return
+                    try {
+                      const updated = await api.festiomeUpdateChannel(activeChannel.id, { name: nextName.trim(), description: nextDescription.trim() })
+                      setChannelsByGroup((current) => ({ ...current, [activeGroup]: (current[activeGroup] || []).map((channel) => channel.id === updated.id ? updated : channel) }))
+                      notify('Channel settings saved')
+                    } catch (e) { setError(e.message || 'Channel settings could not be saved') }
+                  }}><Icon name="settings" size={11}/> Channel settings</button>}
                 </div>
               </div>
               {searchOpen && (

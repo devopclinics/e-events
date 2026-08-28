@@ -348,3 +348,60 @@ class ModerationReport(Base):
     resolved_by_member_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("members.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class Connection(Base):
+    """A private, group-scoped networking connection between two members.
+
+    ``pair_key`` is the sorted member-id pair, which makes repeated requests
+    idempotent regardless of which attendee initiated the connection.
+    """
+    __tablename__ = "connections"
+    __table_args__ = (
+        UniqueConstraint("group_id", "pair_key", name="uq_connection_pair"),
+        CheckConstraint("status IN ('pending','accepted','declined')", name="ck_connection_status"),
+        Index("ix_connections_group_status", "group_id", "status", "created_at"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    group_id: Mapped[str] = mapped_column(String(36), ForeignKey("festiome_groups.id"), index=True)
+    requester_member_id: Mapped[str] = mapped_column(String(36), ForeignKey("members.id"), index=True)
+    recipient_member_id: Mapped[str] = mapped_column(String(36), ForeignKey("members.id"), index=True)
+    pair_key: Mapped[str] = mapped_column(String(80))
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class Meetup(Base):
+    """A lightweight attendee-created or organizer-created community meetup."""
+    __tablename__ = "meetups"
+    __table_args__ = (
+        CheckConstraint("status IN ('scheduled','cancelled')", name="ck_meetup_status"),
+        Index("ix_meetups_group_start", "group_id", "starts_at"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    group_id: Mapped[str] = mapped_column(String(36), ForeignKey("festiome_groups.id"), index=True)
+    creator_member_id: Mapped[str] = mapped_column(String(36), ForeignKey("members.id"), index=True)
+    title: Mapped[str] = mapped_column(String(160))
+    description: Mapped[str] = mapped_column(Text, default="")
+    location: Mapped[str] = mapped_column(String(255), default="")
+    starts_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="scheduled")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class MeetupAttendee(Base):
+    __tablename__ = "meetup_attendees"
+    __table_args__ = (
+        UniqueConstraint("meetup_id", "member_id", name="uq_meetup_attendee"),
+        CheckConstraint("status IN ('going','interested','declined')", name="ck_meetup_attendee_status"),
+        Index("ix_meetup_attendees_member", "member_id", "status"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    meetup_id: Mapped[str] = mapped_column(String(36), ForeignKey("meetups.id"), index=True)
+    member_id: Mapped[str] = mapped_column(String(36), ForeignKey("members.id"), index=True)
+    status: Mapped[str] = mapped_column(String(20), default="going")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

@@ -115,6 +115,13 @@ class ChannelCreate(BaseModel):
     member_ids: list[str] = Field(default_factory=list, max_length=500)
 
 
+class ChannelUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=2000)
+    kind: Literal["discussion", "announcement", "staff"] | None = None
+    archived: bool | None = None
+
+
 class ChannelOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
@@ -158,6 +165,62 @@ class MemberOut(BaseModel):
     is_me: bool = False
     bio: str | None = None
     interest_tags: list[str] = []
+
+
+class ConnectionOut(BaseModel):
+    id: str
+    group_id: str
+    status: str
+    direction: Literal["incoming", "outgoing"]
+    other_member: MemberOut
+    created_at: datetime
+    responded_at: datetime | None = None
+
+
+class ConnectionDecision(BaseModel):
+    status: Literal["accepted", "declined"]
+
+
+class MeetupCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=160)
+    description: str = Field(default="", max_length=3000)
+    location: str = Field(default="", max_length=255)
+    starts_at: datetime
+    ends_at: datetime | None = None
+    capacity: int | None = Field(default=None, ge=2, le=10000)
+
+
+class MeetupRsvp(BaseModel):
+    status: Literal["going", "interested", "declined"]
+
+
+class MeetupOut(BaseModel):
+    id: str
+    group_id: str
+    creator_member_id: str
+    creator_name: str
+    title: str
+    description: str
+    location: str
+    starts_at: datetime
+    ends_at: datetime | None = None
+    capacity: int | None = None
+    status: str
+    attendee_count: int = 0
+    interested_count: int = 0
+    my_status: str | None = None
+    can_manage: bool = False
+    created_at: datetime
+
+
+class MeetupUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=160)
+    description: str | None = Field(default=None, max_length=3000)
+    location: str | None = Field(default=None, max_length=255)
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    capacity: int | None = Field(default=None, ge=2, le=10000)
+    status: Literal["scheduled", "cancelled"] | None = None
 
 
 class InvitationCreate(BaseModel):

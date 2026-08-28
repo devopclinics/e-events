@@ -26,12 +26,12 @@ from .auth import Identity, current_identity, internal_service
 from .database import SessionLocal, get_db
 from .messaging_client import MessagingUnavailable, get_messaging_client
 from .models import (
-    Attachment, AuditLog, Channel, ChannelMember, ChannelReadState, FestioMeGroup, IntegrationCommand, Invitation, JoinRequest, Member, Mention, Message,
+    Attachment, AuditLog, Channel, ChannelMember, ChannelReadState, Connection, FestioMeGroup, IntegrationCommand, Invitation, JoinRequest, Member, Meetup, MeetupAttendee, Mention, Message,
     ModerationReport, NotificationJob, NotificationPreference, PendingUpload, Poll, PollOption, PollVote, PointsEntry, Reaction, Tenant,
 )
 from .schemas import (
-    AttachmentOut, ChannelCreate, ChannelMemberAdd, ChannelMemberOut, ChannelOut, DirectMessageCreate, EventGroupAdminOut, EventLinkCreate, EventLinkOut, GroupCreate, GroupDirectoryOut, GroupOut, GroupUpdate, InternalSubGroupCreate, InvitationCreate,
-    InvitationOut, JoinGroupRequest, JoinGroupResult, JoinRequestDecision, JoinRequestOut, MemberOut, MessageCreate, MessageOut, MessagePage,
+    AttachmentOut, ChannelCreate, ChannelMemberAdd, ChannelMemberOut, ChannelOut, ChannelUpdate, ConnectionDecision, ConnectionOut, DirectMessageCreate, EventGroupAdminOut, EventLinkCreate, EventLinkOut, GroupCreate, GroupDirectoryOut, GroupOut, GroupUpdate, InternalSubGroupCreate, InvitationCreate,
+    InvitationOut, JoinGroupRequest, JoinGroupResult, JoinRequestDecision, JoinRequestOut, MemberOut, MeetupCreate, MeetupOut, MeetupRsvp, MeetupUpdate, MessageCreate, MessageOut, MessagePage,
     MemberUpdate, MessageUpdate, NotificationPreferenceIn, NotificationPreferenceOut, OwnershipTransfer, PollCreate, PollVoteCreate, ProfileUpdate,
     ReactionCreate, ReactionOut, ReadStateOut, ReadStateUpdate, ReportCreate, RulesAcceptResult, SubGroupCreate,
     RealtimeTicketOut, ReportOut, ReportPage, ReportUpdate,
@@ -1299,6 +1299,40 @@ async def create_channel(group_id: str, body: ChannelCreate, identity: Identity 
     return ChannelOut.model_validate(channel).model_copy(update={"member_count": member_count})
 
 
+@app.patch("/v1/channels/{channel_id}", response_model=ChannelOut)
+async def update_channel(channel_id: str, body: ChannelUpdate, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    channel, member = await _channel_access(db, channel_id, identity)
+    _require_role(member, ADMIN_ROLES)
+    patch = body.model_dump(exclude_none=True)
+    if not patch:
+        raise HTTPException(400, "No channel changes supplied")
+    if channel.is_dm:
+        raise HTTPException(409, "Direct-message settings cannot be changed")
+    if "name" in patch:
+        new_name = patch["name"].strip()
+        base = re.sub(r"[^a-z0-9]+", "-", new_name.lower()).strip("-")[:80] or "channel"
+        slug = base
+        suffix = 2
+        while (await db.execute(select(Channel.id).where(
+            Channel.group_id == channel.group_id, Channel.slug == slug, Channel.id != channel.id,
+        ))).scalar_one_or_none():
+            slug, suffix = f"{base[:75]}-{suffix}", suffix + 1
+        channel.name, channel.slug = new_name, slug
+    if "description" in patch:
+        channel.description = patch["description"].strip()
+    if "kind" in patch:
+        channel.kind = patch["kind"]
+    if "archived" in patch:
+        channel.archived = patch["archived"]
+    _audit(db, channel.group_id, member, "channel.updated", "channel", channel.id, fields=sorted(patch))
+    await db.commit()
+    await db.refresh(channel)
+    count = 0
+    if channel.is_private:
+        count = int(await db.scalar(select(func.count(ChannelMember.id)).where(ChannelMember.channel_id == channel.id)) or 0)
+    return ChannelOut.model_validate(channel).model_copy(update={"member_count": count})
+
+
 async def _channel_manage_access(db: AsyncSession, channel: Channel, member: Member) -> None:
     """Who may change a private channel's roster: group admins/owners, or any
     enrolled member of the channel (so a channel's own participants can invite)."""
@@ -1935,6 +1969,257 @@ async def suggested_connections(group_id: str, limit: int = Query(10, ge=1, le=5
             })
     scored.sort(key=lambda row: row["score"], reverse=True)
     return {"items": scored[:limit]}
+
+
+def _connection_out(row: Connection, viewer: Member, other: Member) -> ConnectionOut:
+    return ConnectionOut(
+        id=row.id,
+        group_id=row.group_id,
+        status=row.status,
+        direction="outgoing" if row.requester_member_id == viewer.id else "incoming",
+        other_member=MemberOut.model_validate(other).model_copy(update={"is_me": False}),
+        created_at=row.created_at,
+        responded_at=row.responded_at,
+    )
+
+
+@app.get("/v1/groups/{group_id}/connections", response_model=list[ConnectionOut])
+async def list_connections(group_id: str, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    viewer = await _member(db, group_id, identity)
+    rows = (await db.execute(select(Connection).where(
+        Connection.group_id == group_id,
+        or_(Connection.requester_member_id == viewer.id, Connection.recipient_member_id == viewer.id),
+    ).order_by(Connection.created_at.desc()))).scalars().all()
+    other_ids = {
+        row.recipient_member_id if row.requester_member_id == viewer.id else row.requester_member_id
+        for row in rows
+    }
+    others = {m.id: m for m in (await db.execute(select(Member).where(Member.id.in_(other_ids)))).scalars().all()} if other_ids else {}
+    return [
+        _connection_out(row, viewer, others[row.recipient_member_id if row.requester_member_id == viewer.id else row.requester_member_id])
+        for row in rows
+        if (row.recipient_member_id if row.requester_member_id == viewer.id else row.requester_member_id) in others
+    ]
+
+
+@app.post("/v1/groups/{group_id}/connections/{member_id}", response_model=ConnectionOut, status_code=201)
+async def request_connection(group_id: str, member_id: str, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    viewer = await _member(db, group_id, identity)
+    other = await db.get(Member, member_id)
+    if not other or other.group_id != group_id or other.removed_at:
+        raise HTTPException(404, "FestioMe member not found")
+    if other.id == viewer.id:
+        raise HTTPException(400, "You cannot connect with yourself")
+    pair_key = "|".join(sorted((viewer.id, other.id)))
+    row = (await db.execute(select(Connection).where(
+        Connection.group_id == group_id, Connection.pair_key == pair_key,
+    ).with_for_update())).scalar_one_or_none()
+    now = datetime.utcnow()
+    if row and row.status == "pending" and row.recipient_member_id == viewer.id:
+        # A reciprocal request is a clear mutual signal; accept immediately.
+        row.status, row.responded_at = "accepted", now
+    elif row and row.status == "declined":
+        row.requester_member_id, row.recipient_member_id = viewer.id, other.id
+        row.status, row.responded_at, row.created_at = "pending", None, now
+    elif not row:
+        row = Connection(group_id=group_id, requester_member_id=viewer.id,
+                         recipient_member_id=other.id, pair_key=pair_key)
+        db.add(row)
+    _audit(db, group_id, viewer, "connection.requested", "member", other.id)
+    await db.commit()
+    await db.refresh(row)
+    return _connection_out(row, viewer, other)
+
+
+@app.patch("/v1/connections/{connection_id}", response_model=ConnectionOut)
+async def decide_connection(connection_id: str, body: ConnectionDecision, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    row = await db.get(Connection, connection_id)
+    if not row:
+        raise HTTPException(404, "FestioMe connection not found")
+    viewer = await _member(db, row.group_id, identity)
+    if row.recipient_member_id != viewer.id:
+        raise HTTPException(403, "Only the invited member can answer this connection")
+    if row.status != "pending":
+        raise HTTPException(409, "This connection has already been answered")
+    row.status, row.responded_at = body.status, datetime.utcnow()
+    other = await db.get(Member, row.requester_member_id)
+    _audit(db, row.group_id, viewer, f"connection.{body.status}", "connection", row.id)
+    await db.commit()
+    await db.refresh(row)
+    return _connection_out(row, viewer, other)
+
+
+async def _meetup_out(db: AsyncSession, meetup: Meetup, viewer: Member) -> MeetupOut:
+    creator = await db.get(Member, meetup.creator_member_id)
+    attendance = (await db.execute(
+        select(MeetupAttendee.status, func.count(MeetupAttendee.id))
+        .where(MeetupAttendee.meetup_id == meetup.id)
+        .group_by(MeetupAttendee.status)
+    )).all()
+    counts = {status: int(count) for status, count in attendance}
+    mine = await db.scalar(select(MeetupAttendee.status).where(
+        MeetupAttendee.meetup_id == meetup.id, MeetupAttendee.member_id == viewer.id,
+    ))
+    return MeetupOut(
+        id=meetup.id, group_id=meetup.group_id, creator_member_id=meetup.creator_member_id,
+        creator_name=creator.display_name if creator else "FestioMe member",
+        title=meetup.title, description=meetup.description, location=meetup.location,
+        starts_at=meetup.starts_at, ends_at=meetup.ends_at, capacity=meetup.capacity,
+        status=meetup.status, attendee_count=counts.get("going", 0),
+        interested_count=counts.get("interested", 0), my_status=mine,
+        can_manage=meetup.creator_member_id == viewer.id or viewer.role in ADMIN_ROLES,
+        created_at=meetup.created_at,
+    )
+
+
+@app.get("/v1/groups/{group_id}/meetups", response_model=list[MeetupOut])
+async def list_meetups(group_id: str, include_past: bool = False, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    viewer = await _member(db, group_id, identity)
+    query = select(Meetup).where(Meetup.group_id == group_id)
+    if not include_past:
+        query = query.where(Meetup.starts_at >= datetime.utcnow() - timedelta(hours=4))
+    rows = (await db.execute(query.order_by(Meetup.starts_at))).scalars().all()
+    return [await _meetup_out(db, row, viewer) for row in rows]
+
+
+@app.post("/v1/groups/{group_id}/meetups", response_model=MeetupOut, status_code=201)
+async def create_meetup(group_id: str, body: MeetupCreate, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    viewer = await _member(db, group_id, identity)
+    if viewer.role == "readonly":
+        raise HTTPException(403, "Readonly members cannot create meetups")
+    starts_at = body.starts_at.replace(tzinfo=None) if body.starts_at.tzinfo else body.starts_at
+    ends_at = body.ends_at.replace(tzinfo=None) if body.ends_at and body.ends_at.tzinfo else body.ends_at
+    if ends_at and ends_at <= starts_at:
+        raise HTTPException(400, "Meetup end time must be after its start time")
+    meetup = Meetup(
+        group_id=group_id, creator_member_id=viewer.id, title=body.title.strip(),
+        description=body.description.strip(), location=body.location.strip(),
+        starts_at=starts_at, ends_at=ends_at, capacity=body.capacity,
+    )
+    db.add(meetup)
+    await db.flush()
+    db.add(MeetupAttendee(meetup_id=meetup.id, member_id=viewer.id, status="going"))
+    _audit(db, group_id, viewer, "meetup.created", "meetup", meetup.id)
+    await db.commit()
+    await db.refresh(meetup)
+    return await _meetup_out(db, meetup, viewer)
+
+
+@app.patch("/v1/meetups/{meetup_id}", response_model=MeetupOut)
+async def update_meetup(meetup_id: str, body: MeetupUpdate, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    meetup = await db.get(Meetup, meetup_id)
+    if not meetup:
+        raise HTTPException(404, "FestioMe meetup not found")
+    viewer = await _member(db, meetup.group_id, identity)
+    if meetup.creator_member_id != viewer.id and viewer.role not in ADMIN_ROLES:
+        raise HTTPException(403, "Only the meetup host or a group administrator can edit it")
+    patch = body.model_dump(exclude_none=True)
+    for key, value in patch.items():
+        if key in {"title", "description", "location"}:
+            value = value.strip()
+        if key in {"starts_at", "ends_at"} and value and value.tzinfo:
+            value = value.replace(tzinfo=None)
+        setattr(meetup, key, value)
+    if meetup.ends_at and meetup.ends_at <= meetup.starts_at:
+        raise HTTPException(400, "Meetup end time must be after its start time")
+    _audit(db, meetup.group_id, viewer, "meetup.updated", "meetup", meetup.id, fields=sorted(patch))
+    await db.commit()
+    await db.refresh(meetup)
+    return await _meetup_out(db, meetup, viewer)
+
+
+@app.post("/v1/meetups/{meetup_id}/rsvp", response_model=MeetupOut)
+async def rsvp_meetup(meetup_id: str, body: MeetupRsvp, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    meetup = await db.get(Meetup, meetup_id)
+    if not meetup or meetup.status != "scheduled":
+        raise HTTPException(404, "FestioMe meetup not found")
+    viewer = await _member(db, meetup.group_id, identity)
+    if body.status == "going" and meetup.capacity:
+        going = int(await db.scalar(select(func.count(MeetupAttendee.id)).where(
+            MeetupAttendee.meetup_id == meetup.id, MeetupAttendee.status == "going",
+            MeetupAttendee.member_id != viewer.id,
+        )) or 0)
+        if going >= meetup.capacity:
+            raise HTTPException(409, "This meetup is full")
+    row = (await db.execute(select(MeetupAttendee).where(
+        MeetupAttendee.meetup_id == meetup.id, MeetupAttendee.member_id == viewer.id,
+    ))).scalar_one_or_none()
+    if row:
+        row.status, row.updated_at = body.status, datetime.utcnow()
+    else:
+        db.add(MeetupAttendee(meetup_id=meetup.id, member_id=viewer.id, status=body.status))
+    _audit(db, meetup.group_id, viewer, "meetup.rsvp", "meetup", meetup.id, status=body.status)
+    await db.commit()
+    return await _meetup_out(db, meetup, viewer)
+
+
+@app.get("/v1/groups/{group_id}/community-overview")
+async def community_overview(group_id: str, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Actionable, privacy-safe community health for organizers.
+
+    Counts are calculated from first-party activity. No synthetic sentiment or
+    inferred personal attributes are produced.
+    """
+    viewer = await _member(db, group_id, identity)
+    _require_role(viewer, STAFF_ROLES)
+    now = datetime.utcnow()
+    cutoff = now - timedelta(days=7)
+    members = (await db.execute(select(Member).where(
+        Member.group_id == group_id, Member.removed_at.is_(None),
+    ))).scalars().all()
+    messages = (await db.execute(select(Message).where(
+        Message.group_id == group_id, Message.created_at >= cutoff,
+        Message.deleted_at.is_(None), or_(Message.published_at.is_not(None), Message.scheduled_for.is_(None)),
+    ))).scalars().all()
+    accepted_connections = int(await db.scalar(select(func.count(Connection.id)).where(
+        Connection.group_id == group_id, Connection.status == "accepted",
+    )) or 0)
+    pending_connections = int(await db.scalar(select(func.count(Connection.id)).where(
+        Connection.group_id == group_id, Connection.status == "pending",
+    )) or 0)
+    upcoming_meetups = int(await db.scalar(select(func.count(Meetup.id)).where(
+        Meetup.group_id == group_id, Meetup.status == "scheduled", Meetup.starts_at >= now,
+    )) or 0)
+    meeting_rsvps = int(await db.scalar(select(func.count(MeetupAttendee.id)).join(
+        Meetup, Meetup.id == MeetupAttendee.meetup_id,
+    ).where(Meetup.group_id == group_id, MeetupAttendee.status == "going")) or 0)
+    open_reports = int(await db.scalar(select(func.count(ModerationReport.id)).where(
+        ModerationReport.group_id == group_id, ModerationReport.status.in_(["open", "reviewing"]),
+    )) or 0)
+    active_ids = {message.author_member_id for message in messages}
+    activated = len(active_ids)
+    member_count = len(members)
+    channel_rows = (await db.execute(select(Channel).where(
+        Channel.group_id == group_id, Channel.archived.is_(False), Channel.is_dm.is_(False),
+    ).order_by(Channel.created_at))).scalars().all()
+    messages_by_channel = Counter(message.channel_id for message in messages)
+    activity_by_day = Counter(message.created_at.date().isoformat() for message in messages)
+    topic_counts = Counter(tag for member in members for tag in (member.interest_tags or []))
+    return {
+        "member_count": member_count,
+        "activated_count": activated,
+        "activation_rate": round((activated / member_count) * 100) if member_count else 0,
+        "weekly_active_count": activated,
+        "weekly_active_rate": round((activated / member_count) * 100) if member_count else 0,
+        "messages_7d": len(messages),
+        "accepted_connections": accepted_connections,
+        "pending_connections": pending_connections,
+        "upcoming_meetups": upcoming_meetups,
+        "meeting_rsvps": meeting_rsvps,
+        "open_reports": open_reports,
+        "response_health": max(0, 100 - min(100, open_reports * 10)),
+        "activity": [
+            {"date": (cutoff.date() + timedelta(days=offset)).isoformat(), "messages": activity_by_day.get((cutoff.date() + timedelta(days=offset)).isoformat(), 0)}
+            for offset in range(8)
+        ],
+        "channels": [
+            {"id": channel.id, "name": channel.name, "kind": channel.kind,
+             "messages_7d": messages_by_channel.get(channel.id, 0),
+             "health": "high" if messages_by_channel.get(channel.id, 0) >= 10 else "medium" if messages_by_channel.get(channel.id, 0) >= 3 else "quiet"}
+            for channel in channel_rows
+        ],
+        "trending_topics": [{"label": tag, "members": count} for tag, count in topic_counts.most_common(8)],
+    }
 
 
 @app.post("/v1/channels/{channel_id}/polls", status_code=201)

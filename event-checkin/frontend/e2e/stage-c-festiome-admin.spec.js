@@ -34,6 +34,7 @@ test('FestioMe redesign loads organizer groups and confirms group creation', asy
 
   await page.goto('/festiome-redesign')
   await expect(page.getByRole('heading', { name: 'FestioMe' })).toBeVisible()
+  await page.getByRole('button', { name: 'Community', exact: true }).click()
   await expect(page.getByRole('button', { name: 'QA Community' })).toBeVisible()
   await page.getByRole('button', { name: 'Create group' }).click()
   await page.getByPlaceholder('e.g. Photography Team').fill('QA Moderators')
@@ -77,10 +78,13 @@ test('FestioMe real service supports group, invitation, member, channel, and mes
     await expect(page.getByText('FestioMe enabled', { exact: true })).toBeVisible()
   }
 
+  await page.getByRole('button', { name: 'Community', exact: true }).click()
+
   // The event's primary group and its real General channel must be available,
   // not only separately created subgroups.
-  await expect(page.getByRole('button', { name: 'Redesign QA Test Event' })).toBeVisible()
-  await page.getByRole('button', { name: 'Redesign QA Test Event' }).click()
+  const primaryGroup = page.getByRole('main').getByRole('button', { name: 'Redesign QA Test Event' })
+  await expect(primaryGroup).toBeVisible()
+  await primaryGroup.click()
   await expect(page.getByRole('button', { name: /General/ })).toBeVisible()
 
   try {
@@ -98,17 +102,18 @@ test('FestioMe real service supports group, invitation, member, channel, and mes
     await expect(page.getByRole('button', { name: groupName })).toBeVisible()
     await expect(page.getByRole('button', { name: /General/ })).toBeVisible()
 
-    page.once('dialog', (dialog) => dialog.accept(secondEmail))
+    await page.getByRole('button', { name: 'Invite member' }).click()
+    await page.getByPlaceholder('Name or email…').fill(secondEmail)
     const invitationResponsePromise = page.waitForResponse((response) =>
       response.request().method() === 'POST'
       && response.url().includes(`/api/festiome/v1/groups/${groupId}/invitations`)
     )
-    await page.getByRole('button', { name: 'Invite member' }).click()
+    await page.getByRole('button', { name: `Invite ${secondEmail}` }).click()
     const invitationResponse = await invitationResponsePromise
     expect(invitationResponse.status()).toBe(201)
     const invitation = await invitationResponse.json()
     expect(invitation.token).toBeTruthy()
-    await expect(page.getByText(/Member invitation created/)).toBeVisible()
+    await expect(page.getByText(/Invitation for .* created/)).toBeVisible()
 
     const secondContext = await browser.newContext()
     const secondPage = await secondContext.newPage()
@@ -136,6 +141,7 @@ test('FestioMe real service supports group, invitation, member, channel, and mes
     }
 
     await page.reload()
+    await page.getByRole('button', { name: 'Community', exact: true }).click()
     await page.getByRole('button', { name: groupName }).click()
     await expect(page.getByText('Redesign E2E (staff)', { exact: true }).first()).toBeVisible()
 

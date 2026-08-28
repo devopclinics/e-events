@@ -369,18 +369,52 @@ function RouteLoading() {
   )
 }
 
+// Vite gives every build's JS chunks content-hashed filenames — a deploy
+// replaces them, it doesn't keep the old ones around. A tab left open across
+// a deploy still holds references to the *old* filenames, so navigating to a
+// route it hasn't loaded yet 404s trying to fetch a chunk that no longer
+// exists. That's not a bug in the page, it's unavoidable with hashed
+// filenames — the fix is just a fresh page load, which we do automatically
+// once (a sessionStorage flag stops a genuine, unrelated error from looping
+// forever) before ever bothering the user with a manual "Reload page" click.
+const CHUNK_ERROR_PATTERN = /dynamically imported module|Importing a module script failed|Failed to fetch dynamically imported module|Loading chunk|Load failed/i
+const CHUNK_RELOAD_FLAG = 'festio:chunk-reload-attempted'
+
+function isChunkLoadError(error) {
+  return !!error && (error.name === 'ChunkLoadError' || CHUNK_ERROR_PATTERN.test(error.message || ''))
+}
+
 class RouteChunkBoundary extends Component {
   constructor(props) {
     super(props)
-    this.state = { error: null }
+    this.state = { error: null, autoReloading: false }
   }
 
   static getDerivedStateFromError(error) {
     return { error }
   }
 
+  componentDidCatch(error) {
+    if (!isChunkLoadError(error)) return
+    // If we already tried this once this tab and it's STILL failing, don't
+    // reload forever — fall through to the manual "Reload page" fallback
+    // below, since something other than a routine stale-chunk mismatch is
+    // going on.
+    let alreadyTried = false
+    try { alreadyTried = sessionStorage.getItem(CHUNK_RELOAD_FLAG) === '1' } catch { /* private mode etc. */ }
+    if (alreadyTried) return
+    try { sessionStorage.setItem(CHUNK_RELOAD_FLAG, '1') } catch { /* best-effort */ }
+    this.setState({ autoReloading: true })
+    window.location.reload()
+  }
+
   render() {
     if (!this.state.error) return this.props.children
+    if (this.state.autoReloading) {
+      // The reload above is already in flight — render nothing rather than
+      // flash the manual fallback UI for the instant before it navigates.
+      return null
+    }
     return (
       <div role="alert" className="min-h-[45vh] grid place-items-center px-4">
         <div className="max-w-md rounded-xl border border-amber-200 bg-white p-5 text-center shadow-sm dark:border-amber-900 dark:bg-slate-800">
@@ -537,6 +571,20 @@ function AppRoutes() {
 }
 
 export default function App() {
+  useEffect(() => {
+    // Clear the one-shot auto-reload guard once the app has been up for a
+    // few seconds without crashing again — confirms *this* load is actually
+    // stable rather than clearing it immediately (which, if this exact
+    // reload also failed, would just retrigger reload() -> reload() ->
+    // reload() forever instead of falling back to the manual UI). This is
+    // what lets a *future* deploy, hours into the same long-lived tab, still
+    // get its own automatic retry instead of being blocked by today's flag.
+    const timer = setTimeout(() => {
+      try { sessionStorage.removeItem(CHUNK_RELOAD_FLAG) } catch { /* best-effort */ }
+    }, 8000)
+    return () => clearTimeout(timer)
+  }, [])
+
   return (
     <ThemeProvider>
       <AuthProvider>

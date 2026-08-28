@@ -195,7 +195,7 @@ const COMMUNITY_CARDS = [
   { initials: 'LG', title: 'Logistics', sub: 'Add-on', body: 'Gift shipment packed for 214 guests. Vendor pickup list is ready.' },
   { initials: 'SP', title: 'Speaker showcase', sub: 'Add-on', body: 'A public page for your guest speakers — bios, photos, and social links, linked from your ticket page and each guest’s hub.' },
   { initials: 'PT', title: 'Partner showcase', sub: 'Add-on', body: 'Give sponsors and partners their own page, grouped into your own categories, linked from your ticket page.' },
-  { initials: 'RM', title: 'Automated reminders', sub: 'Add-on', body: 'Schedule a series of email, SMS, and WhatsApp reminders by day offset, each targeted to a specific RSVP audience — no manual resends.' },
+  { initials: 'SC', title: 'Communication scheduler', sub: 'Included', body: 'Schedule invitations, RSVP chasers, event and session reminders, feedback requests, and follow-ups — timed to your event, RSVP deadline, or a specific session, sent to exactly the guests who should get them.' },
 ]
 
 const BUSINESS_FEATURES = [
@@ -214,6 +214,14 @@ const BUSINESS_FEATURES = [
     points: ['Budget tracking', 'Vendor workspace', 'Timeline and run sheet', 'Shared documents', 'Vendor e-signature contracts'],
     to: '/pricing',
     cta: 'See plans and add-ons',
+  },
+  {
+    label: 'Festio Live',
+    title: 'Turn the room into the show',
+    body: 'Quizzes, polls, surveys, ratings, Q&A, and word clouds running live on a projector or TV, with results your guests watch update in real time as they answer.',
+    points: ['Live leaderboard and results', 'One-button Guided Show mode for presenters', 'No-login join by QR code or room code', 'AI-summarized open feedback'],
+    to: '/pricing',
+    cta: 'See Festio Live pricing',
   },
 ]
 

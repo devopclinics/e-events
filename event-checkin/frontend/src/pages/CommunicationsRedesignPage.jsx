@@ -2238,9 +2238,13 @@ function SchedulerTab({ eventId, event, notify, initialPreset }) {
           <p className="rd-hint">Merge fields: {'{{first_name}}'}, {'{{event_name}}'}, {'{{event_date}}'}, {'{{guest_hub_link}}'} and {'{{ticket_link}}'}.</p>
         </div>}
 
-        <div className="cm-schedule-save">
-          <label><input type="checkbox" checked={editing.form.status === 'draft'} onChange={(e) => setForm({ status: e.target.checked ? 'draft' : 'scheduled' })} /> Save as draft</label>
-          <button className="rr-btn primary" disabled={busy === 'save' || !editing.form.name.trim() || !editing.form.channels.length} onClick={save}>{busy === 'save' ? 'Saving…' : editing.form.status === 'draft' ? 'Save draft' : 'Schedule communication'}</button>
+        <div className="cm-schedule-save-wrap">
+          <div className="cm-schedule-save">
+            <label><input type="checkbox" checked={editing.form.status === 'draft'} onChange={(e) => setForm({ status: e.target.checked ? 'draft' : 'scheduled' })} /> Save as draft</label>
+            <button className="rr-btn primary" disabled={busy === 'save' || !editing.form.name.trim() || !editing.form.channels.length} onClick={save}>{busy === 'save' ? 'Saving…' : editing.form.status === 'draft' ? 'Save draft' : 'Schedule communication'}</button>
+          </div>
+          {!editing.form.name.trim() && <p className="cm-schedule-blocker">Give this an internal name above before saving — that's why the button is greyed out.</p>}
+          {editing.form.name.trim() && !editing.form.channels.length && <p className="cm-schedule-blocker">Pick at least one delivery channel above — that's why the button is greyed out.</p>}
         </div>
       </div>
     </div>}

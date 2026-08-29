@@ -137,6 +137,11 @@ function RowMenu({ g, eventId, notify, onView, onEdit, onRemove, onSendInvite })
     ['View', () => onView(g)],
     ['Edit', () => onEdit(g)],
     ['Open QR', () => window.open(api.guestQrUrl(eventId, g.id), '_blank', 'noopener,noreferrer')],
+    ['Open Guest Hub', () => {
+      const token = g.raw?.invite_token || g.raw?.qr_token
+      if (!token) { notify('This guest has no Guest Hub token yet', true); return }
+      window.open(`/r/${token}#guest-hub`, '_blank', 'noopener,noreferrer')
+    }],
     ['Copy invite link', async () => {
       try {
         const { invite_url: inviteUrl } = await api.ensureInviteToken(eventId, g.id)

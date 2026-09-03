@@ -795,8 +795,9 @@ function BroadcastComposer({ notify, onSent, eventId }) {
 /* ── Messages tab (broadcast + templates) ───────────────────────────── */
 
 function MessagesTab({ notify, onPreview, eventId }) {
+  const [searchParams] = useSearchParams()
   const [attnQuery, setAttnQuery] = useState('')
-  const [attnFilter, setAttnFilter] = useState('all')
+  const [attnFilter, setAttnFilter] = useState(() => (['sent', 'failed'].includes(searchParams.get('attn')) ? searchParams.get('attn') : 'all'))
   const [templates, setTemplates] = useState([])
   const [templateAudit, setTemplateAudit] = useState([])
   const [templateError, setTemplateError] = useState('')

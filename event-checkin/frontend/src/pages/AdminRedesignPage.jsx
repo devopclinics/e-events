@@ -530,16 +530,16 @@ export default function AdminRedesignPage() {
 
       <div className="rd-channels">
         {[
-          ['Sent', messagingSummary?.sent],
-          ['Not sent', messagingSummary?.unsent],
-          ['Failed', messagingSummary?.failed],
-          ['No contact', messagingSummary?.noContact],
-        ].map(([label, value]) => (
-          <div className="rd-chan" key={label}>
+          ['Sent', messagingSummary?.sent, '/communications-redesign?tab=messages'],
+          ['Not sent', messagingSummary?.unsent, '/communications-redesign?tab=messages&attn=sent'],
+          ['Failed', messagingSummary?.failed, '/communications-redesign?tab=messages&attn=failed'],
+          ['No contact', messagingSummary?.noContact, '/guests-redesign?tab=guests'],
+        ].map(([label, value, dest]) => (
+          <button type="button" className="rd-chan" key={label} onClick={() => navigate(dest)}>
             <div className="top"><span className="name">{label.toUpperCase()}</span></div>
             <div className="rate">{value ?? '—'}</div>
             <div className="foot"><span>guest records</span></div>
-          </div>
+          </button>
         ))}
       </div>
 

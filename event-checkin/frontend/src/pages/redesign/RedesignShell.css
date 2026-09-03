@@ -205,6 +205,10 @@
 
 .rd-channels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin-bottom: 16px; }
 .rd-chan { border: 1px solid var(--line-soft); border-radius: 10px; padding: 10px 11px; background: var(--surface-2); }
+/* .rd-chan is now a <button> so its stat cards are clickable -- reset native
+   button chrome (centered text, UI font, fixed width) back to the div look. */
+button.rd-chan { width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; transition: border-color .15s ease, background .15s ease; }
+button.rd-chan:hover, button.rd-chan:focus-visible { border-color: var(--teal); background: var(--surface-3); }
 .rd-chan .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
 .rd-chan .name { font-size: 9.5px; font-weight: 700; letter-spacing: .04em; color: var(--muted); }
 .rd-chan .rate { font-size: 17px; font-weight: 700; color: var(--ink); }

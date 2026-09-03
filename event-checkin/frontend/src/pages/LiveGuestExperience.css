@@ -25,6 +25,15 @@
 .live-guest-cinematic h1, .live-guest-cinematic h2, .live-guest-cinematic .text-slate-900,
 .live-guest-cinematic .text-slate-950, .live-guest-cinematic .text-slate-800 { color: #fff !important; }
 .live-guest-cinematic .text-slate-600, .live-guest-cinematic .text-slate-500 { color: #cbd5e1 !important; }
+/* The panel override above flattens every rounded-xl surface to the same
+   background/border, which erased the option button's own selected-vs-
+   unselected color swap -- a tapped answer no longer looked selected. */
+.live-guest-cinematic button[aria-pressed="true"] {
+  border-color: #67e8f9 !important;
+  background: #67e8f9 !important;
+  color: #052129 !important;
+  box-shadow: 0 0 0 3px rgba(103, 232, 249, .3) !important;
+}
 
 /* B — community: warm, welcoming, conversational. */
 .live-guest-community {
@@ -39,6 +48,12 @@
 }
 .live-guest-community button { border-radius: 18px !important; }
 .live-guest-community .bg-teal-400, .live-guest-community .bg-teal-600 { background: #ed6f61 !important; color: white !important; }
+.live-guest-community button[aria-pressed="true"] {
+  border-color: #087f78 !important;
+  background: #087f78 !important;
+  color: white !important;
+  box-shadow: 0 0 0 3px rgba(8, 127, 120, .22) !important;
+}
 
 /* C — pulse: crisp, energetic, contemporary. */
 .live-guest-pulse {
@@ -56,5 +71,24 @@
 .live-guest-pulse .text-slate-950, .live-guest-pulse .text-slate-800 { color: white !important; }
 .live-guest-pulse .text-slate-600, .live-guest-pulse .text-slate-500 { color: #c4b5fd !important; }
 .live-guest-pulse .bg-teal-400, .live-guest-pulse .bg-teal-600 { background: linear-gradient(90deg, #2dd4bf, #8b5cf6) !important; }
+.live-guest-pulse button[aria-pressed="true"] {
+  border-color: #5eead4 !important;
+  background: linear-gradient(90deg, #2dd4bf, #8b5cf6) !important;
+  color: #0b0630 !important;
+  box-shadow: 0 0 0 3px rgba(94, 234, 212, .3) !important;
+}
 
-@media (prefers-reduced-motion: reduce) { .live-guest-experience { transition: none; } }
+/* A tap needs to feel registered the instant it happens, before the network
+   round trip confirms it -- a quick settle animation on the button that just
+   became selected, independent of theme colors above. */
+.live-guest-experience button[aria-pressed="true"] { animation: festio-live-select-pop .22s ease-out; }
+@keyframes festio-live-select-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.045); }
+  100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-guest-experience { transition: none; }
+  .live-guest-experience button[aria-pressed="true"] { animation: none; }
+}

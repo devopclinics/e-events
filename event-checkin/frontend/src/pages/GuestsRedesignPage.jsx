@@ -103,7 +103,14 @@ const SEND_AUDIENCE = [
 function deliveryStatus(g) {
   const vals = Object.values(g.channels)
   if (vals.some((v) => v === 'ok')) return 'ok'
-  if (vals.some((v) => v === 'fail')) return 'fail'
+  // Per-channel status (email/sms/whatsapp/mms) only ever gets set once a
+  // provider actually attempted a send. A guest with no reachable channel at
+  // all (no email/phone, or the event's channel policy excludes what they
+  // have) never gets a per-channel attempt, so those stay blank -- but the
+  // backend still recorded the dispatch itself as invite_status='failed'.
+  // Without this, such a guest matches neither Failed nor Delivered here,
+  // even though the dashboard and Communications page both count them as Failed.
+  if (vals.some((v) => v === 'fail') || g.raw?.invite_status === 'failed') return 'fail'
   return 'notsent'
 }
 

@@ -1,0 +1,60 @@
+.live-guest-experience {
+  min-height: 100vh;
+  transition: background .25s ease, color .25s ease;
+}
+.live-guest-experience .max-w-md { position: relative; z-index: 1; }
+.live-guest-experience button, .live-guest-experience input,
+.live-guest-experience textarea, .live-guest-experience select { min-height: 48px; }
+
+/* A — cinematic: premium, low-light, stage-led. */
+.live-guest-cinematic {
+  color: #f8fafc;
+  background:
+    radial-gradient(circle at 15% 0%, rgba(15, 180, 180, .22), transparent 34rem),
+    radial-gradient(circle at 100% 12%, rgba(114, 70, 240, .24), transparent 32rem),
+    #07132d;
+}
+.live-guest-cinematic::before { content: ''; position: fixed; inset: 0; pointer-events: none; opacity: .28; background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 44px 44px; }
+.live-guest-cinematic .live-guest-brand { color: #67e8f9; }
+.live-guest-cinematic .rounded-2xl, .live-guest-cinematic .rounded-xl {
+  border-color: rgba(103, 232, 249, .24) !important;
+  background-color: rgba(12, 25, 57, .9) !important;
+  color: #f8fafc !important;
+  box-shadow: 0 18px 50px rgba(0,0,0,.25);
+}
+.live-guest-cinematic h1, .live-guest-cinematic h2, .live-guest-cinematic .text-slate-900,
+.live-guest-cinematic .text-slate-950, .live-guest-cinematic .text-slate-800 { color: #fff !important; }
+.live-guest-cinematic .text-slate-600, .live-guest-cinematic .text-slate-500 { color: #cbd5e1 !important; }
+
+/* B — community: warm, welcoming, conversational. */
+.live-guest-community {
+  color: #20343b;
+  background: radial-gradient(circle at 100% 0%, #ffd8ca 0, transparent 25rem), linear-gradient(145deg, #fffaf1, #f2fbf7);
+}
+.live-guest-community .live-guest-brand { color: #087f78; }
+.live-guest-community .rounded-2xl, .live-guest-community .rounded-xl {
+  border-color: #b9ddd6 !important;
+  background-color: rgba(255,255,255,.94) !important;
+  box-shadow: 0 14px 35px rgba(31, 86, 78, .10);
+}
+.live-guest-community button { border-radius: 18px !important; }
+.live-guest-community .bg-teal-400, .live-guest-community .bg-teal-600 { background: #ed6f61 !important; color: white !important; }
+
+/* C — pulse: crisp, energetic, contemporary. */
+.live-guest-pulse {
+  color: #f8fafc;
+  background: linear-gradient(145deg, #10103d 0%, #251166 46%, #071e45 100%);
+}
+.live-guest-pulse .live-guest-brand { color: #5eead4; }
+.live-guest-pulse .rounded-2xl, .live-guest-pulse .rounded-xl {
+  border-color: rgba(167, 139, 250, .45) !important;
+  background: linear-gradient(135deg, rgba(39, 27, 94, .96), rgba(10, 29, 69, .96)) !important;
+  color: white !important;
+  box-shadow: 0 0 0 1px rgba(94,234,212,.08), 0 18px 55px rgba(5,4,30,.35);
+}
+.live-guest-pulse h1, .live-guest-pulse h2, .live-guest-pulse .text-slate-900,
+.live-guest-pulse .text-slate-950, .live-guest-pulse .text-slate-800 { color: white !important; }
+.live-guest-pulse .text-slate-600, .live-guest-pulse .text-slate-500 { color: #c4b5fd !important; }
+.live-guest-pulse .bg-teal-400, .live-guest-pulse .bg-teal-600 { background: linear-gradient(90deg, #2dd4bf, #8b5cf6) !important; }
+
+@media (prefers-reduced-motion: reduce) { .live-guest-experience { transition: none; } }

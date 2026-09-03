@@ -36,9 +36,25 @@ test.describe('Phase 8 route-level code splitting', () => {
   })
 
   test('offers reload recovery when a route chunk fails', async ({ page }) => {
+    await page.addInitScript(() => {
+      sessionStorage.setItem('festio:chunk-reload-state', JSON.stringify({ count: 8, startedAt: Date.now() }))
+    })
     await page.route('**/assets/PricingRedesignPage-*.js', (route) => route.abort('failed'))
     await page.goto('/pricing')
     await expect(page.getByRole('alert')).toContainText('This page could not be loaded')
     await expect(page.getByRole('button', { name: 'Reload page' })).toBeVisible()
+  })
+
+  test('automatically recovers when a route chunk fails during a rollout', async ({ page }) => {
+    let attempts = 0
+    await page.route('**/assets/PricingRedesignPage-*.js', (route) => {
+      attempts += 1
+      if (attempts === 1) return route.abort('failed')
+      return route.continue()
+    })
+    await page.goto('/pricing')
+    await expect(page.getByRole('status')).toContainText('reconnecting automatically')
+    await expect(page.getByRole('heading', { name: /pricing/i }).first()).toBeVisible({ timeout: 15000 })
+    expect(attempts).toBeGreaterThanOrEqual(2)
   })
 })

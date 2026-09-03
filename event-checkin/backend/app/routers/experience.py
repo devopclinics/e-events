@@ -12,11 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth import _org_role, is_org_manager, require_dashboard_access, require_event_admin, require_event_member
 from ..config import settings
 from ..database import get_db
-from ..models import ConsentForm, ConsentSignature, EngagementSyncOutbox, Event, EventUser, ExperienceEvent, ExperienceStep, ExperienceWorkflow, FeedbackSubmission, Guest, GuestExperienceProgress, SeatingTable, TableGroup, TableGroupTable, User
+from ..models import ConsentForm, ConsentSignature, EngagementSyncOutbox, Event, EventUser, ExperienceEvent, ExperienceStep, ExperienceWorkflow, FeedbackSubmission, Guest, GuestExperienceProgress, InboundEmailAutomation, SeatingTable, TableGroup, TableGroupTable, User
 from .seating import assign_next_seat, group_table_ids
 from ..schemas import (
     ConsentFormOut,
     ConsentFormUpsert,
+    ConsentReceivedOut,
     ConsentSignatureCreate,
     ConsentSignatureOut,
     ExperienceEventOut,
@@ -45,6 +46,8 @@ from ..services.experience import (
     active_workflow,
     archive_workflow,
     clone_workflow,
+    complete_guest_step,
+    ExperienceCompletionError,
     create_default_workflow,
     create_workflow,
     dependencies_satisfied,
@@ -1114,6 +1117,123 @@ async def list_consent_signatures(
     return rows
 
 
+_CONSENT_SOURCE_LABELS = {
+    "guest": "Guest Hub (self-signed)",
+    "inbound_email": "Inbound email",
+    "admin": "Staff",
+    "staff": "Staff",
+    "system": "System",
+}
+
+
+def _consent_source_label(source: str | None) -> str:
+    return _CONSENT_SOURCE_LABELS.get(source or "", source or "Unknown")
+
+
+async def _consent_received_rows(event_id: str, db: AsyncSession):
+    """Every guest whose Consent step is completed, regardless of how —
+    Guest Hub self-sign, staff override, or an inbound email automation.
+    GuestExperienceProgress is the source of truth check-in gating already
+    uses; ConsentSignature only covers the self-sign path, so it's joined in
+    for signature detail rather than used as the primary source."""
+    workflow = await active_workflow(event_id, db)
+    if not workflow:
+        return []
+    consent_step_ids = [s.id for s in workflow.steps if s.type == "consent"]
+    if not consent_step_ids:
+        return []
+    rows = (await db.execute(
+        select(GuestExperienceProgress, Guest)
+        .join(Guest, Guest.id == GuestExperienceProgress.guest_id)
+        .where(
+            GuestExperienceProgress.workflow_id == workflow.id,
+            GuestExperienceProgress.step_id.in_(consent_step_ids),
+            GuestExperienceProgress.status.in_(["completed", "overridden"]),
+        )
+        .order_by(GuestExperienceProgress.completed_at.desc().nullslast())
+    )).all()
+
+    automation_ids = {
+        (progress.progress_metadata or {}).get("automation_id")
+        for progress, _guest in rows
+        if (progress.progress_metadata or {}).get("automation_id")
+    }
+    automations = {}
+    if automation_ids:
+        automations = {
+            a.id: a for a in (await db.execute(
+                select(InboundEmailAutomation).where(InboundEmailAutomation.id.in_(automation_ids))
+            )).scalars()
+        }
+    signatures = {
+        s.guest_id: s for s in (await db.execute(
+            select(ConsentSignature).where(ConsentSignature.event_id == event_id)
+        )).scalars()
+    }
+
+    out = []
+    for progress, guest in rows:
+        meta = progress.progress_metadata or {}
+        automation = automations.get(meta.get("automation_id"))
+        signature = signatures.get(guest.id)
+        out.append({
+            "guest_id": guest.id,
+            "first_name": guest.first_name,
+            "last_name": guest.last_name or "",
+            "email": guest.email,
+            "phone": guest.phone,
+            "status": progress.status,
+            "completed_at": progress.completed_at,
+            "source": progress.completed_by_source,
+            "source_label": _consent_source_label(progress.completed_by_source),
+            "automation_id": automation.id if automation else None,
+            "automation_name": automation.name if automation else None,
+            "match_method": meta.get("match_method"),
+            "signer_name": signature.signer_name if signature else None,
+            "signed_at": signature.signed_at if signature else None,
+            "override_reason": progress.override_reason,
+        })
+    return out
+
+
+@router.get("/{event_id}/experience/consent-received", response_model=list[ConsentReceivedOut])
+async def list_consent_received(
+    event_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_event_member),
+):
+    return await _consent_received_rows(event_id, db)
+
+
+@router.get("/{event_id}/experience/consent-received.csv")
+async def consent_received_export(
+    event_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_event_member),
+):
+    rows = await _consent_received_rows(event_id, db)
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow([
+        "guest_id", "first_name", "last_name", "email", "phone",
+        "completed_at", "source", "automation_name", "match_method",
+        "signer_name", "override_reason",
+    ])
+    for row in rows:
+        writer.writerow([
+            row["guest_id"], row["first_name"], row["last_name"],
+            row["email"] or "", row["phone"] or "",
+            row["completed_at"].isoformat() if row["completed_at"] else "",
+            row["source_label"], row["automation_name"] or "", row["match_method"] or "",
+            row["signer_name"] or "", row["override_reason"] or "",
+        ])
+    return Response(
+        content=out.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="consent-received.csv"'},
+    )
+
+
 @router.post("/{event_id}/experience/default-workflow", response_model=ExperienceWorkflowOut, status_code=201)
 async def default_workflow(
     event_id: str,
@@ -1559,8 +1679,6 @@ async def update_guest_step_progress(
         )
         db.add(progress)
 
-    was_completed = progress.status == "completed"
-
     if data.status in ("completed", "skipped"):
         progress_rows = (await db.execute(
             select(GuestExperienceProgress)
@@ -1583,10 +1701,25 @@ async def update_guest_step_progress(
     if data.status == "completed" and step.type == "session_attendance":
         metadata = _session_check_in_metadata(step, metadata)
 
-    progress.status = data.status
-    progress.override_reason = data.override_reason
-    progress.progress_metadata = metadata
-    if data.status in ("completed", "skipped", "overridden"):
+    newly_completed = False
+    if data.status == "completed":
+        try:
+            progress, newly_completed = await complete_guest_step(
+                db,
+                event=event,
+                guest=guest,
+                step=step,
+                source="admin" if current_user.role == "admin" else "staff",
+                actor_user_id=current_user.id,
+                metadata=metadata,
+            )
+        except ExperienceCompletionError as exc:
+            raise HTTPException(409, str(exc)) from exc
+    else:
+        progress.status = data.status
+        progress.override_reason = data.override_reason
+        progress.progress_metadata = metadata
+    if data.status in ("skipped", "overridden"):
         from datetime import datetime
         progress.completed_at = progress.completed_at or datetime.utcnow()
         progress.completed_by_user_id = current_user.id
@@ -1596,28 +1729,28 @@ async def update_guest_step_progress(
         progress.completed_by_user_id = None
         progress.completed_by_source = None
 
-    db.add(ExperienceEvent(
-        event_id=event_id,
-        workflow_id=workflow.id,
-        step_id=step.id,
-        guest_id=guest.id,
-        actor_user_id=current_user.id,
-        event_type={
-            "completed": "step_completed",
-            "skipped": "step_skipped",
-            "failed": "step_failed",
-            "overridden": "override_applied",
-        }.get(data.status, "step_updated"),
-        source="admin" if current_user.role == "admin" else "staff",
-        payload={"status": data.status, "override_reason": data.override_reason, "metadata": metadata or {}},
-    ))
+    if data.status != "completed":
+        db.add(ExperienceEvent(
+            event_id=event_id,
+            workflow_id=workflow.id,
+            step_id=step.id,
+            guest_id=guest.id,
+            actor_user_id=current_user.id,
+            event_type={
+                "skipped": "step_skipped",
+                "failed": "step_failed",
+                "overridden": "override_applied",
+            }.get(data.status, "step_updated"),
+            source="admin" if current_user.role == "admin" else "staff",
+            payload={"status": data.status, "override_reason": data.override_reason, "metadata": metadata or {}},
+        ))
     await db.commit()
     await db.refresh(progress)
-    if data.status == "completed" and step.type == "souvenir" and not was_completed:
+    if data.status == "completed" and step.type == "souvenir" and newly_completed:
         await _queue_souvenir_completion_email(background_tasks, event, guest, step, db)
-    if data.status == "completed" and step.type == "room_assignment" and not was_completed:
+    if data.status == "completed" and step.type == "room_assignment" and newly_completed:
         await _queue_room_assignment_email(background_tasks, event, guest, step, (metadata or {}).get("room_assignment"), db)
-    if data.status == "completed" and step.type == "session_attendance" and not was_completed:
+    if data.status == "completed" and step.type == "session_attendance" and newly_completed:
         await _queue_session_attendance_email(background_tasks, event, guest, step, db)
     return _progress_out(progress)
 

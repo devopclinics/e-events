@@ -22,7 +22,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .routers import activities, analytics, bank, moderation, operations, participate, program_sync, qna, realtime
+from .routers import activities, analytics, bank, moderation, operations, participate, program_sync, qna, realtime, workflows
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s engagement-service %(message)s")
 logger = logging.getLogger("engagement-service")
@@ -70,6 +70,7 @@ app.include_router(realtime.router)
 app.include_router(operations.router)
 app.include_router(program_sync.router)
 app.include_router(program_sync.internal_router)
+app.include_router(workflows.router)
 
 
 @app.on_event("startup")

@@ -698,6 +698,138 @@ class ExperienceProgressUpdate(BaseModel):
     metadata: Optional[dict] = None
 
 
+class InboundSenderRule(BaseModel):
+    sender_kind: Literal["forwarder", "original"] = "forwarder"
+    match_type: Literal["email", "domain"]
+    value: str = Field(min_length=1, max_length=320)
+
+    @field_validator("value", mode="after")
+    @classmethod
+    def normalize_value(cls, value):
+        cleaned = value.strip().lower().removeprefix("@")
+        if not cleaned or " " in cleaned:
+            raise ValueError("Invalid sender rule value")
+        return cleaned
+
+
+class InboundCompletionCondition(BaseModel):
+    field: Literal["subject", "body"]
+    operator: Literal["contains", "equals", "starts_with"]
+    value: str = Field(min_length=1, max_length=500)
+
+    @field_validator("value", mode="after")
+    @classmethod
+    def clean_condition_value(cls, value):
+        cleaned = " ".join(value.split())
+        if not cleaned:
+            raise ValueError("Completion rule value is required")
+        return cleaned
+
+
+class InboundCompletionRules(BaseModel):
+    match: Literal["all", "any"] = "all"
+    conditions: list[InboundCompletionCondition] = Field(min_length=1, max_length=20)
+
+
+class InboundEmailAutomationCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    step_id: str
+    address_prefix: Optional[str] = Field(default=None, max_length=31)
+    status: Literal["active", "paused"] = "paused"
+    sender_rules: list[InboundSenderRule] = Field(min_length=1, max_length=50)
+    completion_rules: InboundCompletionRules
+
+    @field_validator("name", mode="after")
+    @classmethod
+    def clean_automation_name(cls, value):
+        return " ".join(value.split())
+
+
+class InboundEmailAutomationUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    step_id: Optional[str] = None
+    status: Optional[Literal["active", "paused"]] = None
+    sender_rules: Optional[list[InboundSenderRule]] = Field(default=None, min_length=1, max_length=50)
+    completion_rules: Optional[InboundCompletionRules] = None
+
+
+class InboundEmailAutomationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    event_id: str
+    step_id: str
+    name: str
+    address_prefix: str
+    inbound_address: str
+    status: str
+    sender_rules: list[dict] = []
+    completion_rules: dict
+    created_at: datetime
+    updated_at: datetime
+    stats: dict[str, int] = {}
+
+
+class InboundEmailRevalidationOut(BaseModel):
+    revalidated: int
+    outcomes: dict[str, int] = {}
+
+
+class InboundEmailReviewOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    automation_id: Optional[str] = None
+    resend_email_id: str
+    from_address: Optional[str] = None
+    original_sender: Optional[str] = None
+    subject: Optional[str] = None
+    sanitized_excerpt: Optional[str] = None
+    extracted_identifiers: Optional[list[dict]] = None
+    processing_status: str
+    match_status: str
+    rule_status: str
+    sender_status: str
+    matched_guest_id: Optional[str] = None
+    match_method: Optional[str] = None
+    candidate_guest_ids: Optional[list[str]] = None
+    failure_code: Optional[str] = None
+    failure_reason: Optional[str] = None
+    received_at: datetime
+    processed_at: Optional[datetime] = None
+
+
+class InboundEmailAuditOut(BaseModel):
+    """Privacy-conscious audit record for one received inbound message."""
+
+    id: str
+    automation_id: Optional[str] = None
+    automation_name: Optional[str] = None
+    guest_id: Optional[str] = None
+    guest_name: Optional[str] = None
+    guest_email: Optional[str] = None
+    subject: Optional[str] = None
+    from_address: Optional[str] = None
+    original_sender: Optional[str] = None
+    sanitized_excerpt: Optional[str] = None
+    extracted_identifiers: Optional[list[dict]] = None
+    processing_status: str
+    match_status: str
+    match_method: Optional[str] = None
+    sender_status: str
+    rule_status: str
+    failure_code: Optional[str] = None
+    failure_reason: Optional[str] = None
+    reviewer_name: Optional[str] = None
+    received_at: datetime
+    processed_at: Optional[datetime] = None
+    reviewed_at: Optional[datetime] = None
+
+
+class InboundEmailManualMatch(BaseModel):
+    guest_id: str
+
+
 class ExperienceStepOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -861,6 +993,29 @@ class ConsentSignatureOut(BaseModel):
     signed_at: datetime
     sent_copy_at: Optional[datetime] = None
     created_at: datetime
+
+
+class ConsentReceivedOut(BaseModel):
+    """One guest's consent completion, regardless of how it was completed —
+    Guest Hub self-sign, staff override, or an inbound email automation. The
+    ConsentSignature table only covers the self-sign path, so this is sourced
+    from GuestExperienceProgress (the single source of truth check-in gating
+    already uses) and enriched with signature/automation detail when present."""
+    guest_id: str
+    first_name: str
+    last_name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    status: str
+    completed_at: Optional[datetime] = None
+    source: Optional[str] = None
+    source_label: str
+    automation_id: Optional[str] = None
+    automation_name: Optional[str] = None
+    match_method: Optional[str] = None
+    signer_name: Optional[str] = None
+    signed_at: Optional[datetime] = None
+    override_reason: Optional[str] = None
 
 
 # ── Guest-facing Experience (Guest Hub journey view) ─────────────────────────
@@ -1694,16 +1849,17 @@ class ReminderTestSendRequest(BaseModel):
 
 ScheduledCommunicationType = Literal[
     "invitation", "rsvp_reminder", "event_reminder", "session_reminder",
-    "feedback_request", "follow_up", "announcement",
+    "feedback_request", "follow_up", "announcement", "consent_reminder",
 ]
 ScheduledTriggerType = Literal["absolute", "relative"]
 ScheduledAnchor = Literal["event_start", "event_end", "rsvp_deadline", "experience_step"]
 ScheduledAudienceType = Literal[
     "all", "not_invited", "not_responded", "confirmed", "declined",
     "waitlisted", "checked_in", "not_checked_in",
+    "consent_incomplete",
 ]
 ScheduledAudienceMode = Literal["dynamic", "frozen"]
-ScheduledChannel = Literal["email", "sms", "whatsapp"]
+ScheduledChannel = Literal["email", "sms", "mms", "whatsapp"]
 
 
 class ScheduledCommunicationCreate(BaseModel):
@@ -1722,6 +1878,8 @@ class ScheduledCommunicationCreate(BaseModel):
     email_body: Optional[str] = None
     sms_body: Optional[str] = None
     whatsapp_body: Optional[str] = None
+    mms_body: Optional[str] = None
+    mms_media_url: Optional[str] = None
     status: Literal["draft", "scheduled", "paused"] = "scheduled"
 
 
@@ -1740,6 +1898,8 @@ class ScheduledCommunicationUpdate(BaseModel):
     email_body: Optional[str] = None
     sms_body: Optional[str] = None
     whatsapp_body: Optional[str] = None
+    mms_body: Optional[str] = None
+    mms_media_url: Optional[str] = None
     status: Optional[Literal["draft", "scheduled", "paused", "cancelled"]] = None
 
 
@@ -1762,6 +1922,8 @@ class ScheduledCommunicationOut(BaseModel):
     email_body: Optional[str] = None
     sms_body: Optional[str] = None
     whatsapp_body: Optional[str] = None
+    mms_body: Optional[str] = None
+    mms_media_url: Optional[str] = None
     status: str
     recipients_estimated: int = 0
     recipients_targeted: int = 0

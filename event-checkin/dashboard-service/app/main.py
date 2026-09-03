@@ -684,7 +684,11 @@ async def communication_health(db: AsyncSession, event: Event) -> dict:
                MessageCreditLedger.status, MessageCreditLedger.provider_message_id, MessageCreditLedger.reason)
         .where(MessageCreditLedger.event_id == event.id, MessageCreditLedger.channel.in_(("sms", "mms", "whatsapp")))
     )).all()
-    failed_statuses = {"failed", "undelivered", "error", "rejected"}
+    failed_statuses = {
+        "failed", "undelivered", "error", "rejected", "refunded",
+        "sending_failed", "delivery_failed", "skipped", "deleted",
+        "invalid_recipient", "country_not_enabled", "insufficient_credit",
+    }
     channels = ("sms", "mms", "whatsapp")
     msg_ids = {c: {"sent": set(), "delivered": set(), "failed": set()} for c in channels}
     # Every broadcast-originated ledger row is tagged reason="broadcast" (see
@@ -698,7 +702,9 @@ async def communication_health(db: AsyncSession, event: Event) -> dict:
             continue
         key = provider_message_id or f"ledger:{row_id}"
         bd = bc_ids[c] if (reason or "") == "broadcast" else None
-        if action == "spend":
+        # Legacy credits log sends as ``spend``; organization wallets use
+        # ``reserve`` and reconcile that same row with the provider outcome.
+        if action in {"spend", "reserve"}:
             d["sent"].add(key)
             if bd is not None:
                 bd["sent"].add(key)

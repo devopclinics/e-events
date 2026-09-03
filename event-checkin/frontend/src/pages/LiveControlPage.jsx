@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useParams } from 'react-router-dom'
 import { api } from '../api'
 
 const BROADCAST_SCENES = [
@@ -20,6 +21,16 @@ const SHOW_PHASE_LABELS = {
 }
 const SHOW_AUTOMATION_DEFAULTS = { lobby: 10, intro: 8, question_preview: 5, answering: 30, locked: 3, reveal: 6, results: 10, leaderboard: 8 }
 
+function CountdownStatus({ deadlineAt, prefix, suffix = '' }) {
+  const calculate = () => Math.max(0, Math.ceil((new Date(deadlineAt).getTime() - Date.now()) / 1000))
+  const [remaining, setRemaining] = useState(calculate)
+  useEffect(() => {
+    const timer = setInterval(() => setRemaining(calculate()), 500)
+    return () => clearInterval(timer)
+  }, [deadlineAt]) // eslint-disable-line react-hooks/exhaustive-deps
+  return <span>{prefix}{remaining}s{suffix}</span>
+}
+
 function guidedActionLabel(activity) {
   if (activity?.config?.show_mode !== 'guided') return 'Start guided show'
   const phase = activity.config?.show_phase || 'lobby'
@@ -40,13 +51,14 @@ function guidedActionLabel(activity) {
 }
 
 // A lightweight console for a Presenter or Moderator share-link (Settings →
-// Share Links in the admin page) — no Festio login. The URL's ?role= only
-// picks which UI to render; the token's own embedded capabilities are what
-// the server actually enforces (see engagement-service/app/auth.py).
+// Share Links in the admin page) — no Festio login. New links carry only a
+// short opaque code; the browser exchanges it for the capability-scoped JWT
+// without putting that JWT in the address bar. Legacy ?token= links still work.
 export default function LiveControlPage() {
+  const { shareCode } = useParams()
   const params = new URLSearchParams(window.location.search)
-  const token = params.get('token') || ''
-  const role = params.get('role') || 'presenter'
+  const [token, setToken] = useState(params.get('token') || '')
+  const [role, setRole] = useState(params.get('role') || 'presenter')
   const [activities, setActivities] = useState(null)
   const [activityId, setActivityId] = useState(params.get('activity') || null)
   const [activity, setActivity] = useState(null)
@@ -58,14 +70,88 @@ export default function LiveControlPage() {
   const [busy, setBusy] = useState(false)
   const [resultQuestionIds, setResultQuestionIds] = useState([])
   const [resultPageSeconds, setResultPageSeconds] = useState(8)
-  const [clock, setClock] = useState(Date.now())
-  useEffect(() => { const timer = setInterval(() => setClock(Date.now()), 500); return () => clearInterval(timer) }, [])
+  const [experienceRun, setExperienceRun] = useState(null)
+  const [experienceName, setExperienceName] = useState('')
+  const [experienceDisplay, setExperienceDisplay] = useState(null)
 
   useEffect(() => {
-    if (!token) { setError('This link is missing its access token.'); return }
+    if (!shareCode || token) return
+    api.liveResolveShareLink(shareCode)
+      .then((resolved) => { setToken(resolved.token); setRole(resolved.role) })
+      .catch((e) => setError(e.message))
+  }, [shareCode, token])
+
+  useEffect(() => {
+    if (!token) {
+      if (!shareCode) setError('This link is missing its access token.')
+      return
+    }
     api.liveControlActivities(token).then(setActivities).catch((e) => setError(e.message))
-    if (role === 'presenter') api.liveControlDisplays(token).then((items) => { setDisplays(items); setDisplayId((current) => current || items[0]?.id || null) }).catch((e) => setError(e.message))
+    if (role === 'presenter') Promise.all([
+      api.liveControlDisplays(token),
+      api.liveControlWorkflows(token),
+    ]).then(async ([items, workflows]) => {
+      setDisplays(items)
+      setDisplayId((current) => current || items[0]?.id || null)
+
+      // A single event can have multiple live workflows. The presenter must
+      // control the run actually assigned to its projector, not whichever
+      // active workflow happens to be returned first by the API.
+      const assignedRuns = await Promise.all(items.map(async (item) => {
+        const response = await fetch(`/api/engagement/v1/live/${encodeURIComponent(item.display_code)}?token=${encodeURIComponent(item.access_token)}`)
+        if (!response.ok) return null
+        return (await response.json()).workflow_run || null
+      }))
+      const assignedRun = assignedRuns.find((run) => run && ['ready', 'live', 'paused'].includes(run.status))
+      if (assignedRun) {
+        setExperienceDisplay(items[assignedRuns.indexOf(assignedRun)])
+        const run = await api.liveControlWorkflowRun(token, assignedRun.id)
+        setExperienceRun(run)
+        setExperienceName(workflows.find((workflow) => workflow.id === run.workflow_id)?.name || 'Guided Experience')
+        return
+      }
+      for (const workflow of workflows) {
+        const active = await api.liveControlActiveWorkflowRun(token, workflow.id)
+        if (active.run) { setExperienceRun(active.run); setExperienceName(workflow.name); return }
+      }
+    }).catch((e) => setError(e.message))
   }, [token])
+
+  useEffect(() => {
+    if (!token || !experienceRun?.id || !['ready', 'live', 'paused'].includes(experienceRun.status)) return undefined
+    const refresh = () => api.liveControlWorkflowRun(token, experienceRun.id).then(setExperienceRun).catch(() => {})
+    let poll = null
+    const stopFallback = () => { if (poll) { clearInterval(poll); poll = null } }
+    const startFallback = () => { if (!poll) poll = setInterval(refresh, 5000) }
+    if (!experienceDisplay) { startFallback(); return stopFallback }
+    const events = new EventSource(`/api/engagement/v1/live/${encodeURIComponent(experienceDisplay.display_code)}/stream?token=${encodeURIComponent(experienceDisplay.access_token)}`)
+    events.onopen = stopFallback
+    events.onerror = startFallback
+    ;[
+      'workflow.start', 'workflow.next', 'workflow.previous', 'workflow.jump',
+      'workflow.pause', 'workflow.resume', 'workflow.complete',
+      'workflow.video_play', 'workflow.video_pause', 'workflow.video_restart',
+      'workflow.timer_start', 'workflow.timer_pause', 'workflow.timer_resume',
+      'workflow.timer_reset', 'workflow.timer_add',
+      'workflow.reveal_results', 'workflow.reopen_voting',
+    ].forEach((name) => events.addEventListener(name, refresh))
+    return () => { events.close(); stopFallback() }
+  }, [token, experienceRun?.id, experienceRun?.status, experienceDisplay?.id])
+
+  async function commandExperience(action, stepId = null, extra = {}) {
+    if (!experienceRun) return
+    setBusy(true); setError('')
+    try {
+      const next = await api.liveControlCommandWorkflowRun(token, experienceRun.id, {
+        action, step_id: stepId, expected_version: experienceRun.state_version,
+        idempotency_key: `${Date.now()}-${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`, ...extra,
+      })
+      setExperienceRun(next)
+    } catch (e) {
+      setError(e.message)
+      try { setExperienceRun(await api.liveControlWorkflowRun(token, experienceRun.id)) } catch {}
+    } finally { setBusy(false) }
+  }
 
   const load = useCallback(async () => {
     if (!activityId) return
@@ -183,14 +269,32 @@ export default function LiveControlPage() {
   const currentQuestionIndex = activity?.questions?.findIndex((question) => question.id === activity.config?.current_question_id) ?? -1
   const currentQuestion = currentQuestionIndex >= 0 ? activity.questions[currentQuestionIndex] : null
   const currentResult = results?.questions?.find((question) => question.question_id === currentQuestion?.id)
-  const secondsRemaining = currentQuestion?.time_limit_seconds && currentQuestion.config?.opened_at
-    ? Math.max(0, Math.ceil(currentQuestion.time_limit_seconds - (clock - new Date(currentQuestion.config.opened_at).getTime()) / 1000))
+  const questionDeadline = currentQuestion?.time_limit_seconds && currentQuestion.config?.opened_at
+    ? new Date(new Date(currentQuestion.config.opened_at).getTime() + currentQuestion.time_limit_seconds * 1000).toISOString()
     : null
-  const automationRemaining = activity?.config?.show_automation_enabled && activity.config?.show_phase_deadline_at
-    ? Math.max(0, Math.ceil((new Date(activity.config.show_phase_deadline_at).getTime() - clock) / 1000))
-    : null
+  const automationDeadline = activity?.config?.show_automation_enabled ? activity.config?.show_phase_deadline_at : null
   const resultPageCount = Math.max(1, Math.ceil(resultQuestionIds.length / 6))
   const resultPage = Math.min(resultPageCount - 1, Number(selectedDisplay?.settings?.results_page || 0))
+
+  if (experienceRun) {
+    const current = experienceRun.current_step
+    const presenter = current?.config?.presenter || {}
+    const timer = experienceRun.runtime?.timer
+    const interactive = ['poll', 'multi_select', 'rating', 'ranking'].includes(current?.step_type)
+    return <div className="min-h-screen bg-[#f5f7fa] px-4 py-7 text-slate-950"><main className="mx-auto grid max-w-2xl gap-4">
+      <header className="text-center"><div className="text-[11px] font-black uppercase tracking-[.22em] text-teal-600">Festio Live · Experience Presenter</div><h1 className="mt-2 text-2xl font-black">{experienceName}</h1><div className="mt-3 flex justify-center gap-4 text-xs font-bold"><span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">● {experienceRun.status.toUpperCase()}</span><span className="px-2 py-1 text-slate-500">▣ Display connected</span></div></header>
+      {error && <div className="rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-700">{error}</div>}
+      <section className="rounded-2xl bg-gradient-to-br from-[#070d24] via-[#201052] to-[#32116d] p-6 text-white shadow-xl"><div className="text-[10px] font-black uppercase tracking-[.2em] text-teal-300">Guided Experience</div><div className="mt-2 flex items-end justify-between gap-4"><div><h2 className="text-2xl font-black">{String((experienceRun.steps || []).findIndex((step) => step.id === current?.id) + 1).padStart(2, '0')} · {current?.title || 'Ready to begin'}</h2><p className="mt-1 text-xs font-bold text-slate-300">Scene {Math.max(1, (experienceRun.steps || []).findIndex((step) => step.id === current?.id) + 1)} of {experienceRun.steps?.length || 0}</p></div>{timer && <strong className="text-5xl tabular-nums">{String(Math.floor((timer.remaining_seconds || 0) / 60)).padStart(2, '0')}:{String((timer.remaining_seconds || 0) % 60).padStart(2, '0')}</strong>}</div>
+      {experienceRun.status === 'ready' && <button disabled={busy} onClick={() => commandExperience('start')} className="mt-5 min-h-14 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-teal-300 font-black text-slate-950">Start experience</button>}
+      {['countdown','game'].includes(current?.step_type) && <button disabled={busy} onClick={() => commandExperience(timer?.status === 'running' ? 'timer_pause' : timer?.status === 'paused' ? 'timer_resume' : 'timer_start')} className="mt-5 min-h-14 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-teal-300 font-black text-slate-950">{timer?.status === 'running' ? 'Pause timer' : timer?.status === 'paused' ? 'Resume timer' : 'Start timer'}</button>}
+      <div className="mt-4 text-right text-xs font-bold text-teal-200">✓ Server synchronized</div></section>
+      <section className="grid grid-cols-2 gap-3 rounded-2xl bg-white p-4 shadow-sm sm:grid-cols-4"><button disabled={busy || experienceRun.status === 'ready'} onClick={() => commandExperience('previous')} className="rounded-xl border p-4 font-extrabold">←<br/>Previous</button><button disabled={busy || experienceRun.status === 'ready'} onClick={() => commandExperience('next')} className="rounded-xl border p-4 font-extrabold">→<br/>Next scene</button><button disabled={busy || experienceRun.status === 'ready'} onClick={() => commandExperience(experienceRun.status === 'paused' ? 'resume' : 'pause')} className="rounded-xl border p-4 font-extrabold">Ⅱ<br/>{experienceRun.status === 'paused' ? 'Resume' : 'Pause'}</button><button disabled={busy || !interactive} onClick={() => commandExperience(current?.display_phase === 'results' ? 'reopen_voting' : 'reveal_results')} className="rounded-xl border p-4 font-extrabold text-amber-700">✦<br/>{current?.display_phase === 'results' ? 'Reopen voting' : 'Reveal results'}</button><select aria-label="Jump to scene" value={current?.id || ''} onChange={(event) => commandExperience('jump', event.target.value)} className="col-span-2 rounded-xl border p-3 font-bold"><option value="" disabled>Jump to scene…</option>{experienceRun.steps?.map((step, index) => <option key={step.id} value={step.id}>{String(index + 1).padStart(2,'0')} · {step.title}</option>)}</select><button onClick={() => displays?.[0] && window.open(displays[0].short_code ? `/d/${displays[0].short_code}` : `/live/${displays[0].display_code}?token=${encodeURIComponent(displays[0].access_token)}`, '_blank', 'noopener,noreferrer')} className="col-span-2 rounded-xl border p-3 font-bold">Open display ↗</button></section>
+      {current?.step_type === 'video' && <section className="rounded-2xl border border-violet-200 bg-white p-4 shadow-sm"><div className="text-[10px] font-black uppercase tracking-[.18em] text-violet-600">Projector video</div><div className="mt-3 grid grid-cols-3 gap-2"><button disabled={busy} onClick={() => commandExperience('video_play')} className="min-h-12 rounded-xl bg-violet-600 font-black text-white">▶ Play</button><button disabled={busy} onClick={() => commandExperience('video_pause')} className="min-h-12 rounded-xl border font-black">Ⅱ Pause</button><button disabled={busy} onClick={() => commandExperience('video_restart')} className="min-h-12 rounded-xl border font-black">↺ Restart</button></div><p className="mt-2 text-xs font-semibold text-slate-500">These controls operate the video on the assigned projector display.</p></section>}
+      <section className="overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm"><header className="flex items-center justify-between bg-amber-50 px-5 py-3"><div><div className="text-[10px] font-black uppercase tracking-[.18em] text-amber-700">Private · Presenter Notes</div><div className="mt-0.5 text-xs font-bold text-slate-500">Only you can see this guidance</div></div>{presenter.target_duration && <b className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">Target {presenter.target_duration}</b>}</header><div className="grid gap-4 p-5"><div><div className="text-[10px] font-black uppercase tracking-wider text-violet-600">Talking point</div><p className="mt-2 text-base font-semibold leading-7 text-slate-800">{presenter.talking_point || current?.presenter_notes || 'No talking point has been added for this scene.'}</p></div>{presenter.action_cue && <div className="rounded-xl border border-teal-200 bg-teal-50 p-4"><div className="text-[10px] font-black uppercase tracking-wider text-teal-700">Action cue</div><b className="mt-1 block text-sm text-teal-950">{presenter.action_cue}</b></div>}{presenter.transition && <div><div className="text-[10px] font-black uppercase tracking-wider text-fuchsia-600">Transition to next scene</div><p className="mt-1 text-sm font-semibold italic text-slate-700">“{presenter.transition}”</p></div>}{presenter.private_notes && <div className="rounded-xl bg-slate-100 p-3 text-xs font-semibold text-slate-600"><b className="mr-1 text-slate-900">Organizer note:</b>{presenter.private_notes}</div>}</div></section>
+      <section className="grid grid-cols-2 divide-x rounded-2xl bg-white shadow-sm"><div className="p-4"><div className="text-[10px] font-black uppercase tracking-wider text-violet-600">Up next</div><b>{experienceRun.next_step?.title || 'Closing'}</b></div><div className="p-4"><div className="text-[10px] font-black uppercase tracking-wider text-teal-700">Audience</div><b>{current?.data?.response_count || 0} responses</b></div></section>
+      <footer className="flex items-center justify-between rounded-2xl bg-white p-4 shadow-sm"><button disabled={busy || !['live','paused'].includes(experienceRun.status)} onClick={() => window.confirm('End this experience?') && commandExperience('complete')} className="rounded-lg border border-rose-300 px-4 py-2 text-sm font-black text-rose-600">End experience</button><span className="text-xs font-bold text-emerald-700">✓ Server synchronized</span></footer>
+    </main></div>
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-8 dark:bg-slate-950">
@@ -224,14 +328,14 @@ export default function LiveControlPage() {
                     <div className="flex items-start justify-between gap-3"><div><div className="text-[10px] font-black uppercase tracking-[.2em] text-teal-300">Guided Show Mode</div><h2 className="mt-1 text-xl font-black">{SHOW_PHASE_LABELS[activity.config?.show_phase] || 'Ready to begin'}</h2><p className="mt-1 text-xs font-semibold text-slate-300">One action keeps the projector, guest phones, voting, timer and results in sync.</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${activity.config?.show_mode === 'guided' ? 'bg-teal-300 text-slate-950' : 'bg-white/10 text-slate-300'}`}>{activity.config?.show_mode === 'guided' ? 'Active' : 'Off'}</span></div>
                     {currentQuestion && <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-3"><div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Question {currentQuestionIndex + 1} of {activity.questions.length}</div><div className="mt-1 text-sm font-extrabold">{currentQuestion.prompt}</div></div>}
                     <button type="button" disabled={busy} onClick={activity.config?.show_mode === 'guided' && activity.config?.show_phase !== 'complete' ? advanceGuidedShow : startGuidedShow} className="mt-4 min-h-14 w-full rounded-xl bg-gradient-to-r from-teal-300 via-cyan-300 to-violet-400 px-4 text-sm font-black text-slate-950 shadow-lg disabled:opacity-40">{busy ? 'Updating every screen…' : guidedActionLabel(activity)}</button>
-                    <div className="mt-3 flex items-center justify-between text-[11px] font-bold text-slate-400"><span>{selectedDisplay ? `Main screen: ${selectedDisplay.name}` : 'Select a main screen below'}</span><span>{automationRemaining != null ? `Auto advance in ${automationRemaining}s` : secondsRemaining != null && activity.config?.show_phase === 'answering' ? `${secondsRemaining}s remaining` : 'Server synchronized'}</span></div>
+                    <div className="mt-3 flex items-center justify-between text-[11px] font-bold text-slate-400"><span>{selectedDisplay ? `Main screen: ${selectedDisplay.name}` : 'Select a main screen below'}</span>{automationDeadline ? <CountdownStatus deadlineAt={automationDeadline} prefix="Auto advance in "/> : questionDeadline && activity.config?.show_phase === 'answering' ? <CountdownStatus deadlineAt={questionDeadline} prefix="" suffix=" remaining"/> : <span>Server synchronized</span>}</div>
                     <button type="button" disabled={busy} onClick={toggleGuidedAutomation} className="mt-3 w-full rounded-xl border border-white/20 px-3 py-2 text-xs font-extrabold text-white">{activity.config?.show_automation_enabled ? 'Pause automation' : 'Resume automation'}</button>
                   </div>
                 </section>
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div><div className="text-xs font-extrabold uppercase tracking-[.16em] text-fuchsia-500">Festio Broadcast</div><div className="mt-1 text-sm font-bold text-slate-500">Control every projector without leaving this screen</div></div>
-                    {selectedDisplay && <button type="button" onClick={() => window.open(`/live/${selectedDisplay.display_code}?token=${encodeURIComponent(selectedDisplay.access_token)}`, '_blank', 'noopener,noreferrer')} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-extrabold text-slate-700 dark:text-white">Open display ↗</button>}
+                    {selectedDisplay && <button type="button" onClick={() => window.open(selectedDisplay.short_code ? `/d/${selectedDisplay.short_code}` : `/live/${selectedDisplay.display_code}?token=${encodeURIComponent(selectedDisplay.access_token)}`, '_blank', 'noopener,noreferrer')} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-extrabold text-slate-700 dark:text-white">Open display ↗</button>}
                   </div>
                   {displays?.length ? <div className="mt-4 grid gap-4">
                     <div className="flex gap-2"><select value={displayId || ''} onChange={(e) => setDisplayId(e.target.value)} className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-bold dark:border-slate-700 dark:bg-slate-950 dark:text-white">{displays.map((display) => <option key={display.id} value={display.id}>{display.name}</option>)}</select><button type="button" disabled={busy || selectedDisplay?.assigned_activity_id === activityId} onClick={() => updateDisplay({ assigned_activity_id: activityId })} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-extrabold text-slate-700 disabled:opacity-40 dark:text-white">Use this activity</button></div>

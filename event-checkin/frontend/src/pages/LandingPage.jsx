@@ -1241,7 +1241,7 @@ export default function LandingPage() {
           </nav>
           <div className="text-xs font-medium leading-5 text-slate-400 dark:text-slate-500 lg:text-right">
             <p>© {new Date().getFullYear()} Festio. All rights reserved.</p>
-            <p>Festio is operated by FOHMA Solutions LLC.</p>
+            <p>FestioEvents is an event-management platform operated by FOHMA Solutions LLC.</p>
             <p><a href="mailto:events@festio.events" className="hover:text-teal-700 dark:hover:text-teal-300">events@festio.events</a></p>
           </div>
         </div>

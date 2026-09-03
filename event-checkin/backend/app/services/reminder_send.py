@@ -79,7 +79,10 @@ def _reminder_extras(event: Event, guest: Guest) -> dict:
     return extras
 
 
-async def _send_to_guest(event: Event, reminder: EventReminder, guest: Guest, db: AsyncSession) -> list[str]:
+async def _send_to_guest(
+    event: Event, reminder: EventReminder, guest: Guest, db: AsyncSession,
+    *, extra_context: dict | None = None,
+) -> list[str]:
     """One guest, all of this reminder's enabled channels. Gates mirror
     post_event_message.py's shape: event.blocked_messaging_channels,
     event.notify_email/sms/whatsapp, guest.sms_consent/whatsapp_consent (no
@@ -88,7 +91,8 @@ async def _send_to_guest(event: Event, reminder: EventReminder, guest: Guest, db
     -- it's already enforced one layer down inside messaging._channel_ready()
     and email_service's own send path, same as every other automatic send."""
     blocked = set(event.blocked_messaging_channels or [])
-    ctx = build_context(event, guest, extras=_reminder_extras(event, guest))
+    extras = {**_reminder_extras(event, guest), **(extra_context or {})}
+    ctx = build_context(event, guest, extras=extras)
     fired: list[str] = []
 
     if (
@@ -130,15 +134,40 @@ async def _send_to_guest(event: Event, reminder: EventReminder, guest: Guest, db
             fired.append("sms")
 
     if (
+        "mms" in reminder.channels and "mms" not in blocked
+        and event.notify_mms and guest.sms_consent and messaging.mms_ready()
+    ):
+        body = render(getattr(reminder, "mms_body", None), ctx)
+        media_url = render(getattr(reminder, "mms_media_url", None), ctx)
+        if body and media_url and await reserve_message_credit(event, "mms", db=db, reason=f"reminder:{reminder.id}", guest_id=guest.id):
+            await send_with_credit_ledger(
+                last_credit_ledger_id(event), messaging.send_mms,
+                phone=guest.phone, body=body, media_url=media_url,
+            )
+            fired.append("mms")
+
+    if (
         "whatsapp" in reminder.channels and "whatsapp" not in blocked
         and event.notify_whatsapp and guest.whatsapp_consent
+        and (
+            getattr(reminder, "communication_type", None) != "consent_reminder"
+            or messaging.settings.bird_whatsapp_consent_reminder_template
+        )
     ):
         body = render(reminder.whatsapp_body, ctx)
         if body and await reserve_message_credit(event, "whatsapp", db=db, reason=f"reminder:{reminder.id}", guest_id=guest.id):
-            await send_with_credit_ledger(
-                last_credit_ledger_id(event), messaging.send_custom_whatsapp,
-                phone=guest.phone, body=body,
-            )
+            if getattr(reminder, "communication_type", None) == "consent_reminder":
+                await send_with_credit_ledger(
+                    last_credit_ledger_id(event), messaging.send_consent_reminder_whatsapp,
+                    phone=guest.phone, first_name=guest.first_name or "Guest", event_name=event.name,
+                    consent_link=ctx.get("consent_link", ""), event_date=event.event_date,
+                    event_timezone=event.timezone,
+                )
+            else:
+                await send_with_credit_ledger(
+                    last_credit_ledger_id(event), messaging.send_custom_whatsapp,
+                    phone=guest.phone, body=body,
+                )
             fired.append("whatsapp")
 
     return fired

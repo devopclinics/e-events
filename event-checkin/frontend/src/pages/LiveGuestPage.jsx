@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../api'
+import './LiveGuestExperience.css'
 
 function useQueryParams() {
   const [params] = useState(() => new URLSearchParams(window.location.search))
@@ -53,10 +54,14 @@ function useLiveRefresh(guestToken, activityId, onEvent) {
     if (!guestToken || !activityId) return undefined
     let cancelled = false
     let poll
+    const stopFallback = () => { if (poll) { clearInterval(poll); poll = null } }
+    const startFallback = () => { if (!poll) poll = setInterval(onEvent, 5000) }
     api.liveGuestRealtimeTicket(guestToken, activityId).then(({ ticket }) => {
       if (cancelled) return
       const es = new EventSource(`/api/engagement/v1/activities/${activityId}/stream?ticket=${encodeURIComponent(ticket)}`)
       sourceRef.current = es
+      es.onopen = stopFallback
+      es.onerror = startFallback
       es.addEventListener('response.submitted', onEvent)
       es.addEventListener('question.changed', onEvent)
       es.addEventListener('question.state_changed', onEvent)
@@ -65,8 +70,7 @@ function useLiveRefresh(guestToken, activityId, onEvent) {
       es.addEventListener('qna.upvoted', onEvent)
       es.addEventListener('qna.moderated', onEvent)
       es.addEventListener('activity.status_changed', onEvent)
-    }).catch(() => { /* falls back to polling below */ })
-    poll = setInterval(onEvent, 5000)
+    }).catch(startFallback)
     return () => {
       cancelled = true
       sourceRef.current?.close()
@@ -830,6 +834,8 @@ export default function LiveGuestPage() {
   const [retryNonce, setRetryNonce] = useState(0)
   const [activities, setActivities] = useState(null)
   const [activityId, setActivityId] = useState(null)
+  const [workflowRun, setWorkflowRun] = useState(null)
+  const guestTheme = workflowRun?.current_step?.theme?.guest_preset || workflowRun?.theme?.guest_preset || 'cinematic'
   const codeEntryMode = !queryEventId && !joinCode && window.location.pathname.replace(/\/+$/, '') === '/live/join'
 
   useEffect(() => {
@@ -864,6 +870,40 @@ export default function LiveGuestPage() {
     catch (e) { setError(e) }
   }, [guestToken, sessionId])
   useEffect(() => { loadActivities() }, [loadActivities])
+  const loadWorkflow = useCallback(async () => {
+    if (!guestToken) return
+    try {
+      const result = await api.liveGuestCurrentWorkflowRun(guestToken)
+      const nextRun = result.run || null
+      setWorkflowRun(nextRun)
+      setActivityId(nextRun?.active_activity_id || null)
+    } catch { /* workflows may be disabled; existing activity UX remains intact */ }
+  }, [guestToken])
+  useEffect(() => {
+    loadWorkflow()
+  }, [guestToken, loadWorkflow])
+  useEffect(() => {
+    if (!guestToken) return undefined
+    if (!workflowRun?.id || !workflowRun?.public_token) {
+      const discoveryPoll = setInterval(loadWorkflow, 10000)
+      return () => clearInterval(discoveryPoll)
+    }
+    let fallback = null
+    const stopFallback = () => { if (fallback) { clearInterval(fallback); fallback = null } }
+    const startFallback = () => { if (!fallback) fallback = setInterval(loadWorkflow, 5000) }
+    const events = new EventSource(`/api/engagement/v1/runs/${encodeURIComponent(workflowRun.id)}/stream?token=${encodeURIComponent(workflowRun.public_token)}`)
+    const refresh = () => loadWorkflow()
+    events.onopen = stopFallback
+    events.onerror = startFallback
+    ;[
+      'workflow.start', 'workflow.next', 'workflow.previous', 'workflow.jump',
+      'workflow.pause', 'workflow.resume', 'workflow.complete',
+      'workflow.timer_start', 'workflow.timer_pause', 'workflow.timer_resume',
+      'workflow.timer_reset', 'workflow.timer_add',
+      'workflow.reveal_results', 'workflow.reopen_voting',
+    ].forEach((name) => events.addEventListener(name, refresh))
+    return () => { events.close(); stopFallback() }
+  }, [guestToken, workflowRun?.id, workflowRun?.public_token, loadWorkflow])
   useEffect(() => {
     if (!guestToken || activityId) return undefined
     const poll = setInterval(loadActivities, 6000)
@@ -871,10 +911,10 @@ export default function LiveGuestPage() {
   }, [guestToken, activityId, loadActivities])
 
   return (
-    <div className="min-h-screen bg-slate-50 px-4 py-8 dark:bg-slate-950">
+    <div className={`live-guest-experience live-guest-${guestTheme} min-h-screen px-4 py-8`}>
       <div className="mx-auto max-w-md">
         <div className="mb-6 text-center">
-          <div className="text-xs font-extrabold uppercase tracking-[0.2em] text-teal-700 dark:text-teal-300">Festio Live</div>
+          <div className="live-guest-brand text-xs font-extrabold uppercase tracking-[0.2em]">Festio Live</div>
         </div>
         {error?.code === 'FESTIO_LIVE_UNAVAILABLE' && <LiveUnavailableState onRetry={() => { setError(''); setActivities(null); if (guestToken) loadActivities(); else setRetryNonce((value) => value + 1) }} backHref={passToken ? `/scan/${encodeURIComponent(passToken)}/hub` : '/'} />}
         {error && error.code !== 'FESTIO_LIVE_UNAVAILABLE' && <div role="alert" className="mb-4 rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-700 dark:bg-rose-950 dark:text-rose-200">{error.message || error}{joinCode && <a className="mt-2 block underline" href="/live/join">Try another code</a>}</div>}
@@ -884,8 +924,9 @@ export default function LiveGuestPage() {
         {!error && !broadcastMode && !guestToken && <p className="text-center text-sm text-slate-600 dark:text-slate-300">Connecting…</p>}
         {guestToken && !activityId && (
           <div className="grid gap-3">
+            {workflowRun && <div className="overflow-hidden rounded-2xl border border-teal-200 bg-white shadow-sm dark:border-teal-800 dark:bg-slate-900"><div className="h-2 bg-gradient-to-r from-teal-400 via-cyan-400 to-violet-500"/><div className="p-5"><div className="text-xs font-extrabold uppercase tracking-[.16em] text-teal-700 dark:text-teal-300">Guided experience · {workflowRun.status}</div><h2 className="mt-2 text-xl font-black text-slate-950 dark:text-white">{workflowRun.current_step?.title || 'The next moment will begin shortly'}</h2><p className="mt-2 text-sm font-semibold text-slate-600 dark:text-slate-300">{workflowRun.status === 'paused' ? 'The presenter has paused this experience.' : 'Watch the main screen. An interaction will appear here when it is time to participate.'}</p></div></div>}
             {activities === null ? <p className="text-center text-sm text-slate-600 dark:text-slate-300">Loading…</p> : activities.length === 0 ? (
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center text-sm font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-900">Nothing is live right now — check back once your host starts something.</div>
+              !workflowRun && <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center text-sm font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-900">Nothing is live right now — check back once your host starts something.</div>
             ) : activities.map((a) => (
               <button key={a.id} type="button" onClick={() => setActivityId(a.id)}
                 className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 text-left dark:border-slate-700 dark:bg-slate-900">

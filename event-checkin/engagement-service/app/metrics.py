@@ -8,3 +8,5 @@ REALTIME_PUBLISH_FAILURES = Counter("engagement_realtime_publish_failures_total"
 AI_JOBS = Counter("engagement_ai_jobs_total", "AI analysis jobs", ["outcome"])
 DEPENDENCY_LATENCY = Histogram("engagement_dependency_seconds", "Dependency check latency", ["dependency"])
 DEPENDENCY_HEALTH = Gauge("engagement_dependency_health", "Dependency health (1=healthy, 0=degraded)", ["dependency"])
+WORKFLOW_TRANSITIONS = Counter("engagement_workflow_transitions_total", "Authoritative workflow run transitions", ["action"])
+ACTIVE_WORKFLOW_RUNS = Gauge("engagement_active_workflow_runs", "Workflow runs currently live or paused")

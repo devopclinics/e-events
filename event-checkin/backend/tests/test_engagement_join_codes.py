@@ -29,7 +29,7 @@ async def test_short_live_join_code_is_stable_resolvable_and_authorized(ctx, mon
     assert first.status_code == 200
     payload = first.json()
     assert re.fullmatch(r"[A-Z0-9]{6}", payload["code"])
-    assert payload["url"] == f"https://staging.festio.events/live/join/{payload['code']}"
+    assert payload["url"] == f"https://staging.festio.events/l/{payload['code']}"
 
     second = await ctx.client.get(f"/api/events/{event_id}/live/join-info")
     assert second.status_code == 200
@@ -67,3 +67,30 @@ async def test_short_live_join_code_is_stable_resolvable_and_authorized(ctx, mon
         await session.commit()
     disabled = await ctx.client.get(f"/api/events/live/join/{payload['code']}")
     assert disabled.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_presenter_share_link_uses_short_opaque_code(ctx, monkeypatch):
+    event_id = ctx.ids["event_a"]
+    async with _Session() as session:
+        event = await session.get(Event, event_id)
+        event.engagement_enabled = True
+        await session.commit()
+
+    monkeypatch.setattr(settings, "engagement_internal_token", "test-live-secret")
+    monkeypatch.setattr(settings, "public_base_url", "https://staging.festio.events")
+    ctx.login(ctx.ids["user_a"])
+    created = await ctx.client.post(f"/api/events/{event_id}/live/share-link", json={"role": "presenter", "hours": 12})
+    assert created.status_code == 200
+    payload = created.json()
+    assert re.fullmatch(r"[A-Za-z0-9_-]{16}", payload["code"])
+    assert payload["url"] == f"https://staging.festio.events/p/{payload['code']}"
+    assert "token=" not in payload["url"]
+
+    resolved = await ctx.client.get(f"/api/events/live/share/{payload['code']}")
+    assert resolved.status_code == 200
+    assert resolved.json()["token"] == payload["token"]
+    assert resolved.json()["role"] == "presenter"
+
+    missing = await ctx.client.get("/api/events/live/share/not-a-real-code")
+    assert missing.status_code == 404

@@ -1,0 +1,94 @@
+{
+  "name": "MBF Summit 2026 — Better Together",
+  "description": "Different generations. Different experiences. Different perspectives. Yet the quality of our relationships can make us better together.",
+  "theme": {"preset": "legacy_cinematic", "accent": "#20d2c2", "gold": "#e7bd68", "event_line": "Different Generations · One Community"},
+  "steps": [
+    {"step_type": "hero", "title": "THE GOOD LIFE", "subtitle": "Different generations. Different experiences. One community. What can we learn from one another?", "duration_seconds": 45, "config": {"eyebrow": "MBF SUMMIT 2026", "lines": ["BETTER TOGETHER"]}, "presenter": {"talking_point": "Assalamu Alaikum wa Rahmatullahi wa Barakatuh. Before we begin the Summit, I want us to do something together. We have different generations in this room — different experiences, different responsibilities, different ideas about what makes a good life. But we're all here together. So for the next few minutes, we're going to learn something about ourselves.", "action_cue": "Pause after the question", "transition": "What matters to us — and what might we gain by being connected to one another?", "target_duration": "00:45"}},
+
+    {"step_type": "diagram", "title": "Same room. Different life stages. Every voice counts.", "config": {"kicker": "HOW THIS WORKS", "nodes": [
+      {"id": "vote", "label": "VOTE", "caption": "Answer honestly from where you are in life today.", "area": "top", "icon": "①"},
+      {"id": "notice", "label": "NOTICE", "caption": "See where we're similar — and where we're different.", "area": "middle", "icon": "②"},
+      {"id": "connect", "label": "CONNECT", "caption": "Discover what we can learn from one another.", "area": "bottom", "icon": "③"}
+    ]}, "presenter": {"talking_point": "Don't try to give the answer you think everyone expects. A young brother may answer differently from someone who has raised a family. Someone in his forties may see life differently from someone in his seventies.", "action_cue": "Let it land — no need to rush", "transition": "That's exactly what makes this interesting. Anonymous, no right or wrong answers.", "target_duration": "00:45"}},
+
+    {"step_type": "poll", "title": "What contributes MOST to a good and fulfilling life for you right now?", "activity_key": "good_life_before", "config": {"tag": "GOOD_LIFE_BEFORE"}, "presenter": {"talking_point": "Choose only one. And notice the words right now. Answer based on the stage of life you're actually in — not where you were ten years ago, and not where you think you should be.", "action_cue": "Open voting · wait 30–45 seconds", "transition": "Let's lock that in and come back to it later.", "target_duration": "01:00"}},
+
+    {"step_type": "custom_message", "title": "RESPONSE RECEIVED", "subtitle": "We'll come back to this.", "presenter": {"talking_point": "We're deliberately not showing this one yet.", "action_cue": "Keep it brief · move straight on", "transition": "Let's ask something else first.", "target_duration": "00:15"}},
+
+    {"step_type": "poll", "title": "When life becomes difficult, do you have someone you can talk to openly and honestly?", "activity_key": "connection_test", "presenter": {"talking_point": "This one is anonymous. Don't think about how many people you know. Think about how many people you can actually be honest with when things aren't going well.", "action_cue": "Open voting · then reveal", "transition": "Let's see where we actually stand.", "target_duration": "01:00"}},
+
+    {"step_type": "poll_results", "title": "How connected are we?", "activity_key": "connection_test", "config": {"result_style": "connection_gauge"}, "presenter": {"talking_point": "We often measure community by attendance — how many people are in the room. But maybe there's another measure: when life gets difficult, is there actually somebody you can call?", "action_cue": "Reveal · then pause", "transition": "Now let's ask where we can strengthen that.", "target_duration": "01:00"}},
+
+    {"step_type": "poll", "title": "Which connection within our community would you most like to see become stronger?", "activity_key": "connection_growth", "presenter": {"talking_point": "This is deliberately not \"which relationship is failing.\" It's positive and forward-looking — where do you see an opportunity for us to grow?", "action_cue": "Open voting · then reveal", "transition": "Let's put that on the map.", "target_duration": "01:00"}},
+
+    {"step_type": "diagram", "title": "Where can we grow stronger?", "activity_key": "connection_growth", "config": {"kicker": "COMMUNITY CONNECTION MAP", "nodes": [
+      {"id": "mbf", "label": "MBF", "area": "middle", "icon": "✦"},
+      {"id": "youth_elders", "label": "Youth ↔ Adults & Elders", "area": "top", "icon": "◉"},
+      {"id": "mentorship", "label": "Mentors ↔ Those Seeking Guidance", "area": "topright", "icon": "↗"},
+      {"id": "families", "label": "Families ↔ Other Families", "area": "right", "icon": "⌂"},
+      {"id": "wider", "label": "The Wider MBF Community", "area": "bottom", "icon": "◎"},
+      {"id": "brotherhood", "label": "Friendships & Brotherhood", "area": "bottomleft", "icon": "●●"},
+      {"id": "parents_children", "label": "Parents ↔ Children", "area": "left", "icon": "♥"}
+    ]}, "presenter": {"talking_point": "Earlier I said this wasn't a report card. It still isn't — this is the room telling us where stronger relationships could make our community even better.", "action_cue": "Let the strongest connection speak for itself · no need to over-explain", "transition": "Now let's actually do something about this, right now.", "target_duration": "01:00"}},
+
+    {"step_type": "game", "title": "Find someone from a different generation or life stage.", "subtitle": "Not the person you came with.", "duration_seconds": 90, "config": {"instructions": "Phones down. Introduce yourself first, then ask the question below.", "prompts": ["What is one thing your generation understands that mine could learn from?"]}, "presenter": {"talking_point": "Phones down. Find somebody from a different generation or stage of life. You have 90 seconds. Introduce yourself first, then ask the question on the screen. Listen to understand — don't debate their answer.", "action_cue": "Start the 90-second timer · help people pair up", "transition": "Welcome back. Let's hear from some real research now.", "target_duration": "01:30"}},
+
+    {"step_type": "video", "title": "What if we could study an entire lifetime?", "subtitle": "Harvard Study of Adult Development · Robert Waldinger", "config": {"video_url": "https://www.youtube.com/watch?v=8KkKuTCFvzI", "start_seconds": 383, "end_seconds": 681, "requires_presenter_play": true, "context": "Watch for ONE idea that challenges the way you think about a good life."}, "presenter": {"talking_point": "We've heard from ourselves. Now let's hear from research that followed people's lives across decades. As you watch, don't try to remember everything — listen for one idea that challenges something you believe about a good life.", "action_cue": "Play the ~5 minute excerpt — trimmed to start right at \"we've learned three big lessons about relationships\" and end right as he turns the question back to the audience", "transition": "Let's sit with that for a second.", "target_duration": "04:58"}},
+
+    {"step_type": "custom_message", "title": "SO...", "presenter": {"talking_point": "Don't rush into the next question.", "action_cue": "Pause. Let the video land.", "transition": "What really matters?", "target_duration": "00:10"}},
+
+    {"step_type": "custom_message", "title": "What really matters?", "presenter": {"talking_point": "Let's answer one question again.", "action_cue": "Pause again before moving on", "transition": "You saw this question a few minutes ago. Don't try to remember what you selected — answer it again based on what you're thinking now.", "target_duration": "00:15"}},
+
+    {"step_type": "poll", "title": "What contributes MOST to a good and fulfilling life for you right now?", "activity_key": "good_life_after", "config": {"tag": "GOOD_LIFE_AFTER"}, "presenter": {"talking_point": "Same question, same wording. Answer based on what you're thinking right now, not what you picked earlier.", "action_cue": "Open voting · keep wording unchanged · do NOT reveal comparison yet", "transition": "Let's look deeper at how our relationships are actually doing.", "target_duration": "00:50"}},
+
+    {"step_type": "poll", "title": "How satisfied are you with the quality of your closest relationships today?", "activity_key": "relationship_quality", "presenter": {"talking_point": "This one doesn't assume marriage, children, employment, age, or a specific life stage. A 16-year-old and a 75-year-old can both answer it meaningfully.", "action_cue": "Open voting · then reveal", "transition": "Let's see where we stand.", "target_duration": "01:00"}},
+
+    {"step_type": "poll_results", "title": "How strong do our closest relationships feel?", "activity_key": "relationship_quality", "config": {"result_style": "donut"}, "presenter": {"talking_point": "Actual data only — no interpretation needed yet.", "action_cue": "Reveal · brief pause", "transition": "Now, slightly different question.", "target_duration": "00:45"}},
+
+    {"step_type": "poll", "title": "How often do you intentionally make time for family, friends, mentors, or other people who matter to you?", "activity_key": "connection_rhythm", "presenter": {"talking_point": "We've asked whether relationships matter. Now: do our schedules reflect what we say matters?", "action_cue": "Open voting · then reveal", "transition": "Let's see the room's rhythm.", "target_duration": "01:00"}},
+
+    {"step_type": "poll_results", "title": "Are we making time?", "activity_key": "connection_rhythm", "config": {"result_style": "commitment_tiles"}, "presenter": {"talking_point": "Relationships don't always weaken because we decided somebody no longer matters.", "action_cue": "Pause before the next line", "transition": "Sometimes everything else simply kept getting our time.", "target_duration": "01:00"}},
+
+    {"step_type": "poll", "title": "When people one day look back on your life, what would you most want to be remembered for?", "activity_key": "legacy", "config": {"eyebrow": "FAST-FORWARD"}, "presenter": {"talking_point": "For our younger brothers, this may be about the life you're beginning to build. For others, it may be about the life you're already building. And for our elders, there is a lifetime of experience behind the answer. What do you ultimately want your life to say?", "action_cue": "Open voting · then reveal", "transition": "The room has spoken.", "target_duration": "01:15"}},
+
+    {"step_type": "poll_results", "title": "What do you want your life to say?", "activity_key": "legacy", "config": {"result_style": "legacy_podium"}, "presenter": {"talking_point": "Let it sit for a moment before commenting.", "action_cue": "Reveal · give it 5 seconds before speaking", "transition": "Now let's look back at everything the room just told us.", "target_duration": "01:00"}},
+
+    {"step_type": "comparison", "title": "DID OUR THINKING CHANGE?", "comparison_keys": ["good_life_before", "good_life_after"], "presenter": {"talking_point": "Here's what we said before the video, and here's what we said afterward. There's no correct answer here — what interests me is whether a few minutes of reflection changed what we placed at the center.", "action_cue": "Show comparison · keep the interpretation simple", "transition": "Now let's put a few of tonight's numbers side by side.", "target_duration": "01:15"}},
+
+    {"step_type": "big_number", "title": "How connected are we?", "metric_sources": [
+      {"activity_key": "connection_test", "option_labels": ["Yes — several people", "Yes — one person"], "label": "have at least one person they can talk to openly"},
+      {"activity_key": "relationship_quality", "option_labels": ["Very satisfied", "Satisfied"], "label": "are satisfied with their closest relationships"},
+      {"activity_key": "connection_rhythm", "option_labels": ["Daily", "Several times a week", "About once a week"], "label": "make time for it at least weekly"}
+    ], "config": {"footer_line": "SUPPORT · QUALITY · TIME"}, "presenter": {"talking_point": "Do I have somebody? How strong are those relationships? Am I actually investing time in them?", "action_cue": "Let each number land before naming it", "transition": "Community requires all three.", "target_duration": "01:15"}},
+
+    {"step_type": "diagram", "title": "Where can we grow stronger?", "subtitle": "The room's priorities, surrounding MBF.", "activity_key": "connection_growth", "config": {"kicker": "COMMUNITY CONNECTION MAP", "nodes": [
+      {"id": "mbf", "label": "MBF COMMUNITY", "area": "middle", "icon": "✦"},
+      {"id": "youth_elders", "label": "Youth ↔ Adults & Elders", "area": "top", "icon": "◉", "match": "Youth ↔ Adults & Elders"},
+      {"id": "mentorship", "label": "Mentors ↔ Those Seeking Guidance", "area": "topright", "icon": "↗", "match": "Mentors ↔ Those Seeking Guidance"},
+      {"id": "families", "label": "Families ↔ Other Families", "area": "right", "icon": "⌂", "match": "Families ↔ Other Families"},
+      {"id": "wider", "label": "The Wider MBF Community", "area": "bottom", "icon": "◎", "match": "The Wider MBF Community"},
+      {"id": "brotherhood", "label": "Friendships & Brotherhood", "area": "bottomleft", "icon": "●●", "match": "Friendships & Brotherhood"},
+      {"id": "parents_children", "label": "Parents ↔ Children", "area": "left", "icon": "♥", "match": "Parents ↔ Children"}
+    ]}, "presenter": {"talking_point": "This is the room telling us where stronger relationships could make our community even better.", "action_cue": "Full screen · let it breathe", "transition": "Different ages. Different careers. Different experiences.", "target_duration": "00:45"}},
+
+    {"step_type": "poll_results", "title": "IN THE END...", "subtitle": "What do we want our lives to say?", "activity_key": "legacy", "config": {"result_style": "legacy_podium"}, "presenter": {"talking_point": "But perhaps we're not as different as we sometimes think.", "action_cue": "No commentary at first · 5 seconds of silence", "transition": "One last question.", "target_duration": "00:45"}},
+
+    {"step_type": "word_cloud", "title": "What do you hope to gain from MBF Summit 2026?", "subtitle": "ONE WORD", "activity_key": "summit_hopes", "presenter": {"talking_point": "One word only — what do you hope to gain from this Summit?", "action_cue": "Open the word cloud · stay quiet for 10–15 seconds as words appear", "transition": "Let's look at what just came in.", "target_duration": "01:15"}},
+
+    {"step_type": "word_cloud", "title": "OUR MBF 2026 HOPES", "activity_key": "summit_hopes", "presenter": {"talking_point": "Look at these words. Somebody came here looking for knowledge. Somebody came looking for brotherhood. Somebody may be looking for guidance, connection, friendship, growth, or something completely different.", "action_cue": "Let it breathe 10–15 seconds before speaking", "transition": "What if part of the reason we're all here together is that someone else in this room can help you find what you came looking for?", "target_duration": "00:45"}},
+
+    {"step_type": "custom_message", "title": "YOUR MBF 2026 CHALLENGE", "subtitle": "Before this Summit ends: meet someone from another generation, listen to a perspective different from yours, share something that could help another person, and connect with someone beyond this weekend.", "config": {"lines": ["MEET", "LISTEN", "SHARE", "CONNECT"]}, "presenter": {"talking_point": "Don't just attend the Summit. Become part of someone's Summit experience.", "action_cue": "Read each word with a short pause", "transition": "Let's close where we started.", "target_duration": "01:00"}},
+
+    {"step_type": "closing", "title": "THE GOOD LIFE", "subtitle": "Different generations. Different experiences. Different perspectives.", "config": {"lines": ["BETTER TOGETHER"]}, "presenter": {"talking_point": "We started with a question about what makes a good life. But perhaps the more important question for this weekend is what kind of community helps people build one. We have youth who need wisdom. We have elders with experience worth sharing. We have adults carrying families, careers and responsibilities. And every person in this room has something he can contribute. May we leave this Summit knowing more people than when we arrived, understanding one another better, and with relationships that continue long after the program ends. Welcome to MBF Summit 2026.", "action_cue": "Move directly into the formal program", "transition": "Begin the formal program.", "target_duration": "01:15"}}
+  ],
+  "activities": {
+    "good_life_before": {"type": "poll", "question_type": "single_choice", "anonymous": true, "options": ["Faith & Purpose", "Family Relationships", "Friendships & Community", "Health & Wellbeing", "Financial Security", "Achievement, Education & Career"]},
+    "good_life_after": {"type": "poll", "question_type": "single_choice", "anonymous": true, "copy_question_from": "good_life_before"},
+    "connection_test": {"type": "poll", "question_type": "single_choice", "anonymous": true, "options": ["Yes — several people", "Yes — one person", "I'm not sure", "Not really"]},
+    "connection_growth": {"type": "poll", "question_type": "single_choice", "anonymous": true, "options": ["Parents ↔ Children", "Youth ↔ Adults & Elders", "Friendships & Brotherhood", "Mentors ↔ Those Seeking Guidance", "Families ↔ Other Families", "The Wider MBF Community"]},
+    "relationship_quality": {"type": "poll", "question_type": "single_choice", "anonymous": true, "options": ["Very satisfied", "Satisfied", "Somewhere in the middle", "Dissatisfied", "Very dissatisfied"]},
+    "connection_rhythm": {"type": "poll", "question_type": "single_choice", "anonymous": true, "options": ["Daily", "Several times a week", "About once a week", "A few times a month", "Rarely"]},
+    "legacy": {"type": "poll", "question_type": "single_choice", "anonymous": true, "options": ["Faith & Character", "Love & Impact on Family", "Strong Relationships", "Service to Others & Community", "Professional / Academic Accomplishments", "Financial Success & Security"]},
+    "summit_hopes": {"type": "word_cloud", "question_type": "word_cloud", "anonymous": true, "moderation_enabled": false, "options": []}
+  }
+}

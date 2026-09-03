@@ -14,6 +14,7 @@ services:
       - "4000:80"
     volumes:
       - ./proxy.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./proxy-engagement-upstream.inc:/etc/nginx/conf.d/engagement-upstream.inc:ro
       - ./team-docs:/usr/share/nginx/team-docs:ro
       - ./proxy-htpasswd-team-docs:/etc/nginx/.htpasswd-team-docs:ro
     depends_on:
@@ -539,6 +540,7 @@ services:
       # never a data-sharing integration, so it doesn't compromise this
       # service's DB isolation. AI feedback analysis 503s gracefully if unset.
       LOCAL_AI_URL: ${ENGAGEMENT_LOCAL_AI_URL:-http://local-ai:8080}
+      EXPERIENCE_WORKFLOWS_ENABLED: ${EXPERIENCE_WORKFLOWS_ENABLED:-false}
     depends_on:
       engagement-db:
         condition: service_healthy
@@ -564,6 +566,7 @@ services:
       INTERNAL_SERVICE_TOKEN: ${ENGAGEMENT_INTERNAL_SERVICE_TOKEN:-${PLANNER_INTERNAL_SERVICE_TOKEN:-}}
       REDIS_URL: redis://engagement-redis:6379/0
       LOCAL_AI_URL: ${ENGAGEMENT_LOCAL_AI_URL:-http://local-ai:8080}
+      EXPERIENCE_WORKFLOWS_ENABLED: ${EXPERIENCE_WORKFLOWS_ENABLED:-false}
     depends_on:
       engagement-db:
         condition: service_healthy

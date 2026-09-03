@@ -5,12 +5,12 @@ export default function PrivacyPage() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
       <div className="max-w-2xl mx-auto px-4 py-12 prose dark:prose-invert">
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Privacy Policy</h1>
-        <p className="text-sm text-slate-600 dark:text-slate-300">Last updated: June 2026</p>
+        <p className="text-sm text-slate-600 dark:text-slate-300">Last updated: August 2026</p>
 
         <div className="space-y-4 text-sm text-slate-700 dark:text-slate-300 mt-4">
           <p>
-            Festio, operated by <strong>FOHMA Solutions LLC</strong>, provides an event
-            invitation, RSVP and check-in platform. This policy explains what we collect and
+            <strong>FestioEvents is an event-management platform operated by FOHMA Solutions LLC.</strong>{' '}
+            Festio provides event invitations, RSVP management and check-in services. This policy explains what we collect and
             how we use it.
           </p>
 
@@ -70,7 +70,8 @@ export default function PrivacyPage() {
             <a href="mailto:events@festio.events" className="text-teal-600 hover:underline">events@festio.events</a>.
           </p>
           <p>
-            Festio is operated by <strong>FOHMA Solutions LLC</strong>.
+            Festio and FestioEvents are product names of <strong>FOHMA Solutions LLC</strong>,
+            which operates the service at <strong>festio.events</strong>.
           </p>
         </div>
 

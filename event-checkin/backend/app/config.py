@@ -75,6 +75,12 @@ class Settings(BaseSettings):
     resend_api_key: str = ""
     # Resend webhook signing secret (whsec_...). Empty means acknowledge only.
     resend_webhook_secret: str = ""
+    # Inbound receiving is fail-closed. Configure a separate Resend webhook
+    # secret when /api/webhooks/resend/inbound is registered independently.
+    resend_inbound_webhook_secret: str = ""
+    inbound_email_domain: str = "inbound.festio.events"
+    inbound_email_max_webhook_bytes: int = 262144
+    inbound_email_fetch_timeout_seconds: float = 10.0
     # If set, email is sent via Bird's Email API before falling back to SMTP.
     # Example: https://email.us-west-2.api.bird.com/api
     bird_email_api_base: str = ""
@@ -173,6 +179,11 @@ class Settings(BaseSettings):
     # event is over.
     whatsapp_invite_override_event_id: str = ""
     whatsapp_invite_override_template: str = ""
+    # Optional extra parameter for an event-specific invite template that asks
+    # the guest to complete a consent form. Empty preserves the legacy layout.
+    whatsapp_invite_override_consent_link: str = ""
+    # Approved Bird Utility template used by scheduled consent reminders.
+    bird_whatsapp_consent_reminder_template: str = ""
 
     # ── Staging rollout flags — three-surface redesign. Default True since the
     # v2 behavior is already live on staging; set False to instantly fall back

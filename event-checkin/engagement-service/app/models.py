@@ -310,9 +310,11 @@ class LiveDisplay(Base):
     event_id: Mapped[str] = mapped_column(String(64), index=True)
     name: Mapped[str] = mapped_column(String(120))
     display_code: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    short_code: Mapped[str | None] = mapped_column(String(32), unique=True, index=True, nullable=True)
     access_token: Mapped[str] = mapped_column(String(128), unique=True)
     assigned_session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     assigned_activity_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("engagement_activities.id", ondelete="SET NULL"), nullable=True)
+    assigned_workflow_run_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     scene: Mapped[str] = mapped_column(String(32), default="welcome")
     status: Mapped[str] = mapped_column(String(20), default="active")
     settings: Mapped[dict] = mapped_column(JSONB, default=dict)
@@ -348,3 +350,136 @@ class FeedbackAnalysis(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+# -- Reusable interactive experience workflows --------------------------------
+
+class ExperienceWorkflow(Base):
+    """Editable workflow identity. Published content lives in immutable revisions."""
+    __tablename__ = "engagement_experience_workflows"
+    __table_args__ = (Index("ix_engagement_workflows_event_status", "event_id", "status"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    org_id: Mapped[str] = mapped_column(String(64), index=True)
+    event_id: Mapped[str] = mapped_column(String(64), index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="draft")
+    theme: Mapped[dict] = mapped_column(JSONB, default=dict)
+    current_revision_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    draft_version: Mapped[int] = mapped_column(Integer, default=1)
+    created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class WorkflowRevision(Base):
+    __tablename__ = "engagement_workflow_revisions"
+    __table_args__ = (UniqueConstraint("workflow_id", "revision_number", name="uq_engagement_workflow_revision"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    workflow_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_experience_workflows.id", ondelete="CASCADE"), index=True)
+    revision_number: Mapped[int] = mapped_column(Integer)
+    name: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    theme: Mapped[dict] = mapped_column(JSONB, default=dict)
+    published_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class WorkflowStep(Base):
+    __tablename__ = "engagement_workflow_steps"
+    __table_args__ = (
+        Index("ix_engagement_workflow_steps_revision_order", "revision_id", "sequence"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    workflow_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_experience_workflows.id", ondelete="CASCADE"), index=True)
+    revision_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("engagement_workflow_revisions.id", ondelete="CASCADE"), nullable=True, index=True)
+    sequence: Mapped[int] = mapped_column(Integer)
+    step_type: Mapped[str] = mapped_column(String(32))
+    title: Mapped[str] = mapped_column(String(255))
+    subtitle: Mapped[str | None] = mapped_column(Text, nullable=True)
+    config: Mapped[dict] = mapped_column(JSONB, default=dict)
+    linked_activity_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("engagement_activities.id", ondelete="SET NULL"), nullable=True)
+    linked_question_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("engagement_activity_questions.id", ondelete="SET NULL"), nullable=True)
+    duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    auto_advance: Mapped[bool] = mapped_column(Boolean, default=False)
+    presenter_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ComparisonDefinition(Base):
+    __tablename__ = "engagement_workflow_comparisons"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    workflow_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_experience_workflows.id", ondelete="CASCADE"), index=True)
+    question_a_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_activity_questions.id", ondelete="CASCADE"))
+    question_b_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_activity_questions.id", ondelete="CASCADE"))
+    comparison_type: Mapped[str] = mapped_column(String(32), default="option_distribution")
+    config: Mapped[dict] = mapped_column(JSONB, default=dict)
+
+
+class WorkflowRun(Base):
+    """Server-authoritative execution state for one presentation run."""
+    __tablename__ = "engagement_workflow_runs"
+    __table_args__ = (Index("ix_engagement_workflow_runs_event_status", "event_id", "status"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    workflow_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_experience_workflows.id", ondelete="RESTRICT"), index=True)
+    revision_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_workflow_revisions.id", ondelete="RESTRICT"), index=True)
+    org_id: Mapped[str] = mapped_column(String(64), index=True)
+    event_id: Mapped[str] = mapped_column(String(64), index=True)
+    display_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("engagement_live_displays.id", ondelete="SET NULL"), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="ready")
+    current_step_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("engagement_workflow_steps.id", ondelete="SET NULL"), nullable=True)
+    active_activity_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("engagement_activities.id", ondelete="SET NULL"), nullable=True)
+    active_question_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("engagement_activity_questions.id", ondelete="SET NULL"), nullable=True)
+    state_version: Mapped[int] = mapped_column(Integer, default=0)
+    public_token: Mapped[str] = mapped_column(String(128), unique=True)
+    started_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    elapsed_before_pause_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    step_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    timer_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    timer_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    timer_paused_remaining_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    runtime_state: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class WorkflowRunEvent(Base):
+    __tablename__ = "engagement_workflow_run_events"
+    __table_args__ = (
+        UniqueConstraint("run_id", "idempotency_key", name="uq_engagement_workflow_run_command"),
+        Index("ix_engagement_workflow_run_events_order", "run_id", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    run_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_workflow_runs.id", ondelete="CASCADE"), index=True)
+    event_type: Mapped[str] = mapped_column(String(64))
+    actor_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    from_step_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    to_step_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    idempotency_key: Mapped[str] = mapped_column(String(100))
+    payload: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class ExperienceTemplate(Base):
+    __tablename__ = "engagement_experience_templates"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    org_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    category: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    definition: Mapped[dict] = mapped_column(JSONB, default=dict)
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

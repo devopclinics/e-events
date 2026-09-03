@@ -192,6 +192,7 @@ services:
       INTERNAL_SERVICE_TOKEN: ${ENGAGEMENT_INTERNAL_SERVICE_TOKEN:-${PLANNER_INTERNAL_SERVICE_TOKEN:-}}
       REDIS_URL: redis://engagement-redis:6379/0
       LOCAL_AI_URL: ${ENGAGEMENT_LOCAL_AI_URL:-http://local-ai:8080}
+      EXPERIENCE_WORKFLOWS_ENABLED: ${EXPERIENCE_WORKFLOWS_ENABLED:-false}
     depends_on:
       engagement-db:
         condition: service_healthy
@@ -212,6 +213,7 @@ services:
       INTERNAL_SERVICE_TOKEN: ${ENGAGEMENT_INTERNAL_SERVICE_TOKEN:-${PLANNER_INTERNAL_SERVICE_TOKEN:-}}
       REDIS_URL: redis://engagement-redis:6379/0
       LOCAL_AI_URL: ${ENGAGEMENT_LOCAL_AI_URL:-http://local-ai:8080}
+      EXPERIENCE_WORKFLOWS_ENABLED: ${EXPERIENCE_WORKFLOWS_ENABLED:-false}
     depends_on:
       engagement-db:
         condition: service_healthy

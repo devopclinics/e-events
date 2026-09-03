@@ -251,13 +251,19 @@ async def get_dashboard(event_id: str, db: AsyncSession = Depends(get_db), _: Us
     # Deduplicate by provider_message_id so a spend + refund pair is treated as
     # one logical message outcome instead of two separate failures.
     msg_ids = {c: {"sent": set(), "delivered": set(), "failed": set()} for c in ("sms", "mms", "whatsapp")}
-    failed_statuses = {"failed", "undelivered", "error", "rejected"}
+    failed_statuses = {
+        "failed", "undelivered", "error", "rejected", "refunded",
+        "sending_failed", "delivery_failed", "skipped", "deleted",
+        "invalid_recipient", "country_not_enabled", "insufficient_credit",
+    }
     for row_id, c, action, status, delta, provider_message_id in msg_rows:
         d = msg_ids.get(c)
         if d is None:
             continue
         message_key = provider_message_id or f"ledger:{row_id}"
-        if action == "spend":
+        # Legacy credits log sends as ``spend``; organization wallets use
+        # ``reserve`` and reconcile that same row with the provider outcome.
+        if action in {"spend", "reserve"}:
             d["sent"].add(message_key)
             st = (status or "").lower()
             if "deliver" in st:

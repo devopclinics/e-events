@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import get_current_user, _org_role
 from ..database import get_db
-from ..models import Event, EventUser, ExperienceStep, ExperienceWorkflow, Guest, GuestExperienceProgress, User
+from ..models import Event, EventUser, ExperienceStep, ExperienceWorkflow, Guest, GuestExperienceProgress, LiveAccessLink, User
 from ..ratelimit import rate_limit
 from services.qr_service import generate_qr_for_url
 
@@ -46,7 +46,7 @@ def _new_live_join_code() -> str:
 def _live_join_url(code: str) -> str:
     from ..config import settings
     base_url = settings.public_base_url or "https://festio.events"
-    return f"{base_url.rstrip('/')}/live/join/{code}"
+    return f"{base_url.rstrip('/')}/l/{code}"
 
 
 async def _ensure_live_join_code(event_id: str, db: AsyncSession) -> str:
@@ -307,6 +307,8 @@ class LiveShareLinkIn(BaseModel):
 
 class LiveShareLinkOut(BaseModel):
     token: str
+    code: str
+    url: str
     expires_in: int
     role: str
 
@@ -339,4 +341,32 @@ async def live_share_link(event_id: str, body: LiveShareLinkIn, user: User = Dep
         "iat": now,
         "exp": now + timedelta(hours=body.hours),
     }, settings.engagement_internal_token, algorithm="HS256")
-    return LiveShareLinkOut(token=token, expires_in=body.hours * 3600, role=body.role)
+    code = secrets.token_urlsafe(12)[:16]
+    while await db.get(LiveAccessLink, code):
+        code = secrets.token_urlsafe(12)[:16]
+    db.add(LiveAccessLink(
+        code=code, event_id=event.id, role=body.role, access_token=token,
+        expires_at=now + timedelta(hours=body.hours), created_by=user.id,
+    ))
+    await db.commit()
+    url = f"{(settings.public_base_url or 'https://festio.events').rstrip('/')}/p/{code}"
+    return LiveShareLinkOut(token=token, code=code, url=url, expires_in=body.hours * 3600, role=body.role)
+
+
+@router.get("/live/share/{code}", response_model=LiveShareLinkOut)
+async def resolve_live_share_link(
+    code: str,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(rate_limit(limit=60, window=60, scope="engagement_share_resolve", key="client_ip")),
+):
+    """Exchange a short opaque presenter/moderator link for its scoped JWT."""
+    link = await db.get(LiveAccessLink, code)
+    now = datetime.now(timezone.utc)
+    if not link:
+        raise HTTPException(404, "Festio Live link not found")
+    expires_at = link.expires_at if link.expires_at.tzinfo else link.expires_at.replace(tzinfo=timezone.utc)
+    if expires_at <= now:
+        raise HTTPException(410, "This Festio Live link has expired")
+    from ..config import settings
+    url = f"{(settings.public_base_url or 'https://festio.events').rstrip('/')}/p/{link.code}"
+    return LiveShareLinkOut(token=link.access_token, code=link.code, url=url, expires_in=max(0, int((expires_at - now).total_seconds())), role=link.role)

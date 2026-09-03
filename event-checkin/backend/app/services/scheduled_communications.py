@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..models import Event, ExperienceStep, ExperienceWorkflow, Guest, ScheduledCommunication, ScheduledCommunicationDelivery
+from ..models import Event, ExperienceStep, ExperienceWorkflow, Guest, GuestExperienceProgress, InboundEmailAutomation, ScheduledCommunication, ScheduledCommunicationDelivery
 from ..timeutil import event_local_to_utc, to_event_local
 
 
@@ -66,6 +66,26 @@ def audience_query(event_id: str, audience_type: str):
         return query.where(Guest.admitted.is_(True))
     if audience_type == "not_checked_in":
         return query.where(and_(Guest.admitted.is_(False), Guest.rsvp_status == "confirmed"))
+    if audience_type == "consent_incomplete":
+        automated_steps = select(InboundEmailAutomation.step_id).where(
+            InboundEmailAutomation.event_id == event_id,
+            InboundEmailAutomation.status == "active",
+        )
+        incomplete_required_step = select(ExperienceStep.id).join(
+            ExperienceWorkflow, ExperienceWorkflow.id == ExperienceStep.workflow_id,
+        ).where(
+            ExperienceWorkflow.event_id == event_id,
+            ExperienceStep.enabled.is_(True),
+            ExperienceStep.required.is_(True),
+            or_(ExperienceStep.type == "consent", ExperienceStep.id.in_(automated_steps)),
+            ~select(GuestExperienceProgress.id).where(
+                GuestExperienceProgress.event_id == event_id,
+                GuestExperienceProgress.guest_id == Guest.id,
+                GuestExperienceProgress.step_id == ExperienceStep.id,
+                GuestExperienceProgress.status.in_(("completed", "overridden")),
+            ).correlate(Guest, ExperienceStep).exists(),
+        ).exists()
+        return query.where(incomplete_required_step)
     return query
 
 

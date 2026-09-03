@@ -535,6 +535,7 @@ class DisplayOut(BaseModel):
     id: str
     name: str
     display_code: str
+    short_code: str | None = None
     access_token: str
     assigned_session_id: str | None = None
     assigned_activity_id: str | None = None

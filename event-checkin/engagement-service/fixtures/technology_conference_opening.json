@@ -1,0 +1,17 @@
+{
+  "name": "Technology Conference Opening",
+  "description": "Reusable non-MBF acceptance workflow",
+  "theme": {"preset": "festio_vibrant", "accent": "#38a9ff"},
+  "steps": [
+    {"step_type": "hero", "title": "BUILD WHAT’S NEXT", "subtitle": "Technology Conference 2027", "duration_seconds": 30},
+    {"step_type": "poll", "title": "Which technology will reshape your work most?", "activity_key": "opening_poll"},
+    {"step_type": "poll_results", "title": "The room has spoken", "activity_key": "opening_poll"},
+    {"step_type": "video", "title": "A message from the future", "config": {"media_source": null, "requires_presenter_play": true}},
+    {"step_type": "word_cloud", "title": "In one word, what should technology make more human?", "activity_key": "future_cloud"},
+    {"step_type": "closing", "title": "LET’S BUILD", "subtitle": "Together, responsibly."}
+  ],
+  "activities": {
+    "opening_poll": {"type": "poll", "question_type": "single_choice", "anonymous": true, "options": ["Artificial intelligence", "Robotics", "Spatial computing", "Clean energy", "Biotechnology"]},
+    "future_cloud": {"type": "word_cloud", "question_type": "word_cloud", "anonymous": true, "moderation_enabled": true, "options": []}
+  }
+}

@@ -324,6 +324,25 @@ async function downloadLiveEventReport(eventId) {
   document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url)
 }
 
+// Steps through every published step in a headless browser server-side
+// (~2-4s each), so this can take well over a minute for a long workflow --
+// give it real room before giving up.
+async function downloadLiveWorkflowPptx(eventId, workflowId, workflowName = 'festio-live-experience') {
+  const token = await getLiveSession(eventId)
+  const res = await fetch(`${BASE}/engagement/v1/workflows/${workflowId}/export.pptx`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(240000),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'PPTX export could not be generated' }))
+    throw new Error(err.detail || 'PPTX export could not be generated')
+  }
+  const url = URL.createObjectURL(await res.blob())
+  const anchor = document.createElement('a'); anchor.href = url; anchor.download = `${workflowName.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.pptx`
+  document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url)
+}
+
 // Guest-facing: exchange the guest's own pass token (from their Guest Hub
 // link) for a Festio Live participation session — no Firebase login involved,
 // same shape as festiome's guest-token exchange.
@@ -640,6 +659,17 @@ export const api = {
   saveConsentForm: (eventId, data) => req('PUT', `/events/${eventId}/experience/consent-form`, data),
   disableConsentForm: (eventId) => req('DELETE', `/events/${eventId}/experience/consent-form`),
   listConsentSignatures: (eventId) => req('GET', `/events/${eventId}/experience/consent-signatures`),
+  listConsentReceived: (eventId) => req('GET', `/events/${eventId}/experience/consent-received`),
+  downloadConsentReceived: (eventId) => downloadFile(`/events/${eventId}/experience/consent-received.csv`, 'consent-received.csv'),
+  listInboundAutomations: (eventId) => req('GET', `/events/${eventId}/experience/inbound-automations`),
+  listInboundAudit: (eventId) => req('GET', `/events/${eventId}/experience/inbound-automations/audit`),
+  createInboundAutomation: (eventId, data) => req('POST', `/events/${eventId}/experience/inbound-automations`, data),
+  updateInboundAutomation: (eventId, automationId, data) => req('PATCH', `/events/${eventId}/experience/inbound-automations/${automationId}`, data),
+  revalidateInboundAutomation: (eventId, automationId) => req('POST', `/events/${eventId}/experience/inbound-automations/${automationId}/revalidate`, {}),
+  pauseInboundAutomation: (eventId, automationId) => req('DELETE', `/events/${eventId}/experience/inbound-automations/${automationId}`),
+  listInboundNeedsReview: (eventId) => req('GET', `/events/${eventId}/experience/inbound-automations/needs-review`),
+  matchInboundEmail: (eventId, emailId, guestId) => req('POST', `/events/${eventId}/experience/inbound-automations/needs-review/${emailId}/match`, { guest_id: guestId }),
+  resolveInboundEmail: (eventId, emailId, action) => req('POST', `/events/${eventId}/experience/inbound-automations/needs-review/${emailId}/${action}`, {}),
 
   // Seating
   listTables: (eventId) => req('GET', `/events/${eventId}/tables`),
@@ -1571,6 +1601,7 @@ export const api = {
   liveUpdateSettings: (eventId, body) => liveReq(eventId, 'PUT', '/v1/settings', body),
   liveDownloadExport: (eventId, activityId, title) => downloadLiveExport(eventId, activityId, title),
   liveDownloadEventReport: (eventId) => downloadLiveEventReport(eventId),
+  liveExportWorkflowPptx: (eventId, workflowId, workflowName) => downloadLiveWorkflowPptx(eventId, workflowId, workflowName),
   liveWordCloud: (eventId, questionId) => liveReq(eventId, 'GET', `/v1/questions/${questionId}/word-cloud`),
   liveAiAnalysis: (eventId, questionId) => liveReq(eventId, 'POST', `/v1/questions/${questionId}/ai-analysis`),
   liveAiAnalysisStatus: (eventId, jobId) => liveReq(eventId, 'GET', `/v1/analysis/${jobId}`),
@@ -1579,8 +1610,24 @@ export const api = {
   liveModerationItems: (eventId, activityId, status) => liveReq(eventId, 'GET', `/v1/activities/${activityId}/moderation${status ? `?status=${encodeURIComponent(status)}` : ''}`),
   liveModerationDecision: (eventId, itemId, status) => liveReq(eventId, 'PATCH', `/v1/moderation/${itemId}`, { status }),
   liveShareLink: (eventId, role, hours) => req('POST', `/events/${eventId}/live/share-link`, { role, hours }),
+  liveResolveShareLink: (code) => req('GET', `/events/live/share/${encodeURIComponent(code)}`),
   liveJoinInfo: (eventId) => req('GET', `/events/${encodeURIComponent(eventId)}/live/join-info`),
   liveRealtimeTicket: (eventId, activityId) => liveReq(eventId, 'GET', `/v1/activities/${activityId}/realtime-ticket`),
+  liveWorkflows: (eventId) => liveReq(eventId, 'GET', '/v1/workflows'),
+  liveCreateWorkflow: (eventId, body) => liveReq(eventId, 'POST', '/v1/workflows', body),
+  liveWorkflow: (eventId, workflowId) => liveReq(eventId, 'GET', `/v1/workflows/${workflowId}`),
+  liveUpdateWorkflow: (eventId, workflowId, body) => liveReq(eventId, 'PATCH', `/v1/workflows/${workflowId}`, body),
+  liveAddWorkflowStep: (eventId, workflowId, body) => liveReq(eventId, 'POST', `/v1/workflows/${workflowId}/steps`, body),
+  liveUpdateWorkflowStep: (eventId, workflowId, stepId, body) => liveReq(eventId, 'PATCH', `/v1/workflows/${workflowId}/steps/${stepId}`, body),
+  liveDeleteWorkflowStep: (eventId, workflowId, stepId) => liveReq(eventId, 'DELETE', `/v1/workflows/${workflowId}/steps/${stepId}`),
+  liveReorderWorkflowSteps: (eventId, workflowId, stepIds, expectedVersion) => liveReq(eventId, 'PUT', `/v1/workflows/${workflowId}/steps/order`, { step_ids: stepIds, expected_version: expectedVersion }),
+  livePublishWorkflow: (eventId, workflowId) => liveReq(eventId, 'POST', `/v1/workflows/${workflowId}/publish`),
+  liveCreateWorkflowRun: (eventId, workflowId, displayId) => liveReq(eventId, 'POST', `/v1/workflows/${workflowId}/runs`, { display_id: displayId || null }),
+  liveWorkflowRun: (eventId, runId) => liveReq(eventId, 'GET', `/v1/runs/${runId}`),
+  liveActiveWorkflowRun: (eventId, workflowId) => liveReq(eventId, 'GET', `/v1/workflows/${workflowId}/active-run`),
+  liveCommandWorkflowRun: (eventId, runId, body) => liveReq(eventId, 'POST', `/v1/runs/${runId}/commands`, body),
+  liveWorkflowTemplates: (eventId) => liveReq(eventId, 'GET', '/v1/templates'),
+  liveSaveWorkflowTemplate: (eventId, workflowId, body) => liveReq(eventId, 'POST', `/v1/workflows/${workflowId}/template`, body),
 
   // Festio Live — guest participation (no Firebase login; the guest's own
   // pass token is exchanged for a scoped session first).
@@ -1610,6 +1657,7 @@ export const api = {
     return res.json() // { event_id }
   }),
   liveGuestActivities: (guestToken) => liveGuestReq(guestToken, 'GET', '/v1/activities/live'),
+  liveGuestCurrentWorkflowRun: (guestToken) => liveGuestReq(guestToken, 'GET', '/v1/events/current-run'),
   liveGuestProgramParticipation: (guestToken) => liveGuestReq(guestToken, 'GET', '/v1/my-program-participation'),
   liveGuestParticipate: (guestToken, activityId) => liveGuestReq(guestToken, 'GET', `/v1/activities/${activityId}/participate`),
   liveGuestRespond: (guestToken, activityId, body) => liveGuestReq(guestToken, 'POST', `/v1/activities/${activityId}/respond`, body),
@@ -1641,6 +1689,10 @@ export const api = {
   liveControlSetRehearsal: (token, displayId, body) => liveGuestReq(token, 'PUT', `/v1/control/displays/${displayId}/rehearsal`, body),
   liveControlQnaList: (token, activityId) => liveGuestReq(token, 'GET', `/v1/activities/${activityId}/qna`),
   liveControlQnaModerate: (token, qnaId, status) => liveGuestReq(token, 'PATCH', `/v1/qna/${qnaId}`, { status }),
+  liveControlWorkflows: (token) => liveGuestReq(token, 'GET', '/v1/workflows'),
+  liveControlActiveWorkflowRun: (token, workflowId) => liveGuestReq(token, 'GET', `/v1/workflows/${workflowId}/active-run`),
+  liveControlWorkflowRun: (token, runId) => liveGuestReq(token, 'GET', `/v1/runs/${runId}`),
+  liveControlCommandWorkflowRun: (token, runId, body) => liveGuestReq(token, 'POST', `/v1/runs/${runId}/commands`, body),
 
   // Paid admission (standalone staging-only ticketing-service).
   ticketingConfig: (eventId) => ticketingReq(eventId, 'GET', `/events/${eventId}/config`),

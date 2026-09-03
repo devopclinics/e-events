@@ -693,6 +693,7 @@ export default function LandingRedesignPage() {
             <div className="lr-foot-brand">
               <a className="lr-brand" href="#top"><span className="lr-brand-mark">F</span>Festio</a>
               <p>Invitations, individual guest passes, and live check-in, all connected to one guest record.</p>
+              <p><strong>FestioEvents is an event-management platform operated by FOHMA Solutions LLC.</strong></p>
             </div>
             <div className="lr-foot-cols">
               <div className="lr-foot-col">
@@ -710,12 +711,13 @@ export default function LandingRedesignPage() {
               <div className="lr-foot-col">
                 <strong>Legal</strong>
                 <Link to="/privacy">Privacy</Link>
+                <Link to="/terms">Terms</Link>
                 <Link to="/sms-policy">SMS terms</Link>
               </div>
             </div>
           </div>
           <div className="lr-foot-bottom">
-            <span>&copy; {new Date().getFullYear()} Festio. Operated by FOHMA Solutions LLC.</span>
+            <span>&copy; {new Date().getFullYear()} FestioEvents. Operated by FOHMA Solutions LLC.</span>
             <span>{CONTACT_EMAIL}</span>
           </div>
         </div>

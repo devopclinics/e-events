@@ -9,6 +9,7 @@ it is never shared with core Festio's redis or festiome's, keeping this
 service's realtime layer fault-isolated like everything else about it.
 """
 import json
+import re
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -24,6 +25,44 @@ redis = Redis.from_url(
     socket_timeout=1.0,
     health_check_interval=15,
 )
+
+DISPLAY_LEASE_SECONDS = 15
+_DISPLAY_CLIENT_RE = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
+
+
+def validate_display_client_id(client_id: str) -> str:
+    if not _DISPLAY_CLIENT_RE.fullmatch(client_id or ""):
+        raise ValueError("Invalid display client identifier")
+    return client_id
+
+
+async def claim_display(display_id: str, client_id: str) -> bool:
+    """First projector owns the display until its stream disconnects."""
+    validate_display_client_id(client_id)
+    key = f"engagement:display-lease:{display_id}"
+    claimed = await redis.set(key, client_id, ex=DISPLAY_LEASE_SECONDS, nx=True)
+    if claimed:
+        return True
+    if await redis.get(key) != client_id:
+        return False
+    await redis.expire(key, DISPLAY_LEASE_SECONDS)
+    return True
+
+
+async def renew_display(display_id: str, client_id: str) -> bool:
+    """Extend an existing lease without allowing a disconnected stream to reclaim it."""
+    validate_display_client_id(client_id)
+    return bool(await redis.eval(
+        "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('expire', KEYS[1], ARGV[2]) else return 0 end",
+        1, f"engagement:display-lease:{display_id}", client_id, DISPLAY_LEASE_SECONDS,
+    ))
+
+
+async def release_display(display_id: str, client_id: str) -> None:
+    await redis.eval(
+        "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+        1, f"engagement:display-lease:{display_id}", client_id,
+    )
 
 
 def _channel(activity_id: str) -> str:
@@ -45,6 +84,17 @@ async def publish_display(display_id: str, event: str, data: dict) -> None:
     try:
         await redis.publish(
             f"engagement:display:{display_id}",
+            json.dumps({"event": event, "data": data}, default=str),
+        )
+    except Exception:
+        REALTIME_PUBLISH_FAILURES.inc()
+
+
+async def publish_run(run_id: str, event: str, data: dict) -> None:
+    """Run-scoped updates keep simultaneous rooms and workflows isolated."""
+    try:
+        await redis.publish(
+            f"engagement:workflow-run:{run_id}",
             json.dumps({"event": event, "data": data}, default=str),
         )
     except Exception:

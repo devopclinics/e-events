@@ -22,6 +22,89 @@ from ..models import (
 from ..timeutil import event_tz, to_event_local
 
 
+class ExperienceCompletionError(ValueError):
+    """A deterministic refusal to complete a guest step."""
+
+
+async def complete_guest_step(
+    db: AsyncSession,
+    *,
+    event: Event,
+    guest: Guest,
+    step: ExperienceStep,
+    source: str,
+    actor_user_id: str | None = None,
+    metadata: dict | None = None,
+) -> tuple[GuestExperienceProgress, bool]:
+    """Complete one Experience step through a single idempotent write path.
+
+    Returns ``(progress, newly_completed)``. Callers own the transaction so an
+    inbound-email status change and the Experience completion can commit
+    atomically. Native side effects such as staff notification emails remain in
+    their route/service layer and should run only when ``newly_completed`` is
+    true.
+    """
+    if guest.event_id != event.id:
+        raise ExperienceCompletionError("Guest does not belong to this event")
+    workflow = await active_workflow(event.id, db)
+    if not workflow or step.workflow_id != workflow.id:
+        raise ExperienceCompletionError("Step is not in the active workflow")
+    if not step.enabled:
+        raise ExperienceCompletionError("Step is disabled")
+    if not await step_applies_to_guest(step, guest, db):
+        raise ExperienceCompletionError("Step does not apply to this guest")
+
+    await sync_guest_progress(event.id, guest.id, db)
+    await db.flush()
+    progress = await db.scalar(
+        select(GuestExperienceProgress)
+        .where(
+            GuestExperienceProgress.workflow_id == workflow.id,
+            GuestExperienceProgress.step_id == step.id,
+            GuestExperienceProgress.guest_id == guest.id,
+        )
+        .with_for_update()
+    )
+    if not progress:
+        raise ExperienceCompletionError("Guest progress could not be initialized")
+    if progress.status in {"completed", "overridden"}:
+        return progress, False
+
+    progress_rows = (await db.execute(
+        select(GuestExperienceProgress).where(
+            GuestExperienceProgress.workflow_id == workflow.id,
+            GuestExperienceProgress.guest_id == guest.id,
+        )
+    )).scalars().all()
+    progress_by_step_id = {row.step_id: row for row in progress_rows}
+    steps_by_key_or_id = {
+        value: item for item in workflow.steps for value in (item.id, item.key)
+    }
+    if not dependencies_satisfied(step, steps_by_key_or_id, progress_by_step_id, event=event):
+        raise ExperienceCompletionError(
+            "Step is blocked until its required prior steps are complete"
+        )
+
+    now = datetime.utcnow()
+    progress.status = "completed"
+    progress.completed_at = progress.completed_at or now
+    progress.completed_by_user_id = actor_user_id
+    progress.completed_by_source = source
+    progress.override_reason = None
+    progress.progress_metadata = metadata or None
+    db.add(ExperienceEvent(
+        event_id=event.id,
+        workflow_id=workflow.id,
+        step_id=step.id,
+        guest_id=guest.id,
+        actor_user_id=actor_user_id,
+        event_type="step_completed",
+        source=source,
+        payload={"status": "completed", "metadata": metadata or {}},
+    ))
+    return progress, True
+
+
 def default_step_specs(event: Event) -> list[dict]:
     """Build the conservative default workflow from features already enabled.
 

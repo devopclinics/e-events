@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 _BIRD_BASE = "https://api.bird.com"
 _SMS_FOOTER = "Reply HELP for help, STOP to opt out. Message and data rates may apply."
+_E164_PHONE_RE = re.compile(r"^\+[1-9]\d{7,14}$")
 
 # One-off per-event SMS provider override (see sms_override_* in app/config.py).
 # Set once per request/background-task chain by set_event_context() in whichever
@@ -132,6 +133,14 @@ async def send_experience_invite_whatsapp(*, phone: str, first_name: str, event_
     ):
         _local = to_event_local(event_date, event_timezone) if event_date else None
         date_str = _local.strftime("%A, %d %B %Y") if _local else ""
+        if settings.whatsapp_invite_override_consent_link:
+            return await _bird_whatsapp_send(
+                phone, settings.whatsapp_invite_override_template,
+                [first_name, event_name, ticket_url, ticket_url,
+                 settings.whatsapp_invite_override_consent_link, date_str, event_location or ""],
+                ["firstName", "eventName", "ticketUrl", "qrCodeUrl",
+                 "consentLink", "eventDate", "eventLocation"],
+            )
         return await _bird_whatsapp_send(
             phone, settings.whatsapp_invite_override_template,
             [greeting, first_name, event_name, ticket_url, ticket_url, date_str, event_location or ""],
@@ -142,6 +151,22 @@ async def send_experience_invite_whatsapp(*, phone: str, first_name: str, event_
         kind="experience_invite",
         params=[first_name, event_name, ticket_url],
         var_keys=["firstName", "eventName", "ticketUrl"],
+    )
+
+
+async def send_consent_reminder_whatsapp(*, phone: str, first_name: str, event_name: str,
+                                         consent_link: str, event_date: datetime | None = None,
+                                         event_timezone: str | None = None) -> dict | None:
+    """Open a WhatsApp conversation with the approved consent-reminder template."""
+    if not _channel_ready("whatsapp", phone) or not settings.bird_whatsapp_consent_reminder_template:
+        return
+    local_date = to_event_local(event_date, event_timezone) if event_date else None
+    date_str = local_date.strftime("%B %d, %Y").replace(" 0", " ") if local_date else ""
+    return await _bird_whatsapp_send(
+        phone,
+        settings.bird_whatsapp_consent_reminder_template,
+        [first_name, event_name, consent_link, date_str],
+        ["firstName", "eventName", "consentLink", "eventDate"],
     )
 
 
@@ -581,6 +606,37 @@ def _wa_provider() -> str:
     return (settings.whatsapp_provider or settings.messaging_provider or "").lower()
 
 
+def _normalize_whatsapp_phone(phone: str | None, default_country_code: str = "1") -> str | None:
+    """Normalize legacy/free-form recipient numbers before provider dispatch.
+
+    Guest write paths already normalize most numbers, but older imports and
+    records created by less strict paths may still contain punctuation or omit
+    the leading country code. Keep this guard at the provider boundary so every
+    WhatsApp workflow benefits, including broadcasts and scheduled sends.
+    """
+    raw = str(phone or "").strip()
+    if raw.lower().startswith("whatsapp:"):
+        raw = raw.split(":", 1)[1].strip()
+    has_plus = raw.startswith("+")
+    digits = re.sub(r"\D", "", raw)
+    if not digits:
+        return None
+    if raw.startswith("00"):
+        digits = digits[2:]
+        has_plus = True
+    if not has_plus:
+        if len(digits) == 10 and default_country_code == "1":
+            digits = "1" + digits
+        elif len(digits) == 11 and digits.startswith("1") and default_country_code == "1":
+            pass
+        else:
+            # A number longer than a national US number is assumed to already
+            # contain its country code; Bird still requires the leading plus.
+            pass
+    candidate = f"+{digits}"
+    return candidate if _E164_PHONE_RE.fullmatch(candidate) else None
+
+
 def _channel_ready(channel: str, phone: str | None) -> bool:
     """Return False (silently) when there's no point trying — no provider,
     no phone, or no creds for the chosen provider."""
@@ -792,6 +848,10 @@ async def _bird_whatsapp_send(phone: str, template: str, params: list[str],
     uses the active version when omitted). Factored out of _send_whatsapp_template
     so a caller with its own resolved template (e.g. a per-event override) can
     send without going through the kind -> settings lookup below."""
+    normalized_phone = _normalize_whatsapp_phone(phone)
+    if not normalized_phone:
+        logger.warning("Bird WhatsApp recipient could not be normalized; skipping invalid number")
+        return {"provider": "bird", "status": "failed", "error": "invalid_recipient_phone"}
     project_id, _, version = template.partition(":")
     keys = var_keys or [str(i + 1) for i in range(len(params))]
     parameters = [{"type": "string", "key": k, "value": v} for k, v in zip(keys, params)]
@@ -803,7 +863,7 @@ async def _bird_whatsapp_send(phone: str, template: str, params: list[str],
     if version.strip():
         template_ref["version"] = version.strip()
     return await _bird_post(settings.bird_whatsapp_channel_id, {
-        "receiver": _bird_recipient(phone),
+        "receiver": _bird_recipient(normalized_phone),
         "template": template_ref,
     })
 
@@ -847,8 +907,12 @@ async def _send_sms_as_whatsapp(phone: str, body: str) -> dict | None:
     where no template is registered)."""
     provider = _wa_provider()
     if provider == "bird":
+        normalized_phone = _normalize_whatsapp_phone(phone)
+        if not normalized_phone:
+            logger.warning("Bird WhatsApp recipient could not be normalized; skipping invalid number")
+            return {"provider": "bird", "status": "failed", "error": "invalid_recipient_phone"}
         return await _bird_post(settings.bird_whatsapp_channel_id, {
-            "receiver": _bird_recipient(phone),
+            "receiver": _bird_recipient(normalized_phone),
             "body": {"type": "text", "text": {"text": body}},
         })
     elif provider == "twilio":

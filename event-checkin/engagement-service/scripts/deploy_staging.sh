@@ -12,10 +12,11 @@ docker build -t "$REGISTRY:engagement-$VERSION" "$ROOT_DIR/engagement-service"
 if [[ "${PUSH_IMAGE:-true}" == "true" ]]; then
   docker push "$REGISTRY:engagement-$VERSION"
 fi
-APP_VERSION="$VERSION" docker compose -f "$COMPOSE_FILE" up -d --no-deps --scale engagement-service=2 --wait engagement-service engagement-worker
+COMPOSE_FILE="$COMPOSE_FILE" REGISTRY="$REGISTRY" EXPERIENCE_WORKFLOWS_ENABLED=true \
+  "$ROOT_DIR/engagement-service/scripts/rollout_compose.sh" "$VERSION"
 
 for attempt in $(seq 1 30); do
-  mapfile -t service_ids < <(APP_VERSION="$VERSION" docker compose -f "$COMPOSE_FILE" ps -q engagement-service)
+  mapfile -t service_ids < <(APP_VERSION="$VERSION" EXPERIENCE_WORKFLOWS_ENABLED=true docker compose -f "$COMPOSE_FILE" ps -q engagement-service)
   healthy=0
   for container_id in "${service_ids[@]}"; do
     status=$(docker inspect --format '{{.State.Health.Status}}' "$container_id" 2>/dev/null || true)

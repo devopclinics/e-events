@@ -47,6 +47,32 @@ async def test_controls_require_superadmin(ctx):
 
 
 @pytest.mark.asyncio
+async def test_superadmin_org_addon_grant_unlocks_all_org_events(ctx, monkeypatch):
+    from app import entitlements
+    from app.config import settings
+    from app.models import Organization
+
+    monkeypatch.setattr(settings, "organization_entitlements_v2", True)
+    org_id = ctx.ids["org_a"]
+    event_id = ctx.ids["event_a"]
+
+    ctx.login(ctx.ids["superadmin"])
+    response = await ctx.client.put(
+        f"/api/admin/orgs/{org_id}/addon-overrides",
+        json={"overrides": {"addon_engagement": True}},
+    )
+    assert response.status_code == 200
+    assert response.json()["overrides"]["addon_engagement"] is True
+
+    async with _Session() as session:
+        org = await session.get(Organization, org_id)
+        event = await session.get(Event, event_id)
+        assert org.addon_overrides == {"addon_engagement": True}
+        assert event.org_addon_overrides == {"addon_engagement": True}
+        assert entitlements.event_allows_addon(event, "addon_engagement") is True
+
+
+@pytest.mark.asyncio
 async def test_blocked_festiome_returns_403(ctx):
     ev = ctx.ids["event_a"]
     async with _Session() as s:

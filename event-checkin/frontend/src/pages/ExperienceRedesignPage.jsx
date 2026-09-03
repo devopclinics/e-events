@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { Fragment, useState, useEffect } from 'react'
 import RedesignShell, { Icon, Modal, ConfirmDialog, ChannelPreviewFrame } from './redesign/RedesignShell'
 import { LoadingSkeleton, PermissionDeniedState } from './redesign/RedesignPrimitives'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
@@ -32,7 +32,7 @@ const WORKFLOW_TEMPLATES = [
   { id: 'simple_checkin', name: 'Simple Check-in Journey', label: 'Simple check-in', description: 'A minimal operational workflow for events that only need arrival tracking.', stepKeys: ['main_check_in'] },
 ]
 
-const SUBTABS = ['Setup', 'Workflow', 'Guests', 'Consent', 'Feedback', 'Messages', 'Analytics']
+const SUBTABS = ['Setup', 'Workflow', 'Guests', 'Consent', 'Inbound Automations', 'Feedback', 'Messages', 'Analytics']
 const STATUS_FILTERS = ['All', 'Live', 'Draft', 'Archived']
 
 
@@ -370,6 +370,7 @@ export default function ExperienceRedesignPage() {
   const [analytics, setAnalytics] = useState(null)
   const [experienceAudit, setExperienceAudit] = useState(null)
   const [realSignatures, setRealSignatures] = useState(null)
+  const [consentReceived, setConsentReceived] = useState(null)
   const [feedbackResults, setFeedbackResults] = useState(null)
   const [feedbackDenied, setFeedbackDenied] = useState(false)
   const [realTemplateAudit, setRealTemplateAudit] = useState(null)
@@ -402,6 +403,16 @@ export default function ExperienceRedesignPage() {
   const [guestJourney, setGuestJourney] = useState(null)
   const [consentForm, setConsentForm] = useState(null)
   const [confirmDisableConsent, setConfirmDisableConsent] = useState(false)
+  const [inboundAutomations, setInboundAutomations] = useState(null)
+  const [inboundReview, setInboundReview] = useState(null)
+  const [inboundAudit, setInboundAudit] = useState(null)
+  const [inboundAuditSearch, setInboundAuditSearch] = useState('')
+  const [inboundAuditStatus, setInboundAuditStatus] = useState('all')
+  const [expandedInboundAudit, setExpandedInboundAudit] = useState('')
+  const [inboundReviewGuests, setInboundReviewGuests] = useState({})
+  const [inboundDraft, setInboundDraft] = useState({ name: '', step_id: '', sender: '', original_sender: '', subject: '', body: '', match: 'all' })
+  const [editingInbound, setEditingInbound] = useState(null)
+  const [inboundEditDraft, setInboundEditDraft] = useState(null)
   const [remindConfirm, setRemindConfirm] = useState(null) // { form, channels, preview }
   const [realTemplates, setRealTemplates] = useState(null)
   const [editingTemplate, setEditingTemplate] = useState(null)
@@ -472,6 +483,7 @@ export default function ExperienceRedesignPage() {
       api.getExperienceDashboard(currentEventId).then(setDashboard).catch(() => {}),
       api.getExperienceAnalytics(currentEventId).then(setAnalytics).catch(() => {}),
       api.listExperienceAudit(currentEventId, 50).then(setExperienceAudit).catch(() => {}),
+      api.listConsentReceived(currentEventId).then(setConsentReceived).catch(() => {}),
     ])
   }
 
@@ -503,12 +515,25 @@ export default function ExperienceRedesignPage() {
     }
   }
 
+  async function loadInboundAutomations() {
+    if (!currentEventId) return
+    const [automations, review, audit] = await Promise.all([
+      api.listInboundAutomations(currentEventId).catch(() => []),
+      api.listInboundNeedsReview(currentEventId).catch(() => []),
+      api.listInboundAudit(currentEventId).catch(() => []),
+    ])
+    setInboundAutomations(automations)
+    setInboundReview(review)
+    setInboundAudit(audit)
+  }
+
   useEffect(() => {
     if (!currentEventId) return
     api.getExperienceDashboard(currentEventId).then(setDashboard).catch(() => setDashboard(null))
     api.getExperienceAnalytics(currentEventId).then(setAnalytics).catch(() => setAnalytics(null))
     api.listExperienceAudit(currentEventId, 50).then(setExperienceAudit).catch(() => setExperienceAudit([]))
     api.listConsentSignatures(currentEventId).then(setRealSignatures).catch(() => setRealSignatures([]))
+    api.listConsentReceived(currentEventId).then(setConsentReceived).catch(() => setConsentReceived([]))
     api.templateAudit(currentEventId).then(setRealTemplateAudit).catch(() => setRealTemplateAudit([]))
     api.getFeedbackResults(currentEventId).then((r) => { setFeedbackResults(r); setFeedbackDenied(false) })
       .catch((err) => { if (err.status === 403) setFeedbackDenied(true); else setFeedbackResults(null) })
@@ -516,10 +541,30 @@ export default function ExperienceRedesignPage() {
     loadWorkflows()
     loadConsentForm()
     loadTemplates()
+    loadInboundAutomations()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentEventId])
 
   useEffect(() => { loadLiveIntegration() }, [currentEventId, realEvent?.engagement_enabled]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!currentEventId || activeTab !== 'Consent') return undefined
+    let refreshing = false
+    const refreshConsentAudit = async () => {
+      if (document.visibilityState !== 'visible' || refreshing) return
+      refreshing = true
+      try { await loadInboundAutomations() } finally { refreshing = false }
+    }
+    const timer = window.setInterval(refreshConsentAudit, 15000)
+    const onVisibilityChange = () => { if (document.visibilityState === 'visible') refreshConsentAudit() }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+    // The event and active tab deliberately own this polling lifecycle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentEventId, activeTab])
 
   useEffect(() => {
     const stepId = new URLSearchParams(window.location.search).get('step')
@@ -572,7 +617,10 @@ export default function ExperienceRedesignPage() {
   const liveParticipantPeak = linkedLiveActivities.reduce((peak, activity) => Math.max(peak, activity.participant_count || 0), 0)
 
   function guestLabel(g) { return g ? `${g.first_name || ''} ${g.last_name || ''}`.trim() : '' }
-  function consentSignedFor(guestId) { return !!(realSignatures || []).find((s) => s.guest_id === guestId) }
+  // consentReceived covers every completion path (Guest Hub self-sign, staff
+  // override, inbound email automation); realSignatures only covers self-sign,
+  // kept here only as the pre-load fallback so this doesn't flash "unsigned".
+  function consentSignedFor(guestId) { return !!(consentReceived ?? realSignatures ?? []).find((s) => s.guest_id === guestId) }
 
   function openLiveLink(step) {
     setLiveLinkStep(step)
@@ -708,6 +756,9 @@ export default function ExperienceRedesignPage() {
   }
   async function handleExportProgress() {
     await runAction('export', () => api.downloadExperienceExport(currentEventId), 'Experience export downloaded.')
+  }
+  async function handleExportConsentReceived() {
+    await runAction('consent:export', () => api.downloadConsentReceived(currentEventId), 'Consent received exported.')
   }
 
   // ── Workflow cards: publish/unpublish/archive/unarchive/clone/delete ──
@@ -1073,6 +1124,7 @@ export default function ExperienceRedesignPage() {
       setConsentForm(result)
       await Promise.all([
         api.listConsentSignatures(currentEventId).then(setRealSignatures).catch(() => {}),
+        api.listConsentReceived(currentEventId).then(setConsentReceived).catch(() => {}),
         api.listExperienceAudit(currentEventId, 50).then(setExperienceAudit).catch(() => {}),
       ])
     }
@@ -1196,6 +1248,111 @@ export default function ExperienceRedesignPage() {
       sms_body: item.effective.sms_body, whatsapp_body: item.effective.whatsapp_body,
     }
     await runAction(`template:${item.key}:test`, () => api.testSendTemplate(currentEventId, item.key, { ...draft, channel, to: to.trim() }), `Test ${channel} sent to ${to.trim()}.`)
+  }
+
+  async function createInboundAutomation() {
+    const draft = inboundDraft
+    if (!draft.name.trim() || !draft.step_id || !draft.sender.trim() || !draft.subject.trim()) {
+      notifyError('Name, Experience step, trusted sender, and subject rule are required.')
+      return
+    }
+    const senderValue = draft.sender.trim().toLowerCase().replace(/^@/, '')
+    const senderRules = [{ sender_kind: 'forwarder', match_type: senderValue.includes('@') ? 'email' : 'domain', value: senderValue }]
+    const originalValue = draft.original_sender.trim().toLowerCase().replace(/^@/, '')
+    if (originalValue) senderRules.push({ sender_kind: 'original', match_type: originalValue.includes('@') ? 'email' : 'domain', value: originalValue })
+    const conditions = [{ field: 'subject', operator: 'contains', value: draft.subject.trim() }]
+    if (draft.body.trim()) conditions.push({ field: 'body', operator: 'contains', value: draft.body.trim() })
+    const result = await runAction('inbound:create', () => api.createInboundAutomation(currentEventId, {
+      name: draft.name.trim(), step_id: draft.step_id, status: 'active',
+      sender_rules: senderRules,
+      completion_rules: { match: draft.match, conditions },
+    }), 'Inbound automation created.')
+    if (result !== FAILED) {
+      setInboundDraft({ name: '', step_id: '', sender: '', original_sender: '', subject: '', body: '', match: 'all' })
+      await loadInboundAutomations()
+    }
+  }
+
+  async function toggleInboundAutomation(item) {
+    const status = item.status === 'active' ? 'paused' : 'active'
+    const result = await runAction(`inbound:${item.id}:status`, () => api.updateInboundAutomation(currentEventId, item.id, { status }), `Automation ${status}.`)
+    if (result !== FAILED) await loadInboundAutomations()
+  }
+
+  async function revalidateInboundAutomation(item) {
+    const result = await runAction(
+      `inbound:${item.id}:revalidate`,
+      () => api.revalidateInboundAutomation(currentEventId, item.id),
+      'Stored consent notifications revalidated.',
+    )
+    if (result !== FAILED) await Promise.all([loadInboundAutomations(), refreshDashboardAndAudit()])
+  }
+
+  function openInboundEditor(item) {
+    const forwarder = (item.sender_rules || []).find((rule) => (rule.sender_kind || 'forwarder') === 'forwarder')
+    const original = (item.sender_rules || []).find((rule) => rule.sender_kind === 'original')
+    const conditions = item.completion_rules?.conditions || []
+    setEditingInbound(item)
+    setInboundEditDraft({
+      name: item.name || '',
+      step_id: item.step_id || '',
+      sender: forwarder?.value || '',
+      original_sender: original?.value || '',
+      subject: conditions.find((condition) => condition.field === 'subject')?.value || '',
+      body: conditions.find((condition) => condition.field === 'body')?.value || '',
+      match: item.completion_rules?.match || 'all',
+    })
+  }
+
+  async function saveInboundAutomation() {
+    const draft = inboundEditDraft
+    if (!draft?.name.trim() || !draft.step_id || !draft.sender.trim() || !draft.subject.trim()) {
+      notifyError('Name, Experience step, trusted sender, and subject rule are required.')
+      return
+    }
+    const senderValue = draft.sender.trim().toLowerCase().replace(/^@/, '')
+    const senderRules = [{ sender_kind: 'forwarder', match_type: senderValue.includes('@') ? 'email' : 'domain', value: senderValue }]
+    const originalValue = draft.original_sender.trim().toLowerCase().replace(/^@/, '')
+    if (originalValue) senderRules.push({ sender_kind: 'original', match_type: originalValue.includes('@') ? 'email' : 'domain', value: originalValue })
+    const conditions = [{ field: 'subject', operator: 'contains', value: draft.subject.trim() }]
+    if (draft.body.trim()) conditions.push({ field: 'body', operator: 'contains', value: draft.body.trim() })
+    const result = await runAction(`inbound:${editingInbound.id}:save`, () => api.updateInboundAutomation(currentEventId, editingInbound.id, {
+      name: draft.name.trim(), step_id: draft.step_id, sender_rules: senderRules,
+      completion_rules: { match: draft.match, conditions },
+    }), 'Inbound automation updated.')
+    if (result !== FAILED) {
+      setEditingInbound(null)
+      setInboundEditDraft(null)
+      await loadInboundAutomations()
+    }
+  }
+
+  async function copyInboundAddress(address) {
+    try { await navigator.clipboard.writeText(address); notify('Inbound address copied.') }
+    catch { notifyError('Could not copy the address. Select and copy it manually.') }
+  }
+
+  async function resolveInboundReview(item, action) {
+    let request
+    if (action === 'match') {
+      const guestId = inboundReviewGuests[item.id]
+      if (!guestId) { notifyError('Select a guest first.'); return }
+      request = () => api.matchInboundEmail(currentEventId, item.id, guestId)
+    } else request = () => api.resolveInboundEmail(currentEventId, item.id, action)
+    const result = await runAction(`inbound-review:${item.id}`, request, action === 'match' ? 'Guest matched and step completed.' : 'Review item resolved.')
+    if (result !== FAILED) await Promise.all([loadInboundAutomations(), refreshDashboardAndAudit()])
+  }
+
+  const filteredInboundAudit = (inboundAudit || []).filter((item) => {
+    if (inboundAuditStatus !== 'all' && item.processing_status !== inboundAuditStatus) return false
+    const query = inboundAuditSearch.trim().toLowerCase()
+    if (!query) return true
+    return [item.guest_name, item.guest_email, item.subject, item.from_address, item.original_sender, item.automation_name]
+      .some((value) => String(value || '').toLowerCase().includes(query))
+  })
+
+  function inboundAuditLabel(status) {
+    return ({ completed: 'Completed', needs_review: 'Needs review', invalid: 'Invalid', ignored: 'Ignored', untrusted: 'Untrusted', duplicate: 'Duplicate', failed: 'Failed', received: 'Received', processing: 'Processing' })[status] || String(status || 'Unknown').replaceAll('_', ' ')
   }
 
   return (
@@ -1485,18 +1642,30 @@ export default function ExperienceRedesignPage() {
             </div>
           </div>
           <div className="rd-panel">
-            <div className="rd-panel-head"><h3>Signatures</h3><p>Guests who have signed</p></div>
+            <div className="rd-panel-head ex-panel-head-row">
+              <div><h3>Consent received</h3><p>Every guest with Consent completed — self-signed, staff, or inbound email</p></div>
+              <button className="rr-btn secondary" disabled={actionKey === 'consent:export' || !consentReceived?.length} onClick={handleExportConsentReceived}>
+                {actionKey === 'consent:export' ? 'Exporting…' : 'Export CSV'}
+              </button>
+            </div>
             <div className="rd-panel-body">
-              {realSignatures === null ? <LoadingSkeleton rows={4} variant="list" /> : (
+              {consentReceived === null ? <LoadingSkeleton rows={4} variant="list" /> : (
                 <table className="rr-table">
-                  <thead><tr><th>Guest</th><th>Signed</th><th/></tr></thead>
+                  <thead><tr><th>Guest</th><th>Completed</th><th>Source</th><th/></tr></thead>
                   <tbody>
-                    {realSignatures.map((s) => (
-                      <tr key={s.id}><td>{s.signer_name}</td><td className="rd-rowlink">{s.signed_at ? new Date(s.signed_at).toLocaleString() : '—'}</td>
-                        <td className="rd-rowlink"><button className="rr-link-btn" onClick={() => setSignatureGuest(s.signer_name)}>View signature</button></td>
+                    {consentReceived.map((s) => (
+                      <tr key={s.guest_id}>
+                        <td>{`${s.first_name} ${s.last_name}`.trim()}</td>
+                        <td className="rd-rowlink">{s.completed_at ? new Date(s.completed_at).toLocaleString() : '—'}</td>
+                        <td className="rd-rowlink">
+                          {s.source_label}
+                          {s.automation_name ? ` · ${s.automation_name}` : ''}
+                          {s.match_method ? ` (${s.match_method})` : ''}
+                        </td>
+                        <td className="rd-rowlink">{s.signer_name && <button className="rr-link-btn" onClick={() => setSignatureGuest(s.signer_name)}>View signature</button>}</td>
                       </tr>
                     ))}
-                    {realSignatures.length === 0 && <tr><td colSpan={3} className="rd-rowlink">No signatures yet.</td></tr>}
+                    {consentReceived.length === 0 && <tr><td colSpan={4} className="rd-rowlink">No consent received yet.</td></tr>}
                   </tbody>
                 </table>
               )}
@@ -1506,6 +1675,105 @@ export default function ExperienceRedesignPage() {
                   ? <p className="rd-rowlink">No recent activity.</p>
                   : experienceAudit.slice(0, 8).map((a) => <div key={a.id} className="ex-audit-row"><Icon name="clock" size={12}/><span>{a.event_type}{a.source ? ` · ${a.source}` : ''}</span><small>{a.occurred_at ? new Date(a.occurred_at).toLocaleString() : ''}</small></div>)
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'Inbound Automations' && (
+        <div className="ex-feedback-page">
+          <details className="ex-inbound-guide">
+            <summary>
+              <span className="ex-inbound-guide-icon"><Icon name="shield" size={17}/></span>
+              <span className="ex-inbound-guide-heading"><strong>How inbound consent verification works</strong><small>What organizers, Festio, and check-in staff need to know</small></span>
+              <span className="ex-inbound-guide-count">Quick guide</span>
+              <span className="ex-inbound-guide-chevron" aria-hidden="true">⌄</span>
+            </summary>
+            <div className="ex-inbound-guide-body">
+              <div className="ex-inbound-guide-intro"><strong>One verified email can clear the guest for check-in.</strong><span>Festio only completes consent when the sender, completion evidence, and guest identity agree.</span></div>
+              <div className="ex-inbound-guide-flow">
+                <div className="ex-inbound-guide-step"><b>1</b><span><em>Event owner</em><strong>Forward the provider email</strong><small>Send the signed-waiver completion notice to this event’s generated Festio address.</small></span></div>
+                <span className="ex-inbound-guide-arrow" aria-hidden="true">→</span>
+                <div className="ex-inbound-guide-step"><b>2</b><span><em>Festio</em><strong>Verify and identify the guest</strong><small>Festio checks the forwarder, original provider, completion wording, and guest details.</small></span></div>
+                <span className="ex-inbound-guide-arrow" aria-hidden="true">→</span>
+                <div className="ex-inbound-guide-step"><b>3</b><span><em>Automatic outcome</em><strong>Consent is completed</strong><small>A unique match removes the consent block. Scan again or refresh to check the guest in.</small></span></div>
+              </div>
+              <div className="ex-inbound-guide-review"><span className="ex-inbound-guide-review-icon"><Icon name="info" size={16}/></span><div><strong>If Festio cannot make a safe match</strong><p>The message moves to <b>Needs Review</b>. Select the correct guest there, or verify the guest’s confirmation email at the door and use <b>Confirm completed &amp; check in</b>.</p></div></div>
+              <div className="ex-inbound-guide-note"><strong>Important:</strong><span>“I’ve completed this” only alerts staff. It does not verify consent or remove the check-in block.</span></div>
+            </div>
+          </details>
+          <div className="rr-panel">
+            <div className="rd-panel-head"><h3>Create inbound automation</h3><p>Forward a trusted external completion notification to Festio</p></div>
+            <div className="rd-panel-body">
+              <div className="rd-row2">
+                <div><label className="rd-field-label">Automation name</label><input className="rd-field" value={inboundDraft.name} onChange={(e) => setInboundDraft((v) => ({ ...v, name: e.target.value }))} placeholder="External Consent Completion" /></div>
+                <div><label className="rd-field-label">Experience step</label><select className="rd-field" value={inboundDraft.step_id} onChange={(e) => setInboundDraft((v) => ({ ...v, step_id: e.target.value }))}><option value="">Select a step</option>{sortedSteps.map((step) => <option key={step.id} value={step.id}>{step.title}</option>)}</select></div>
+              </div>
+              <div className="rd-row2" style={{ marginTop: 10 }}>
+                <div><label className="rd-field-label">Trusted forwarding mailbox or domain</label><input className="rd-field" value={inboundDraft.sender} onChange={(e) => setInboundDraft((v) => ({ ...v, sender: e.target.value }))} placeholder="organizer@gmail.com" /></div>
+                <div><label className="rd-field-label">Trusted original provider (optional)</label><input className="rd-field" value={inboundDraft.original_sender} onChange={(e) => setInboundDraft((v) => ({ ...v, original_sender: e.target.value }))} placeholder="provider.com" /></div>
+              </div>
+              <div className="rd-row2" style={{ marginTop: 10 }}>
+                <div><label className="rd-field-label">Subject contains</label><input className="rd-field" value={inboundDraft.subject} onChange={(e) => setInboundDraft((v) => ({ ...v, subject: e.target.value }))} placeholder="Consent Completed" /></div>
+                <div><label className="rd-field-label">Body contains (optional)</label><input className="rd-field" value={inboundDraft.body} onChange={(e) => setInboundDraft((v) => ({ ...v, body: e.target.value }))} placeholder="successfully submitted" /></div>
+              </div>
+              <div className="rd-hint" style={{ marginTop: 12 }}>Automatic completion is fail-closed: a trusted sender and every configured completion rule must match before Festio can update a guest.</div>
+              <button className="rr-btn primary" style={{ marginTop: 12 }} disabled={actionKey === 'inbound:create' || !sortedSteps.length} onClick={createInboundAutomation}>{actionKey === 'inbound:create' ? 'Creating…' : 'Create automation'}</button>
+            </div>
+          </div>
+
+          <div className="rr-panel">
+            <div className="rd-panel-head"><h3>Inbound automations</h3><p>Forward completion notifications to the generated address</p></div>
+            <div className="rd-panel-body">
+              {inboundAutomations === null ? <LoadingSkeleton rows={3} variant="list" /> : inboundAutomations.length === 0 ? <p className="rd-rowlink">No inbound automations configured.</p> : inboundAutomations.map((item) => <div className="ex-audit-row" style={{ alignItems: 'flex-start', padding: '12px 0' }} key={item.id}>
+                <Icon name="send" size={14}/><span style={{ flex: 1 }}><strong style={{ display: 'block' }}>{item.name}</strong><code style={{ display: 'block', overflowWrap: 'anywhere', margin: '5px 0' }}>{item.inbound_address}</code><small>Received {item.stats?.received || 0} · Completed {item.stats?.completed || 0} · Needs review {item.stats?.needs_review || 0} · Rejected {(item.stats?.invalid || 0) + (item.stats?.untrusted || 0)} · Duplicates {item.stats?.duplicate || 0}</small></span>
+                <button className="rr-btn secondary" onClick={() => copyInboundAddress(item.inbound_address)}>Copy address</button>
+                <button className="rr-btn secondary" onClick={() => openInboundEditor(item)}>Edit</button>
+                <button className="rr-btn secondary" disabled={item.status !== 'active' || actionKey === `inbound:${item.id}:revalidate`} onClick={() => revalidateInboundAutomation(item)}>{actionKey === `inbound:${item.id}:revalidate` ? 'Revalidating…' : 'Revalidate received'}</button>
+                <button className="rr-btn secondary" disabled={actionKey === `inbound:${item.id}:status`} onClick={() => toggleInboundAutomation(item)}>{item.status === 'active' ? 'Pause' : 'Activate'}</button>
+              </div>)}
+            </div>
+          </div>
+
+          <div className="rr-panel ex-inbound-audit-panel">
+            <div className="rd-panel-head ex-panel-head-row">
+              <div><h3>Consent completion audit</h3><p>Authenticated notifications from the configured trusted consent provider</p></div>
+              <span className="ex-inbound-audit-total">{inboundAudit?.length || 0} received</span>
+            </div>
+            <div className="rd-panel-body">
+              <div className="ex-inbound-audit-filters">
+                <div className="rd-search"><Icon name="search" size={13}/><input value={inboundAuditSearch} onChange={(event) => setInboundAuditSearch(event.target.value)} placeholder="Search guest, email, subject, or sender…" /></div>
+                <select className="rr-select" value={inboundAuditStatus} onChange={(event) => setInboundAuditStatus(event.target.value)}>
+                  <option value="all">All outcomes</option><option value="completed">Completed</option><option value="needs_review">Needs review</option><option value="invalid">Invalid</option><option value="ignored">Ignored</option><option value="duplicate">Duplicate</option><option value="failed">Failed</option>
+                </select>
+                <button className="rr-btn secondary" onClick={loadInboundAutomations}>Refresh</button>
+              </div>
+              {inboundAudit === null ? <LoadingSkeleton rows={5} variant="list" /> : filteredInboundAudit.length === 0 ? <div className="ex-inbound-audit-empty"><Icon name="shield" size={22}/><strong>No consent notifications found</strong><small>Received provider emails will appear here with their verification and guest-match outcome.</small></div> : (
+                <div className="ex-inbound-audit-table-wrap"><table className="rr-table ex-inbound-audit-table">
+                  <thead><tr><th>Guest</th><th>Received</th><th>Automation</th><th>Outcome</th><th>Match</th><th/></tr></thead>
+                  <tbody>{filteredInboundAudit.map((item) => <Fragment key={item.id}>
+                    <tr>
+                      <td><strong>{item.guest_name || 'Unmatched guest'}</strong><small>{item.guest_email || item.subject || 'No guest identified'}</small></td>
+                      <td><strong>{new Date(item.received_at).toLocaleDateString()}</strong><small>{new Date(item.received_at).toLocaleTimeString()}</small></td>
+                      <td><strong>{item.automation_name || 'Unknown automation'}</strong><small>{item.subject || '(No subject)'}</small></td>
+                      <td><span className={`ex-inbound-status is-${item.processing_status}`}>{inboundAuditLabel(item.processing_status)}</span></td>
+                      <td><strong>{item.match_method ? item.match_method.replaceAll('_', ' ') : '—'}</strong><small>{item.sender_status} sender · rules {item.rule_status}</small></td>
+                      <td><button className="rr-link-btn" aria-expanded={expandedInboundAudit === item.id} onClick={() => setExpandedInboundAudit((value) => value === item.id ? '' : item.id)}>{expandedInboundAudit === item.id ? 'Hide' : 'Details'}</button></td>
+                    </tr>
+                    {expandedInboundAudit === item.id && <tr className="ex-inbound-audit-detail-row"><td colSpan={6}><div className="ex-inbound-audit-detail">
+                      <div><span>Forwarded by</span><strong>{item.from_address || 'Unknown'}</strong></div><div><span>Original provider</span><strong>{item.original_sender || 'Not identified'}</strong></div><div><span>Processed</span><strong>{item.processed_at ? new Date(item.processed_at).toLocaleString() : 'Pending'}</strong></div><div><span>Reviewed by</span><strong>{item.reviewer_name || 'Automatic verification'}</strong></div>
+                      {(item.failure_reason || item.sanitized_excerpt) && <div className="ex-inbound-audit-evidence"><span>{item.failure_reason ? 'Decision reason' : 'Sanitized evidence'}</span><p>{item.failure_reason || item.sanitized_excerpt}</p>{item.failure_code && <code>{item.failure_code}</code>}</div>}
+                    </div></td></tr>}
+                  </Fragment>)}</tbody>
+                </table></div>
+              )}
+            </div>
+          </div>
+
+          <div className="rr-panel">
+            <div className="rd-panel-head"><h3>Needs Review</h3><p>Messages Festio could not match safely</p></div>
+            <div className="rd-panel-body">
+              {inboundReview === null ? <LoadingSkeleton rows={3} variant="list" /> : inboundReview.length === 0 ? <p className="rd-rowlink">Nothing needs review.</p> : <table className="rr-table"><thead><tr><th>Received</th><th>Email</th><th>Reason</th><th>Guest</th><th/></tr></thead><tbody>{inboundReview.map((item) => <tr key={item.id}><td>{new Date(item.received_at).toLocaleString()}</td><td><strong>{item.subject || '(No subject)'}</strong><small style={{ display: 'block' }}>{item.from_address || 'Unknown sender'}</small></td><td>{item.failure_reason || item.match_status}</td><td><select className="rd-field" value={inboundReviewGuests[item.id] || ''} onChange={(e) => setInboundReviewGuests((v) => ({ ...v, [item.id]: e.target.value }))}><option value="">Select guest</option>{realGuests.map((guest) => <option key={guest.id} value={guest.id}>{guest.first_name} {guest.last_name}{guest.email ? ` · ${guest.email}` : ''}</option>)}</select></td><td><div className="rd-row2"><button className="rr-btn secondary" disabled={actionKey === `inbound-review:${item.id}`} onClick={() => resolveInboundReview(item, 'match')}>Match Guest</button><button className="rr-link-btn" onClick={() => resolveInboundReview(item, 'invalid')}>Invalid</button><button className="rr-link-btn" onClick={() => resolveInboundReview(item, 'ignore')}>Ignore</button></div></td></tr>)}</tbody></table>}
             </div>
           </div>
         </div>
@@ -1623,7 +1891,7 @@ export default function ExperienceRedesignPage() {
             </div>
           </div>
           <div className="rr-grid3" style={{ marginTop: 14 }}>
-            <div className="rr-panel er-stat"><span>Consent signed</span><strong>{realSignatures ? `${realSignatures.length} / ${dashboard.guest_total}` : '—'}</strong></div>
+            <div className="rr-panel er-stat"><span>Consent signed</span><strong>{consentReceived ? `${consentReceived.length} / ${dashboard.guest_total}` : '—'}</strong></div>
             <div className="rr-panel er-stat amber"><span>Lowest-completion step</span><strong>{dashboard.steps.length ? [...dashboard.steps].sort((a, b) => a.completion_rate - b.completion_rate)[0].title : '—'}</strong></div>
             <div className="rr-panel er-stat"><span>Blocked / failed</span><strong>{dashboard.steps.reduce((sum, s) => sum + (s.blocked || 0) + (s.failed || 0), 0)}</strong></div>
           </div>
@@ -1729,6 +1997,29 @@ export default function ExperienceRedesignPage() {
             <button className="rr-btn primary" style={{ flex: 1, justifyContent: 'center' }} disabled={actionKey === `template:${editingTemplate.key}:save`} onClick={saveTemplateDraft}>
               {actionKey === `template:${editingTemplate.key}:save` ? 'Saving…' : 'Save'}
             </button>
+          </div>
+        </Modal>
+      )}
+
+      {editingInbound && inboundEditDraft && (
+        <Modal title={`Edit — ${editingInbound.name}`} onClose={() => { setEditingInbound(null); setInboundEditDraft(null) }} width={560}>
+          <div className="rd-row2">
+            <div><label className="rd-field-label">Automation name</label><input className="rd-field" value={inboundEditDraft.name} onChange={(e) => setInboundEditDraft((draft) => ({ ...draft, name: e.target.value }))} /></div>
+            <div><label className="rd-field-label">Experience step</label><select className="rd-field" value={inboundEditDraft.step_id} onChange={(e) => setInboundEditDraft((draft) => ({ ...draft, step_id: e.target.value }))}>{sortedSteps.map((step) => <option key={step.id} value={step.id}>{step.title}</option>)}</select></div>
+          </div>
+          <div className="rd-row2" style={{ marginTop: 10 }}>
+            <div><label className="rd-field-label">Trusted forwarding mailbox or domain</label><input className="rd-field" value={inboundEditDraft.sender} onChange={(e) => setInboundEditDraft((draft) => ({ ...draft, sender: e.target.value }))} /></div>
+            <div><label className="rd-field-label">Trusted original provider (optional)</label><input className="rd-field" value={inboundEditDraft.original_sender} onChange={(e) => setInboundEditDraft((draft) => ({ ...draft, original_sender: e.target.value }))} /></div>
+          </div>
+          <div className="rd-row2" style={{ marginTop: 10 }}>
+            <div><label className="rd-field-label">Subject contains</label><input className="rd-field" value={inboundEditDraft.subject} onChange={(e) => setInboundEditDraft((draft) => ({ ...draft, subject: e.target.value }))} /></div>
+            <div><label className="rd-field-label">Body contains (optional)</label><input className="rd-field" value={inboundEditDraft.body} onChange={(e) => setInboundEditDraft((draft) => ({ ...draft, body: e.target.value }))} /></div>
+          </div>
+          <div style={{ marginTop: 10 }}><label className="rd-field-label">Rule matching</label><select className="rd-field" value={inboundEditDraft.match} onChange={(e) => setInboundEditDraft((draft) => ({ ...draft, match: e.target.value }))}><option value="all">All conditions must match</option><option value="any">Any condition may match</option></select></div>
+          <div className="rd-hint" style={{ marginTop: 10 }}>The generated forwarding address does not change when these settings are edited.</div>
+          <div className="rd-row2" style={{ marginTop: 12 }}>
+            <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => { setEditingInbound(null); setInboundEditDraft(null) }}>Cancel</button>
+            <button className="rr-btn primary" style={{ flex: 1, justifyContent: 'center' }} disabled={actionKey === `inbound:${editingInbound.id}:save`} onClick={saveInboundAutomation}>{actionKey === `inbound:${editingInbound.id}:save` ? 'Saving…' : 'Save changes'}</button>
           </div>
         </Modal>
       )}

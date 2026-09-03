@@ -12,13 +12,34 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import Identity, current_identity, require_admin, require_capability, require_staff
 from ..database import get_db
-from ..models import ActivityParticipant, ActivityQuestion, ActivityRule, EngagementActivity, EngagementEventSettings, EngagementQnaQuestion, LiveDisplay, ParticipantResponse, ProgramSession, QuestionOption, ResponseOptionSelection
-from ..realtime import publish_display
+from ..models import ActivityParticipant, ActivityQuestion, ActivityRule, EngagementActivity, EngagementEventSettings, EngagementQnaQuestion, LiveDisplay, ParticipantResponse, ProgramSession, QuestionOption, ResponseOptionSelection, WorkflowRun
+from ..realtime import claim_display, publish_display
 from ..schemas import DisplayControlUpdate, DisplayCreate, DisplayOut, DisplayRehearsalIn, DisplayResultsControlIn, DisplayUpdate, EventSettings, EventSettingsOut, ResponseDetailOut, RuleCreate, RuleOut
 from .activities import _fetch_activity
 from .participate import _display_payload
 
 router = APIRouter(prefix="/api/engagement/v1", tags=["engagement-operations"])
+
+
+def _new_display_short_code() -> str:
+    # 96 bits of entropy, URL-safe and still short enough to type/copy.
+    return secrets.token_urlsafe(12)
+
+
+def _take_manual_display_control(display: LiveDisplay, changed_fields: set[str]) -> None:
+    """Detach a workflow when an operator explicitly chooses TV content."""
+    if changed_fields & {"scene", "assigned_activity_id"}:
+        display.assigned_workflow_run_id = None
+
+
+async def _ensure_display_short_codes(displays: list[LiveDisplay], db: AsyncSession) -> None:
+    changed = False
+    for display in displays:
+        if not display.short_code:
+            display.short_code = _new_display_short_code()
+            changed = True
+    if changed:
+        await db.commit()
 
 
 def _csv_safe(value) -> str:
@@ -204,10 +225,12 @@ async def delete_rule(rule_id: str, identity: Identity = Depends(current_identit
 @router.get("/displays", response_model=list[DisplayOut])
 async def list_displays(identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
     require_staff(identity)
-    return (await db.execute(select(LiveDisplay).where(
+    displays = list((await db.execute(select(LiveDisplay).where(
         LiveDisplay.event_id == identity.event_id,
         LiveDisplay.org_id == identity.org_id,
-    ).order_by(LiveDisplay.created_at))).scalars().all()
+    ).order_by(LiveDisplay.created_at))).scalars().all())
+    await _ensure_display_short_codes(displays, db)
+    return displays
 
 
 @router.post("/displays", response_model=DisplayOut, status_code=201)
@@ -215,7 +238,7 @@ async def create_display(body: DisplayCreate, identity: Identity = Depends(curre
     require_admin(identity)
     await _validate_assigned_activity(body.assigned_activity_id, identity.event_id, identity.org_id, db)
     await _validate_assigned_session(body.assigned_session_id, identity.event_id, identity.org_id, db)
-    display = LiveDisplay(org_id=identity.org_id, event_id=identity.event_id, name=body.name, display_code=secrets.token_urlsafe(8), access_token=secrets.token_urlsafe(32), assigned_session_id=body.assigned_session_id, assigned_activity_id=body.assigned_activity_id, scene=body.scene, settings=body.settings.model_dump(mode="json", exclude_none=True))
+    display = LiveDisplay(org_id=identity.org_id, event_id=identity.event_id, name=body.name, display_code=secrets.token_urlsafe(8), short_code=_new_display_short_code(), access_token=secrets.token_urlsafe(32), assigned_session_id=body.assigned_session_id, assigned_activity_id=body.assigned_activity_id, scene=body.scene, settings=body.settings.model_dump(mode="json", exclude_none=True))
     db.add(display); await db.commit(); await db.refresh(display)
     return display
 
@@ -228,6 +251,7 @@ async def update_display(display_id: str, body: DisplayUpdate, identity: Identit
     await _validate_assigned_activity(changes.get("assigned_activity_id"), identity.event_id, identity.org_id, db)
     if "assigned_session_id" in changes:
         await _validate_assigned_session(changes.get("assigned_session_id"), identity.event_id, identity.org_id, db)
+    _take_manual_display_control(display, set(changes))
     for key, value in changes.items(): setattr(display, key, value)
     _merge_display_settings(display, body.settings)
     await db.commit(); await db.refresh(display)
@@ -238,11 +262,13 @@ async def update_display(display_id: str, body: DisplayUpdate, identity: Identit
 @router.get("/control/displays", response_model=list[DisplayOut])
 async def control_displays(identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
     require_capability(identity, "control")
-    return (await db.execute(select(LiveDisplay).where(
+    displays = list((await db.execute(select(LiveDisplay).where(
         LiveDisplay.event_id == identity.event_id,
         LiveDisplay.org_id == identity.org_id,
         LiveDisplay.status == "active",
-    ).order_by(LiveDisplay.created_at))).scalars().all()
+    ).order_by(LiveDisplay.created_at))).scalars().all())
+    await _ensure_display_short_codes(displays, db)
+    return displays
 
 
 @router.patch("/control/displays/{display_id}", response_model=DisplayOut)
@@ -251,6 +277,7 @@ async def control_display(display_id: str, body: DisplayControlUpdate, identity:
     display = await _owned_display(display_id, identity, db)
     changes = body.model_dump(exclude_unset=True, exclude={"settings"})
     await _validate_assigned_activity(changes.get("assigned_activity_id"), identity.event_id, identity.org_id, db)
+    _take_manual_display_control(display, set(changes))
     for key, value in changes.items(): setattr(display, key, value)
     _merge_display_settings(display, body.settings)
     await db.commit(); await db.refresh(display)
@@ -296,6 +323,7 @@ async def control_display_results(display_id: str, body: DisplayResultsControlIn
     else:
         settings["results_snapshot"] = None
     display.assigned_activity_id = activity.id
+    display.assigned_workflow_run_id = None
     display.scene = "all_results" if body.mode == "all" else "results"
     display.settings = settings
     await db.commit(); await db.refresh(display)
@@ -308,6 +336,7 @@ async def control_display_rehearsal(display_id: str, body: DisplayRehearsalIn, i
     """Preview realistic results without creating participants or responses."""
     require_capability(identity, "control")
     display = await _owned_display(display_id, identity, db)
+    display.assigned_workflow_run_id = None
     if not body.enabled:
         display.scene = "join"
         display.settings = {
@@ -350,9 +379,16 @@ async def delete_display(display_id: str, identity: Identity = Depends(current_i
 
 
 @router.get("/live/{display_code}")
-async def public_display(display_code: str, token: str = Query(...), db: AsyncSession = Depends(get_db)):
+async def public_display(display_code: str, token: str = Query(...), client_id: str | None = Query(None), db: AsyncSession = Depends(get_db)):
     display = await db.scalar(select(LiveDisplay).where(LiveDisplay.display_code == display_code, LiveDisplay.access_token == token, LiveDisplay.status == "active"))
     if not display: raise HTTPException(404, "Display not found")
+    if client_id:
+        try:
+            claimed = await claim_display(display.id, client_id)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc))
+        if not claimed:
+            raise HTTPException(409, "This display already has a connected projector")
     # The public TV shell needs the owning event id to fetch the canonical
     # six-character join code from core. No org or organizer data is exposed.
     sessions = (await db.execute(
@@ -373,6 +409,7 @@ async def public_display(display_code: str, token: str = Query(...), db: AsyncSe
             "settings": public_display_settings,
         },
         "activity": None,
+        "workflow_run": None,
         "program_sessions": [
             {
                 "id": session.id,
@@ -396,7 +433,25 @@ async def public_display(display_code: str, token: str = Query(...), db: AsyncSe
             else:
                 activity_payload = await _display_payload(activity, db)
             payload["activity"] = _apply_results_view(activity_payload, settings)
+    if getattr(display, "assigned_workflow_run_id", None):
+        # Import locally to avoid making existing display operations depend on
+        # the optional workflow router at module-import time.
+        from .workflows import _run_payload
+        run = await db.get(WorkflowRun, display.assigned_workflow_run_id)
+        if run and run.event_id == display.event_id and run.status in {"ready", "live", "paused"}:
+            payload["workflow_run"] = await _run_payload(run, db, False)
     return payload
+
+
+@router.get("/live-short/{short_code}")
+async def public_short_display(short_code: str, client_id: str | None = Query(None), db: AsyncSession = Depends(get_db)):
+    display = await db.scalar(select(LiveDisplay).where(
+        LiveDisplay.short_code == short_code,
+        LiveDisplay.status == "active",
+    ))
+    if not display:
+        raise HTTPException(404, "Display not found")
+    return await public_display(display.display_code, display.access_token, client_id, db)
 
 
 @router.get("/activities/{activity_id}/export.csv")

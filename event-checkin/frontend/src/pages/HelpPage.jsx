@@ -93,10 +93,7 @@ export default function HelpPage({ publicMode = false }) {
 
   // Keep role in sync when user data loads (fixes race where role initialises
   // as 'staff' because user is null on first render, then isAdmin becomes true)
-  const [role, setRole] = useState(() => {
-    const requested = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('role') : ''
-    return roles.includes(requested) ? requested : roles[0] || 'guest'
-  })
+  const [role, setRole] = useState(roles[0] || 'guest')
   useEffect(() => {
     if (!roles.includes(role)) setRole(roles[0] || 'guest')
   }, [roles]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -112,12 +109,7 @@ export default function HelpPage({ publicMode = false }) {
   }, [data, query])
 
   // open topics: all open when searching, else first open
-  const [openSet, setOpenSet] = useState(() => {
-    const requested = typeof window !== 'undefined'
-      ? new URLSearchParams(window.location.search).get('topic') || window.location.hash.slice(1)
-      : ''
-    return new Set([requested || data.topics[0]?.id])
-  })
+  const [openSet, setOpenSet] = useState(() => new Set([data.topics[0]?.id]))
   const isOpen = (id) => (query.trim() ? true : openSet.has(id))
   const toggle = (id) => setOpenSet((prev) => {
     const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n
@@ -132,22 +124,14 @@ export default function HelpPage({ publicMode = false }) {
     setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30)
   }
 
-  useEffect(() => {
-    const requested = new URLSearchParams(window.location.search).get('topic') || window.location.hash.slice(1)
-    if (!requested || !data.topics.some((topic) => topic.id === requested)) return
-    setOpenSet((prev) => new Set(prev).add(requested))
-    const timer = setTimeout(() => document.getElementById(requested)?.scrollIntoView({ block: 'start' }), 60)
-    return () => clearTimeout(timer)
-  }, [data])
-
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
       {/* Public header — /guide has no app Nav around it */}
       {publicMode && (
         <div className="flex items-center justify-between mb-6">
           <Link to="/" className="flex items-center gap-2 font-bold text-lg text-slate-900 dark:text-white tracking-tight">
-            <span className="grid h-8 w-8 place-items-center rounded-md bg-teal-600 text-white text-sm">F</span>
-            Festio
+            <span className="grid h-8 w-8 place-items-center rounded-md bg-teal-600 text-white text-sm">EQ</span>
+            EventQR
           </Link>
           <div className="flex items-center gap-1 text-sm">
             <Link to="/pricing" className="px-3 py-2 rounded-md text-slate-600 dark:text-slate-300 hover:text-teal-700 dark:hover:text-teal-300">Pricing</Link>
@@ -160,7 +144,7 @@ export default function HelpPage({ publicMode = false }) {
       <div className="rounded-2xl bg-gradient-to-br from-teal-600 to-cyan-700 text-white p-7 sm:p-9 mb-6">
         <h1 className="text-2xl sm:text-3xl font-extrabold">Help &amp; How-To</h1>
         <p className="mt-2 text-white/85 text-sm sm:text-base max-w-2xl">
-          Step-by-step instructions for everything in Festio. Pick your role, or search.
+          Step-by-step instructions for everything in EventQR. Pick your role, or search.
         </p>
         {/* Role switcher */}
         <div className="mt-5 flex flex-wrap gap-2">
@@ -228,7 +212,7 @@ export default function HelpPage({ publicMode = false }) {
           {role !== 'guest' && (
             <p className="text-xs text-slate-400 dark:text-slate-500 pt-2">
               Need more? <Link to="/pricing" className="text-teal-600 hover:underline">See pricing</Link> ·
-              {' '}<a href="mailto:info@festio.events" className="text-teal-600 hover:underline">Contact support</a>
+              {' '}<a href="mailto:info@devopclinics.com" className="text-teal-600 hover:underline">Contact support</a>
             </p>
           )}
         </div>

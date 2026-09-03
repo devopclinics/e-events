@@ -94,7 +94,10 @@ async def reconcile_provider_status(
             return False
         if error_code:
             ledger.reason = f"{ledger.reason or 'message'}:{error_code}"
-        if status_key in {"failed", "undelivered", "rejected", "error"}:
+        if status_key in {
+            "failed", "undelivered", "rejected", "error",
+            "sending_failed", "delivery_failed", "skipped", "deleted",
+        }:
             event = await db.get(Event, ledger.event_id)
             if settings.organization_entitlements_v2:
                 await refund_message_units(db, ledger, reason=f"delivery_{status_key}")

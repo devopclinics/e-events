@@ -31,12 +31,14 @@ const SCHEDULE_AUDIENCES = [
   { value: 'waitlisted', label: 'Waitlisted guests' },
   { value: 'checked_in', label: 'Checked-in guests' },
   { value: 'not_checked_in', label: 'Confirmed, not checked in' },
+  { value: 'consent_incomplete', label: 'Consent not completed' },
 ]
 const SCHEDULE_AUDIENCE_LABEL = Object.fromEntries(SCHEDULE_AUDIENCES.map((o) => [o.value, o.label]))
 
 const SCHEDULE_PRESETS = [
   { type: 'invitation', label: 'Invitation', description: 'Send each guest their personal invitation or RSVP link.', audience: 'not_invited', channels: ['email'] },
   { type: 'rsvp_reminder', label: 'RSVP reminder', description: 'Chase only guests who still have not responded.', audience: 'not_responded', channels: ['email', 'sms'] },
+  { type: 'consent_reminder', label: 'Consent reminder', description: 'Remind only guests whose required consent is still incomplete.', audience: 'consent_incomplete', channels: ['email', 'sms', 'whatsapp'], subject: 'Action required before arrival — {{event_name}}', body: 'Assalamualaikum {{first_name}},\n\nThis is a reminder to complete the required form for {{event_name}} before arrival.\n\nComplete the form:\n{{consent_link}}\n\nEvent date: {{event_date}}\n\nIf you have already completed the form, no further action is required.' },
   { type: 'event_reminder', label: 'Event reminder', description: 'Share arrival details before the event begins.', audience: 'confirmed', channels: ['email', 'sms'], subject: 'Coming up: {{event_name}}', body: 'Hi {{first_name}}, {{event_name}} is coming up. View your event details here: {{guest_hub_link}}' },
   { type: 'session_reminder', label: 'Session reminder', description: 'Send a timed program or room reminder.', audience: 'confirmed', channels: ['email', 'sms'], subject: 'Your next session at {{event_name}}', body: 'Hi {{first_name}}, your next session begins soon. Open your event schedule: {{guest_hub_link}}' },
   { type: 'feedback_request', label: 'Feedback request', description: 'Invite participants to review a session or experience.', audience: 'checked_in', channels: ['email'], subject: 'How was {{event_name}}?', body: 'Hi {{first_name}}, thank you for joining us. Please share your feedback from your FestioHub: {{guest_hub_link}}' },
@@ -803,7 +805,7 @@ function MessagesTab({ notify, onPreview, eventId }) {
   const [templateTest, setTemplateTest] = useState(null)
   const [templateQuery, setTemplateQuery] = useState('')
   const [broadcastOpen, setBroadcastOpen] = useState(true)
-  const [deliveryOpen, setDeliveryOpen] = useState(false)
+  const [deliveryOpen, setDeliveryOpen] = useState(true)
   const [templatesOpen, setTemplatesOpen] = useState(true)
   const [templateAuditOpen, setTemplateAuditOpen] = useState(false)
   const [orgMembers, setOrgMembers] = useState([])
@@ -919,7 +921,11 @@ function MessagesTab({ notify, onPreview, eventId }) {
     ? ['email', 'sms', 'whatsapp'].map((key) => {
         const c = communication[key] || {}
         const delivered = c.reached ?? c.delivered ?? 0
-        return { key, label: CHANNEL_LABELS[key], rate: c.rate ?? null, sent: c.sent ?? 0, failed: Math.max(0, (c.sent ?? 0) - delivered) }
+        const sent = c.sent ?? 0
+        const failed = key === 'email'
+          ? (c.breakdown?.bounced || 0) + (c.breakdown?.failed || 0) + (c.breakdown?.complained || 0) + (c.breakdown?.suppressed || 0)
+          : c.failed ?? 0
+        return { key, label: CHANNEL_LABELS[key], rate: c.rate ?? null, sent, delivered, failed, pending: Math.max(0, sent - delivered - failed) }
       })
     : []
 
@@ -1023,7 +1029,7 @@ function MessagesTab({ notify, onPreview, eventId }) {
                   </div>
                   <div className="rate">{c.rate === null ? '—' : <>{c.rate}<small>%</small></>}</div>
                   <div className="rd-mini-bar"><i style={{ width: `${c.rate || 0}%` }} /></div>
-                  <div className="foot"><span>{c.sent} sent</span>{c.failed > 0 ? <span className="fail">{c.failed} failed</span> : <span>—</span>}</div>
+                  <div className="foot"><span>{c.delivered} delivered / {c.sent} sent</span>{c.failed > 0 ? <span className="fail">{c.failed} failed</span> : c.pending > 0 ? <span>{c.pending} pending</span> : <span>—</span>}</div>
                 </div>
               ))}
               {!channelStats.length && <p className="rd-rowlink">Channel delivery data is not available yet.</p>}
@@ -1985,6 +1991,8 @@ function SchedulerTab({ eventId, event, notify, initialPreset }) {
       email_body: preset.body || '',
       sms_body: preset.body || '',
       whatsapp_body: preset.body || '',
+      mms_body: preset.body || '',
+      mms_media_url: '',
       status: 'scheduled',
     }
   }
@@ -2042,6 +2050,8 @@ function SchedulerTab({ eventId, event, notify, initialPreset }) {
       email_body: item.email_body || '',
       sms_body: item.sms_body || '',
       whatsapp_body: item.whatsapp_body || '',
+      mms_body: item.mms_body || '',
+      mms_media_url: item.mms_media_url || '',
       status: item.status,
     } })
   }
@@ -2071,6 +2081,7 @@ function SchedulerTab({ eventId, event, notify, initialPreset }) {
       channels: form.channels, audience_type: form.audience_type, audience_mode: form.audience_mode,
       subject: form.subject || null, email_body: form.email_body || null,
       sms_body: form.sms_body || null, whatsapp_body: form.whatsapp_body || null,
+      mms_body: form.mms_body || null, mms_media_url: form.mms_media_url || null,
       status: ['draft', 'paused'].includes(form.status) ? form.status : 'scheduled',
     }
   }
@@ -2214,8 +2225,8 @@ function SchedulerTab({ eventId, event, notify, initialPreset }) {
 
         <div className="cm-schedule-grid">
           <label><span className="rd-field-label">Internal name</span><input className="rd-field" value={editing.form.name} onChange={(e) => setForm({ name: e.target.value })} /></label>
-          <label><span className="rd-field-label">Audience</span><select className="rr-select" value={editing.form.audience_type} onChange={(e) => setForm({ audience_type: e.target.value })}>{SCHEDULE_AUDIENCES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-          <label><span className="rd-field-label">Recipient mode</span><select className="rr-select" value={editing.form.audience_mode} onChange={(e) => setForm({ audience_mode: e.target.value })}><option value="dynamic">Dynamic — evaluate when sent</option><option value="frozen">Frozen — lock recipients now</option></select></label>
+          <label><span className="rd-field-label">Audience</span><select className="rr-select" disabled={editing.form.communication_type === 'consent_reminder'} value={editing.form.audience_type} onChange={(e) => setForm({ audience_type: e.target.value })}>{SCHEDULE_AUDIENCES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+          <label><span className="rd-field-label">Recipient mode</span><select className="rr-select" disabled={editing.form.communication_type === 'consent_reminder'} value={editing.form.audience_mode} onChange={(e) => setForm({ audience_mode: e.target.value })}><option value="dynamic">Dynamic — evaluate when sent</option><option value="frozen">Frozen — lock recipients now</option></select></label>
           <label><span className="rd-field-label">Timing</span><select className="rr-select" value={editing.form.trigger_type} onChange={(e) => setForm({ trigger_type: e.target.value })}><option value="absolute">Specific date and time</option><option value="relative">Relative to event timing</option></select></label>
         </div>
 
@@ -2228,14 +2239,16 @@ function SchedulerTab({ eventId, event, notify, initialPreset }) {
         {editing.form.trigger_type === 'relative' && editing.form.anchor === 'experience_step' && <label><span className="rd-field-label">Program session</span><select className="rr-select" value={editing.form.anchor_step_id} onChange={(e) => setForm({ anchor_step_id: e.target.value })}>{programSegments.map((step) => <option key={step.id} value={step.id}>{step.title}</option>)}</select></label>}
 
         <span className="rd-field-label">Delivery channels</span>
-        <div className="cm-channel-checks cm-schedule-channels">{['email', 'sms', 'whatsapp'].map((channel) => <label key={channel}><input type="checkbox" checked={editing.form.channels.includes(channel)} onChange={() => toggleChannel(channel)} /> {channel === 'sms' ? 'SMS' : channel[0].toUpperCase() + channel.slice(1)}</label>)}</div>
+        <div className="cm-channel-checks cm-schedule-channels">{['email', 'sms', 'mms', 'whatsapp'].map((channel) => <label key={channel}><input type="checkbox" checked={editing.form.channels.includes(channel)} onChange={() => toggleChannel(channel)} /> {['sms', 'mms'].includes(channel) ? channel.toUpperCase() : channel[0].toUpperCase() + channel.slice(1)}</label>)}</div>
         {['invitation', 'rsvp_reminder'].includes(editing.form.communication_type) && <p className="rd-hint">Invitation sends use your approved invitation templates, personal guest links, channel consent, and event channel policy.</p>}
 
         {!['invitation', 'rsvp_reminder'].includes(editing.form.communication_type) && <div className="cm-message-fields">
           {editing.form.channels.includes('email') && <><label className="rd-field-label">Email subject</label><input className="rd-field" value={editing.form.subject} onChange={(e) => setForm({ subject: e.target.value })} /><label className="rd-field-label">Email message</label><textarea className="rr-textarea" rows={5} value={editing.form.email_body} onChange={(e) => setForm({ email_body: e.target.value })} /></>}
           {editing.form.channels.includes('sms') && <><label className="rd-field-label">SMS message</label><textarea className="rr-textarea" rows={3} value={editing.form.sms_body} onChange={(e) => setForm({ sms_body: e.target.value })} /></>}
+          {editing.form.channels.includes('mms') && <><label className="rd-field-label">MMS message</label><textarea className="rr-textarea" rows={3} value={editing.form.mms_body} onChange={(e) => setForm({ mms_body: e.target.value })} /><label className="rd-field-label">MMS image URL (HTTPS)</label><input className="rd-field" type="url" value={editing.form.mms_media_url} onChange={(e) => setForm({ mms_media_url: e.target.value })} placeholder="https://…" /></>}
           {editing.form.channels.includes('whatsapp') && <><label className="rd-field-label">WhatsApp message</label><textarea className="rr-textarea" rows={3} value={editing.form.whatsapp_body} onChange={(e) => setForm({ whatsapp_body: e.target.value })} /></>}
-          <p className="rd-hint">Merge fields: {'{{first_name}}'}, {'{{event_name}}'}, {'{{event_date}}'}, {'{{guest_hub_link}}'} and {'{{ticket_link}}'}.</p>
+          {editing.form.communication_type === 'consent_reminder' && editing.form.channels.includes('whatsapp') && <p className="rd-hint">WhatsApp uses the approved Utility template. Festio inserts the current consent link when the reminder sends.</p>}
+          <p className="rd-hint">Merge fields: {'{{first_name}}'}, {'{{event_name}}'}, {'{{event_date}}'}, {'{{guest_hub_link}}'}, {'{{ticket_link}}'} and {'{{consent_link}}'}.</p>
         </div>}
 
         <div className="cm-schedule-save-wrap">

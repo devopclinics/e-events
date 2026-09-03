@@ -1,6 +1,7 @@
 import asyncio
 import unittest
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
@@ -8,12 +9,17 @@ from fastapi import HTTPException
 from app.auth import Identity, require_activity_session, require_admin, require_capability, require_staff
 from app.config import settings
 from app.moderation import flag_public_text
-from app.realtime import mint_realtime_ticket, publish, verify_realtime_ticket
-from app.routers.operations import _apply_results_view, _csv_safe, _rehearsal_payload
+from app.realtime import claim_display, mint_realtime_ticket, publish, renew_display, verify_realtime_ticket
+from app.routers.operations import _apply_results_view, _csv_safe, _rehearsal_payload, _take_manual_display_control
 from app.routers.activities import _apply_guided_advance, _guided_next_phase, _guided_phase_deadline
 from app.routers.participate import _leaderboard_name, _load_activity, _participant_locator, _rule_matches, _survey_completion_summary
 from app.scoring import score_choice_response
 from app.wordcloud import word_cloud
+from app.routers.workflows import (
+    _big_number_data, _mint_preview_token, _step_data, _step_payload,
+    create_run, export_workflow_pptx, preview_step,
+)
+from app.workflow_schemas import RunCommand, RunCreate, StepCreate
 
 
 class ScoringTests(unittest.TestCase):
@@ -53,6 +59,83 @@ class FailureIsolationTests(unittest.TestCase):
     def test_redis_publish_failure_never_fails_durable_request_path(self):
         with patch("app.realtime.redis.publish", new=AsyncMock(side_effect=ConnectionError("redis down"))):
             asyncio.run(publish("activity", "response.submitted", {"question_id": "q"}))
+
+    def test_first_projector_owns_display_lease(self):
+        with patch("app.realtime.redis.set", new=AsyncMock(return_value=True)) as set_value:
+            self.assertTrue(asyncio.run(claim_display("display-a", "projector-client-0001")))
+        set_value.assert_awaited_once()
+
+    def test_second_projector_cannot_take_display_lease(self):
+        with patch("app.realtime.redis.set", new=AsyncMock(return_value=False)), \
+             patch("app.realtime.redis.get", new=AsyncMock(return_value="projector-client-0001")):
+            self.assertFalse(asyncio.run(claim_display("display-a", "projector-client-0002")))
+
+    def test_disconnected_stream_cannot_reclaim_released_lease(self):
+        with patch("app.realtime.redis.eval", new=AsyncMock(return_value=0)) as renew:
+            self.assertFalse(asyncio.run(renew_display("display-a", "projector-client-0001")))
+        renew.assert_awaited_once()
+
+
+class ExperienceWorkflowSafetyTests(unittest.TestCase):
+    def test_display_rejects_a_second_active_workflow_channel(self):
+        class Db:
+            def __init__(self):
+                self.rows = iter((
+                    SimpleNamespace(id="display-a", event_id="event-a", org_id="org-a"),
+                    SimpleNamespace(id="run-other"),
+                ))
+
+            async def scalar(self, _statement):
+                return next(self.rows)
+
+        identity = Identity(
+            identity_kind="staff", subject="presenter-a", event_id="event-a", org_id="org-a",
+            role="presenter", capabilities=("control",),
+        )
+        workflow = SimpleNamespace(
+            id="workflow-a", event_id="event-a", org_id="org-a", current_revision_id="revision-a",
+        )
+        with patch.object(settings, "experience_workflows_enabled", True), \
+             patch("app.routers.workflows._workflow", new=AsyncMock(return_value=workflow)):
+            with self.assertRaises(HTTPException) as raised:
+                asyncio.run(create_run("workflow-a", RunCreate(display_id="display-a"), identity, Db()))
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertIn("already assigned", raised.exception.detail)
+
+    def test_manual_scene_or_activity_selection_detaches_workflow(self):
+        for field in ("scene", "assigned_activity_id"):
+            display = type("Display", (), {"assigned_workflow_run_id": "run-a"})()
+            _take_manual_display_control(display, {field})
+            self.assertIsNone(display.assigned_workflow_run_id)
+
+        display = type("Display", (), {"assigned_workflow_run_id": "run-a"})()
+        _take_manual_display_control(display, {"name"})
+        self.assertEqual(display.assigned_workflow_run_id, "run-a")
+
+    def test_interactive_steps_must_reference_existing_activity_engine(self):
+        from pydantic import ValidationError
+        with self.assertRaises(ValidationError):
+            StepCreate(step_type="poll", title="Audience poll")
+
+    def test_auto_advance_requires_authoritative_duration(self):
+        from pydantic import ValidationError
+        with self.assertRaises(ValidationError):
+            StepCreate(step_type="hero", title="Opening", auto_advance=True)
+
+    def test_presenter_notes_never_enter_public_scene_payload(self):
+        step = type("Step", (), {
+            "id": "step-a", "sequence": 0, "step_type": "hero", "title": "Opening",
+            "subtitle": None, "config": {}, "linked_activity_id": None,
+            "linked_question_id": None, "duration_seconds": 30, "auto_advance": False,
+            "presenter_notes": "Private cue", "status": "active",
+        })()
+        self.assertNotIn("presenter_notes", _step_payload(step, presenter=False))
+        self.assertEqual(_step_payload(step, presenter=True)["presenter_notes"], "Private cue")
+
+    def test_run_commands_require_version_and_idempotency_key(self):
+        from pydantic import ValidationError
+        with self.assertRaises(ValidationError):
+            RunCommand(action="next", expected_version=0, idempotency_key="short")
 
     def test_csv_cells_cannot_execute_spreadsheet_formulas(self):
         self.assertEqual(_csv_safe("=HYPERLINK('bad')"), "'=HYPERLINK('bad')")
@@ -272,6 +355,224 @@ class AuthorizationAndPrivacyTests(unittest.TestCase):
             self.assertEqual(column.key, "anon_id")
             self.assertNotEqual(subject, guest.subject)
             self.assertEqual(subject, _participant_locator("activity-a", guest, truly_anonymous=True)[1])
+
+
+class BigNumberDataTests(unittest.TestCase):
+    def test_combines_multiple_options_into_one_percentage_using_the_questions_own_denominator(self):
+        step = SimpleNamespace(config={"metrics": [
+            {"question_id": "q1", "option_labels": ["Yes — several people", "Yes — one person"], "label": "have someone to talk to"},
+        ]})
+
+        class Db:
+            def __init__(self):
+                self._call = 0
+
+            async def execute(self, _statement):
+                self._call += 1
+                if self._call == 1:
+                    options = [
+                        SimpleNamespace(id="opt-several", label="Yes — several people"),
+                        SimpleNamespace(id="opt-one", label="Yes — one person"),
+                        SimpleNamespace(id="opt-not-really", label="Not really"),
+                    ]
+                    return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: options))
+                if self._call == 2:
+                    rows = [("q1", "opt-several"), ("q1", "opt-several"), ("q1", "opt-one"), ("q1", "opt-not-really")]
+                    return SimpleNamespace(all=lambda: rows)
+                return SimpleNamespace(all=lambda: [("q1", 4)])
+
+        result = asyncio.run(_big_number_data(step, Db()))
+        self.assertEqual(result["metrics"][0]["value"], "75%")
+        self.assertEqual(result["metrics"][0]["response_count"], 4)
+        self.assertEqual(result["metrics"][0]["label"], "have someone to talk to")
+
+    def test_returns_none_when_no_metric_has_a_bound_question(self):
+        step = SimpleNamespace(config={"metrics": [{"label": "orphaned config, never resolved at import time"}]})
+        self.assertIsNone(asyncio.run(_big_number_data(step, object())))
+
+    def test_zero_responses_reports_zero_percent_instead_of_dividing_by_zero(self):
+        step = SimpleNamespace(config={"metrics": [{"question_id": "q1", "option_labels": ["Yes"], "label": "x"}]})
+
+        class Db:
+            async def execute(self, _statement):
+                return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: []), all=lambda: [])
+
+        result = asyncio.run(_big_number_data(step, Db()))
+        self.assertEqual(result["metrics"][0]["value"], "0%")
+        self.assertEqual(result["metrics"][0]["response_count"], 0)
+
+
+class StepDataDispatchTests(unittest.TestCase):
+    """_step_data backs both the live run payload and the PPTX exporter's
+    step-preview route -- these pin the dispatch so the two can never see
+    different data for the same step."""
+
+    def test_comparison_steps_use_the_comparison_helper(self):
+        step = SimpleNamespace(step_type="comparison", linked_activity_id=None)
+        with patch("app.routers.workflows._comparison_data", new=AsyncMock(return_value={"rows": []})) as mocked:
+            result = asyncio.run(_step_data(step, object()))
+        mocked.assert_awaited_once()
+        self.assertEqual(result, {"rows": []})
+
+    def test_big_number_steps_use_the_big_number_helper(self):
+        step = SimpleNamespace(step_type="big_number", linked_activity_id=None)
+        with patch("app.routers.workflows._big_number_data", new=AsyncMock(return_value={"metrics": []})):
+            result = asyncio.run(_step_data(step, object()))
+        self.assertEqual(result, {"metrics": []})
+
+    def test_steps_linked_to_an_activity_fall_back_to_the_generic_scene_helper(self):
+        step = SimpleNamespace(step_type="poll", linked_activity_id="activity-a")
+        with patch("app.routers.workflows._activity_scene_data", new=AsyncMock(return_value={"results": []})):
+            result = asyncio.run(_step_data(step, object()))
+        self.assertEqual(result, {"results": []})
+
+    def test_unlinked_non_special_steps_have_no_data(self):
+        step = SimpleNamespace(step_type="hero", linked_activity_id=None)
+        self.assertIsNone(asyncio.run(_step_data(step, object())))
+
+
+class WorkflowPreviewAndExportTests(unittest.TestCase):
+    """The step-preview route and the PPTX exporter are deliberately built on
+    top of the published revision only, and never create or touch a
+    WorkflowRun/LiveDisplay -- generating a deck (or previewing a step) must
+    never be able to interfere with an actively-presenting run."""
+
+    def _identity(self):
+        return Identity(
+            identity_kind="staff", subject="presenter-a", event_id="event-a", org_id="org-a",
+            role="presenter", capabilities=("control",),
+        )
+
+    def _fake_request(self):
+        return SimpleNamespace(headers=SimpleNamespace(get=lambda *_a: ""), client=SimpleNamespace(host="test"))
+
+    def test_preview_requires_a_published_revision(self):
+        workflow = SimpleNamespace(id="workflow-a", event_id="event-a", org_id="org-a", current_revision_id=None)
+        with patch.object(settings, "experience_workflows_enabled", True), \
+             patch("app.routers.workflows._workflow", new=AsyncMock(return_value=workflow)):
+            with self.assertRaises(HTTPException) as raised:
+                asyncio.run(preview_step("workflow-a", "step-a", self._identity(), object()))
+        self.assertEqual(raised.exception.status_code, 422)
+
+    def test_preview_404s_for_a_step_outside_the_published_revision(self):
+        workflow = SimpleNamespace(id="workflow-a", event_id="event-a", org_id="org-a", current_revision_id="revision-a")
+
+        class Db:
+            async def scalar(self, _statement):
+                return None
+
+        with patch.object(settings, "experience_workflows_enabled", True), \
+             patch("app.routers.workflows._workflow", new=AsyncMock(return_value=workflow)):
+            with self.assertRaises(HTTPException) as raised:
+                asyncio.run(preview_step("workflow-a", "step-not-in-revision", self._identity(), Db()))
+        self.assertEqual(raised.exception.status_code, 404)
+
+    def test_preview_carries_presenter_notes_for_this_staff_only_route(self):
+        # Unlike the guest-facing public run payload, this route is staff-only
+        # (require_capability "control"), so presenter_notes are expected here
+        # -- pinned so it isn't "fixed" later by copying the public-payload pattern.
+        workflow = SimpleNamespace(id="workflow-a", event_id="event-a", org_id="org-a", current_revision_id="revision-a")
+        step = SimpleNamespace(
+            id="step-a", sequence=0, step_type="hero", title="Opening", subtitle=None,
+            config={}, linked_activity_id=None, linked_question_id=None,
+            duration_seconds=None, auto_advance=False, presenter_notes="Private cue", status="active",
+        )
+        revision = SimpleNamespace(theme={"preset": "legacy_cinematic"})
+
+        class Db:
+            async def scalar(self, _statement):
+                return step
+
+            async def get(self, _model, _id):
+                return revision
+
+        with patch.object(settings, "experience_workflows_enabled", True), \
+             patch("app.routers.workflows._workflow", new=AsyncMock(return_value=workflow)), \
+             patch("app.routers.workflows._step_data", new=AsyncMock(return_value=None)):
+            payload = asyncio.run(preview_step("workflow-a", "step-a", self._identity(), Db()))
+        self.assertEqual(payload["presenter_notes"], "Private cue")
+        self.assertEqual(payload["theme"], {"preset": "legacy_cinematic"})
+
+    def test_export_requires_a_published_revision(self):
+        workflow = SimpleNamespace(id="workflow-a", event_id="event-a", org_id="org-a", current_revision_id=None, name="Draft")
+        with patch.object(settings, "experience_workflows_enabled", True), \
+             patch("app.routers.workflows.enforce_rate_limit", new=AsyncMock()), \
+             patch("app.routers.workflows._workflow", new=AsyncMock(return_value=workflow)):
+            with self.assertRaises(HTTPException) as raised:
+                asyncio.run(export_workflow_pptx("workflow-a", self._fake_request(), self._identity(), object()))
+        self.assertEqual(raised.exception.status_code, 422)
+
+    def test_export_rejects_a_published_workflow_with_no_active_steps(self):
+        workflow = SimpleNamespace(id="workflow-a", event_id="event-a", org_id="org-a", current_revision_id="revision-a", name="Empty")
+
+        class Db:
+            async def execute(self, _statement):
+                return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: []))
+
+        with patch.object(settings, "experience_workflows_enabled", True), \
+             patch("app.routers.workflows.enforce_rate_limit", new=AsyncMock()), \
+             patch("app.routers.workflows._workflow", new=AsyncMock(return_value=workflow)):
+            with self.assertRaises(HTTPException) as raised:
+                asyncio.run(export_workflow_pptx("workflow-a", self._fake_request(), self._identity(), Db()))
+        self.assertEqual(raised.exception.status_code, 422)
+
+    def test_export_never_launches_a_browser_for_an_unpublished_workflow(self):
+        # render_workflow_pptx is what actually launches Chromium; a guard
+        # clause failing must return before it's ever called.
+        workflow = SimpleNamespace(id="workflow-a", event_id="event-a", org_id="org-a", current_revision_id=None, name="Draft")
+        with patch.object(settings, "experience_workflows_enabled", True), \
+             patch("app.routers.workflows.enforce_rate_limit", new=AsyncMock()), \
+             patch("app.routers.workflows._workflow", new=AsyncMock(return_value=workflow)), \
+             patch("app.routers.workflows.render_workflow_pptx", new=AsyncMock()) as mocked_render:
+            with self.assertRaises(HTTPException):
+                asyncio.run(export_workflow_pptx("workflow-a", self._fake_request(), self._identity(), object()))
+        mocked_render.assert_not_awaited()
+
+    def test_export_is_rate_limited_per_staff_member_per_workflow(self):
+        workflow = SimpleNamespace(id="workflow-a", event_id="event-a", org_id="org-a", current_revision_id=None, name="Draft")
+        with patch.object(settings, "experience_workflows_enabled", True), \
+             patch("app.routers.workflows.enforce_rate_limit", new=AsyncMock(side_effect=HTTPException(429, "Too many requests — please wait a moment"))) as mocked_limit, \
+             patch("app.routers.workflows._workflow", new=AsyncMock(return_value=workflow)):
+            with self.assertRaises(HTTPException) as raised:
+                asyncio.run(export_workflow_pptx("workflow-a", self._fake_request(), self._identity(), object()))
+        self.assertEqual(raised.exception.status_code, 429)
+        mocked_limit.assert_awaited_once()
+        self.assertEqual(mocked_limit.await_args.args[1], "export_pptx")
+
+    def test_export_returns_the_rendered_deck_as_a_pptx_attachment(self):
+        workflow = SimpleNamespace(
+            id="workflow-a", event_id="event-a", org_id="org-a", current_revision_id="revision-a",
+            name="MBF Summit 2026 — Better Together",
+        )
+        step = SimpleNamespace(id="step-a", sequence=0)
+
+        class Db:
+            async def execute(self, _statement):
+                return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [step]))
+
+        with patch.object(settings, "experience_workflows_enabled", True), \
+             patch.object(settings, "internal_service_token", "qa-export-attachment-secret-at-least-32-bytes"), \
+             patch("app.routers.workflows.enforce_rate_limit", new=AsyncMock()), \
+             patch("app.routers.workflows._workflow", new=AsyncMock(return_value=workflow)), \
+             patch("app.routers.workflows.render_workflow_pptx", new=AsyncMock(return_value=b"fake-pptx-bytes")):
+            response = asyncio.run(export_workflow_pptx("workflow-a", self._fake_request(), self._identity(), Db()))
+        self.assertEqual(response.body, b"fake-pptx-bytes")
+        self.assertEqual(response.media_type, "application/vnd.openxmlformats-officedocument.presentationml.presentation")
+        self.assertIn("MBF_Summit_2026", response.headers["content-disposition"])
+
+    def test_preview_token_is_scoped_to_the_calling_staff_members_own_event_and_org(self):
+        import jwt as pyjwt
+        identity = Identity(identity_kind="staff", subject="presenter-a", event_id="event-a", org_id="org-a", role="presenter")
+        with patch.object(settings, "internal_service_token", "qa-preview-token-secret-at-least-32-bytes"):
+            token = _mint_preview_token(identity)
+            claims = pyjwt.decode(
+                token, "qa-preview-token-secret-at-least-32-bytes",
+                algorithms=["HS256"], audience="engagement", issuer="guesthub",
+            )
+        self.assertEqual(claims["event_id"], "event-a")
+        self.assertEqual(claims["org_id"], "org-a")
+        self.assertEqual(claims["identity_kind"], "staff")
+        self.assertTrue(claims["sub"].startswith("pptx-export:"))
 
 
 if __name__ == "__main__":

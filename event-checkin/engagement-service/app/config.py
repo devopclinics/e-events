@@ -12,6 +12,15 @@ class Settings(BaseSettings):
     cors_origins: str = "https://festio.events,http://localhost:4000"
     redis_url: str = "redis://engagement-redis:6379/0"
     local_ai_url: str = "http://local-ai:8080"
+    # Deliberately off by default. Staging enables this explicitly after the
+    # additive migration is applied; production remains unaffected until the
+    # workflow acceptance suite has passed.
+    experience_workflows_enabled: bool = False
+    # Where the PPTX exporter's headless browser reaches the step-preview
+    # page it screenshots. `proxy` is this service's own compose network --
+    # never the public hostname, so export keeps working even if the public
+    # domain/TLS is down.
+    internal_display_base_url: str = "http://proxy:80"
 
 
 settings = Settings()

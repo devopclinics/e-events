@@ -163,17 +163,18 @@ def event_allows(event: Event, feature: str) -> bool:
 
 
 def event_allows_addon(event: Event, addon: str) -> bool:
-    # Add-ons supplement an Event Pass; they never turn a free event into a
-    # paid event. This hard gate intentionally wins over every operator override
-    # and promotional grant below.
     if settings.organization_entitlements_v2:
         policy = _org_entitlement_cache.get(event.org_id, {})
-        active = policy.get("status") == "active" and policy.get("expires_at") and policy["expires_at"] > datetime.utcnow()
-        if not active:
-            return False
+        # A platform operator's organization override is an explicit grant or
+        # denial, not a purchase. It must work for any organization, including
+        # a free/staging account, so superadmins can provision trials and QA
+        # access from the Console without fabricating a paid subscription.
         org_override = _org_addon_override_cache.get(event.org_id, {}).get(addon)
         if org_override is not None:
             return bool(org_override)
+        active = policy.get("status") == "active" and policy.get("expires_at") and policy["expires_at"] > datetime.utcnow()
+        if not active:
+            return False
         promo = policy.get("promo_expires_at")
         if promo and promo > datetime.utcnow():
             return True

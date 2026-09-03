@@ -394,9 +394,24 @@ if $DO_DEPLOY; then
   fi
   ok "Migration applied and verified"
 
-  # ── Phase 4c — Swap production containers ───────────────────────────────────
+  # ── Phase 4c — Swap staging containers ──────────────────────────────────────
   step "6/6  Restarting services with new images"
-  APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" up -d --remove-orphans
+
+  # Compose replaces every replica of a scaled service at once. Keep a healthy
+  # canary on the engagement-service DNS name while its two managed replicas
+  # are replaced, otherwise Festio Live briefly returns 502 during each deploy.
+  COMPOSE_FILE="$PROD_COMPOSE" REGISTRY="$REGISTRY" \
+    "${SCRIPT_DIR}/engagement-service/scripts/rollout_compose.sh" "$VERSION"
+
+  # The engagement API and worker were rolled safely above. Start every other
+  # Compose service explicitly so a subsequent blanket `up` cannot recreate
+  # both engagement replicas together and undo that availability guarantee.
+  mapfile -t NON_ENGAGEMENT_SERVICES < <(
+    APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" config --services \
+      | grep -Ev '^(engagement-service|engagement-worker)$'
+  )
+  APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" \
+    up -d --remove-orphans --no-deps "${NON_ENGAGEMENT_SERVICES[@]}"
   # Nginx resolves Docker service names at startup. Restart the proxy after
   # frontend/backend swaps so it does not keep stale container IPs.
   APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" restart proxy

@@ -26,11 +26,12 @@ from .routers import org_billing as org_billing_router
 from .routers import calendars as calendars_router
 from .routers import shortlinks as shortlinks_router
 from .routers import xwireless_webhooks as xwireless_webhooks_router
+from .routers import inbound_email_automations as inbound_email_automations_router
 from .routers import ticketing_internal as ticketing_internal_router
 from .routers import redesign_telemetry as redesign_telemetry_router
 from .routers import training as training_router
 from . import sync_poller, db_migrate, entitlements
-from .services import engagement_sync_outbox, festiome_outbox, webhook_outbox, reminder_outbox, scheduled_communication_outbox
+from .services import engagement_sync_outbox, festiome_outbox, webhook_outbox, reminder_outbox, scheduled_communication_outbox, inbound_email_outbox
 from . import routers
 from . import storage
 from .database import AsyncSessionLocal
@@ -79,6 +80,13 @@ async def lifespan(app: FastAPI):
     # Same SKIP LOCKED-safe multi-replica pattern as the FestioMe outbox, own switch.
     run_webhook_outbox = os.environ.get("RUN_IN_APP_WEBHOOK_OUTBOX", "true").lower() not in ("false", "0", "no")
     webhook_task = asyncio.create_task(webhook_outbox.run()) if run_webhook_outbox else None
+    run_inbound_email_outbox = os.environ.get(
+        "RUN_IN_APP_INBOUND_EMAIL_OUTBOX", "true"
+    ).lower() not in ("false", "0", "no")
+    inbound_email_task = (
+        asyncio.create_task(inbound_email_outbox.run())
+        if run_inbound_email_outbox else None
+    )
     # Reminders scheduler -- same SKIP LOCKED-safe multi-replica claim shape,
     # own switch.
     run_reminder_outbox = os.environ.get("RUN_IN_APP_REMINDER_OUTBOX", "true").lower() not in ("false", "0", "no")
@@ -127,6 +135,12 @@ async def lifespan(app: FastAPI):
             webhook_task.cancel()
             try:
                 await webhook_task
+            except asyncio.CancelledError:
+                pass
+        if inbound_email_task is not None:
+            inbound_email_task.cancel()
+            try:
+                await inbound_email_task
             except asyncio.CancelledError:
                 pass
         if reminder_outbox_task is not None:
@@ -192,6 +206,7 @@ async def _audit_public_api_requests(request, call_next):
 app.include_router(auth_router.router, prefix="/api/auth",   tags=["auth"])
 app.include_router(events.router,      prefix="/api/events", tags=["events"])
 app.include_router(experience.router,  prefix="/api/events", tags=["experience"])
+app.include_router(inbound_email_automations_router.router, prefix="/api/events", tags=["inbound-email-automations"])
 app.include_router(guests.router,      prefix="/api/events", tags=["guests"])
 app.include_router(tasks.router,       prefix="/api/events", tags=["tasks"])
 app.include_router(tasks.mine_router,  prefix="/api",        tags=["tasks"])

@@ -12,6 +12,7 @@ const TABS = [
   { id: 'support', label: 'Support chat' },
   { id: 'referrals', label: 'Referrals' },
   { id: 'pricing', label: 'Pricing' },
+  { id: 'addon-access', label: 'Add-on Access' },
   { id: 'org-plans', label: 'Org Plans' },
   { id: 'affiliates', label: 'Affiliate stores' },
   { id: 'operators', label: 'Operators' },
@@ -209,7 +210,8 @@ const ADDON_LABELS = {
   addon_registry: 'Registry', addon_menu: 'Menu & Orders', addon_planner: 'Event Planner',
   addon_logistics: 'Logistics', addon_festiome: 'FestioMe Community', addon_seating: 'Seating & Floor Plans',
   addon_experience: 'Experience Workflows', addon_venue_access: 'Venue Access Intelligence',
-  addon_speakers: 'Speakers', addon_partners: 'Partners',
+  addon_engagement: 'Festio Live', addon_speakers: 'Speakers', addon_partners: 'Partners',
+  addon_reminders: 'Automated Reminders',
 }
 
 function AddonOverrideEditor({ scope, id, label }) {
@@ -250,6 +252,50 @@ function AddonOverrideEditor({ scope, id, label }) {
       <div className="mt-3 flex justify-end gap-2"><button className="rounded border px-3 py-1 text-xs dark:border-slate-600" onClick={() => setOpen(false)}>Close</button><button className="rounded bg-teal-600 px-3 py-1 text-xs text-white" disabled={saving} onClick={() => save()}>{saving ? 'Saving…' : 'Save'}</button></div>
     </div>}
   </div>
+}
+
+function OrgAddonAccessTab() {
+  const [orgs, setOrgs] = useState(null)
+  const [query, setQuery] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    api.adminOverview().then(setOrgs).catch((e) => setError(e.message))
+  }, [])
+
+  if (error) return <div className="text-sm text-red-500">{error}</div>
+  if (!orgs) return <div className="text-sm text-slate-500">Loading…</div>
+
+  const needle = query.trim().toLowerCase()
+  const filtered = needle
+    ? orgs.filter((org) => org.name.toLowerCase().includes(needle)
+      || org.events.some((event) => event.name.toLowerCase().includes(needle)))
+    : orgs
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border bg-white p-4 shadow dark:border-slate-700 dark:bg-slate-800">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold dark:text-white">Organization add-on access</h2>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Grant, deny, or return any add-on to normal billing rules. Organization grants apply to all current and future events.</p>
+          </div>
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search organization or event…"
+            className="w-64 rounded border bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white" />
+        </div>
+      </div>
+      {filtered.map((org) => (
+        <div key={org.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-white p-4 shadow dark:border-slate-700 dark:bg-slate-800">
+          <div>
+            <div className="font-semibold dark:text-white">{org.name}</div>
+            <div className="text-xs text-slate-400">{org.events.length} event{org.events.length === 1 ? '' : 's'} · {org.region}/{org.currency}</div>
+          </div>
+          <AddonOverrideEditor scope="org" id={org.id} label="Manage add-ons" />
+        </div>
+      ))}
+      {!filtered.length && <div className="py-8 text-center text-sm text-slate-400">No matching organizations.</div>}
+    </div>
+  )
 }
 
 function EventRow({ ev, plans, onGrant }) {
@@ -1317,6 +1363,7 @@ export default function ConsolePage() {
       {tab === 'support' && <SupportChatTab />}
       {tab === 'referrals' && <ReferralsTab />}
       {tab === 'pricing' && <PricingTab />}
+      {tab === 'addon-access' && <OrgAddonAccessTab />}
       {tab === 'org-plans' && <OrgPlansTab />}
       {tab === 'affiliates' && <AffiliateStoresTab />}
       {tab === 'operators' && <OperatorsTab me={user} />}

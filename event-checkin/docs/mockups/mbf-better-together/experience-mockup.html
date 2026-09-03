@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MBF Summit 2026 — Better Together — Festio Live mockup</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#07171f;color:#f8fbfb;font-family:Inter,Arial,sans-serif}
+.board{max-width:1920px;margin:0 auto;padding:54px;background:radial-gradient(circle at 15% 0,#164b51 0,transparent 26%),#07171f}
+.head{display:flex;justify-content:space-between;align-items:end;margin-bottom:18px;gap:24px;flex-wrap:wrap}
+.head h1{margin:0;font:700 40px Georgia,serif}
+.head h1 span{display:block;color:#78dfda;font-size:20px;font-weight:700;margin-top:6px;letter-spacing:.02em}
+.head p{margin:10px 0 0;color:#91b9bb;max-width:640px;font-size:13px;line-height:1.5}
+.pill{padding:10px 16px;border:1px solid #4fd2ce55;border-radius:99px;color:#72e3df;font-size:11px;font-weight:800;letter-spacing:.1em;white-space:nowrap}
+
+.gaps{margin:30px 0 40px;padding:22px 26px;border:1px solid #f4b64c55;border-radius:16px;background:linear-gradient(145deg,#241a0c,#1c130a);display:grid;gap:14px}
+.gaps h2{margin:0;font:800 13px Inter;letter-spacing:.14em;color:#f4b64c}
+.gaps .row{display:grid;grid-template-columns:150px 1fr;gap:16px;align-items:start}
+.gaps .row b{color:#ffd68a;font-size:12px;letter-spacing:.04em}
+.gaps .row span{color:#e7d9c2;font-size:13px;line-height:1.55}
+.gaps .row span em{color:#8cece4;font-style:normal}
+
+.act{margin:44px 0 16px;display:flex;align-items:baseline;gap:14px}
+.act b{font:800 12px Inter;letter-spacing:.2em;color:#f4b64c}
+.act small{color:#5f838a;font-size:11px;letter-spacing:.08em}
+.act:after{content:"";flex:1;height:1px;background:#ffffff14}
+
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+.scene{position:relative;aspect-ratio:16/9;overflow:hidden;padding:28px;border:1px solid #ffffff18;border-radius:20px;background:linear-gradient(145deg,#0a2d38,#0b202c 62%,#101b31);box-shadow:0 24px 60px #0005;display:flex;flex-direction:column}
+.scene:after{position:absolute;right:-70px;bottom:-90px;width:240px;height:240px;border:30px solid #46d4c218;border-radius:50%;content:""}
+.scene.coral{background:linear-gradient(145deg,#381f33,#702f49 60%,#d36055)}
+.scene.gold{background:linear-gradient(145deg,#142b34,#614b2b 70%,#b77835)}
+.scene.violet{background:linear-gradient(145deg,#17243c,#383069 65%,#78568c)}
+.scene.green{background:linear-gradient(145deg,#0b2930,#124f48 65%,#33816a)}
+.scene.mute{background:#050d15}
+.num{color:#71ded8;font-size:10px;font-weight:900;letter-spacing:.16em}
+.type{margin-top:6px;color:#5f838a;font-size:9px;font-weight:800;letter-spacing:.1em}
+.type b{color:#8cece4}
+.scene h2{max-width:94%;margin:10px 0 8px;font:700 24px/1.1 Georgia,serif}
+.scene p{max-width:92%;margin:0;color:#c5d8da;font-size:11.5px;line-height:1.45}
+.footer{position:absolute;right:26px;bottom:18px;left:28px;display:flex;justify-content:space-between;color:#83a5aa;font-size:8px;font-weight:800;letter-spacing:.08em}
+.sample{position:absolute;top:24px;right:24px;padding:5px 8px;border-radius:99px;background:#f4b64c1d;color:#f4c266;font-size:7px;font-weight:900;letter-spacing:.1em}
+.needbuild{position:absolute;top:24px;right:24px;padding:5px 8px;border-radius:99px;background:#ff6d7d24;color:#ff97a4;font-size:7px;font-weight:900;letter-spacing:.1em}
+
+/* hero */
+.hero .accent{display:block;color:#78dfda}
+.hero .tags{display:flex;gap:8px;margin-top:20px;flex-wrap:wrap}
+.hero .tags b{padding:7px 10px;border-radius:99px;background:#ffffff12;color:#f5c163;font-size:8px;font-weight:800}
+
+/* three-step explainer */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px}
+.steps div{min-height:88px;padding:14px;border-radius:13px;background:#ffffff0d}
+.steps b{display:block;color:#70ded7;font-size:20px}
+.steps strong{display:block;margin:6px 0 3px;font-size:10.5px}
+.steps span{color:#9dbabc;font-size:9px}
+
+/* suspense / response received */
+.received{flex:1;display:grid;place-items:center;text-align:center}
+.received .check{width:56px;height:56px;margin:0 auto 14px;border-radius:50%;border:2px solid #55ddd1;display:grid;place-items:center;font-size:24px;color:#55ddd1}
+.received b{display:block;font:700 20px Georgia,serif;letter-spacing:.02em}
+.received span{display:block;margin-top:8px;color:#9dbabc;font-size:11px}
+
+/* connection gauge */
+.gauge{position:relative;width:170px;height:85px;margin:14px auto 6px;overflow:hidden}
+.gauge:before{position:absolute;width:170px;height:170px;border:20px solid #ffffff12;border-radius:50%;content:""}
+.gauge:after{position:absolute;width:170px;height:170px;border:20px solid #59ddc8;border-color:#59ddc8 #59ddc8 transparent transparent;border-radius:50%;content:"";transform:rotate(-27deg)}
+.gauge b{position:absolute;right:0;bottom:0;left:0;text-align:center;font-size:30px}
+.mini{text-align:center;color:#f7bd59!important;font-weight:800;font-size:10px!important;letter-spacing:.06em}
+
+/* community map, 6 satellites */
+.map{position:relative;width:100%;height:190px;margin-top:6px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:6px;place-items:center}
+.map .center{grid-column:2;grid-row:2;width:74px;height:74px;border-radius:50%;background:radial-gradient(circle,#20d2c2,#0d5f57);display:grid;place-items:center;font:900 10px Inter;letter-spacing:.04em;text-align:center;box-shadow:0 0 40px #20d2c266;z-index:2}
+.map .node{padding:6px 8px;border-radius:10px;background:#ffffff10;border:1px solid #ffffff22;font-size:7.5px;font-weight:800;text-align:center;line-height:1.3;color:#dcecee}
+.map .node b{display:block;color:#f4b64c;font-size:11px}
+.map .n1{grid-column:1;grid-row:1}.map .n2{grid-column:2;grid-row:1}.map .n3{grid-column:3;grid-row:1}
+.map .n4{grid-column:1;grid-row:3}.map .n5{grid-column:2;grid-row:3}.map .n6{grid-column:3;grid-row:3}
+.map .strong{border-color:#f4b64c;background:#f4b64c1f}
+
+/* room challenge timer */
+.timerwrap{flex:1;display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:8px}
+.timer{display:grid;place-items:center;width:110px;height:110px;border:3px solid #62dad2;border-radius:50%;background:#ffffff08;font:200 30px Inter;flex-shrink:0}
+.prompt{padding:12px 14px;border-left:3px solid #f4b64c;background:#ffffff09;font:700 13px/1.35 Georgia,serif}
+
+/* video */
+.video{display:grid;grid-template-columns:1.2fr .8fr;gap:16px;flex:1}
+.screen{position:relative;margin-top:12px;height:100px;border-radius:14px;background:linear-gradient(135deg,#0f151b,#223b49);box-shadow:inset 0 0 0 1px #ffffff17}
+.play{position:absolute;inset:50%;display:grid;width:46px;height:46px;place-items:center;border-radius:50%;background:#f4b64c;color:#13252b;transform:translate(-50%,-50%);font-size:19px}
+.source{display:grid;align-content:center;gap:8px}
+.source b,.source small{display:block}
+.source b{font-size:9px;color:#f2ba59}
+.source small{margin-top:3px;font-size:9.5px;color:#c5d8da}
+
+/* reflection interstitial */
+.reflect{flex:1;display:grid;place-items:center;text-align:center;gap:6px}
+.reflect b{display:block;font:700 15px Inter;letter-spacing:.3em;color:#4c7c80}
+.reflect h2{margin:6px 0 0;font:700 32px Georgia,serif}
+
+/* podium */
+.podium{display:flex;align-items:end;justify-content:center;gap:8px;height:132px;margin-top:6px}
+.podium div{display:grid;width:28%;place-items:center;padding:10px;border-radius:10px 10px 0 0;text-align:center;font-size:8px;font-weight:800}
+.podium b{font-size:20px}
+.p1{height:118px;background:linear-gradient(#f5c25f,#9a6329)}
+.p2{height:92px;background:linear-gradient(#68ddd2,#24716e)}
+.p3{height:72px;background:linear-gradient(#ae83de,#5a477b)}
+
+/* connection rhythm pulses */
+.rhythm{display:grid;gap:8px;margin-top:12px}
+.rhythm .row{display:grid;grid-template-columns:110px 1fr;align-items:center;gap:10px}
+.rhythm .row span{font-size:8.5px;color:#9dbabc;font-weight:800;letter-spacing:.04em}
+.rhythm .dots{display:flex;gap:5px}
+.rhythm .dots i{width:11px;height:11px;border-radius:50%;background:#55ddd1;box-shadow:0 0 10px #55ddd188}
+.rhythm .dim i{background:#ffffff1c;box-shadow:none}
+
+/* before/after table */
+.compare{width:100%;margin-top:10px;border-collapse:collapse;font-size:9.5px}
+.compare th{text-align:left;color:#71ded8;font-size:8px;letter-spacing:.08em;padding-bottom:6px;font-weight:800}
+.compare td{padding:5px 0;border-top:1px solid #ffffff14;color:#d7e4e5}
+.compare td.num{text-align:right;font-variant-numeric:tabular-nums}
+.compare td.delta{text-align:right;font-weight:800}
+.compare .up{color:#75e68a}.compare .down{color:#ffb87a}
+
+/* big number gap card */
+.bignum{flex:1;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px}
+.bignum div{flex:1;text-align:center}
+.bignum b{display:block;font:800 30px Inter;color:#78dfda}
+.bignum span{display:block;margin-top:4px;font-size:8.5px;color:#9dbacc;line-height:1.3}
+
+/* word cloud */
+.cloud{flex:1;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px 16px;padding:6px 0}
+.cloud b{font-family:Georgia,serif;font-weight:700}
+
+/* challenge tiles */
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:12px}
+.actions div{padding:9px 11px;border-radius:9px;background:#ffffff0b;color:#d5e4e5;font-size:8.5px}
+.actions div b{display:block;color:#f4b64c;font-size:9px;margin-bottom:2px}
+
+.closing h2{font-size:32px;color:#f7c45f}
+.closing .line{margin-top:12px;padding:11px;border-left:3px solid #66ded5;background:#ffffff0c;font:700 12.5px Georgia,serif}
+
+.note{margin-top:30px;color:#789da1;font-size:11px;line-height:1.6;max-width:1400px}
+@media(max-width:1100px){.grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:700px){.grid{grid-template-columns:1fr}.gaps .row{grid-template-columns:1fr}}
+</style>
+</head>
+<body><main class="board">
+
+<header class="head">
+  <div><h1>MBF Summit 2026<span>The Good Life · Better Together</span></h1>
+  <p>Design-review scene board for a Festio Live Experience workflow — an evolution of the approved "The Good Life — Men and Young Men" concept, restructured as one continuous opening experience across 7 acts. No workflow imported yet.</p></div>
+  <div class="pill">DESIGN REVIEW · NOT IMPLEMENTED</div>
+</header>
+
+<section class="gaps">
+  <h2>TWO SCENES NEED A SMALL BUILD BEFORE THIS CAN SHIP AS DRAFTED</h2>
+  <div class="row"><b>Triple stat scene</b><span>The "How Connected Are We?" combined-metrics scene (three big numbers: support · quality · time) uses step type <em>big_number</em>. It's declared in the workflow schema but has no renderer yet in <em>WorkflowSceneRenderer.jsx</em> — it would render blank today. Recommend building it before this ships; it's a contained addition, not a redesign.</span></div>
+  <div class="row"><b>Community map, 6 nodes</b><span>The existing <em>diagram</em> renderer (already used in the current MBF workflow for the Allah/Family/You/Brotherhood/Service framework) only has 5 satellite slots (top, left, middle, right, bottom) in its CSS grid. Your Community Connection Map wants 6 relationship categories around MBF. Two options: trim to 5 categories, or extend the grid to a full 3×3 (adds 3 corner slots) — a small, low-risk CSS change since the diagram renderer already exists and is in production.</span></div>
+</section>
+
+<div class="act"><b>ACT 1 — WHO ARE WE?</b><small>hero · poll instructions</small></div>
+<section class="grid">
+<article class="scene hero"><span class="num">SCENE 01 · OPENING HERO</span><span class="type">step_type: <b>hero</b></span><h2>THE GOOD LIFE <span class="accent">Better Together</span></h2><p>Different generations. Different experiences. One community. What can we learn from one another?</p><div class="tags"><b>CINEMATIC OPEN</b><b>PRESENTER VO</b><b>LEGACY THEME</b></div><footer class="footer"><span>MBF SUMMIT 2026</span><span>DIFFERENT GENERATIONS · ONE COMMUNITY</span></footer></article>
+
+<article class="scene green"><span class="num">SCENE 02 · YOUR VOICE MATTERS</span><span class="type">step_type: <b>custom_message</b></span><h2>Same room. Different life stages. Every voice counts.</h2><div class="steps"><div><b>01</b><strong>VOTE</strong><span>Answer from where you are today.</span></div><div><b>02</b><strong>NOTICE</strong><span>See where we're similar and different.</span></div><div><b>03</b><strong>CONNECT</strong><span>Discover what we can learn.</span></div></div></article>
+
+<article class="scene"><i class="sample">SAMPLE DATA</i><span class="num">SCENE 03A · Q1 — VOTE</span><span class="type">step_type: <b>poll</b> · activity: good_life_before</span><h2>What contributes MOST to a good life for you right now?</h2><p>Faith &amp; Purpose · Family · Friendships &amp; Community · Health · Financial Security · Achievement</p></article>
+</section>
+
+<section class="grid" style="margin-top:22px">
+<article class="scene mute"><span class="num">SCENE 03B · Q1 — HELD BACK</span><span class="type">step_type: <b>custom_message</b> (no poll_results step follows yet)</span><div class="received"><div class="check">✓</div><b>RESPONSE RECEIVED</b><span>We'll come back to this.</span></div></article>
+
+<article class="scene"><i class="sample">SAMPLE DATA</i><span class="num">SCENE 04 · Q2 — CONNECTION</span><span class="type">step_type: <b>poll_results</b> · result_style: <b>connection_gauge</b></span><h2>How connected are we?</h2><div class="gauge"><b>78%</b></div><p class="mini">HAVE AT LEAST ONE PERSON THEY CAN TALK TO OPENLY</p></article>
+
+<article class="scene violet"><i class="sample">SAMPLE DATA</i><span class="num">SCENE 05 · Q3 — WHERE WE NEED EACH OTHER</span><span class="type">step_type: <b>poll_results</b> · result_style: <b>diagram</b> (needs 6th slot — see note above)</span><h2>Which connection should grow stronger?</h2><div class="map"><div class="node n1">Parents ↔<br>Children</div><div class="node n2 strong">Youth ↔<br>Adults/Elders</div><div class="node n3">Brotherhood</div><div class="center">MBF</div><div class="node n4">Mentorship</div><div class="node n5">Families</div><div class="node n6">Wider<br>Community</div></div></article>
+</section>
+
+<div class="act"><b>ROOM CHALLENGE</b><small>interrupts the digital flow</small></div>
+<section class="grid">
+<article class="scene coral"><span class="num">SCENE 06 · MICRO CONNECTION CHALLENGE</span><span class="type">step_type: <b>game</b></span><h2>Find someone from a different generation.</h2><div class="timerwrap"><div class="timer">01:30</div><div class="prompt">"What is one thing your generation understands that mine could learn from?"</div></div></article>
+
+<div class="act" style="grid-column:1/-1;margin:6px 0 -6px"><b>ACT 3 — WHAT DOES A LIFETIME TEACH US?</b><small>video · reflection</small></div>
+</section>
+
+<section class="grid" style="margin-top:22px">
+<article class="scene"><span class="num">SCENE 07 · HARVARD VIDEO</span><span class="type">step_type: <b>video</b></span><div class="video"><div><h2>What if we could study an entire lifetime?</h2><div class="screen"><i class="play">▶</i></div></div><div class="source"><div><b>HARVARD STUDY OF ADULT DEVELOPMENT</b><small>Robert Waldinger · ~4 min excerpt</small></div><div><b>WATCH FOR</b><small>One idea that challenges how you think about a good life.</small></div></div></div></article>
+
+<article class="scene mute"><span class="num">SCENE 08 · REFLECTION</span><span class="type">step_type: <b>custom_message</b> · auto_advance staged (3 beats)</span><div class="reflect"><b>SO...</b><h2>What really matters?</h2></div></article>
+</section>
+
+<div class="act"><b>ACT 4–5 — DID OUR THINKING CHANGE? · LOOKING DEEPER</b><small>poll · poll_results</small></div>
+<section class="grid">
+<article class="scene"><i class="sample">SAMPLE DATA</i><span class="num">SCENE 10 · Q5 — RELATIONSHIP QUALITY</span><span class="type">step_type: <b>poll_results</b> · result_style: <b>donut</b></span><h2>How strong do our closest relationships feel?</h2><p style="margin-top:8px"><b style="color:#f7bd59;font-size:26px">76%</b> satisfied or very satisfied · full 5-point split shown beneath</p></article>
+
+<article class="scene gold"><i class="sample">SAMPLE DATA</i><span class="num">SCENE 11 · Q6 — CONNECTION RHYTHM</span><span class="type">step_type: <b>poll_results</b> · result_style: <b>bars</b>-style pulse (custom)</span><h2>Are we making time?</h2><div class="rhythm">
+<div class="row"><span>DAILY</span><div class="dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+<div class="row"><span>WEEKLY+</span><div class="dots"><i></i><i></i><i></i><i></i><i class="dim"></i></div></div>
+<div class="row"><span>MONTHLY</span><div class="dots"><i></i><i></i><i class="dim"></i><i class="dim"></i></div></div>
+<div class="row"><span>RARELY</span><div class="dots"><i></i><i class="dim"></i></div></div>
+</div></article>
+
+<article class="scene violet"><i class="sample">SAMPLE DATA</i><span class="num">SCENE 12 · Q7 — LEGACY</span><span class="type">step_type: <b>poll_results</b> · result_style: <b>legacy_podium</b></span><h2>What do you want your life to say?</h2><div class="podium"><div class="p2"><b>#2</b>STRONG RELATIONSHIPS<br>28%</div><div class="p1"><b>#1</b>FAITH &amp; CHARACTER<br>34%</div><div class="p3"><b>#3</b>SERVICE TO OTHERS<br>21%</div></div></article>
+</section>
+
+<div class="act"><b>ACT 6 — NOW SHOW US OURSELVES</b><small>the room's story, told back</small></div>
+<section class="grid">
+<article class="scene"><i class="sample">SAMPLE DATA</i><span class="num">SCENE 13 · DID OUR THINKING CHANGE?</span><span class="type">step_type: <b>comparison</b> (already built — used today for happiness_before/after)</span><h2>Before → After</h2><table class="compare"><tr><th></th><th>BEFORE</th><th>AFTER</th><th></th></tr>
+<tr><td>Faith &amp; Purpose</td><td class="num">22%</td><td class="num">27%</td><td class="delta up">▲5</td></tr>
+<tr><td>Family</td><td class="num">28%</td><td class="num">31%</td><td class="delta up">▲3</td></tr>
+<tr><td>Friends &amp; Community</td><td class="num">13%</td><td class="num">19%</td><td class="delta up">▲6</td></tr>
+<tr><td>Financial Security</td><td class="num">11%</td><td class="num">5%</td><td class="delta down">▼6</td></tr>
+</table></article>
+
+<article class="scene gold"><i class="needbuild">NEEDS BUILD</i><span class="num">SCENE 14 · HOW CONNECTED ARE WE?</span><span class="type">step_type: <b>big_number</b> — declared in schema, no renderer yet</span><h2>Three measures, together</h2><div class="bignum"><div><b>81%</b><span>have someone to talk to</span></div><div><b>76%</b><span>satisfied with relationships</span></div><div><b>63%</b><span>make time weekly+</span></div></div></article>
+
+<article class="scene mute"><span class="num">SCENE 17 · FINAL WORD CLOUD</span><span class="type">step_type: <b>word_cloud</b> (case/dup normalization already built)</span><h2 style="font-size:20px">What do you hope to gain from MBF Summit 2026?</h2><div class="cloud">
+<b style="font-size:30px;color:#f4b64c">BROTHERHOOD</b><b style="font-size:24px;color:#55ddd1">CONNECTION</b><b style="font-size:26px;color:#78568c">FAITH</b><b style="font-size:16px;color:#d36055">WISDOM</b><b style="font-size:19px;color:#55ddd1">GROWTH</b><b style="font-size:14px;color:#f4b64c">GUIDANCE</b>
+</div></article>
+</section>
+
+<div class="act"><b>ACT 7 — WHAT DID WE COME HERE FOR?</b><small>challenge · closing</small></div>
+<section class="grid">
+<article class="scene coral"><span class="num">SCENE 19 · SUMMIT CHALLENGE</span><span class="type">step_type: <b>custom_message</b></span><h2>Before this Summit ends...</h2><div class="actions"><div><b>MEET</b>Someone from another generation.</div><div><b>LISTEN</b>To a different perspective.</div><div><b>SHARE</b>Something that could help another.</div><div><b>CONNECT</b>With someone beyond this weekend.</div></div></article>
+
+<article class="scene gold closing"><span class="num">SCENE 20 · CLOSING HERO</span><span class="type">step_type: <b>closing</b></span><h2>THE GOOD LIFE</h2><p>Different generations. Different experiences. Different perspectives.</p><div class="line">Better together. MBF Summit 2026.</div></article>
+
+<article class="scene"><span class="num">SUNDAY CALLBACK · OPTIONAL</span><span class="type">no new backend feature — carry the finalized word list forward as static config</span><h2>"On Friday, this is what we said we came looking for. Did we find it?"</h2><p>Re-show Friday's frozen word cloud (pasted into a step as static <em>config.words</em>), then run a fresh 3-option pulse poll: Yes, absolutely / Yes, somewhat / Not yet.</p></article>
+</section>
+
+<p class="note">All percentages, response counts and word-cloud entries shown here are visual placeholders. Every result style pictured except the two flagged "NEEDS BUILD" scenes already exists in <em>WorkflowSceneRenderer.jsx</em> and is exercised today by the current MBF workflow (hero, custom_message, poll, poll_results with donut/connection_gauge/legacy_podium/diagram, game, video, word_cloud, comparison, closing). Word-cloud case/duplicate normalization (Brotherhood / brotherhood / BROTHERHOOD → one entry) is already implemented in <em>wordcloud.py</em>. Shipping this experience means: (1) building the <em>big_number</em> renderer, (2) deciding on the 5-vs-6-node community map, then assembling the sequence as a workflow-definition JSON (the same pattern <em>mbf_good_life.json</em> already uses) and importing it to staging for review before any production promotion.</p>
+
+</main></body></html>

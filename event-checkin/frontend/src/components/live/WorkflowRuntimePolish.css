@@ -1,0 +1,125 @@
+.wf-join span {
+  display: block;
+  margin-top: 3px;
+  color: #ffd15c;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.wf-cloud-empty {
+  padding: 24px 30px;
+  border: 1px dashed #ffffff42;
+  border-radius: 16px;
+  background: #07132988;
+}
+
+.wf-display footer {
+  position: absolute;
+  left: clamp(24px,4vw,64px);
+  right: clamp(24px,4vw,64px);
+  bottom: clamp(18px,3vh,34px);
+  padding-top: 14px;
+  border-top: 1px solid #ffffff1f;
+}
+.wf-display>header{position:absolute;left:clamp(24px,4vw,64px);right:clamp(24px,4vw,64px);top:clamp(20px,3vh,38px)}
+.wf-display>main{width:100%;padding:clamp(76px,10vh,116px) 0 clamp(62px,8vh,92px)}
+
+.wf-display.wf-hero h1,
+.wf-display.wf-closing h1 {
+  color: transparent;
+  background: linear-gradient(100deg, #fff 5%, #ffd15c 55%, #ff8f4d);
+  background-clip: text;
+  -webkit-background-clip: text;
+  text-shadow: 0 8px 45px #ffb62722;
+}
+
+.wf-display .wf-options > div { box-shadow: 0 12px 36px #0005; }
+.wf-display .wf-bars em { box-shadow: 0 0 20px currentColor; }
+.wf-poll-instruction{margin:-6px 0 16px!important;font-size:clamp(14px,1.35vw,20px)!important;color:#9fb3cb!important}
+.wf-display.wf-poll .wf-options,.wf-display.wf-multi_select .wf-options{gap:12px 16px;width:min(1050px,88%)}
+.wf-display.wf-poll .wf-options>div,.wf-display.wf-multi_select .wf-options>div{min-height:68px;padding:11px 18px;border-width:1.5px;background:linear-gradient(110deg,color-mix(in srgb,var(--option) 31%,#071329),color-mix(in srgb,var(--option) 15%,#071329));box-shadow:0 10px 28px #0005,inset 0 1px #ffffff16}
+.wf-display.wf-poll .wf-option-icon,.wf-display.wf-multi_select .wf-option-icon{width:42px;height:42px;font-size:20px;color:#fff;border:1px solid color-mix(in srgb,var(--option) 70%,#fff);box-shadow:0 0 18px color-mix(in srgb,var(--option) 35%,transparent)}
+.wf-display.wf-poll .wf-options b,.wf-display.wf-multi_select .wf-options b{font-size:clamp(15px,1.35vw,20px);line-height:1.15}
+.wf-results-label{display:block;margin-bottom:10px;color:#ffd15c;font-size:13px;font-weight:900;letter-spacing:.18em}.wf-display .wf-bars{gap:14px}.wf-display .wf-bars>div{grid-template-columns:minmax(180px,280px) 1fr 72px}.wf-display .wf-bars span{font-size:clamp(15px,1.3vw,20px);font-weight:750}.wf-display .wf-bars i{height:24px}
+.wf-result-ranking{display:grid;gap:10px;width:min(900px,90%)}.wf-result-ranking>div{display:grid;grid-template-columns:58px 1fr 90px;align-items:center;gap:16px;padding:13px 20px;border:1px solid var(--option);border-radius:14px;background:linear-gradient(90deg,color-mix(in srgb,var(--option) 24%,#071329),#071329);text-align:left}.wf-result-ranking strong{font-size:22px;color:var(--option)}.wf-result-ranking span{font-size:18px;font-weight:800}.wf-result-ranking b{text-align:right;font-size:22px}.wf-result-ranking.winner>div:first-child{padding:20px;transform:scale(1.035);box-shadow:0 0 32px color-mix(in srgb,var(--option) 32%,transparent)}
+.wf-result-donut{display:grid;grid-template-columns:280px minmax(360px,1fr);align-items:center;gap:50px;width:min(900px,90%)}.wf-donut{width:260px;aspect-ratio:1;border-radius:50%;display:grid;place-content:center;position:relative}.wf-donut::after{content:"";position:absolute;inset:54px;border-radius:50%;background:#08172f}.wf-donut b,.wf-donut span{position:relative;z-index:1}.wf-donut b{font-size:48px}.wf-donut span{color:#a9bdd5}.wf-donut-legend{display:grid;gap:12px}.wf-donut-legend>div{display:grid;grid-template-columns:16px 1fr 60px;gap:12px;text-align:left;align-items:center}.wf-donut-legend i{width:12px;height:12px;border-radius:50%}.wf-donut-legend span{font-size:17px;font-weight:750}
+.wf-result-split{display:flex;width:min(1000px,92%);min-height:240px;overflow:hidden;border:1px solid #ffffff2a;border-radius:22px}.wf-result-split>div{min-width:130px;padding:28px 18px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:linear-gradient(145deg,color-mix(in srgb,var(--option) 45%,#071329),#071329);border-right:1px solid #ffffff24}.wf-result-split b{font-size:clamp(30px,4vw,60px)}.wf-result-split span{font-size:16px;font-weight:800}
+
+/* The scene type class is also `wf-diagram`. An older generic rule used that
+   same class for an inner grid, which turned the entire 16:9 scene into a tall
+   CSS grid. Keep the scene itself on the standard full-screen flex layout. */
+.wf-scene.wf-diagram {
+  display: flex;
+  grid-template: none;
+  min-height: 100vh;
+}
+.wf-scene.wf-diagram > main { width: 100%; }
+.wf-display.wf-diagram>main{padding:68px 0 50px}
+.wf-display.wf-diagram h2{font-size:clamp(38px,3.8vw,62px);margin-bottom:12px}
+.wf-diagram-subtitle{margin:-6px auto 22px!important;max-width:760px!important;color:#a9bdd5!important;font-size:clamp(15px,1.45vw,22px)!important}
+
+.wf-diagram-map {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  grid-template-areas: "topleft top topright" "left middle right" "bottomleft bottom bottomright";
+  gap: clamp(8px, 1.5vh, 16px) clamp(24px, 5vw, 72px);
+  width: min(980px, 92%);
+  align-items: center;
+  justify-items: center;
+  background:linear-gradient(90deg,transparent 7%,#ffffff20 24%,#ffffff20 76%,transparent 93%) center 50%/100% 2px no-repeat;
+}
+.wf-diagram-map::before,.wf-diagram-map::after{content:"";position:absolute;left:50%;width:2px;height:27%;transform:translateX(-50%);background:linear-gradient(#ffd15c,#20d2c2);opacity:.72;z-index:-1}.wf-diagram-map::before{top:19%}.wf-diagram-map::after{bottom:19%}
+.wf-node-top{grid-area:top}.wf-node-left{grid-area:left}.wf-node-middle{grid-area:middle}.wf-node-right{grid-area:right}.wf-node-bottom{grid-area:bottom}
+.wf-node-topleft{grid-area:topleft}.wf-node-topright{grid-area:topright}.wf-node-bottomleft{grid-area:bottomleft}.wf-node-bottomright{grid-area:bottomright}
+/* Corner nodes sit one ring further out than the cardinal ones, so a
+   6-satellite diagram (e.g. a "connection map" around a center node) reads
+   as a radial layout rather than a cramped 3x3 grid. */
+.wf-node-topleft .wf-diagram-node,.wf-node-topright .wf-diagram-node,.wf-node-bottomleft .wf-diagram-node,.wf-node-bottomright .wf-diagram-node{opacity:.94;transform:scale(.92)}
+/* The room's leading answer, when a diagram is bound to live poll data. */
+.wf-diagram-percent{display:block;margin-top:4px;font-style:normal;font-weight:900;font-size:clamp(11px,1vw,15px);color:#ffd15c}
+.wf-node-strong .wf-diagram-node{transform:scale(1.12);border-color:#ffd15c!important;box-shadow:0 0 0 2px #ffd15c66,0 0 42px color-mix(in srgb,#ffd15c 40%,transparent)!important}
+.wf-node-strong .wf-diagram-node b{color:#fff8e6}
+.wf-node-topleft.wf-node-strong .wf-diagram-node,.wf-node-topright.wf-node-strong .wf-diagram-node,.wf-node-bottomleft.wf-node-strong .wf-diagram-node,.wf-node-bottomright.wf-node-strong .wf-diagram-node{opacity:1;transform:scale(1.05)}
+.wf-diagram-map .wf-diagram-node b{width:clamp(92px,8vw,118px);height:clamp(92px,8vw,118px);border-width:2px;font-size:clamp(12px,1.05vw,16px);box-shadow:0 0 34px color-mix(in srgb,var(--node) 28%,transparent),inset 0 0 26px #ffffff0b}
+.wf-diagram-map .wf-diagram-node i{font-style:normal;font-size:clamp(16px,1.5vw,23px);height:22px;color:#fff;text-shadow:0 0 18px var(--node)}
+@media(max-width:700px){.wf-diagram-map{width:100%;gap:18px 8px}.wf-diagram-map .wf-diagram-node b{width:82px;height:82px;font-size:11px}}
+
+/* Reusable premium presentation preset. This is intentionally theme-driven:
+   MBF supplies content and colors, while every Experience can select the same
+   cinematic system without inheriting MBF-specific copy or imagery. */
+.wf-theme-legacy_cinematic {
+  --cinematic-ink:#050b20;
+  --cinematic-navy:#071833;
+  --cinematic-panel:#0a1c38d9;
+  --cinematic-muted:#aebcd2;
+  background:
+    radial-gradient(ellipse at 72% 20%,#56319b55 0,transparent 34%),
+    radial-gradient(ellipse at 15% 78%,#037f8460 0,transparent 38%),
+    radial-gradient(circle at 50% 48%,#15385b66 0,transparent 48%),
+    linear-gradient(135deg,var(--cinematic-ink),var(--cinematic-navy) 58%,#090c28);
+  padding:clamp(26px,3.2vw,54px);
+}
+.wf-theme-legacy_cinematic .wf-cinematic-frame{position:absolute!important;inset:clamp(12px,1.3vw,22px);z-index:0!important;border:1px solid color-mix(in srgb,var(--wf-gold) 42%,transparent);border-radius:3px;box-shadow:inset 0 0 70px #02071499;pointer-events:none}
+.wf-theme-legacy_cinematic .wf-cinematic-frame::before,.wf-theme-legacy_cinematic .wf-cinematic-frame::after{content:"";position:absolute;width:64px;height:64px;border-color:var(--wf-gold);opacity:.75}.wf-theme-legacy_cinematic .wf-cinematic-frame::before{left:-1px;top:-1px;border-left:3px solid;border-top:3px solid}.wf-theme-legacy_cinematic .wf-cinematic-frame::after{right:-1px;bottom:-1px;border-right:3px solid;border-bottom:3px solid}
+.wf-theme-legacy_cinematic .wf-cinematic-pattern{position:absolute!important;inset:0;z-index:0!important;opacity:.12;pointer-events:none;background-image:linear-gradient(30deg,#e7bd6815 12%,transparent 12.5%,transparent 87%,#e7bd6815 87.5%),linear-gradient(150deg,#e7bd6815 12%,transparent 12.5%,transparent 87%,#e7bd6815 87.5%),linear-gradient(30deg,#e7bd6815 12%,transparent 12.5%,transparent 87%,#e7bd6815 87.5%),linear-gradient(150deg,#e7bd6815 12%,transparent 12.5%,transparent 87%,#e7bd6815 87.5%);background-size:72px 126px;background-position:0 0,0 0,36px 63px,36px 63px;mask-image:linear-gradient(90deg,#000,transparent 30%,transparent 70%,#000)}
+.wf-theme-legacy_cinematic>header{color:#8cece4}.wf-theme-legacy_cinematic>header span::before{content:"✦";margin-right:10px;color:var(--wf-gold)}
+.wf-theme-legacy_cinematic>main{z-index:2!important}.wf-theme-legacy_cinematic h1,.wf-theme-legacy_cinematic h2{font-family:Georgia,'Times New Roman',serif;font-weight:500;letter-spacing:-.025em;text-wrap:balance}.wf-theme-legacy_cinematic h2{max-width:1100px}.wf-theme-legacy_cinematic footer{color:#d5b96f}.wf-theme-legacy_cinematic footer span{font-family:Georgia,serif;letter-spacing:.13em}
+.wf-theme-legacy_cinematic .wf-kicker{display:block;color:#8cece4;font-size:clamp(11px,1vw,15px);font-weight:900;letter-spacing:.2em;text-transform:uppercase;margin-bottom:13px}
+.wf-theme-legacy_cinematic.wf-hero main,.wf-theme-legacy_cinematic.wf-closing main{align-items:flex-start;text-align:left;padding-left:clamp(30px,8vw,140px)}
+.wf-theme-legacy_cinematic.wf-hero h1,.wf-theme-legacy_cinematic.wf-closing h1{max-width:850px;font-size:clamp(60px,8vw,128px);text-transform:uppercase}.wf-theme-legacy_cinematic.wf-hero main>p,.wf-theme-legacy_cinematic.wf-closing main>p{font-family:Georgia,serif;color:#fff;font-size:clamp(22px,2.2vw,36px);letter-spacing:.12em}.wf-theme-legacy_cinematic .wf-keywords{justify-content:flex-start}.wf-theme-legacy_cinematic .wf-keywords b{border-color:#e7bd686b;background:#07142caa;box-shadow:0 10px 34px #0008;color:#f1d692}
+
+.wf-theme-legacy_cinematic.wf-poll .wf-options>div,.wf-theme-legacy_cinematic.wf-multi_select .wf-options>div,.wf-theme-legacy_cinematic.wf-rating .wf-options>div{border-radius:5px;border-color:color-mix(in srgb,var(--option) 75%,#fff);background:linear-gradient(112deg,color-mix(in srgb,var(--option) 32%,#06142d),#08162f 80%);box-shadow:0 14px 34px #0007,inset 0 1px #fff2}.wf-theme-legacy_cinematic .wf-option-icon{border-radius:4px;transform:rotate(45deg)}.wf-theme-legacy_cinematic .wf-option-icon::first-letter{transform:rotate(-45deg)}
+.wf-theme-legacy_cinematic .wf-join{border-color:#e7bd6859;border-radius:6px;background:#050d20e8;box-shadow:0 16px 44px #0008}.wf-theme-legacy_cinematic .wf-join img{border-radius:3px}
+.wf-theme-legacy_cinematic .wf-bars>div{padding:6px 12px 6px 0;border-bottom:1px solid #fff1}.wf-theme-legacy_cinematic .wf-bars i{border-radius:2px}.wf-theme-legacy_cinematic .wf-bars em{border-radius:2px}.wf-theme-legacy_cinematic .wf-result-ranking>div{border-radius:4px}.wf-theme-legacy_cinematic .wf-result-split{border-radius:5px}.wf-theme-legacy_cinematic .wf-donut{filter:drop-shadow(0 0 30px #7c4dff55)}
+.wf-theme-legacy_cinematic blockquote{position:relative;padding:clamp(30px,5vw,72px);border:1px solid #e7bd6854;background:linear-gradient(135deg,#0b1b38e8,#171136d9);box-shadow:0 28px 90px #0008}.wf-theme-legacy_cinematic blockquote::before,.wf-theme-legacy_cinematic blockquote::after{content:"❖";position:absolute;color:var(--wf-gold);font-size:26px}.wf-theme-legacy_cinematic blockquote::before{top:14px;left:18px}.wf-theme-legacy_cinematic blockquote::after{right:18px;bottom:14px}.wf-theme-legacy_cinematic blockquote strong{color:#f5e6bf;text-shadow:0 6px 30px #d2a94a22}.wf-theme-legacy_cinematic blockquote p{margin:22px auto 0}.wf-theme-legacy_cinematic .wf-pill{border-radius:3px}
+.wf-theme-legacy_cinematic .wf-video{border-radius:5px;border-color:#e7bd6866;box-shadow:0 30px 80px #000a,0 0 44px #20d2c21c}.wf-theme-legacy_cinematic .wf-video-real video,.wf-theme-legacy_cinematic .wf-video-real iframe{border-radius:3px}
+.wf-theme-legacy_cinematic .wf-timer-ring{filter:drop-shadow(0 0 30px #e7bd6844)}.wf-theme-legacy_cinematic .wf-prompts div{border-radius:4px;background:linear-gradient(145deg,#f8f0dc,#d9e3eb);box-shadow:0 18px 40px #0008}.wf-theme-legacy_cinematic .wf-prompts b{border-radius:3px}
+.wf-theme-legacy_cinematic .wf-cloud{padding:30px 38px;border:1px solid #e7bd6840;background:#06142bb5;box-shadow:0 24px 70px #0007}.wf-theme-legacy_cinematic .wf-cloud b{text-shadow:0 0 22px currentColor;font-family:Georgia,serif}.wf-theme-legacy_cinematic .wf-compare{padding:18px 28px;border:1px solid #e7bd6845;background:#07162dcf}.wf-theme-legacy_cinematic .wf-compare>div{min-height:48px}.wf-theme-legacy_cinematic .wf-compare-badge{border-radius:3px}
+
+.wf-theme-legacy_cinematic.wf-diagram>main{padding:70px 0 48px}.wf-diagram-composition{display:grid;grid-template-columns:minmax(300px,.75fr) minmax(600px,1.4fr);align-items:center;gap:clamp(28px,5vw,86px);width:min(1260px,94%);margin:auto;text-align:left}.wf-diagram-composition .wf-diagram-copy h2{font-size:clamp(48px,5.3vw,82px);line-height:.98;margin:0;color:#f2d17e}.wf-diagram-composition .wf-diagram-subtitle{margin:22px 0 0!important;font-size:clamp(17px,1.35vw,22px)!important;line-height:1.55;max-width:470px!important;color:#c2cee0!important}
+.wf-theme-legacy_cinematic .wf-diagram-map{width:100%;grid-template-columns:repeat(3,minmax(150px,1fr));gap:22px 26px;background:none;isolation:isolate}.wf-theme-legacy_cinematic .wf-diagram-map::before{top:18%;height:64%;width:2px;background:linear-gradient(transparent,#e7bd68,#20d2c2,#e7bd68,transparent);opacity:.85}.wf-theme-legacy_cinematic .wf-diagram-map::after{left:12%;right:12%;top:50%;bottom:auto;width:auto;height:1px;transform:none;background:linear-gradient(90deg,transparent,#20d2c2,#e7bd68,#8b61ff,transparent);opacity:.65}
+.wf-theme-legacy_cinematic .wf-diagram-node{width:100%;gap:7px;padding:15px 14px 13px;border:1px solid color-mix(in srgb,var(--node) 62%,#e7bd68);background:linear-gradient(145deg,color-mix(in srgb,var(--node) 17%,#0b1834),#07142de8);box-shadow:0 18px 46px #0008,0 0 28px color-mix(in srgb,var(--node) 18%,transparent);clip-path:polygon(10px 0,calc(100% - 10px) 0,100% 10px,100% calc(100% - 10px),calc(100% - 10px) 100%,10px 100%,0 calc(100% - 10px),0 10px)}.wf-theme-legacy_cinematic .wf-diagram-node i{font-size:25px;height:auto}.wf-theme-legacy_cinematic .wf-diagram-node b{width:auto;height:auto;border:0;background:none;box-shadow:none;padding:0;font-family:Georgia,serif;font-size:clamp(15px,1.25vw,20px);color:#fff}.wf-theme-legacy_cinematic .wf-diagram-node small{color:#aebcd2;font-size:11px;text-align:center;line-height:1.25}.wf-theme-legacy_cinematic .wf-node-top .wf-diagram-node,.wf-theme-legacy_cinematic .wf-node-middle .wf-diagram-node{max-width:190px}.wf-theme-legacy_cinematic .wf-node-bottom .wf-diagram-node{min-width:300px}
+@media(max-width:1000px){.wf-diagram-composition{grid-template-columns:1fr;gap:22px;text-align:center}.wf-diagram-composition .wf-diagram-subtitle{margin:12px auto 0!important}.wf-theme-legacy_cinematic .wf-diagram-map{max-width:760px}.wf-theme-legacy_cinematic.wf-diagram>main{padding-top:60px}.wf-diagram-composition .wf-diagram-copy h2{font-size:clamp(38px,5vw,58px)}}
+@media(max-height:760px){.wf-theme-legacy_cinematic>main{padding-top:62px;padding-bottom:48px}.wf-theme-legacy_cinematic h2{font-size:clamp(28px,3.4vw,48px)}.wf-theme-legacy_cinematic .wf-options>div{min-height:54px!important}.wf-theme-legacy_cinematic .wf-prompts div{padding:10px}.wf-theme-legacy_cinematic .wf-diagram-node{padding:9px}.wf-diagram-composition{gap:28px}}

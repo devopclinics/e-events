@@ -1318,6 +1318,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   const [programDay, setProgramDay] = useState('')
   const [hubTab, setHubTab] = useState('pass')
   const [speakers, setSpeakers] = useState(null)
+  const [showAllSpeakers, setShowAllSpeakers] = useState(false)
   const [showAllActivity, setShowAllActivity] = useState(false)
   const [sending, setSending] = useState(false)
   const [sendingChat, setSendingChat] = useState(false)
@@ -1921,12 +1922,25 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
           {/* Speakers — horizontal strip, not one card per person */}
           {speakersVisible && speakers?.length > 0 && (
             <div className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
-              <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Featured Speakers</div>
-              <div className="mt-3 flex gap-3 overflow-x-auto pb-1">
-                {speakers.slice(0, 6).map((s) => (
-                  <div key={s.id} className="w-16 shrink-0 text-center">
-                    {s.photo_url ? <img src={s.photo_url} alt="" className="mx-auto h-12 w-12 rounded-full object-cover" /> : <div className="mx-auto grid h-12 w-12 place-items-center rounded-full text-base" style={{ background: tone.chip }}>🎤</div>}
-                    <div className="mt-1.5 truncate text-[10.5px] font-bold">{s.name}</div>
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Featured Speakers</div>
+                {speakers.length > 6 && (
+                  <button type="button" onClick={() => setShowAllSpeakers((visible) => !visible)} aria-expanded={showAllSpeakers} className="text-xs font-extrabold" style={{ color: tone.accent }}>
+                    {showAllSpeakers ? 'Show fewer ↑' : `+${speakers.length - 6} more ↓`}
+                  </button>
+                )}
+              </div>
+              <div className={showAllSpeakers ? 'mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3' : 'mt-3 flex gap-3 overflow-x-auto pb-1'}>
+                {speakers.slice(0, showAllSpeakers ? speakers.length : 6).map((s) => (
+                  <div key={s.id} className={showAllSpeakers ? 'min-w-0 rounded-xl border p-2 text-center' : 'w-20 shrink-0 text-center'} style={showAllSpeakers ? { background: tone.chip, borderColor: tone.border } : undefined}>
+                    {s.photo_url ? <img src={s.photo_url} alt="" className="mx-auto h-12 w-12 rounded-full object-cover" /> : <div className="mx-auto grid h-12 w-12 place-items-center rounded-full text-base" style={{ background: showAllSpeakers ? tone.panel : tone.chip }}>🎤</div>}
+                    <div
+                      className="mt-1.5 text-[10.5px] font-bold leading-tight"
+                      style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                    >
+                      {s.name}
+                    </div>
+                    {showAllSpeakers && s.title && <div className="mt-1 truncate text-[10px]" style={{ color: tone.muted }}>{s.title}</div>}
                   </div>
                 ))}
               </div>
@@ -2197,7 +2211,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
         </div>}
 
         {tabActive('speakers') && speakersVisible && (
-          <div className="mt-6 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+          <div id="guest-hub-speakers" tabIndex={-1} className="mt-6 scroll-mt-4 rounded-2xl border p-4 focus:outline-none" style={{ background: tone.panel, borderColor: tone.border }}>
             <h3 className="text-lg font-extrabold">Speakers</h3>
             {speakers === null ? (
               <p className="mt-2 text-sm" style={{ color: tone.muted }}>Loading speakers…</p>

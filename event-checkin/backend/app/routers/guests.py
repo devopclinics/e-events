@@ -112,6 +112,17 @@ def _normalize_phone(raw: str, default_country_code: str = "1") -> str | None:
         candidate = '+1' + cleaned
     elif len(cleaned) == 11 and cleaned.startswith('1') and default_country_code == "1":
         candidate = '+' + cleaned
+    elif default_country_code == "1":
+        # No '+' given and it doesn't cleanly match a 10-digit local number or an
+        # 11-digit one carrying the '1' country code. For a US/Canada default
+        # there is no safe way to guess what an extra/missing digit means — a
+        # common source of this shape is a 10-digit number with one stray digit
+        # appended by an exporting spreadsheet (e.g. "8327941707" -> "83279417070").
+        # Guessing here would silently manufacture a "valid-looking" but wrong
+        # E.164 number — sometimes a real number in an unrelated country, which
+        # a provider then actually accepts, so the mistake never surfaces. Reject
+        # instead so it shows up as an invalid-phone count at import time.
+        return None
     else:
         # Could be a longer non-US number missing its + — assume international and prepend.
         candidate = '+' + cleaned
@@ -125,11 +136,30 @@ _BROWSER_UA = (
 )
 
 
+def _cell_to_str(c) -> str:
+    """Stringify one Excel/Sheets cell value for CSV text.
+
+    openpyxl/xlrd read a numeric-formatted cell (phone numbers very commonly
+    end up numeric, even unintentionally) as a Python int/float, not a string.
+    A bare `str()` on an integer-valued float appends ".0" (e.g. 8503451754.0
+    -> "8503451754.0"), and the phone normalizer strips non-digit characters
+    before parsing — the "." disappears but its trailing 0 doesn't, silently
+    turning a valid 10-digit number into an 11-digit one no different in shape
+    from a genuinely malformed number. This is what actually produced the
+    MBF Summit phone corruption incident (2026-08-29/30), not bad source data.
+    """
+    if c is None:
+        return ""
+    if isinstance(c, float) and c.is_integer():
+        return str(int(c))
+    return str(c)
+
+
 def _rows_to_csv_text(rows: list) -> str:
     out = io.StringIO()
     writer = csv.writer(out)
     for row in rows:
-        writer.writerow([str(c) if c is not None else "" for c in row])
+        writer.writerow([_cell_to_str(c) for c in row])
     return out.getvalue()
 
 

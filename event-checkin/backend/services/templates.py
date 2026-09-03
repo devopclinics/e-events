@@ -21,7 +21,7 @@ from urllib.parse import urlencode
 # ── Supported placeholders ─────────────────────────────────────────────────────
 
 PLACEHOLDERS = [
-    "guest_first_name", "guest_last_name", "guest_full_name",
+    "guest_first_name", "guest_last_name", "guest_full_name", "first_name",
     "event_name", "event_date", "event_time", "organizer_name",
     "rsvp_link", "ticket_link", "festiome_link", "qr_code",
     "venue_name", "venue_address", "event_location",
@@ -29,7 +29,7 @@ PLACEHOLDERS = [
     "experience_steps", "experience_steps_text",
     "experience_step_title", "experience_step_message",
     "session_topic", "session_date", "session_time", "session_room", "session_speaker",
-    "room_name", "seat_number", "download_link",
+    "room_name", "seat_number", "download_link", "consent_link",
 ]
 
 _TOKEN_RE = re.compile(r"\{\{\s*([a-zA-Z0-9_]+)\s*\}\}")
@@ -385,6 +385,22 @@ TEMPLATE_DEFS: dict[str, dict] = {
         required=["download_link"],
         note="Used when a guest or organizer sends the signed consent copy.",
     ),
+    "experience_consent_reminder": _t(
+        "Experience consent reminder", ["email", "sms", "whatsapp", "mms"], group="Experience",
+        subject="Action required before arrival — {{event_name}}",
+        email_body=(
+            "<p>Assalamualaikum {{guest_first_name}},</p>"
+            "<p>Please complete the required form for <strong>{{event_name}}</strong> before arrival.</p>"
+            '<p><a href="{{consent_link}}">Complete the required form</a></p>'
+            "<p>Event date: {{event_date}}</p>"
+            "<p>If you have already completed the form, no further action is required.</p>"
+        ),
+        sms_body="Assalamualaikum {{guest_first_name}}, please complete the required form for {{event_name}} before arrival: {{consent_link}}",
+        whatsapp_body="Assalamualaikum {{guest_first_name}}, please complete the required form for {{event_name}} before arrival: {{consent_link}} Event date: {{event_date}}",
+        mms_body="Assalamualaikum {{guest_first_name}}, please complete the required form for {{event_name}} before arrival: {{consent_link}}",
+        required=["consent_link"],
+        note="Scheduled reminders re-check consent completion immediately before sending.",
+    ),
     "experience_souvenir_completion": _t(
         "Experience souvenir completion", ["email"], group="Experience",
         subject="{{experience_step_title}} complete — {{event_name}}",
@@ -656,6 +672,7 @@ def build_context(event, guest=None, *, extras: dict | None = None) -> dict:
         first = getattr(guest, "first_name", "") or ""
         last = getattr(guest, "last_name", "") or ""
         ctx["guest_first_name"] = first
+        ctx["first_name"] = first
         ctx["guest_last_name"] = last
         ctx["guest_full_name"] = f"{first} {last}".strip()
         # FestioMe guest sessions are issued for confirmed guests, or imported

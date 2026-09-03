@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import RedesignShell, { Icon } from './redesign/RedesignShell'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
@@ -6,7 +6,9 @@ import { api } from '../api'
 import { DonutChart, StarRating, RatingDistribution, PALETTE } from '../components/charts/LiveCharts'
 import './FestioLiveRedesignPage.css'
 
-const TABS = ['Overview', 'Activities', 'Question Bank', 'Live Control', 'Displays', 'Responses', 'Analytics', 'Settings', 'Help']
+const ExperienceWorkflowsPanel = lazy(() => import('../components/live/ExperienceWorkflowsPanel'))
+
+const TABS = ['Overview', 'Activities', 'Experiences', 'Question Bank', 'Live Control', 'Displays', 'Responses', 'Analytics', 'Settings', 'Help']
 
 const ACTIVITY_TYPES = [
   ['quiz', 'Quiz'], ['poll', 'Poll'], ['survey', 'Survey'], ['rating', 'Rating'],
@@ -763,7 +765,10 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
 export default function FestioLiveRedesignPage() {
   const [eventId] = useCurrentEvent()
   const { event, loading: eventLoading } = useEventDetails(eventId)
-  const [tab, setTab] = useState('Overview')
+  const liveQuery = new URLSearchParams(window.location.search)
+  const presenterEntry = liveQuery.has('present')
+  const requestedTab = liveQuery.get('tab')
+  const [tab, setTab] = useState(presenterEntry ? 'Experiences' : (TABS.find((item) => item.toLowerCase() === requestedTab?.toLowerCase()) || 'Overview'))
 
   const [activities, setActivities] = useState(null)
   const [error, setError] = useState('')
@@ -1164,8 +1169,8 @@ export default function FestioLiveRedesignPage() {
   async function generateShareLink() {
     setShareBusy(true); setError('')
     try {
-      const { token } = await api.liveShareLink(eventId, shareRole, Number(shareHours) || 12)
-      const url = `${window.location.origin}/live-control?token=${encodeURIComponent(token)}&role=${shareRole}`
+      const created = await api.liveShareLink(eventId, shareRole, Number(shareHours) || 12)
+      const url = created.url || `${window.location.origin}/p/${created.code}`
       setShareLinks((v) => [{ role: shareRole, url, hours: shareHours }, ...v])
     } catch (e) { setError(e.message) } finally { setShareBusy(false) }
   }
@@ -1337,6 +1342,12 @@ export default function FestioLiveRedesignPage() {
 
       {tab === 'Overview' && <OverviewPanel eventId={eventId} joinInfo={joinInfo} activities={activities} displays={displays} onCreate={() => { setTab('Activities'); setSelected(null); setCreating(true) }} onOpen={async (id) => { await openActivity(id); setTab('Activities') }} onTab={setTab} />}
 
+      {tab === 'Experiences' && (
+        <Suspense fallback={<div className="fl-loading">Loading experiences…</div>}>
+          <ExperienceWorkflowsPanel eventId={eventId} activities={activities || []} displays={displays || []} presenterEntry={presenterEntry}/>
+        </Suspense>
+      )}
+
       {tab === 'Activities' && !selected && (
         <div className="rr-panel fl-section-panel">
           <div className="rd-panel-head">
@@ -1445,7 +1456,9 @@ export default function FestioLiveRedesignPage() {
                 <button className="rr-btn secondary" onClick={viewResults}>View Results</button>
                 <button className="rr-btn secondary" onClick={openParticipantPreview}>Preview participant review</button>
                 <button className="rr-btn secondary" onClick={() => {
-                  const url = `${window.location.origin}/live-display/${selected.id}?token=${encodeURIComponent(selected.config?.display_token || '')}`
+                  const url = selected.short_code
+                    ? `${window.location.origin}/d/${selected.short_code}`
+                    : `${window.location.origin}/live-display/${selected.id}?token=${encodeURIComponent(selected.config?.display_token || '')}`
                   navigator.clipboard?.writeText(url)
                 }}>Copy TV Display Link</button>
                 {selected.session_id && ['live', 'paused'].includes(selected.status) && selected.config?.auto_close_enabled !== false && (
@@ -1979,7 +1992,7 @@ export default function FestioLiveRedesignPage() {
           onClose={() => setAnalyticsOverlayOpen(false)}
           onExportCsv={() => api.liveDownloadExport(eventId, selected.id, selected.title).catch((e) => setError(e.message))}
           onGenerateReport={() => api.liveDownloadExport(eventId, selected.id, selected.title).catch((e) => setError(e.message))}
-          displayUrl={selected.config?.display_token ? `/live-display/${selected.id}?token=${selected.config.display_token}` : null}
+          displayUrl={selected.short_code ? `/d/${selected.short_code}` : selected.config?.display_token ? `/live-display/${selected.id}?token=${selected.config.display_token}` : null}
         />
       )}
       {participantPreviewOpen && results && selected && <ParticipantReviewPreview activity={selected} results={results} onClose={() => setParticipantPreviewOpen(false)}/>}

@@ -128,26 +128,42 @@ def _signalhouse_extract_status_and_message_id(data: dict) -> tuple[str | None, 
     return (str(status) if status else None, str(message_id) if message_id else None)
 
 
-@router.post("/bird/status")
-async def bird_status_callback(request: Request) -> Response:
-    data = await _payload(request)
-    message = data.get("message") if isinstance(data.get("message"), dict) else {}
-    status = data.get("status") or message.get("status") or data.get("messageStatus")
+def _bird_status_fields(data: dict) -> tuple[str | None, str | None, str | None]:
+    # Channels subscriptions wrap the message lifecycle object in `payload`.
+    # Retain support for the older flat/message shapes as well.
+    payload = data.get("payload") if isinstance(data.get("payload"), dict) else data
+    message = payload.get("message") if isinstance(payload.get("message"), dict) else {}
+    status = payload.get("status") or message.get("status") or payload.get("messageStatus")
     message_id = (
-        data.get("id")
-        or data.get("messageId")
-        or data.get("message_id")
+        payload.get("id")
+        or payload.get("messageId")
+        or payload.get("message_id")
         or message.get("id")
         or message.get("messageId")
         or message.get("message_id")
     )
-    error = data.get("errorCode") or data.get("error_code") or data.get("error")
+    failure = payload.get("failure") if isinstance(payload.get("failure"), dict) else {}
+    error = (
+        payload.get("errorCode") or payload.get("error_code") or payload.get("error")
+        or failure.get("code") or payload.get("reason")
+    )
+    return (
+        str(status) if status else None,
+        str(message_id) if message_id else None,
+        str(error) if error else None,
+    )
+
+
+@router.post("/bird/status")
+async def bird_status_callback(request: Request) -> Response:
+    data = await _payload(request)
+    status, message_id, error = _bird_status_fields(data)
     try:
         await reconcile_provider_status(
             provider="bird",
             provider_message_id=message_id,
             status=status,
-            error_code=str(error) if error else None,
+            error_code=error,
         )
     except Exception:
         logger.exception("Bird status callback reconciliation failed")

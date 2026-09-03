@@ -20,13 +20,30 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
-from app.models import EmailDeliveryEvent, Guest
+from app.models import (
+    EmailDeliveryEvent,
+    Guest,
+    InboundEmail,
+    InboundEmailAutomation,
+    InboundEmailWebhookReceipt,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 _SVIX_TOLERANCE_SECONDS = 5 * 60
+
+
+def _inbound_token(recipients) -> str | None:
+    for raw in recipients if isinstance(recipients, list) else [recipients]:
+        address = str(raw or "").strip().lower()
+        local = address.rsplit("@", 1)[0]
+        if "+" in local:
+            token = local.rsplit("+", 1)[1].strip()
+            if token:
+                return token
+    return None
 
 
 def _decode_svix_secret(secret: str) -> bytes:
@@ -211,4 +228,111 @@ async def receive_resend_webhook(
     )
     from ..services.marketing_client import ingest_marketing_delivery
     await ingest_marketing_delivery(recipient, event_type, data.get("email_id") or data.get("id"))
+    return {"ok": True}
+
+
+@router.post("/resend/inbound")
+async def receive_resend_inbound_webhook(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, bool]:
+    """Persist a verified ``email.received`` notification and return quickly.
+
+    Content retrieval, parsing, matching, and Experience completion are owned
+    by the durable inbound-email worker, never this request path.
+    """
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > settings.inbound_email_max_webhook_bytes:
+                raise HTTPException(status_code=413, detail="Webhook payload too large")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid Content-Length")
+    payload = await request.body()
+    if len(payload) > settings.inbound_email_max_webhook_bytes:
+        raise HTTPException(status_code=413, detail="Webhook payload too large")
+
+    secret = settings.resend_inbound_webhook_secret or settings.resend_webhook_secret
+    if not secret:
+        logger.error("Resend inbound webhook rejected: signing secret is not configured")
+        raise HTTPException(status_code=503, detail="Inbound email is not configured")
+    if not _verify_svix_signature(payload, request.headers, secret):
+        raise HTTPException(status_code=400, detail="Invalid Resend webhook signature")
+
+    try:
+        event = json.loads(payload.decode("utf-8") or "{}")
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+    if event.get("type") != "email.received":
+        return {"ok": True}
+
+    data = event.get("data") or {}
+    resend_email_id = str(data.get("email_id") or "").strip()
+    svix_id = str(request.headers.get("svix-id") or "").strip()
+    if not resend_email_id or not svix_id:
+        raise HTTPException(status_code=400, detail="Missing inbound email identifier")
+
+    prior_receipt = await db.scalar(
+        select(InboundEmailWebhookReceipt).where(InboundEmailWebhookReceipt.svix_id == svix_id)
+    )
+    if prior_receipt:
+        return {"ok": True}
+
+    existing = await db.scalar(
+        select(InboundEmail).where(InboundEmail.resend_email_id == resend_email_id)
+    )
+    if existing:
+        db.add(InboundEmailWebhookReceipt(
+            svix_id=svix_id,
+            resend_email_id=resend_email_id,
+            inbound_email_id=existing.id,
+            is_duplicate=True,
+        ))
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+        logger.info("inbound_email.duplicate email_id=%s", resend_email_id)
+        return {"ok": True}
+
+    token = _inbound_token(data.get("to") or [])
+    automation = None
+    if token:
+        automation = await db.scalar(
+            select(InboundEmailAutomation).where(InboundEmailAutomation.inbound_token == token)
+        )
+    inbound = InboundEmail(
+        org_id=automation.org_id if automation else None,
+        event_id=automation.event_id if automation else None,
+        automation_id=automation.id if automation else None,
+        resend_email_id=resend_email_id,
+        message_id=(str(data.get("message_id"))[:500] if data.get("message_id") else None),
+        from_address=(str(data.get("from"))[:320].lower() if data.get("from") else None),
+        to_addresses=[str(value).lower() for value in (data.get("to") or [])][:20],
+        cc_addresses=[str(value).lower() for value in (data.get("cc") or [])][:20],
+        subject=(str(data.get("subject"))[:1000] if data.get("subject") else None),
+        attachment_metadata=(data.get("attachments") or [])[:50],
+        processing_status="received" if automation else "invalid",
+        failure_code=None if automation else "unknown_inbound_token",
+        failure_reason=None if automation else "The recipient does not resolve to an automation.",
+        processed_at=None if automation else datetime.utcnow(),
+        received_at=_parse_datetime(data.get("created_at") or event.get("created_at")),
+    )
+    db.add(inbound)
+    await db.flush()
+    db.add(InboundEmailWebhookReceipt(
+        svix_id=svix_id,
+        resend_email_id=resend_email_id,
+        inbound_email_id=inbound.id,
+    ))
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        return {"ok": True}
+    logger.info(
+        "inbound_email.received inbound_email_id=%s automation_id=%s",
+        inbound.id,
+        automation.id if automation else None,
+    )
     return {"ok": True}

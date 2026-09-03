@@ -833,6 +833,96 @@ class ExperienceEvent(Base):
     occurred_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
 
+class InboundEmailAutomation(Base):
+    """Event-scoped rule set that maps one opaque inbound address to one
+    Experience step.  The address prefix is presentation only; routing always
+    uses the random token.
+    """
+    __tablename__ = "inbound_email_automations"
+    __table_args__ = (
+        Index("ix_inbound_email_automation_event_status", "event_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    step_id: Mapped[str] = mapped_column(String(36), ForeignKey("experience_steps.id"), index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    address_prefix: Mapped[str] = mapped_column(String(80), default="automation")
+    # Needed to display/copy the address after creation. It is a 256-bit bearer
+    # routing secret, never logged and never interpreted as a database id.
+    inbound_token: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    status: Mapped[str] = mapped_column(String(20), default="paused", index=True)
+    sender_rules: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    completion_rules: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class InboundEmail(Base):
+    """One logical message received for an inbound automation.
+
+    Bodies are not retained.  Extracted evidence and a short sanitized excerpt
+    are sufficient for review while keeping unnecessary email content out of
+    Festio's long-lived database.
+    """
+    __tablename__ = "inbound_emails"
+    __table_args__ = (
+        UniqueConstraint("resend_email_id", name="uq_inbound_email_resend_id"),
+        Index("ix_inbound_email_due", "processing_status", "next_attempt_at"),
+        Index("ix_inbound_email_event_status", "event_id", "processing_status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("organizations.id"), nullable=True, index=True)
+    event_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("events.id"), nullable=True, index=True)
+    automation_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("inbound_email_automations.id"), nullable=True, index=True)
+    resend_email_id: Mapped[str] = mapped_column(String(120))
+    message_id: Mapped[str | None] = mapped_column(String(500), nullable=True, index=True)
+    message_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    from_address: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    original_sender: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    to_addresses: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    cc_addresses: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    subject: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    sanitized_excerpt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    relevant_headers: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    attachment_metadata: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    extracted_identifiers: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    processing_status: Mapped[str] = mapped_column(String(30), default="received", index=True)
+    match_status: Mapped[str] = mapped_column(String(30), default="not_attempted", index=True)
+    rule_status: Mapped[str] = mapped_column(String(30), default="not_evaluated", index=True)
+    sender_status: Mapped[str] = mapped_column(String(30), default="not_evaluated", index=True)
+    matched_guest_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("guests.id"), nullable=True, index=True)
+    match_method: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    candidate_guest_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    failure_code: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reviewed_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    received_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class InboundEmailWebhookReceipt(Base):
+    """Audit every signed webhook delivery/replay without processing the same
+    logical Resend email more than once.
+    """
+    __tablename__ = "inbound_email_webhook_receipts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    svix_id: Mapped[str] = mapped_column(String(160), unique=True, index=True)
+    resend_email_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    inbound_email_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("inbound_emails.id"), nullable=True, index=True)
+    is_duplicate: Mapped[bool] = mapped_column(Boolean, default=False)
+    received_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
 class EngagementSyncOutbox(Base):
     """Durable Experience -> Festio Live program synchronization.
 
@@ -2236,6 +2326,8 @@ class ScheduledCommunication(Base):
     email_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     sms_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     whatsapp_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    mms_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    mms_media_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
 
     status: Mapped[str] = mapped_column(String(20), default="scheduled", index=True)
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -2456,3 +2548,21 @@ class ShortLink(Base):
     code: Mapped[str] = mapped_column(String(12), primary_key=True)
     target_url: Mapped[str] = mapped_column(String(1000))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class LiveAccessLink(Base):
+    """Short-lived opaque entry for a capability-scoped Festio Live console.
+
+    The browser exchanges the high-entropy code for the existing signed JWT,
+    keeping that JWT out of copied links and the address bar. Expiry and role
+    remain server-authoritative and event-scoped.
+    """
+    __tablename__ = "live_access_links"
+
+    code: Mapped[str] = mapped_column(String(16), primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id", ondelete="CASCADE"), index=True)
+    role: Mapped[str] = mapped_column(String(20))
+    access_token: Mapped[str] = mapped_column(Text)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    created_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

@@ -1,7 +1,10 @@
 from datetime import datetime
 
-from app.models import Event, ExperienceStep, ExperienceWorkflow, ScheduledCommunication
-from app.services.scheduled_communications import compute_scheduled_for
+from app.models import (
+    Event, ExperienceStep, ExperienceWorkflow, GuestExperienceProgress,
+    Guest, InboundEmailAutomation, ScheduledCommunication,
+)
+from app.services.scheduled_communications import audience_guests, compute_scheduled_for
 
 
 def test_absolute_schedule_uses_event_timezone():
@@ -155,3 +158,50 @@ async def test_schedule_can_anchor_to_experience_program_session(ctx):
     assert scheduled.status_code == 201, scheduled.text
     assert scheduled.json()["anchor_step_id"] == step_id
     assert scheduled.json()["scheduled_for_utc"].startswith("2026-09-01T00:45:00")
+
+
+async def test_consent_reminder_is_dynamic_and_excludes_completed_guests(ctx):
+    from conftest import _Session
+
+    async with _Session() as db:
+        event = await db.get(Event, ctx.ids["event_a"])
+        workflow = ExperienceWorkflow(event_id=event.id, name="Consent", status="published")
+        db.add(workflow)
+        await db.flush()
+        step = ExperienceStep(
+            workflow_id=workflow.id, key="waiver", type="custom", title="Required waiver",
+            required=True, enabled=True, config={"external_url": "https://example.test/waiver"},
+        )
+        db.add(step)
+        await db.flush()
+        db.add(InboundEmailAutomation(
+            org_id=event.org_id, event_id=event.id, step_id=step.id, name="WaiverSign",
+            inbound_token="test-token", status="active", sender_rules=[], completion_rules={},
+        ))
+        await db.commit()
+        guests = await audience_guests(db, event.id, "consent_incomplete")
+        assert len(guests) == 1
+        incomplete_guest = Guest(event_id=event.id, first_name="Still", last_name="Pending")
+        db.add(incomplete_guest)
+        await db.flush()
+        db.add(GuestExperienceProgress(
+            event_id=event.id, workflow_id=workflow.id, step_id=step.id,
+            guest_id=guests[0].id, status="completed",
+        ))
+        await db.commit()
+        remaining = await audience_guests(db, event.id, "consent_incomplete")
+        assert [guest.id for guest in remaining] == [incomplete_guest.id]
+
+    ctx.login(ctx.ids["superadmin"])
+    response = await ctx.client.post(
+        f"/api/events/{ctx.ids['event_a']}/communications/scheduled",
+        json={
+            "name": "Consent reminder", "communication_type": "consent_reminder",
+            "trigger_type": "absolute", "scheduled_at_local": "2026-09-01T09:00",
+            "channels": ["email"], "audience_type": "all", "audience_mode": "frozen",
+            "subject": "Required form", "email_body": "Complete: {{consent_link}}",
+        },
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["audience_type"] == "consent_incomplete"
+    assert response.json()["audience_mode"] == "dynamic"

@@ -33,10 +33,10 @@ DEFAULT_FOOTER = "Festio · Event operations"
 
 
 SAMPLE_VALUES = {
-    "firstName": "Aisha",
+    "firstName": "Aminu",
     "guestName": "Aisha Bello",
-    "eventName": "Women's Convention 2026",
-    "eventDate": "July 17, 2026",
+    "eventName": "Masjid-ul Mumineen 2026 MBF Summit",
+    "eventDate": "September 4, 2026",
     "ticketUrl": "https://festio.events/scan/sample-pass-token",
     "rsvpLink": "https://festio.events/rsvp/sample-rsvp-token",
     "ticketLink": "https://festio.events/scan/sample-pass-token",
@@ -55,9 +55,10 @@ SAMPLE_VALUES = {
     "sessionRoom": "Main Hall",
     "message": "Doors open at 5:30 PM. Please bring your pass.",
     "roomAssignment": "Cabin: Hilltop A",
-    "eventLocation": "Camp Carolina, Chapel Hill, NC",
+    "eventLocation": "84 Wimberly Ln, Huntsville, TX 77320",
     "qrCodeUrl": "https://festio.events/scan/sample-pass-token",
     "greetings": "Asalam Alaykum",
+    "consentLink": "https://festio.events/api/s/mbfwaiver",
 }
 
 
@@ -199,6 +200,24 @@ TEMPLATES: list[TemplateDef] = [
         ("greetings", "firstName", "eventName", "ticketUrl", "qrCodeUrl", "eventDate", "eventLocation"),
         group="mbf_summit",
     ),
+    # V7 is deliberately transactional: confirmed registration, pass delivery,
+    # a required pre-arrival form, and event logistics only.
+    TemplateDef(
+        "MBF Summit 2026 Experience pass invite v7",
+        "festio_mbf_summit_2026_invite_v7",
+        "Assalamualaikum {{firstName}},\n\n"
+        "Your registration for {{eventName}} has been confirmed.\n\n"
+        "Experience Pass:\n{{ticketUrl}}\n\n"
+        "QR Code:\n{{qrCodeUrl}}\n\n"
+        "Action required before arrival:\n"
+        "Please complete your consent form:\n{{consentLink}}\n\n"
+        "Event date: {{eventDate}}\n"
+        "Location: {{eventLocation}}\n\n"
+        "Please have your Experience Pass available when you arrive.",
+        ("firstName", "eventName", "ticketUrl", "qrCodeUrl", "consentLink", "eventDate", "eventLocation"),
+        category="UTILITY",
+        group="mbf_summit",
+    ),
     # Link-based alternative to the inline template above. No seating/room/seat
     # wording baked into the approved copy — the actual details live in the
     # guest's Guest Hub, so future wording changes (seating label, new fields,
@@ -259,6 +278,18 @@ TEMPLATES: list[TemplateDef] = [
         "Hi {{firstName}}, your signed consent copy for {{eventName}} is ready. "
         "Download it here: {{downloadLink}} Keep this for your records.",
         ("firstName", "eventName", "downloadLink"),
+        group="experience",
+    ),
+    TemplateDef(
+        "Experience consent reminder",
+        "festio_experience_consent_reminder",
+        "Assalamualaikum {{firstName}},\n\n"
+        "Action required before arrival for {{eventName}}.\n\n"
+        "Please complete the required form:\n{{consentLink}}\n\n"
+        "Event date: {{eventDate}}\n\n"
+        "If you have already completed the form, no further action is required.",
+        ("firstName", "eventName", "consentLink", "eventDate"),
+        category="UTILITY",
         group="experience",
     ),
     TemplateDef(

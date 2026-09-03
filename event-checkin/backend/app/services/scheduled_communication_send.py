@@ -7,10 +7,36 @@ from fastapi import BackgroundTasks
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..models import Event, Guest, ScheduledCommunication, ScheduledCommunicationDelivery
+from ..models import (
+    Event, ExperienceStep, ExperienceWorkflow, Guest, InboundEmailAutomation,
+    ScheduledCommunication, ScheduledCommunicationDelivery,
+)
 from .scheduled_communications import audience_guests
 
 logger = logging.getLogger("scheduled_communication_send")
+
+
+async def _consent_link(db: AsyncSession, event_id: str) -> str:
+    automated_steps = select(InboundEmailAutomation.step_id).where(
+        InboundEmailAutomation.event_id == event_id,
+        InboundEmailAutomation.status == "active",
+    )
+    steps = list((await db.scalars(
+        select(ExperienceStep)
+        .join(ExperienceWorkflow, ExperienceWorkflow.id == ExperienceStep.workflow_id)
+        .where(
+            ExperienceWorkflow.event_id == event_id,
+            ExperienceStep.enabled.is_(True),
+            ExperienceStep.required.is_(True),
+            (ExperienceStep.type == "consent") | ExperienceStep.id.in_(automated_steps),
+        )
+        .order_by(ExperienceWorkflow.is_default.desc(), ExperienceWorkflow.version.desc(), ExperienceStep.sort_order)
+    )).all())
+    for step in steps:
+        link = str((step.config or {}).get("external_url") or "").strip()
+        if link:
+            return link
+    return ""
 
 
 async def _recipient_rows(
@@ -92,15 +118,24 @@ async def _send_custom(
     # small immutable adapter lets the unified scheduler reuse that safety path.
     from .reminder_send import _send_to_guest
 
+    extra_context = None
+    if communication.communication_type == "consent_reminder":
+        link = await _consent_link(db, event.id)
+        if not link:
+            raise RuntimeError("No required consent step with an external link is configured")
+        extra_context = {"consent_link": link}
     adapter = SimpleNamespace(
         id=f"scheduled:{communication.id}",
+        communication_type=communication.communication_type,
         channels=communication.channels or [],
         subject=communication.subject,
         email_body=communication.email_body,
         sms_body=communication.sms_body,
         whatsapp_body=communication.whatsapp_body,
+        mms_body=communication.mms_body,
+        mms_media_url=communication.mms_media_url,
     )
-    return await _send_to_guest(event, adapter, guest, db)
+    return await _send_to_guest(event, adapter, guest, db, extra_context=extra_context)
 
 
 async def send_scheduled_communication(

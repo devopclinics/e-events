@@ -68,6 +68,7 @@ const FestioLiveRedesignPage = lazy(() => import('./pages/FestioLiveRedesignPage
 const LiveGuestPage = lazy(() => import('./pages/LiveGuestPage'))
 const LiveDisplayPage = lazy(() => import('./pages/LiveDisplayPage'))
 const LiveControlPage = lazy(() => import('./pages/LiveControlPage'))
+const LiveStepPreviewPage = lazy(() => import('./pages/LiveStepPreviewPage'))
 const VendorPortalPage = lazy(() => import('./pages/VendorPortalPage'))
 const TicketingRedesignPage = lazy(() => import('./pages/TicketingRedesignPage'))
 const TicketOrderPage = lazy(() => import('./pages/TicketOrderPage'))
@@ -374,11 +375,13 @@ function RouteLoading() {
 // a deploy still holds references to the *old* filenames, so navigating to a
 // route it hasn't loaded yet 404s trying to fetch a chunk that no longer
 // exists. That's not a bug in the page, it's unavoidable with hashed
-// filenames — the fix is just a fresh page load, which we do automatically
-// once (a sessionStorage flag stops a genuine, unrelated error from looping
-// forever) before ever bothering the user with a manual "Reload page" click.
+// filenames. During a rolling deploy two frontend versions can briefly answer
+// consecutive requests, so one reload is not always enough. Retry for the
+// length of a normal rollout before asking the guest to do anything.
 const CHUNK_ERROR_PATTERN = /dynamically imported module|Importing a module script failed|Failed to fetch dynamically imported module|Loading chunk|Load failed/i
-const CHUNK_RELOAD_FLAG = 'festio:chunk-reload-attempted'
+const CHUNK_RELOAD_STATE = 'festio:chunk-reload-state'
+const CHUNK_RELOAD_LIMIT = 8
+const CHUNK_RELOAD_WINDOW_MS = 2 * 60 * 1000
 
 function isChunkLoadError(error) {
   return !!error && (error.name === 'ChunkLoadError' || CHUNK_ERROR_PATTERN.test(error.message || ''))
@@ -388,6 +391,7 @@ class RouteChunkBoundary extends Component {
   constructor(props) {
     super(props)
     this.state = { error: null, autoReloading: false }
+    this.reloadTimer = null
   }
 
   static getDerivedStateFromError(error) {
@@ -396,24 +400,28 @@ class RouteChunkBoundary extends Component {
 
   componentDidCatch(error) {
     if (!isChunkLoadError(error)) return
-    // If we already tried this once this tab and it's STILL failing, don't
-    // reload forever — fall through to the manual "Reload page" fallback
-    // below, since something other than a routine stale-chunk mismatch is
-    // going on.
-    let alreadyTried = false
-    try { alreadyTried = sessionStorage.getItem(CHUNK_RELOAD_FLAG) === '1' } catch { /* private mode etc. */ }
-    if (alreadyTried) return
-    try { sessionStorage.setItem(CHUNK_RELOAD_FLAG, '1') } catch { /* best-effort */ }
+    const now = Date.now()
+    let retry = { count: 0, startedAt: now }
+    try {
+      const stored = JSON.parse(sessionStorage.getItem(CHUNK_RELOAD_STATE) || 'null')
+      if (stored && now - stored.startedAt < CHUNK_RELOAD_WINDOW_MS) retry = stored
+    } catch { /* private mode or malformed legacy value */ }
+    if (retry.count >= CHUNK_RELOAD_LIMIT) return
+    retry.count += 1
+    try { sessionStorage.setItem(CHUNK_RELOAD_STATE, JSON.stringify(retry)) } catch { /* best-effort */ }
     this.setState({ autoReloading: true })
-    window.location.reload()
+    const delay = Math.min(1000 * retry.count, 5000)
+    this.reloadTimer = window.setTimeout(() => window.location.reload(), delay)
+  }
+
+  componentWillUnmount() {
+    if (this.reloadTimer) window.clearTimeout(this.reloadTimer)
   }
 
   render() {
     if (!this.state.error) return this.props.children
     if (this.state.autoReloading) {
-      // The reload above is already in flight — render nothing rather than
-      // flash the manual fallback UI for the instant before it navigates.
-      return null
+      return <div role="status" aria-live="polite" className="min-h-[45vh] grid place-items-center px-4 text-sm font-semibold text-slate-600 dark:text-slate-300">Updating Festio… reconnecting automatically.</div>
     }
     return (
       <div role="alert" className="min-h-[45vh] grid place-items-center px-4">
@@ -449,12 +457,20 @@ function AppRoutes() {
       {/* Confirmed guests exchange their Festio pass for a scoped Festio Live session. */}
       <Route path="/live/guest" element={<LiveGuestPage />} />
       {/* Room-wide short code entry and canonical six-character join links. */}
+      <Route path="/l" element={<LiveGuestPage />} />
+      <Route path="/l/:joinCode" element={<LiveGuestPage />} />
       <Route path="/live/join" element={<LiveGuestPage />} />
       <Route path="/live/join/:joinCode" element={<LiveGuestPage />} />
       {/* TV/projector display — public except by the activity's own display_token. */}
+      <Route path="/d/:displayShortCode" element={<LiveDisplayPage />} />
       <Route path="/live-display/:activityId" element={<LiveDisplayPage />} />
+      <Route path="/live/step-preview/:workflowId/:stepId" element={<LiveStepPreviewPage />} />
       <Route path="/live/:displayCode" element={<LiveDisplayPage />} />
+      {/* Short authenticated event-context entry for the Festio Live workspace
+          and presenter. More specific public /live/:displayCode stays above. */}
+      <Route path="/live" element={<ProtectedRoute><FestioLiveRedesignPage /></ProtectedRoute>} />
       {/* Presenter/Moderator share-link console — no Festio login, capability-scoped token. */}
+      <Route path="/p/:shareCode" element={<LiveControlPage />} />
       <Route path="/live-control" element={<LiveControlPage />} />
       {/* Public vendor packing list — no auth required */}
       <Route path="/vendor/:token" element={<VendorPage />} />
@@ -572,7 +588,7 @@ function AppRoutes() {
 
 export default function App() {
   useEffect(() => {
-    // Clear the one-shot auto-reload guard once the app has been up for a
+    // Clear the rollout retry guard once the app has been up for a
     // few seconds without crashing again — confirms *this* load is actually
     // stable rather than clearing it immediately (which, if this exact
     // reload also failed, would just retrigger reload() -> reload() ->
@@ -580,7 +596,7 @@ export default function App() {
     // what lets a *future* deploy, hours into the same long-lived tab, still
     // get its own automatic retry instead of being blocked by today's flag.
     const timer = setTimeout(() => {
-      try { sessionStorage.removeItem(CHUNK_RELOAD_FLAG) } catch { /* best-effort */ }
+      try { sessionStorage.removeItem(CHUNK_RELOAD_STATE) } catch { /* best-effort */ }
     }, 8000)
     return () => clearTimeout(timer)
   }, [])

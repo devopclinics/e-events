@@ -5,12 +5,13 @@ export default function TermsPage() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
       <div className="max-w-2xl mx-auto px-4 py-12 prose dark:prose-invert">
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Terms of Service</h1>
-        <p className="text-sm text-slate-600 dark:text-slate-300">Last updated: June 2026</p>
+        <p className="text-sm text-slate-600 dark:text-slate-300">Last updated: August 2026</p>
 
         <div className="space-y-4 text-sm text-slate-700 dark:text-slate-300 mt-4">
           <p>
-            These terms govern your use of Festio, an event invitation, RSVP and check-in platform
-            operated by <strong>FOHMA Solutions LLC</strong> (“Festio”, “we”, “us”). By creating an
+            <strong>FestioEvents is an event-management platform operated by FOHMA Solutions LLC.</strong>{' '}
+            These terms govern your use of Festio, including its invitation, RSVP and check-in services
+            (“Festio”, “we”, “us”). By creating an
             account or using the service you agree to them.
           </p>
 
@@ -62,7 +63,8 @@ export default function TermsPage() {
             <a href="mailto:events@festio.events" className="text-teal-600 hover:underline">events@festio.events</a>.
           </p>
           <p>
-            Festio is operated by <strong>FOHMA Solutions LLC</strong>.
+            Festio and FestioEvents are product names of <strong>FOHMA Solutions LLC</strong>,
+            which operates the service at <strong>festio.events</strong>.
           </p>
         </div>
 

@@ -24,6 +24,13 @@ router = APIRouter()
 _EDITABLE = {"draft", "scheduled", "paused"}
 
 
+def _enforce_consent_audience(row) -> None:
+    """Consent reminders must always re-check completion at delivery time."""
+    if row.communication_type == "consent_reminder":
+        row.audience_type = "consent_incomplete"
+        row.audience_mode = "dynamic"
+
+
 async def _event(event_id: str, db: AsyncSession) -> Event:
     event = await db.get(Event, event_id)
     if not event:
@@ -74,6 +81,11 @@ def _validate_content(data) -> None:
         raise HTTPException(422, "Add an SMS message or remove the SMS channel")
     if "whatsapp" in data.channels and not (data.whatsapp_body or "").strip():
         raise HTTPException(422, "Add a WhatsApp message or remove the WhatsApp channel")
+    if "mms" in data.channels:
+        if not (data.mms_body or "").strip():
+            raise HTTPException(422, "Add an MMS message or remove the MMS channel")
+        if not (data.mms_media_url or "").lower().startswith("https://"):
+            raise HTTPException(422, "MMS requires an HTTPS image URL")
 
 
 async def _out(db: AsyncSession, row: ScheduledCommunication) -> ScheduledCommunicationOut:
@@ -96,6 +108,8 @@ async def _out(db: AsyncSession, row: ScheduledCommunication) -> ScheduledCommun
         email_body=row.email_body,
         sms_body=row.sms_body,
         whatsapp_body=row.whatsapp_body,
+        mms_body=row.mms_body,
+        mms_media_url=row.mms_media_url,
         status=row.status,
         recipients_estimated=await estimated_recipients(db, row),
         recipients_targeted=row.recipients_targeted,
@@ -159,9 +173,12 @@ async def create_scheduled_communication(
         email_body=data.email_body,
         sms_body=data.sms_body,
         whatsapp_body=data.whatsapp_body,
+        mms_body=data.mms_body,
+        mms_media_url=data.mms_media_url,
         status=data.status,
         created_by=user.id,
     )
+    _enforce_consent_audience(row)
     db.add(row)
     await db.flush()
     await replace_frozen_audience(db, row)
@@ -186,6 +203,7 @@ async def update_scheduled_communication(
     scheduled_at_local = changes.pop("scheduled_at_local", None)
     for key, value in changes.items():
         setattr(row, key, value)
+    _enforce_consent_audience(row)
     _validate_content(row)
     timing_changed = bool(scheduled_at_local) or any(
         key in changes for key in ("trigger_type", "anchor", "anchor_step_id", "offset_minutes")

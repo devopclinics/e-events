@@ -1,0 +1,28 @@
+{
+  "name": "The Good Life — Men and Young Men",
+  "description": "What Really Matters for Men and Young Men?",
+  "theme": {"preset": "legacy_cinematic", "accent": "#55ddd1", "gold": "#f4b64c", "event_line": "THE GOOD LIFE · MEN · YOUNG MEN · MEANINGFUL CONNECTIONS"},
+  "steps": [
+    {"step_type":"hero","title":"What Really Matters for Men and Young Men?","subtitle":"An intergenerational conversation about happiness, relationships, future choices, legacy, and living with fewer regrets.","config":{"eyebrow":"THE GOOD LIFE","lines":["VIDEO","LIVE POLLS","CONVERSATION","COMMITMENT"]},"presenter":{"talking_point":"Introduce the intergenerational conversation and invite everyone to answer from where they are in life today.","target_duration":"00:45"}},
+    {"step_type":"video","title":"What makes a good life?","subtitle":"Robert Waldinger · Harvard Study of Adult Development","config":{"video_url":"https://www.youtube.com/watch?v=w8a0T5XLrXc","requires_presenter_play":true},"presenter":{"talking_point":"Adult Men: What has experience taught you? Students: What kind of life are you building? Listen for one idea that challenges how you define success.","action_cue":"Play 4-minute excerpt","target_duration":"04:00"}},
+    {"step_type":"hero","title":"Same room. Different life stages. Every voice counts.","subtitle":"Select one answer. Personal explanations are optional.","config":{"eyebrow":"HOW POLLING WORKS","lines":["01 · VOTE — Answer from your life today","02 · NOTICE — Observe similarities and differences","03 · DISCUSS — Share wisdom without judgment"]},"presenter":{"talking_point":"Explain: vote, notice, discuss.","target_duration":"00:45"}},
+    {"step_type":"poll","title":"What contributes most to your happiness right now?","subtitle":"Choose one response.","activity_key":"happiness","config":{"result_style":"donut"}},
+    {"step_type":"poll","title":"Who influences your life the most today?","subtitle":"Choose one response.","activity_key":"influence","config":{"result_style":"influence_orbit"}},
+    {"step_type":"poll","title":"When life becomes difficult, do you have someone you trust to talk to?","subtitle":"Choose one response.","activity_key":"trusted_connection","config":{"result_style":"connection_gauge"}},
+    {"step_type":"poll","title":"What area of life needs the most attention right now?","subtitle":"Choose one response.","activity_key":"attention","config":{"result_style":"life_wheel"}},
+    {"step_type":"poll","title":"What do you hope your life will be known for?","subtitle":"Choose one response.","activity_key":"legacy","config":{"result_style":"legacy_podium"}},
+    {"step_type":"poll","title":"Which regret feels most relevant to you?","subtitle":"Adults may look back. Students may look ahead. Choose what you want to repair or avoid.","activity_key":"regret","config":{"result_style":"generational_mirror"}},
+    {"step_type":"poll","title":"If you could strengthen one area starting today, what would it be?","subtitle":"Choose one response.","activity_key":"strengthen","config":{"result_style":"commitment_tiles"}},
+    {"step_type":"game","title":"Pair with someone from a different life stage","subtitle":"Two minutes each. Listen first, then share.","duration_seconds":240,"config":{"eyebrow":"INTERGENERATIONAL CONVERSATION","instructions":"What is one lesson about happiness you wish more people your age understood?","prompts":["What can another generation teach you about relationships, choices, or regret?"]},"presenter":{"action_cue":"Start · Pause · Resume · Reset","target_duration":"04:00"}},
+    {"step_type":"closing","title":"Build a life you will not regret.","subtitle":"Choose one action for this week. Meaningful lives are built through meaningful choices and connections.","config":{"eyebrow":"ONE COMMITMENT","lines":["Call someone you value","Spend intentional time with family","Reconnect with a friend","Ask a mentor for guidance","Apologize or make peace","Take one step toward better health"]}}
+  ],
+  "activities": {
+    "happiness":{"type":"poll","question_type":"single_choice","anonymous":true,"options":["Family","Friends and community","Faith and purpose","Achievement and success","Health and well-being"]},
+    "influence":{"type":"poll","question_type":"single_choice","anonymous":true,"options":["Parents or guardians","Friends or peers","Mentors, coaches, or teachers","Spouse, partner, or family","No one in particular"]},
+    "trusted_connection":{"type":"poll","question_type":"single_choice","anonymous":true,"options":["Yes, several people","Yes, one person","I am not sure","Not consistently"]},
+    "attention":{"type":"poll","question_type":"single_choice","anonymous":true,"options":["Family or home relationships","Friendships and community","Faith, purpose, or direction","Physical and mental well-being","School, career, or work-life balance"]},
+    "legacy":{"type":"poll","question_type":"single_choice","anonymous":true,"options":["Achievement","Financial stability","Service to others","Strong relationships","Character and values"]},
+    "regret":{"type":"poll","question_type":"single_choice","anonymous":true,"options":["Not spending enough time with people I love","Losing important friendships","Working or studying without balance","Not caring for my health","Not pursuing a meaningful dream"]},
+    "strengthen":{"type":"poll","question_type":"single_choice","anonymous":true,"options":["Family relationships","Friendships and support network","Faith and purpose","Health and well-being","Personal growth and future direction"]}
+  }
+}

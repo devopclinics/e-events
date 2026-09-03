@@ -11,6 +11,7 @@ from app.auth import Identity, current_identity
 from app.database import get_db
 from app.routers.activities import VALID_STATUS_TRANSITIONS
 from app.schemas import DisplayControlUpdate, DisplayCreate, DisplayResultsControlIn, QuestionLiveStateIn, RespondIn
+from app.config import settings
 
 client = TestClient(app)
 
@@ -66,6 +67,19 @@ class HealthTests(unittest.TestCase):
 
 
 class AuthRequiredTests(unittest.TestCase):
+    def test_workflow_admin_and_presenter_routes_require_auth_when_enabled(self):
+        original = settings.experience_workflows_enabled
+        settings.experience_workflows_enabled = True
+        try:
+            self.assertEqual(client.get("/api/engagement/v1/workflows").status_code, 401)
+            self.assertEqual(client.post("/api/engagement/v1/workflows", json={"name": "Opening"}).status_code, 401)
+            self.assertEqual(client.post("/api/engagement/v1/runs/run-a/commands", json={
+                "action": "next", "expected_version": 0, "idempotency_key": "command-123",
+            }).status_code, 401)
+            self.assertEqual(client.get("/api/engagement/v1/workflows/wf-a/steps/step-a/preview").status_code, 401)
+            self.assertEqual(client.post("/api/engagement/v1/workflows/wf-a/export.pptx").status_code, 401)
+        finally:
+            settings.experience_workflows_enabled = original
     def test_activities_requires_auth(self):
         self.assertEqual(client.get("/api/engagement/v1/activities").status_code, 401)
 

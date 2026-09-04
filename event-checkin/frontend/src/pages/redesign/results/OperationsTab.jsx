@@ -121,7 +121,21 @@ export default function OperationsTab({ eventId }) {
             {!consent ? (
               <p className="rd-rowlink">No consent step configured.</p>
             ) : (
-              <ProgressRow label="Consent" completed={consent.signed} total={consent.eligible} />
+              <>
+                <ProgressRow label="Consent" completed={consent.signed} total={consent.eligible} />
+                <div className="er-provider-row" style={{ marginTop: 8 }}>
+                  <span>Expected</span><b>{consent.eligible}</b>
+                </div>
+                <div className="er-provider-row">
+                  <span>Signed</span><b>{consent.signed}</b>
+                </div>
+                <div className="er-provider-row">
+                  <span>Not yet signed</span><b>{consent.eligible - consent.signed}</b>
+                </div>
+                <div className="er-provider-row">
+                  <span>Completion rate</span><b>{consent.rate}%</b>
+                </div>
+              </>
             )}
           </div>
         </div>

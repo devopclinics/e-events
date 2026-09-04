@@ -450,6 +450,9 @@ function OverviewDashboard({
                 <div className="er-ops-panel-body">
                   <CapacityRow name="Consent" value={data.consent.signed} capacity={data.consent.eligible}
                     detail={`${data.consent.rate}% complete`} />
+                  <div className="er-ops-card-foot"><span>Expected</span><b>{data.consent.eligible}</b></div>
+                  <div className="er-ops-card-foot"><span>Signed</span><b>{data.consent.signed}</b></div>
+                  <div className="er-ops-card-foot"><span>Not yet signed</span><b>{data.consent.eligible - data.consent.signed}</b></div>
                 </div>
               </article>
             )}

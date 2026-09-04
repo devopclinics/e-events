@@ -443,6 +443,16 @@ function OverviewDashboard({
                 )) : <div className="er-ops-empty compact">No table groups configured.</div>}
               </div>
             </article>
+
+            {data.consent && (
+              <article className="er-ops-panel er-ops-consent-card">
+                <div className="er-ops-panel-head"><div><h2>Consent signed</h2><p>Entire-event completion</p></div></div>
+                <div className="er-ops-panel-body">
+                  <CapacityRow name="Consent" value={data.consent.signed} capacity={data.consent.eligible}
+                    detail={`${data.consent.rate}% complete`} />
+                </div>
+              </article>
+            )}
           </div>
 
           <article className="er-ops-panel er-ops-alerts-card">

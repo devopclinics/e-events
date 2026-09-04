@@ -1429,6 +1429,10 @@ async def command_center(
         "rsvp_funnel": await rsvp_funnel(db, event),
         "communication": await communication_health(db, event),
         "recent_activity": await recent_activity(db, event, scope),
+        # Reuses the Operations tab's own helper — same eligible/signed/rate
+        # shape, null when event.experience_enabled is false or no consent
+        # step exists (see consent_status()).
+        "consent": await consent_status(db, event),
         # Which sections actually change with the day/venue selector, so the
         # frontend can label the rest "Entire event" instead of silently
         # implying everything scoped when only some of it does.

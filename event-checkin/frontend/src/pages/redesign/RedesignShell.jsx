@@ -76,6 +76,47 @@ export function ConfirmDialog({ title = 'Are you sure?', message, danger = true,
   )
 }
 
+// Shared between the Guests list and the manual check-in search (both let
+// staff reverse an admission) so the notify-guest choice and wording stay
+// consistent in one place rather than drifting across two hand-rolled copies.
+export function UnadmitDialog({ eventId, guest, hasSeat, onDone, onCancel }) {
+  const [notifyGuest, setNotifyGuest] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function confirm() {
+    setBusy(true); setError('')
+    try {
+      await api.unadmitGuest(eventId, guest.id, notifyGuest)
+      onDone(notifyGuest)
+    } catch (e) {
+      setError(e.message || 'Check-in could not be undone')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal title="Undo check-in" onClose={onCancel} width={420}>
+      <p className="rr-confirm-message">
+        Undo {guest.name}'s check-in{hasSeat ? ' and free their seat' : ''}? They'll show as not
+        admitted and can be checked in again, or the seat given to someone else.
+      </p>
+      <label className="gr-required-check" style={{ marginTop: 10 }}>
+        <input type="checkbox" checked={notifyGuest} onChange={(e) => setNotifyGuest(e.target.checked)} />
+        {' '}Also notify the guest (email/SMS/WhatsApp, per their consent)
+      </label>
+      {error && <p className="rr-confirm-message" style={{ color: 'var(--danger, #e5484d)' }}>{error}</p>}
+      <div className="rd-row2" style={{ marginTop: 12 }}>
+        <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={onCancel} disabled={busy}>Cancel</button>
+        <button className="rr-btn danger" style={{ flex: 1, justifyContent: 'center' }} onClick={confirm} disabled={busy}>
+          {busy ? 'Undoing…' : 'Undo check-in'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
 const CHANNEL_FRAME_META = {
   email: { label: 'Email', icon: 'mail' },
   sms: { label: 'SMS', icon: 'message' },

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import RedesignShell, { Icon, Modal, ConfirmDialog, ChannelPreviewFrame } from './redesign/RedesignShell'
+import RedesignShell, { Icon, Modal, ConfirmDialog, ChannelPreviewFrame, UnadmitDialog } from './redesign/RedesignShell'
 import { LoadingSkeleton, EmptyState, ErrorRetryState } from './redesign/RedesignPrimitives'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
@@ -1888,21 +1888,17 @@ export default function GuestsRedesignPage() {
       )}
 
       {unadmitTarget && (
-        <ConfirmDialog
-          title="Undo check-in"
-          message={`Undo ${unadmitTarget.name}'s check-in and free their seat${unadmitTarget.raw?.table_id ? '' : ' (they have no seat assigned)'}? They'll show as not admitted and can be checked in again, or the seat given to someone else.`}
-          confirmLabel="Undo check-in"
-          onConfirm={async () => {
-            setMutationBusy(true)
-            try {
-              await api.unadmitGuest(eventId, unadmitTarget.id)
-              const name = unadmitTarget.name
-              setUnadmitTarget(null)
-              await loadGuests()
-              notify(`${name}'s check-in was undone`)
-            } catch (e) { notify(e.message || 'Check-in could not be undone', true) } finally { setMutationBusy(false) }
-          }}
+        <UnadmitDialog
+          eventId={eventId}
+          guest={unadmitTarget}
+          hasSeat={!!unadmitTarget.raw?.table_id}
           onCancel={() => setUnadmitTarget(null)}
+          onDone={async (notified) => {
+            const name = unadmitTarget.name
+            setUnadmitTarget(null)
+            await loadGuests()
+            notify(notified ? `${name}'s check-in was undone and they were notified` : `${name}'s check-in was undone`)
+          }}
         />
       )}
 

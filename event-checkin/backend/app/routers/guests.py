@@ -2122,10 +2122,45 @@ async def manual_checkout(
     return await perform_checkout(guest, event, current_user, db)
 
 
+async def _notify_unadmit(event: Event, guest: Guest, db: AsyncSession, background_tasks: BackgroundTasks) -> None:
+    """Best-effort notice to a guest whose admission was just reversed.
+
+    Ad hoc, not templated (no organizer override) -- this is a rare
+    corrective action, not a campaign. Reuses the same channel-eligibility
+    (consent + paid gate) and credit-ledger machinery as every other guest
+    send in this file so it can't bypass consent or double-charge credits.
+    Never raises -- a messaging failure must not fail the un-admit itself.
+    """
+    paid_ok = can_use_paid_channels(event)
+    chosen = channels_for_flow(event, guest, "unadmit", paid_ok=paid_ok)
+    text = (
+        f"Hi {guest.first_name}, your check-in at {event.name} was just updated "
+        f"by event staff. Please see a staff member if you have questions."
+    )
+    if "email" in chosen and guest.email:
+        safe_name = html.escape(guest.first_name)
+        safe_event = html.escape(event.name)
+        html_body = (
+            f"<p>Hi {safe_name},</p>"
+            f"<p>Your check-in at <strong>{safe_event}</strong> was just updated by event staff. "
+            f"If you have questions, please see a staff member.</p>"
+        )
+        background_tasks.add_task(
+            send_simple_email, guest.email, f"Check-in update — {event.name}", html_body,
+            event_id=event.id, guest_id=guest.id, message_kind="unadmit_notice",
+        )
+    if "sms" in chosen and guest.phone and await reserve_message_credit(event, "sms", db=db, guest_id=guest.id):
+        background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_sms, phone=guest.phone, body=text)
+    if "whatsapp" in chosen and guest.phone and await reserve_message_credit(event, "whatsapp", db=db, guest_id=guest.id):
+        background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_whatsapp, phone=guest.phone, body=text)
+
+
 @router.post("/{event_id}/guests/{guest_id}/unadmit", response_model=GuestOut)
 async def unadmit_guest(
     event_id: str,
     guest_id: str,
+    background_tasks: BackgroundTasks,
+    body: dict = Body(default={}),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_guest_manage_access),
 ):
@@ -2137,7 +2172,12 @@ async def unadmit_guest(
     for correcting a wrong scan, or freeing a no-show's seat for a walk-in.
     Gated behind guest-manage (not the door-scanner `require_official`) since
     it undoes state the scanner flow can't, and shouldn't be a routine
-    door action.
+    door action -- reachable from both the Guests list and the manual
+    check-in search, but a lower-privilege staff account gets a clear 403
+    rather than silently being allowed.
+
+    Body: {"notify": bool} -- optionally message the guest across their
+    consented channels explaining their check-in status changed.
     """
     guest = await db.get(Guest, guest_id)
     if not guest or guest.event_id != event_id:
@@ -2156,6 +2196,11 @@ async def unadmit_guest(
     guest.held_seat = None
     await db.commit()
     await db.refresh(guest)
+
+    if body.get("notify"):
+        event = await db.get(Event, event_id)
+        if event:
+            await _notify_unadmit(event, guest, db, background_tasks)
 
     await broadcast(event_id, {
         "type": "unadmitted",

@@ -14,7 +14,7 @@ import {
   recordOfflineScan,
   saveOfflineManifest,
 } from '../offlineExperienceQueue'
-import RedesignShell, { Icon } from './redesign/RedesignShell'
+import RedesignShell, { Icon, UnadmitDialog } from './redesign/RedesignShell'
 import './ScannerRedesignPage.css'
 
 const MODES = [
@@ -218,6 +218,7 @@ function ManualMode({ event, sections, onResult }) {
   const [results, setResults] = useState([])
   const [busyId, setBusyId] = useState('')
   const [error, setError] = useState('')
+  const [unadmitTarget, setUnadmitTarget] = useState(null)
   const [walkin, setWalkin] = useState(false)
   const [form, setForm] = useState({ first_name: '', last_name: '', email: '', phone: '' })
   const [sectionId, setSectionId] = useState(sections.length === 1 ? sections[0].id : '')
@@ -313,6 +314,9 @@ function ManualMode({ event, sections, onResult }) {
                   {busyId === `${guest.id}:checkout` ? 'Recording…' : guest.checked_out ? 'Checked out' : 'Check out'}
                 </button>
               )}
+              {guest.admitted && (
+                <button className="rr-btn secondary" disabled={!!busyId} onClick={() => setUnadmitTarget(guest)}>Undo check-in</button>
+              )}
               {!event.manual_checkin_enabled && !guest.admitted && <span className="sc-guest-state">Not checked in</span>}
             </div>
           </div>)}
@@ -336,6 +340,18 @@ function ManualMode({ event, sections, onResult }) {
         <button className="rr-btn primary" disabled={!form.first_name.trim() || busyId === 'walkin'}>{busyId === 'walkin' ? 'Registering…' : 'Register & check in'}</button>
       </form>}
       {error && <p className="sc-empty">{error}</p>}
+      {unadmitTarget && (
+        <UnadmitDialog
+          eventId={event.id}
+          guest={{ id: unadmitTarget.id, name: unadmitTarget.full_name }}
+          hasSeat={!!unadmitTarget.table_name}
+          onCancel={() => setUnadmitTarget(null)}
+          onDone={() => {
+            setResults((items) => items.map((item) => item.id === unadmitTarget.id ? { ...item, admitted: false, checked_out: false, table_name: null } : item))
+            setUnadmitTarget(null)
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -17,6 +17,12 @@ import { api } from '../../../api'
 //   - venue_occupancy: [{id, name, occupancy, capacity}] from
 //       venue_occupancy() — [] when event.venue_access_enabled is false or
 //       no active zones are configured.
+//   - festio_live: {activities, participants, responses} | null from
+//       festio_live_participation() — null when event.engagement_enabled is
+//       false, the shared engagement token isn't configured, or the call to
+//       engagement-service fails/times out for any reason (that service is
+//       independently deployed with its own database; an outage there must
+//       never break this report).
 // The real page's ProgressBar (label/completed/total, teal fill, "n/total"
 // caption) is reproduced here with er-chan-row + rd-mini-bar, matching the
 // bar pattern already used for zones/channels/experience steps on the wired
@@ -86,7 +92,7 @@ export default function OperationsTab({ eventId }) {
 
   if (!data) return null
 
-  const { meals, consent, denied_scans: deniedScans, venue_occupancy: occupancy } = data
+  const { meals, consent, denied_scans: deniedScans, venue_occupancy: occupancy, festio_live: festioLive } = data
 
   return (
     <div>
@@ -144,6 +150,23 @@ export default function OperationsTab({ eventId }) {
               <p className="rd-rowlink">No zones configured for this event.</p>
             ) : (
               occupancy.map((z) => <OccupancyRow key={z.id} {...z} />)
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="rr-grid2" style={{ marginTop: 14 }}>
+        <div className="rd-panel">
+          <div className="rd-panel-head"><h3>Festio Live participation</h3></div>
+          <div className="rd-panel-body">
+            {!festioLive ? (
+              <p className="rd-rowlink">Festio Live is not enabled for this event, or no activity data yet.</p>
+            ) : (
+              <>
+                <div className="er-provider-row"><span>Activities run</span><b>{festioLive.activities}</b></div>
+                <div className="er-provider-row"><span>Participants</span><b>{festioLive.participants}</b></div>
+                <div className="er-provider-row"><span>Responses</span><b>{festioLive.responses}</b></div>
+              </>
             )}
           </div>
         </div>

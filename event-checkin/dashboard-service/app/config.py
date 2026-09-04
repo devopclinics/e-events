@@ -9,6 +9,12 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:5173"
     firebase_credentials: str = ""
     superadmin_emails: str = ""
+    # Optional: Festio Live participation stat on the Operations tab. Same
+    # shared secret engagement-service itself verifies (see that service's
+    # app/config.py). Blank here (dev/older deploys) just means the stat is
+    # omitted -- see festio_live_participation() in main.py.
+    engagement_internal_token: str = ""
+    engagement_url: str = "http://engagement-service:8060"
 
 
 settings = Settings()

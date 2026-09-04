@@ -226,6 +226,11 @@ services:
       # interpolation. The backend migration reads the matching lowercase
       # setting from backend/.env when provisioning/rotating the role.
       DATABASE_URL: postgresql+asyncpg://dashboard_ro:${DASHBOARD_RO_DB_PASSWORD:-dashboard_ro}@db:5432/checkin
+      # Optional Festio Live participation stat on the Operations tab. Same
+      # fallback chain as engagement-service's own INTERNAL_SERVICE_TOKEN
+      # above, so both sides always agree on the shared secret value.
+      ENGAGEMENT_INTERNAL_TOKEN: ${ENGAGEMENT_INTERNAL_SERVICE_TOKEN:-${PLANNER_INTERNAL_SERVICE_TOKEN:-}}
+      ENGAGEMENT_URL: http://engagement-service:8060
     depends_on:
       db:
         condition: service_healthy
@@ -235,6 +240,7 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+
 
   marketing-service:
     image: dclinics/events:marketing-${APP_VERSION:-latest}

@@ -73,6 +73,8 @@ class Event(Base):
     seating_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     menu_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     experience_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Festio Live add-on gate — see festio_live_participation() in main.py.
+    engagement_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     message_credits: Mapped[int] = mapped_column(Integer, default=0)
     plan_tier: Mapped[str] = mapped_column(String(20), default="free")
     # Speaker Showcase cross-link: lets program_sessions() tell the Program

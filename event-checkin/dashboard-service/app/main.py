@@ -5,10 +5,13 @@ SELECT-only) and never writes guest data. See
 docs/MULTI-DAY-DASHBOARD-IMPLEMENTATION-PLAN.md, Track A, for the design.
 """
 import logging
+import time
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 
+import httpx
+import jwt
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
@@ -1074,6 +1077,44 @@ async def denied_scans_breakdown(db: AsyncSession, event: Event) -> dict:
     return {"total": total, "by_reason": by_reason}
 
 
+def _mint_engagement_token(event: Event) -> str:
+    """Same claim shape engagement-service's own current_identity() verifies
+    (see engagement-service/app/auth.py) -- "viewer" role is enough for its
+    read-only GET /activities."""
+    now = int(time.time())
+    return jwt.encode({
+        "sub": "dashboard-service", "event_id": event.id, "org_id": event.org_id,
+        "role": "viewer", "identity_kind": "staff",
+        "iss": "guesthub", "aud": "engagement", "iat": now, "exp": now + 30,
+    }, settings.engagement_internal_token, algorithm="HS256")
+
+
+async def festio_live_participation(event: Event) -> dict | None:
+    """Best-effort Festio Live summary for the Operations tab. engagement-service
+    is a separate failure-isolated service with its own database (see that
+    service's ARCHITECTURE.md) -- any failure here (down, slow, misconfigured
+    secret) must degrade to "unavailable" and never break the rest of this
+    report, exactly like consent_status() returns None when not applicable."""
+    if not event.engagement_enabled or not settings.engagement_internal_token:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            resp = await client.get(
+                f"{settings.engagement_url}/api/engagement/v1/activities",
+                headers={"Authorization": f"Bearer {_mint_engagement_token(event)}"},
+            )
+        resp.raise_for_status()
+        rows = resp.json()
+    except Exception:
+        logger.warning("Festio Live participation unavailable for event %s", event.id, exc_info=True)
+        return None
+    return {
+        "activities": len(rows),
+        "participants": sum(r.get("participant_count") or 0 for r in rows),
+        "responses": sum(r.get("response_count") or 0 for r in rows),
+    }
+
+
 @app.get("/api/results/events/{event_id}/analytics/operations")
 async def get_operations(event: Event = Depends(admin_event), db: AsyncSession = Depends(get_db)):
     breakdown = await meals_breakdown(db, event)
@@ -1085,6 +1126,7 @@ async def get_operations(event: Event = Depends(admin_event), db: AsyncSession =
         "consent": await consent_status(db, event),
         "denied_scans": await denied_scans_breakdown(db, event),
         "venue_occupancy": await venue_occupancy(db, event),
+        "festio_live": await festio_live_participation(event),
     }
 
 

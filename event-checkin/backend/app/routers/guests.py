@@ -35,12 +35,19 @@ from ..models import (
     RSVPAnswer,
     RSVPQuestion,
     ScanEvent,
+    ScheduledCommunicationDelivery,
     SeatingTable,
     TableGroup,
     TicketType,
     User,
     EventUser,
     EventUserSection,
+    EventReminderSend,
+    GuestMealFulfillment,
+    GuestMealService,
+    GuestPushSubscription,
+    InboundEmail,
+    PushOutbox,
 )
 from ..schemas import GuestOut, GuestCreate, GuestUpdate, BulkAssignGroupRequest, ScanResult, WalkInRegister, HouseholdOut, HouseholdCreate, BulkAssignHouseholdRequest, GuestDuplicateGroup, MergeDuplicatesRequest
 from ..auth import require_guest_manage_access, require_guest_view_access, require_official
@@ -2142,9 +2149,10 @@ async def my_sections(
 
 async def delete_guest_cascade(event_id: str, guest_id: str, background_tasks: BackgroundTasks, db: AsyncSession) -> bool:
     """Shared cascade-delete body used by both the internal admin endpoint
-    below and the public API's write endpoint (public_api.py) — one ~10-table
-    cleanup block instead of two copies to keep in sync. Returns False (no-op)
-    if the guest doesn't exist in this event; caller decides how to respond."""
+    below and the public API's write endpoint (public_api.py) — one cleanup
+    block covering every table with a guest_id foreign key, instead of two
+    copies to keep in sync. Returns False (no-op) if the guest doesn't exist
+    in this event; caller decides how to respond."""
     guest = await db.get(Guest, guest_id)
     if not guest or guest.event_id != event_id:
         return False
@@ -2154,6 +2162,13 @@ async def delete_guest_cascade(event_id: str, guest_id: str, background_tasks: B
         Guest.__table__.update()
         .where(Guest.event_id == event_id, Guest.partner_guest_id == guest_id)
         .values(partner_guest_id=None)
+    )
+    # A guest can be recorded as the RSVP submitter for other guests (e.g. a
+    # parent submitting for a child) -- same dangling-FK risk as partner_guest_id.
+    await db.execute(
+        Guest.__table__.update()
+        .where(Guest.event_id == event_id, Guest.rsvp_submitter_guest_id == guest_id)
+        .values(rsvp_submitter_guest_id=None)
     )
     await db.execute(delete(GuestExperienceProgress).where(GuestExperienceProgress.guest_id == guest_id))
     await db.execute(delete(FeedbackSubmission).where(FeedbackSubmission.guest_id == guest_id))
@@ -2168,8 +2183,20 @@ async def delete_guest_cascade(event_id: str, guest_id: str, background_tasks: B
     await db.execute(delete(EventMessageDeliveryLog).where(EventMessageDeliveryLog.guest_id == guest_id))
     await db.execute(delete(EventMessage).where(EventMessage.guest_id == guest_id))
     await db.execute(delete(EventMessageThread).where(EventMessageThread.guest_id == guest_id))
-    # Delivery and credit ledgers are event-level audit records. Keep them, but
-    # detach the deleted guest so their foreign keys do not prevent removal.
+    # The next several guest_id columns are NOT NULL, so these rows must be
+    # deleted, not detached -- each added by a later feature that didn't
+    # update this shared cascade, which left deleting an affected guest
+    # 500ing on the FK (found and fixed one at a time; audited the full set
+    # of guest_id-referencing tables in models.py to close the rest here
+    # rather than wait for each to surface as its own incident).
+    await db.execute(delete(ScheduledCommunicationDelivery).where(ScheduledCommunicationDelivery.guest_id == guest_id))
+    await db.execute(delete(GuestMealFulfillment).where(GuestMealFulfillment.guest_id == guest_id))
+    await db.execute(delete(GuestMealService).where(GuestMealService.guest_id == guest_id))
+    await db.execute(delete(GuestPushSubscription).where(GuestPushSubscription.guest_id == guest_id))
+    await db.execute(delete(EventReminderSend).where(EventReminderSend.guest_id == guest_id))
+    # Delivery, credit-ledger, inbound-email-match, and push-outbox records are
+    # event-level audit/queue records. Keep them, but detach the deleted guest
+    # so their foreign keys do not prevent removal.
     await db.execute(
         EmailDeliveryEvent.__table__.update()
         .where(EmailDeliveryEvent.guest_id == guest_id)
@@ -2178,6 +2205,16 @@ async def delete_guest_cascade(event_id: str, guest_id: str, background_tasks: B
     await db.execute(
         MessageCreditLedger.__table__.update()
         .where(MessageCreditLedger.guest_id == guest_id)
+        .values(guest_id=None)
+    )
+    await db.execute(
+        InboundEmail.__table__.update()
+        .where(InboundEmail.matched_guest_id == guest_id)
+        .values(matched_guest_id=None)
+    )
+    await db.execute(
+        PushOutbox.__table__.update()
+        .where(PushOutbox.guest_id == guest_id)
         .values(guest_id=None)
     )
     queue_guest_remove(db, event_id=event_id, guest_id=guest_id)

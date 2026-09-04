@@ -138,7 +138,7 @@ function StatTile({ s }) {
   )
 }
 
-function RowMenu({ g, eventId, notify, onView, onEdit, onRemove, onSendInvite }) {
+function RowMenu({ g, eventId, notify, onView, onEdit, onRemove, onSendInvite, onUnadmit }) {
   const [open, setOpen] = useState(false)
   const actions = [
     ['View', () => onView(g)],
@@ -159,6 +159,7 @@ function RowMenu({ g, eventId, notify, onView, onEdit, onRemove, onSendInvite })
       }
     }],
     ['Send invite', () => onSendInvite(g.id)],
+    ...(g.admitted ? [['Undo check-in', () => onUnadmit(g)]] : []),
     ['Remove', () => onRemove(g)],
   ]
   return (
@@ -223,7 +224,7 @@ function ExportMenu({ notify, filteredCount, totalCount, eventId, filteredIds })
   )
 }
 
-function GuestsTab({ notify, onView, onEdit, onRemove, onApproveRsvp, onRejectRsvp, onApproveAll, onSendSelected, eventId, guests, guestsLoading, guestsError, onRetryGuests, households, householdsLoading, tableGroups, onAddHousehold, onEditHousehold, onDeleteHousehold, onBulkAssignHousehold, onBulkAssignTableGroup, rsvpQuestions, stats }) {
+function GuestsTab({ notify, onView, onEdit, onRemove, onUnadmit, onApproveRsvp, onRejectRsvp, onApproveAll, onSendSelected, eventId, guests, guestsLoading, guestsError, onRetryGuests, households, householdsLoading, tableGroups, onAddHousehold, onEditHousehold, onDeleteHousehold, onBulkAssignHousehold, onBulkAssignTableGroup, rsvpQuestions, stats }) {
   const [query, setQuery] = useState('')
   const [activeChips, setActiveChips] = useState(() => new Set())
   const [selected, setSelected] = useState(() => new Set())
@@ -442,7 +443,7 @@ function GuestsTab({ notify, onView, onEdit, onRemove, onApproveRsvp, onRejectRs
                       ? <span className="rd-status-chip ok"><Icon name="check" size={11} /> Admitted</span>
                       : <span className="rd-status-chip warn">Not yet</span>}
                   </td>
-                  <td className="rd-rowlink"><RowMenu g={g} eventId={eventId} notify={notify} onView={onView} onEdit={onEdit} onRemove={onRemove} onSendInvite={(guestId) => onSendSelected?.([guestId])} /></td>
+                  <td className="rd-rowlink"><RowMenu g={g} eventId={eventId} notify={notify} onView={onView} onEdit={onEdit} onRemove={onRemove} onUnadmit={onUnadmit} onSendInvite={(guestId) => onSendSelected?.([guestId])} /></td>
                 </tr>
               ))}
               {filtered.length === 0 && (
@@ -1392,6 +1393,7 @@ export default function GuestsRedesignPage() {
   const [viewAnswers, setViewAnswers] = useState(null)
   const openedGuestRef = useRef('')
   const [removeTarget, setRemoveTarget] = useState(null)
+  const [unadmitTarget, setUnadmitTarget] = useState(null)
   const [addForm, setAddForm] = useState({ first: '', last: '', email: '', phone: '', vip: false, ticket_type_id: '', sendInvite: false })
   const [dupWarning, setDupWarning] = useState(null) // { existing_guest, message } from a 409 possible_duplicate
   const [dupCheckOpen, setDupCheckOpen] = useState(false)
@@ -1676,7 +1678,7 @@ export default function GuestsRedesignPage() {
       </div>
 
       {tab === 'guests'
-        ? <GuestsTab notify={notify} onView={setViewTarget} onEdit={setEditTarget} onRemove={setRemoveTarget} onApproveRsvp={setApproveTarget} onRejectRsvp={setRejectTarget} onApproveAll={(n) => setApproveAllCount(n)} onSendSelected={(ids) => { setSendGuestIds(ids); setSendResult(null); setSendCount(ids.length); setSendStep('audience') }} eventId={eventId} guests={guests} guestsLoading={guestsLoading} guestsError={guestsError} onRetryGuests={loadGuests} households={households} householdsLoading={householdsLoading} tableGroups={tableGroups} onAddHousehold={() => { setHouseholdTarget('new'); setHouseholdForm({ name: '', description: '', default_table_group_id: '', default_table_id: '' }) }} onEditHousehold={(h) => { setHouseholdTarget(h); setHouseholdForm({ name: h.raw.name, description: h.raw.description || '', default_table_group_id: h.raw.default_table_group_id || '', default_table_id: h.raw.default_table_id || '' }) }} onDeleteHousehold={setHouseholdDeleteTarget} onBulkAssignHousehold={async (guestIds, householdId) => {
+        ? <GuestsTab notify={notify} onView={setViewTarget} onEdit={setEditTarget} onRemove={setRemoveTarget} onUnadmit={setUnadmitTarget} onApproveRsvp={setApproveTarget} onRejectRsvp={setRejectTarget} onApproveAll={(n) => setApproveAllCount(n)} onSendSelected={(ids) => { setSendGuestIds(ids); setSendResult(null); setSendCount(ids.length); setSendStep('audience') }} eventId={eventId} guests={guests} guestsLoading={guestsLoading} guestsError={guestsError} onRetryGuests={loadGuests} households={households} householdsLoading={householdsLoading} tableGroups={tableGroups} onAddHousehold={() => { setHouseholdTarget('new'); setHouseholdForm({ name: '', description: '', default_table_group_id: '', default_table_id: '' }) }} onEditHousehold={(h) => { setHouseholdTarget(h); setHouseholdForm({ name: h.raw.name, description: h.raw.description || '', default_table_group_id: h.raw.default_table_group_id || '', default_table_id: h.raw.default_table_id || '' }) }} onDeleteHousehold={setHouseholdDeleteTarget} onBulkAssignHousehold={async (guestIds, householdId) => {
           try { await api.bulkAssignHousehold(eventId, guestIds, householdId); await Promise.all([loadGuests(), loadHouseholds()]); notify('Household assignment updated') }
           catch (e) { notify(e.message || 'Household assignment could not be updated', true) }
         }} onBulkAssignTableGroup={async (guestIds, tableGroupId) => {
@@ -1882,6 +1884,25 @@ export default function GuestsRedesignPage() {
             } catch (e) { notify(e.message || 'Guest could not be removed', true) } finally { setMutationBusy(false) }
           }}
           onCancel={() => setRemoveTarget(null)}
+        />
+      )}
+
+      {unadmitTarget && (
+        <ConfirmDialog
+          title="Undo check-in"
+          message={`Undo ${unadmitTarget.name}'s check-in and free their seat${unadmitTarget.raw?.table_id ? '' : ' (they have no seat assigned)'}? They'll show as not admitted and can be checked in again, or the seat given to someone else.`}
+          confirmLabel="Undo check-in"
+          onConfirm={async () => {
+            setMutationBusy(true)
+            try {
+              await api.unadmitGuest(eventId, unadmitTarget.id)
+              const name = unadmitTarget.name
+              setUnadmitTarget(null)
+              await loadGuests()
+              notify(`${name}'s check-in was undone`)
+            } catch (e) { notify(e.message || 'Check-in could not be undone', true) } finally { setMutationBusy(false) }
+          }}
+          onCancel={() => setUnadmitTarget(null)}
         />
       )}
 

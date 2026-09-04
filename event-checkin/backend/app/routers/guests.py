@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from ..database import get_db
 from ..timeutil import to_event_local
 from sqlalchemy import or_
+from . import broadcast
 from ..models import (
     ConsentSignature,
     EmailDeliveryEvent,
@@ -2119,6 +2120,49 @@ async def manual_checkout(
     if not guest or guest.event_id != event_id:
         return ScanResult(status="invalid", message="Guest not found for this event.")
     return await perform_checkout(guest, event, current_user, db)
+
+
+@router.post("/{event_id}/guests/{guest_id}/unadmit", response_model=GuestOut)
+async def unadmit_guest(
+    event_id: str,
+    guest_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_guest_manage_access),
+):
+    """Reverse a mistaken admission and release the guest's seat.
+
+    Distinct from checkout: checkout just logs an exit and leaves the guest
+    admitted/seated (they can walk back in). This clears admitted state and
+    table/seat entirely, so the seat becomes available to another guest --
+    for correcting a wrong scan, or freeing a no-show's seat for a walk-in.
+    Gated behind guest-manage (not the door-scanner `require_official`) since
+    it undoes state the scanner flow can't, and shouldn't be a routine
+    door action.
+    """
+    guest = await db.get(Guest, guest_id)
+    if not guest or guest.event_id != event_id:
+        raise HTTPException(404, "Guest not found")
+    if not guest.admitted:
+        raise HTTPException(400, "Guest has not been admitted")
+
+    guest.admitted = False
+    guest.admitted_at = None
+    guest.admit_notified = False
+    guest.table_id = None
+    guest.seat_number = None
+    # held_seat is this guest's own hold on an adjacent seat for a not-yet-
+    # arrived partner (see assign_next_seat) -- also released, since this
+    # guest is leaving the table entirely.
+    guest.held_seat = None
+    await db.commit()
+    await db.refresh(guest)
+
+    await broadcast(event_id, {
+        "type": "unadmitted",
+        "guest_id": guest.id,
+        "name": f"{guest.first_name} {guest.last_name}",
+    })
+    return guest
 
 
 @router.get("/{event_id}/my-sections")

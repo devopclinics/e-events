@@ -542,6 +542,9 @@ class DisplayOut(BaseModel):
     scene: str
     status: str
     settings: dict[str, Any] = Field(default_factory=dict)
+    # Computed at request time from the Redis lease, not a DB column -- see
+    # _attach_connection_status in routers/operations.py.
+    connected: bool = False
 
 
 class RuleCreate(BaseModel):

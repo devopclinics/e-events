@@ -65,6 +65,25 @@ async def release_display(display_id: str, client_id: str) -> None:
     )
 
 
+async def display_is_connected(display_id: str) -> bool:
+    """Whether some projector currently holds this display's lease, for the
+    admin UI's "is anything actually attached?" indicator."""
+    try:
+        return bool(await redis.exists(f"engagement:display-lease:{display_id}"))
+    except Exception:
+        return False
+
+
+async def force_release_display(display_id: str) -> None:
+    """Admin override: clear a display's lease regardless of who holds it.
+    Unlike release_display, this doesn't check the caller's own client_id --
+    it's for staff who can't reach whatever browser/device is stuck holding
+    the lease. The held stream's next renewal cycle (~5s, see _sse in
+    routers/realtime.py) then fails and it closes itself: this actively
+    disconnects the stuck projector, not just clears the way for a new one."""
+    await redis.delete(f"engagement:display-lease:{display_id}")
+
+
 def _channel(activity_id: str) -> str:
     return f"engagement:activity:{activity_id}"
 

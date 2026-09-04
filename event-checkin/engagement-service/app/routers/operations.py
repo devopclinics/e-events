@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth import Identity, current_identity, require_admin, require_capability, require_staff
 from ..database import get_db
 from ..models import ActivityParticipant, ActivityQuestion, ActivityRule, EngagementActivity, EngagementEventSettings, EngagementQnaQuestion, LiveDisplay, ParticipantResponse, ProgramSession, QuestionOption, ResponseOptionSelection, WorkflowRun
-from ..realtime import claim_display, publish_display
+from ..realtime import claim_display, display_is_connected, force_release_display, publish_display
 from ..schemas import DisplayControlUpdate, DisplayCreate, DisplayOut, DisplayRehearsalIn, DisplayResultsControlIn, DisplayUpdate, EventSettings, EventSettingsOut, ResponseDetailOut, RuleCreate, RuleOut
 from .activities import _fetch_activity
 from .participate import _display_payload
@@ -40,6 +40,14 @@ async def _ensure_display_short_codes(displays: list[LiveDisplay], db: AsyncSess
             changed = True
     if changed:
         await db.commit()
+
+
+async def _attach_connection_status(displays: list[LiveDisplay]) -> None:
+    """Sets a plain (non-column) `connected` attribute on each row so the
+    admin display list can show which screens actually have a projector
+    attached right now -- DisplayOut.connected reads it via from_attributes."""
+    for display in displays:
+        display.connected = await display_is_connected(display.id)
 
 
 def _csv_safe(value) -> str:
@@ -230,7 +238,21 @@ async def list_displays(identity: Identity = Depends(current_identity), db: Asyn
         LiveDisplay.org_id == identity.org_id,
     ).order_by(LiveDisplay.created_at))).scalars().all())
     await _ensure_display_short_codes(displays, db)
+    await _attach_connection_status(displays)
     return displays
+
+
+@router.post("/displays/{display_id}/disconnect", response_model=DisplayOut)
+async def disconnect_display(display_id: str, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Force-release a display's connection lease regardless of who holds
+    it -- for when staff can't reach whatever browser/device is stuck
+    connected (see force_release_display's docstring for why this actually
+    kicks the stuck stream, not just clears the way for a new one)."""
+    require_admin(identity)
+    display = await _owned_display(display_id, identity, db)
+    await force_release_display(display.id)
+    display.connected = False
+    return display
 
 
 @router.post("/displays", response_model=DisplayOut, status_code=201)

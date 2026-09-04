@@ -1597,6 +1597,7 @@ export const api = {
   liveSetDisplayRehearsal: (eventId, displayId, body) => liveReq(eventId, 'PUT', `/v1/control/displays/${displayId}/rehearsal`, body),
   liveRotateDisplayToken: (eventId, displayId) => liveReq(eventId, 'POST', `/v1/displays/${displayId}/rotate-token`),
   liveDeleteDisplay: (eventId, displayId) => liveReq(eventId, 'DELETE', `/v1/displays/${displayId}`),
+  liveDisconnectDisplay: (eventId, displayId) => liveReq(eventId, 'POST', `/v1/displays/${displayId}/disconnect`),
   liveSettings: (eventId) => liveReq(eventId, 'GET', '/v1/settings'),
   liveUpdateSettings: (eventId, body) => liveReq(eventId, 'PUT', '/v1/settings', body),
   liveDownloadExport: (eventId, activityId, title) => downloadLiveExport(eventId, activityId, title),

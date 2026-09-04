@@ -9,7 +9,10 @@ from fastapi import HTTPException
 from app.auth import Identity, require_activity_session, require_admin, require_capability, require_staff
 from app.config import settings
 from app.moderation import flag_public_text
-from app.realtime import claim_display, mint_realtime_ticket, publish, renew_display, verify_realtime_ticket
+from app.realtime import (
+    claim_display, display_is_connected, force_release_display, mint_realtime_ticket,
+    publish, renew_display, verify_realtime_ticket,
+)
 from app.routers.operations import _apply_results_view, _csv_safe, _rehearsal_payload, _take_manual_display_control
 from app.routers.activities import _apply_guided_advance, _guided_next_phase, _guided_phase_deadline
 from app.routers.participate import _leaderboard_name, _load_activity, _participant_locator, _rule_matches, _survey_completion_summary
@@ -74,6 +77,24 @@ class FailureIsolationTests(unittest.TestCase):
         with patch("app.realtime.redis.eval", new=AsyncMock(return_value=0)) as renew:
             self.assertFalse(asyncio.run(renew_display("display-a", "projector-client-0001")))
         renew.assert_awaited_once()
+
+    def test_force_release_clears_the_lease_regardless_of_which_client_holds_it(self):
+        # Unlike release_display (which only a lease's own holder can call),
+        # this is the staff override for a stuck/unreachable projector -- it
+        # must not need to know the stuck client's id.
+        with patch("app.realtime.redis.delete", new=AsyncMock()) as delete:
+            asyncio.run(force_release_display("display-a"))
+        delete.assert_awaited_once_with("engagement:display-lease:display-a")
+
+    def test_display_is_connected_reflects_whether_a_lease_key_exists(self):
+        with patch("app.realtime.redis.exists", new=AsyncMock(return_value=1)):
+            self.assertTrue(asyncio.run(display_is_connected("display-a")))
+        with patch("app.realtime.redis.exists", new=AsyncMock(return_value=0)):
+            self.assertFalse(asyncio.run(display_is_connected("display-a")))
+
+    def test_display_is_connected_fails_closed_when_redis_is_unreachable(self):
+        with patch("app.realtime.redis.exists", new=AsyncMock(side_effect=ConnectionError("redis down"))):
+            self.assertFalse(asyncio.run(display_is_connected("display-a")))
 
 
 class ExperienceWorkflowSafetyTests(unittest.TestCase):

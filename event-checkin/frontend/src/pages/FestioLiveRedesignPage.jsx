@@ -538,8 +538,11 @@ function ParticipantReviewPreview({ activity, results, onClose }) {
   </div>
 }
 
-function DisplayCard({ display, eventId, activities, programSessions, busy, onUpdate, onDelete, onPresentResults, onRehearsal }) {
+function DisplayCard({ display, eventId, activities, programSessions, busy, onUpdate, onDelete, onDisconnect, onPresentResults, onRehearsal }) {
   const [editing, setEditing] = useState(false)
+  const [renaming, setRenaming] = useState(false)
+  const [nameDraft, setNameDraft] = useState(display.name)
+  const [disconnecting, setDisconnecting] = useState(false)
   const [pushing, setPushing] = useState(false)
   const [pushReceipt, setPushReceipt] = useState('')
   const [livePreviewVersion, setLivePreviewVersion] = useState(0)
@@ -560,6 +563,20 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
     setPendingActivityId(display.assigned_activity_id || '')
     setPendingScene(display.scene)
   }, [display.assigned_session_id, display.assigned_activity_id, display.scene])
+  useEffect(() => { if (!renaming) setNameDraft(display.name) }, [display.name, renaming])
+
+  async function saveRename() {
+    const trimmed = nameDraft.trim()
+    if (!trimmed || trimmed === display.name) { setRenaming(false); setNameDraft(display.name); return }
+    const updated = await onUpdate(display.id, { name: trimmed })
+    if (updated) setRenaming(false)
+  }
+
+  async function disconnectProjector() {
+    if (!window.confirm(`Disconnect the projector currently attached to "${display.name}"? Its screen will go blank until a new one connects.`)) return
+    setDisconnecting(true)
+    try { await onDisconnect(display.id) } finally { setDisconnecting(false) }
+  }
   useEffect(() => { setPushReceipt('') }, [pendingSessionId, pendingActivityId, pendingScene])
   useEffect(() => {
     if (!pendingActivityId) { setActivityDetail(null); setResultQuestionIds([]); return }
@@ -660,7 +677,23 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
     </div>
     <div className="fl-display-body">
     <div className="fl-display-heading">
-      <div style={{ flex: '1 1 180px' }}><strong style={{ fontSize: 15 }}>{display.name}</strong><div className="rd-hint">{display.status} · {DISPLAY_SCENES.find(([key]) => key === display.scene)?.[1] || display.scene}</div></div>
+      <div style={{ flex: '1 1 180px' }}>
+        {renaming
+          ? <div style={{ display: 'flex', gap: 6 }}>
+              <input className="rr-input" style={{ fontSize: 15, padding: '4px 8px' }} aria-label="Display name" autoFocus value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') saveRename(); if (e.key === 'Escape') { setRenaming(false); setNameDraft(display.name) } }} onBlur={saveRename} />
+            </div>
+          : <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <strong style={{ fontSize: 15 }}>{display.name}</strong>
+              <button className="rr-link-btn" style={{ fontSize: 11 }} onClick={() => setRenaming(true)}>Rename</button>
+            </div>}
+        <div className="rd-hint" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {display.status} · {DISPLAY_SCENES.find(([key]) => key === display.scene)?.[1] || display.scene}
+          <span title={display.connected ? 'A projector is currently attached to this display' : 'No projector currently attached'} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 700, color: display.connected ? '#1a9c5b' : '#8a8a8a' }}>
+            <span aria-hidden="true" style={{ fontSize: 9 }}>{display.connected ? '●' : '○'}</span>{display.connected ? 'Connected' : 'No projector connected'}
+          </span>
+        </div>
+      </div>
+      {display.connected && <button className="rr-btn secondary" disabled={disconnecting} onClick={disconnectProjector}>{disconnecting ? 'Disconnecting…' : 'Disconnect projector'}</button>}
       <select className="rr-select" style={{ minWidth: 200 }} aria-label={`Program session for ${display.name}`} value={pendingSessionId} onChange={(event) => {
         const assignedSessionId = event.target.value || ''
         const currentActivity = activities.find((activity) => activity.id === pendingActivityId)
@@ -680,6 +713,7 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
       </label>
       <button className="rr-btn secondary" onClick={() => navigator.clipboard?.writeText(link)}>Copy link</button>
       <button className="rr-btn primary" onClick={() => setEditing((value) => !value)}>{editing ? 'Close studio' : 'Design scene'}</button>
+      <button className="rr-link-btn gr-danger-link" disabled={busy} onClick={() => onDelete(display.id)}>Delete</button>
     </div>
     <div className="fl-results-quickbar" aria-label="Results and rehearsal controls">
       <div><span>RESULTS &amp; REHEARSAL</span><strong>Put results on screen or practise safely</strong></div>
@@ -756,7 +790,6 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
         {[['motion', 'Motion'], ['show_reactions', 'Audience reactions'], ['safe_area', 'Safe area'], ['follow_activity', 'Follow activity automatically']].map(([key, label]) => <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700 }}><input type="checkbox" checked={key === 'motion' || key === 'show_reactions' ? settings[key] !== false : !!settings[key]} onChange={(e) => onUpdate(display.id, { settings: { [key]: e.target.checked } })}/>{label}</label>)}
       </div>
-      <div><button className="rr-link-btn gr-danger-link" disabled={busy} onClick={() => onDelete(display.id)}>Delete display</button></div>
     </div>}
     </div>
   </article>
@@ -873,6 +906,14 @@ export default function FestioLiveRedesignPage() {
   useEffect(() => {
     if (tab === 'Displays' && eventId && enabled) api.liveDisplays(eventId).then(setDisplays).catch((e) => setError(e.message))
   }, [tab, eventId, enabled])
+  // Keeps the "connected" badge live while staff are actually looking at
+  // this tab -- the lease itself only lives ~15s, so this is the loop that
+  // makes "which screen is stuck?" answerable without a manual refresh.
+  useEffect(() => {
+    if (tab !== 'Displays' || !eventId || !enabled) return undefined
+    const timer = setInterval(() => { api.liveDisplays(eventId).then(setDisplays).catch(() => {}) }, 10000)
+    return () => clearInterval(timer)
+  }, [tab, eventId, enabled])
 
   useEffect(() => {
     if (!eventId || !selected?.id || !selected.config?.show_automation_enabled || selected.config?.show_phase === 'complete') return undefined
@@ -925,6 +966,17 @@ export default function FestioLiveRedesignPage() {
       await api.liveDeleteDisplay(eventId, displayId)
       setDisplays((current) => (current || []).filter((display) => display.id !== displayId))
     } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+
+  // Not gated on `busy` (unlike the other display actions) -- this is meant
+  // to work fast during a live troubleshooting moment (a stuck projector),
+  // not queue behind whatever else is in flight.
+  async function disconnectDisplay(displayId) {
+    setError('')
+    try {
+      const updated = await api.liveDisconnectDisplay(eventId, displayId)
+      setDisplays((current) => (current || []).map((display) => display.id === displayId ? updated : display))
+    } catch (e) { setError(e.message) }
   }
 
   async function createRule() {
@@ -1752,7 +1804,7 @@ export default function FestioLiveRedesignPage() {
           <div className="rd-panel-head"><div><span className="fl-eyebrow">Scene manager · 22 presentation styles</span><h3>Festio Broadcast</h3><p>Direct every projector, TV, and LED wall independently in realtime.</p></div><button className="rr-btn primary" disabled={busy} onClick={createDisplay}>+ Add display</button></div>
           <div className="rd-panel-body">
             <div style={{ display: 'flex', gap: 8, marginBottom: 14, maxWidth: 520 }}><input className="rr-input" aria-label="New display name" placeholder="Main stage, lobby, breakout room…" value={newDisplayName} onChange={(e) => setNewDisplayName(e.target.value)} /></div>
-            <div className="fl-display-grid">{visibleDisplays.map((display) => <DisplayCard key={display.id} display={display} eventId={eventId} activities={activities || []} programSessions={programSessions || []} busy={busy} onUpdate={updateDisplay} onDelete={deleteDisplay} onPresentResults={presentDisplayResults} onRehearsal={setDisplayRehearsal}/>)}</div>
+            <div className="fl-display-grid">{visibleDisplays.map((display) => <DisplayCard key={display.id} display={display} eventId={eventId} activities={activities || []} programSessions={programSessions || []} busy={busy} onUpdate={updateDisplay} onDelete={deleteDisplay} onDisconnect={disconnectDisplay} onPresentResults={presentDisplayResults} onRehearsal={setDisplayRehearsal}/>)}</div>
             {visibleDisplays.length === 0 && <p className="rd-hint">No displays match this program session. Create one or assign an existing display to the session.</p>}
           </div>
         </div>

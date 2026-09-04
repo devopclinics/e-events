@@ -125,6 +125,7 @@ export default function LiveDisplayPage() {
     }
     let cancelled = false
     let events = null
+    let retryTimer = null
     const streamPath = displayShortCode
       ? `/api/engagement/v1/live-short/${encodeURIComponent(displayShortCode)}/stream?client_id=${encodeURIComponent(clientId.current)}`
       : displayCode
@@ -145,7 +146,17 @@ export default function LiveDisplayPage() {
     const refresh = () => load()
     const refreshDisplay = () => { load(); setStreamVersion((version) => version + 1) }
     load().then((allowed) => {
-      if (!allowed || cancelled) return
+      if (cancelled) return
+      if (!allowed) {
+        // A 409 here means another client held the lease at that instant --
+        // not necessarily still true a few seconds later (it may disconnect,
+        // or a presenter may force-disconnect it from the admin panel). A
+        // projector usually has no one there to reload it, so this has to
+        // recover on its own: retry the whole handshake fresh by forcing the
+        // effect to re-run, same as a real page reload would do.
+        retryTimer = setTimeout(() => { if (!cancelled) setStreamVersion((version) => version + 1) }, 5000)
+        return
+      }
       events = new EventSource(streamPath)
       events.onopen = () => { setConnected(true); stopFallback() }
       events.onerror = () => { setConnected(false); startFallback() }
@@ -161,7 +172,7 @@ export default function LiveDisplayPage() {
       ].forEach((name) => events.addEventListener(name, refresh))
       ;['response.submitted', 'question.changed', 'question.state_changed', 'show.phase_changed', 'qna.submitted', 'qna.upvoted', 'qna.moderated', 'activity.status_changed'].forEach((name) => events.addEventListener(name, refresh))
     })
-    return () => { cancelled = true; events?.close(); stopFallback(); window.removeEventListener('pagehide', releaseLease) }
+    return () => { cancelled = true; events?.close(); stopFallback(); if (retryTimer) clearTimeout(retryTimer); window.removeEventListener('pagehide', releaseLease) }
   }, [activityId, displayCode, displayShortCode, token, previewScene, streamVersion]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (error) return <div className="grid min-h-screen place-items-center bg-[#07070d] px-8 text-center text-2xl font-extrabold text-white"><div><div className="mb-3 text-sm uppercase tracking-[.25em] text-fuchsia-400">Festio Live</div>{error}</div></div>

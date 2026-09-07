@@ -561,13 +561,27 @@ async def send_simple_email(
     # guest's second automatic email produced no new ledger row at all.
     msg["Message-Id"] = make_msgid()
     _set_delivery_context(msg, event_id=event_id, guest_id=guest_id, message_kind=message_kind)
-    theme = await _design_email_theme(event_id)
-    wrapped = _festio_email_shell(
-        html_body,
-        title=subject,
-        preheader=_plain_text_from_html(html_body)[:140],
-        theme=theme,
-    )
+    # A template override can supply its own complete email document (own
+    # header, own visual identity, deliberately no event flyer) instead of a
+    # content fragment meant to sit inside the shared shell -- detected by
+    # the body already starting with a doctype/html tag, so nothing has to
+    # opt in explicitly and every existing fragment-style override (the
+    # overwhelming majority) is unaffected. Without this, the shared shell's
+    # title bar and the event's flyer image always render above the
+    # override's own content no matter what it contains -- found live
+    # sending a redesigned post-event thank-you/feedback email, where the
+    # stale pre-event flyer ("Scan to Register", dates, speakers) kept
+    # showing above the new content.
+    if re.match(r"^\s*<(!doctype\s+html|html\b)", html_body, re.IGNORECASE):
+        wrapped = html_body
+    else:
+        theme = await _design_email_theme(event_id)
+        wrapped = _festio_email_shell(
+            html_body,
+            title=subject,
+            preheader=_plain_text_from_html(html_body)[:140],
+            theme=theme,
+        )
     body_part = MIMEMultipart("alternative") if attachments or inline_images else msg
     body_part.attach(MIMEText(_plain_text_from_html(html_body), "plain", "utf-8"))
     body_part.attach(MIMEText(wrapped, "html", "utf-8"))

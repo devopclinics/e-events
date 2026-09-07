@@ -1505,6 +1505,8 @@ export default function FestioLiveRedesignPage() {
                 {selected.status === 'paused' && <button className="rr-btn primary" disabled={busy} onClick={() => setStatus('live')}>Resume</button>}
                 {['live', 'paused'].includes(selected.status) && <button className="rr-btn" disabled={busy} onClick={() => setStatus('closed')}>Close</button>}
                 {selected.status === 'closed' && <button className="rr-btn primary" disabled={busy} onClick={() => window.confirm('End this activity and mark it completed?') && setStatus('completed')}>End activity</button>}
+                {selected.status === 'completed' && <button className="rr-btn primary" disabled={busy} onClick={() => window.confirm('Restart this activity? It will go live again.') && setStatus('live')}>Restart</button>}
+                {selected.status === 'archived' && <button className="rr-btn" disabled={busy} onClick={() => setStatus('draft')}>Unarchive</button>}
                 <button className="rr-btn secondary" onClick={viewResults}>View Results</button>
                 <button className="rr-btn secondary" onClick={openParticipantPreview}>Preview participant review</button>
                 <button className="rr-btn secondary" onClick={() => {

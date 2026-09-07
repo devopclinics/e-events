@@ -24,8 +24,13 @@ VALID_STATUS_TRANSITIONS = {
     "live": {"paused", "closed"},
     "paused": {"live", "closed"},
     "closed": {"completed", "live", "archived"},
-    "completed": {"archived"},
-    "archived": set(),
+    # completed -> live: a one-click "Restart" once a show has ended, same
+    # immediacy as the existing paused -> live "Resume".
+    "completed": {"archived", "live"},
+    # archived -> draft: "unarchive" undoes the archive back to the state
+    # that already has a working "Go Live" restart path, rather than
+    # inventing a second restart flow just for the unarchive case.
+    "archived": {"draft"},
 }
 
 GUIDED_QUESTION_TYPES = {"quiz", "poll", "rating", "word_cloud", "voting"}

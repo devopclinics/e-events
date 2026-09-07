@@ -608,6 +608,10 @@ async def send_simple_email(
 
 
 def render_simple_email_preview(subject: str, html_body: str) -> str:
+    # Mirror send_simple_email's shell bypass so Preview shows exactly what
+    # actually gets sent for a full-document template override.
+    if re.match(r"^\s*<(!doctype\s+html|html\b)", html_body, re.IGNORECASE):
+        return html_body
     return _festio_email_shell(
         html_body,
         title=subject,

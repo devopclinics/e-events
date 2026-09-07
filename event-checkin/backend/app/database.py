@@ -15,6 +15,18 @@ from .config import settings
 # -- invisible at idle, but a real risk of connection exhaustion (which
 # looks like intermittent slowness/errors, not a clean outage) the first
 # time a real traffic spike actually triggered full scale-out.
+
+# statement_timeout / idle_in_transaction_session_timeout cap how long any one
+# connection can be held (query stuck, or a task cancelled mid-await abandons
+# the transaction). Without these both default to 0 (unlimited) at the DB
+# level, so a single stuck request leaks a connection forever instead of
+# freeing it back to the pool -- this is what silently exhausted the pool
+# across 2026-09-05/06 (dozens of connections stuck 20+ hours, blocking real
+# traffic and login). Applied engine-wide since sessions are opened from many
+# places (get_db, sync_poller.py, entitlements.py, main.py's outbox tasks),
+# not just one dependency. 60s/120s is generous for any real API request or
+# migration backfill; DDL_LOCK_TIMEOUT in db_migrate.py separately governs
+# lock-wait time for schema changes and is unaffected by this.
 engine = create_async_engine(
     settings.database_url,
     echo=False,
@@ -22,6 +34,12 @@ engine = create_async_engine(
     pool_recycle=1800,
     pool_size=10,
     max_overflow=5,
+    connect_args={
+        "server_settings": {
+            "statement_timeout": "60000",
+            "idle_in_transaction_session_timeout": "120000",
+        }
+    },
 )
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 

@@ -876,7 +876,14 @@ export default function LiveGuestPage() {
       const result = await api.liveGuestCurrentWorkflowRun(guestToken)
       const nextRun = result.run || null
       setWorkflowRun(nextRun)
-      setActivityId(nextRun?.active_activity_id || null)
+      // Only pull the guest INTO a newly-live workflow step -- never force
+      // them back out to the list. This poll/SSE-driven refresh used to also
+      // reset activityId to null whenever the workflow had no active step
+      // (or a different one), which meant a guest mid-survey on a standalone
+      // activity that isn't part of the workflow (e.g. an ad-hoc feedback
+      // survey during a non-interactive segment like breakfast) got bounced
+      // back to the activity list every ~5-10s, losing their place.
+      if (nextRun?.active_activity_id) setActivityId(nextRun.active_activity_id)
     } catch { /* workflows may be disabled; existing activity UX remains intact */ }
   }, [guestToken])
   useEffect(() => {

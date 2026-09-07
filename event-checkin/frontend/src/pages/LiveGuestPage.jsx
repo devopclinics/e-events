@@ -365,6 +365,18 @@ function hasDraftAnswer(entry) {
 // completes the survey, shows a per-question confirmation, or affects
 // analytics — only pressing Submit Feedback (onComplete) does, and it's the
 // server, not this component, that has final say on what was required.
+function SurveyIntro({ activity, onStart }) {
+  return (
+    <div className="grid gap-4">
+      {activity.description && <p className="text-sm text-slate-600 dark:text-slate-300">{activity.description}</p>}
+      <button type="button" onClick={onStart}
+        className="min-h-14 rounded-xl bg-teal-400 px-4 py-3 text-base font-extrabold text-slate-950 shadow-lg">
+        Start Survey
+      </button>
+    </div>
+  )
+}
+
 function SurveyForm({ activity, rules, draftAnswersFromServer, completedAt, onAutosave, onComplete, busy }) {
   const [draft, setDraft] = useState(() => draftAnswersFromServer || {})
   const [submitted, setSubmitted] = useState(false)
@@ -653,6 +665,11 @@ function GuidedGuestNotice({ phase, activity }) {
 function ActivityView({ guestToken, activityId, onBack }) {
   const [state, setState] = useState(null)
   const [busy, setBusy] = useState(false)
+  // Survey/feedback only: show the description + a "Start Survey" button
+  // first, and only reveal the progress bar + questions once tapped --
+  // resets on every fresh mount so a returning guest sees it again, which is
+  // fine (one extra tap) and keeps the flow simple.
+  const [started, setStarted] = useState(false)
   const [leaderboard, setLeaderboard] = useState(null)
   const [revealedResult, setRevealedResult] = useState(null)
   const [reviewResults, setReviewResults] = useState(null)
@@ -726,7 +743,7 @@ function ActivityView({ guestToken, activityId, onBack }) {
       <button type="button" onClick={onBack} className="text-left text-xs font-extrabold uppercase tracking-wide text-slate-600 dark:text-slate-300">← All activities</button>
       <div>
         <div className="text-xl font-extrabold text-slate-900 dark:text-white">{activity.title}</div>
-        <div className="text-xs font-bold uppercase tracking-wide text-teal-700 dark:text-teal-300">{activity.status === 'live' ? 'Live now' : activity.status}</div>
+        <div className="text-xs font-bold uppercase tracking-wide text-teal-700 dark:text-teal-300">{activity.status === 'live' ? (['survey', 'feedback'].includes(activity.type) ? 'Open now' : 'Live now') : activity.status}</div>
       </div>
       {error && error.code !== 'FESTIO_LIVE_UNAVAILABLE' && <div role="alert" className="rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-700 dark:bg-rose-950 dark:text-rose-200">{error.message || error}</div>}
 
@@ -738,7 +755,9 @@ function ActivityView({ guestToken, activityId, onBack }) {
         guided && reviewResults ? <ParticipantReview activity={activity} results={reviewResults} myAnswers={my_answers} leaderboard={leaderboard}/> : guided ? <GuidedGuestNotice phase="complete" activity={activity}/> : <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-900">This activity has ended — thanks for joining!</div>
       ) : ['survey', 'feedback'].includes(activity.type) ? (
         !guided || showPhase === 'answering'
-          ? <SurveyForm activity={activity} rules={state.rules} draftAnswersFromServer={state.draft_answers} completedAt={state.completed_at} onAutosave={autosaveAnswer} onComplete={completeSurvey} busy={busy} />
+          ? (started || state.completed_at
+              ? <SurveyForm activity={activity} rules={state.rules} draftAnswersFromServer={state.draft_answers} completedAt={state.completed_at} onAutosave={autosaveAnswer} onComplete={completeSurvey} busy={busy} />
+              : <SurveyIntro activity={activity} onStart={() => setStarted(true)} />)
           : <GuidedGuestNotice phase={showPhase} activity={activity}/>
       ) : (
         <div className="grid gap-3">
@@ -865,7 +884,11 @@ export default function LiveGuestPage() {
       const available = await api.liveGuestActivities(guestToken)
       const scoped = sessionId ? available.filter((activity) => activity.session_id === sessionId) : available
       setActivities(scoped)
-      if (sessionId && scoped.length === 1) setActivityId(scoped[0].id)
+      // Land directly on the one activity there is to do instead of a list
+      // of one tile to click through -- was previously gated to sessionId
+      // scoping only, but the same reasoning applies whenever there's just
+      // one activity, full stop (e.g. a standalone post-event survey).
+      if (scoped.length === 1) setActivityId(scoped[0].id)
     }
     catch (e) { setError(e) }
   }, [guestToken, sessionId])
@@ -939,7 +962,7 @@ export default function LiveGuestPage() {
                 className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 text-left dark:border-slate-700 dark:bg-slate-900">
                 <div>
                   <div className="text-sm font-extrabold text-slate-900 dark:text-white">{a.title}</div>
-                  <div className="text-xs font-bold uppercase tracking-wide text-teal-700 dark:text-teal-300">{a.status === 'live' ? 'Live now' : ['closed', 'completed'].includes(a.status) ? 'Review results' : 'Paused'}{a.session_title ? ` · ${a.session_title}` : ''}</div>
+                  <div className="text-xs font-bold uppercase tracking-wide text-teal-700 dark:text-teal-300">{a.status === 'live' ? (['survey', 'feedback'].includes(a.type) ? 'Open now' : 'Live now') : ['closed', 'completed'].includes(a.status) ? 'Review results' : 'Paused'}{a.session_title ? ` · ${a.session_title}` : ''}</div>
                 </div>
                 <span aria-hidden="true">›</span>
               </button>

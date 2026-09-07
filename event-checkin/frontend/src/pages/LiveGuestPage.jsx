@@ -795,8 +795,7 @@ function AnonJoinForm({ eventId, onJoined }) {
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
-      <div className="text-sm font-extrabold text-slate-900 dark:text-white">What should we call you?</div>
-      <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Optional — helps your name show up on the leaderboard.</p>
+      <div className="text-sm font-extrabold text-slate-900 dark:text-white">Your Name &mdash; It's Optional</div>
       <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name (optional)"
         className="mt-3 w-full rounded-xl border-2 border-slate-200 bg-white p-3 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-white"
         onKeyDown={(e) => { if (e.key === 'Enter') join() }} />

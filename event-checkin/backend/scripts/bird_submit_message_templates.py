@@ -59,6 +59,7 @@ SAMPLE_VALUES = {
     "qrCodeUrl": "https://festio.events/scan/sample-pass-token",
     "greetings": "Asalam Alaykum",
     "consentLink": "https://festio.events/api/s/mbfwaiver",
+    "feedbackLink": "https://festio.events/live/join/8CZH52",
 }
 
 
@@ -317,6 +318,23 @@ TEMPLATES: list[TemplateDef] = [
         "recorded. This confirms staff checked you in for that session. Thank you.",
         ("firstName", "sessionTopic", "eventName"),
         group="experience",
+    ),
+    # MBF Summit 2026 (Masjid-ul Mumineen) — post-event feedback-survey ask,
+    # scoped to this one event via group="mbf_summit". MARKETING (not
+    # UTILITY) because it's soliciting engagement rather than servicing an
+    # existing transaction — Meta reviews UTILITY claims strictly and a
+    # feedback ask doesn't fit that definition. Body doesn't end on
+    # {{feedbackLink}} (WhatsApp rejects a body ending on a variable — see
+    # festio_event_announcement below).
+    TemplateDef(
+        "MBF Summit 2026 feedback request",
+        "festio_mbf_summit_2026_feedback",
+        "As-salamu Alaykum {{firstName}}! JazakumAllahu Khairan for being part of {{eventName}}. "
+        "We'd love your feedback -- it only takes 2-3 minutes and helps us plan next year's Summit, in shaa Allah.\n\n"
+        "Share your feedback: {{feedbackLink}} -- sent via Festio.",
+        ("firstName", "eventName", "feedbackLink"),
+        category="MARKETING",
+        group="mbf_summit",
     ),
     # Generic announcement carrier for host broadcasts + FestioMe urgent
     # escalations (the only flows with freeform organizer text). Kept neutral /

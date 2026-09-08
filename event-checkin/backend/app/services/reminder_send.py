@@ -154,14 +154,27 @@ async def _send_to_guest(
             or messaging.settings.bird_whatsapp_consent_reminder_template
         )
     ):
+        wa_template_ref = getattr(reminder, "whatsapp_template_ref", None)
+        wa_template_vars = getattr(reminder, "whatsapp_template_vars", None)
         body = render(reminder.whatsapp_body, ctx)
-        if body and await reserve_message_credit(event, "whatsapp", db=db, reason=f"reminder:{reminder.id}", guest_id=guest.id):
+        has_content = body or (wa_template_ref and wa_template_vars)
+        if has_content and await reserve_message_credit(event, "whatsapp", db=db, reason=f"reminder:{reminder.id}", guest_id=guest.id):
             if getattr(reminder, "communication_type", None) == "consent_reminder":
                 await send_with_credit_ledger(
                     last_credit_ledger_id(event), messaging.send_consent_reminder_whatsapp,
                     phone=guest.phone, first_name=guest.first_name or "Guest", event_name=event.name,
                     consent_link=ctx.get("consent_link", ""), event_date=event.event_date,
                     event_timezone=event.timezone,
+                )
+            elif wa_template_ref and wa_template_vars:
+                # A specific approved template configured on this reminder --
+                # same mechanism as MessageTemplate.whatsapp_template_ref for
+                # broadcasts (see routers/events.py::broadcast_message).
+                var_keys = list(wa_template_vars.keys())
+                params = [render(wa_template_vars[k], ctx) for k in var_keys]
+                await send_with_credit_ledger(
+                    last_credit_ledger_id(event), messaging.send_custom_template_whatsapp,
+                    phone=guest.phone, template_ref=wa_template_ref, params=params, var_keys=var_keys,
                 )
             else:
                 await send_with_credit_ledger(

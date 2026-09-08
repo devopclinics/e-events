@@ -2197,6 +2197,17 @@ class MessageTemplate(Base):
     sms_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     whatsapp_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     mms_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # A SPECIFIC approved WhatsApp template to use instead of the generic
+    # festio_event_announcement fallback (bird_whatsapp_announcement_template) —
+    # e.g. a campaign with its own tailored, Meta-approved copy. "projectId" or
+    # "projectId:version" (see messaging.py::_bird_whatsapp_send). vars maps the
+    # template's Bird variable keys to {{placeholder}} strings (rendered via
+    # services.templates.render against this event/guest's context) or literal
+    # values for anything that isn't guest-specific (e.g. a campaign link).
+    # Null on both = unchanged existing behavior (generic template, then
+    # free-text fallback).
+    whatsapp_template_ref: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    whatsapp_template_vars: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     updated_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
 
@@ -2251,6 +2262,12 @@ class EventReminder(Base):
     email_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     sms_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     whatsapp_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Same mechanism as MessageTemplate.whatsapp_template_ref/_vars (see there) --
+    # reminders store their body directly on this row rather than through the
+    # shared message_templates override table, so the same two fields are
+    # duplicated here rather than reminders reaching into that other table.
+    whatsapp_template_ref: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    whatsapp_template_vars: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|sending|sent|failed

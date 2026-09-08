@@ -29,7 +29,7 @@ from services.credit_ledger import send_with_credit_ledger
 from services.email_service import send_manual_invite_email, send_broadcast_email, send_simple_email
 from services.outbound_safety import recipient_allowed
 from ..template_resolve import load_overrides, channel_text, channel_text_or_default, email_override
-from services.templates import build_context as build_template_context
+from services.templates import build_context as build_template_context, render as render_template_text
 from .. import storage
 from ..services.festiome_outbox import queue_announcement
 from ..services import post_event_message
@@ -1732,20 +1732,36 @@ async def broadcast_message(
             elif not guest.whatsapp_consent:
                 channel_counts["whatsapp"]["skipped_no_consent"] += 1
             elif await reserve_message_credit(event, "whatsapp", db=db, reason="broadcast", guest_id=guest.id):
-                wa_text = channel_text(overrides, "broadcast", "whatsapp", _ctx(guest, guest_message))
-                # Freeform content can only initiate WhatsApp via an approved
-                # generic announcement template; falls back to free text
-                # (session-only) when that template isn't configured.
-                background_tasks.add_task(
-                    send_with_credit_ledger,
-                    last_credit_ledger_id(event),
-                    messaging.send_announcement_whatsapp,
-                    phone=guest.phone,
-                    first_name=guest.first_name,
-                    event_name=event.name,
-                    message=wa_text if wa_text is not None else guest_message,
-                    ticket_url=guest_link or f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}",
-                )
+                broadcast_override = overrides.get("broadcast")
+                wa_template_ref = broadcast_override.whatsapp_template_ref if broadcast_override else None
+                if wa_template_ref and broadcast_override.whatsapp_template_vars:
+                    wa_ctx = _ctx(guest, guest_message)
+                    var_keys = list(broadcast_override.whatsapp_template_vars.keys())
+                    params = [render_template_text(broadcast_override.whatsapp_template_vars[k], wa_ctx) for k in var_keys]
+                    background_tasks.add_task(
+                        send_with_credit_ledger,
+                        last_credit_ledger_id(event),
+                        messaging.send_custom_template_whatsapp,
+                        phone=guest.phone,
+                        template_ref=wa_template_ref,
+                        params=params,
+                        var_keys=var_keys,
+                    )
+                else:
+                    wa_text = channel_text(overrides, "broadcast", "whatsapp", _ctx(guest, guest_message))
+                    # Freeform content can only initiate WhatsApp via an approved
+                    # generic announcement template; falls back to free text
+                    # (session-only) when that template isn't configured.
+                    background_tasks.add_task(
+                        send_with_credit_ledger,
+                        last_credit_ledger_id(event),
+                        messaging.send_announcement_whatsapp,
+                        phone=guest.phone,
+                        first_name=guest.first_name,
+                        event_name=event.name,
+                        message=wa_text if wa_text is not None else guest_message,
+                        ticket_url=guest_link or f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}",
+                    )
                 channel_counts["whatsapp"]["queued"] += 1
                 sent_any = True
             else:

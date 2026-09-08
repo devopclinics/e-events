@@ -342,6 +342,21 @@ async def send_announcement_whatsapp(*, phone: str, first_name: str, event_name:
     return await _send_sms_as_whatsapp(phone, body)
 
 
+async def send_custom_template_whatsapp(*, phone: str, template_ref: str, params: list[str], var_keys: list[str]) -> dict | None:
+    """Send WhatsApp via a specific, explicitly-configured approved template --
+    not one of the fixed `kind`s _send_whatsapp_template knows about. Used when
+    a broadcast override (MessageTemplate.whatsapp_template_ref) or a reminder
+    (EventReminder.whatsapp_template_ref) points at its own tailored,
+    Meta-approved template instead of the generic announcement fallback."""
+    if not _channel_ready("whatsapp", phone):
+        return
+    provider = _wa_provider()
+    if provider != "bird":
+        logger.warning("Custom WhatsApp template send needs Bird; provider is %r — skipping", provider)
+        return
+    return await _bird_whatsapp_send(phone, template_ref, params, var_keys)
+
+
 async def send_broadcast_whatsapp(*, phone: str, first_name: str, message: str) -> dict | None:
     """Send a free-text host broadcast over WhatsApp.
 

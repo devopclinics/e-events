@@ -130,8 +130,8 @@ export default function HelpPage({ publicMode = false }) {
       {publicMode && (
         <div className="flex items-center justify-between mb-6">
           <Link to="/" className="flex items-center gap-2 font-bold text-lg text-slate-900 dark:text-white tracking-tight">
-            <span className="grid h-8 w-8 place-items-center rounded-md bg-teal-600 text-white text-sm">EQ</span>
-            EventQR
+            <span className="grid h-8 w-8 place-items-center rounded-md bg-teal-600 text-white text-sm">F</span>
+            Festio
           </Link>
           <div className="flex items-center gap-1 text-sm">
             <Link to="/pricing" className="px-3 py-2 rounded-md text-slate-600 dark:text-slate-300 hover:text-teal-700 dark:hover:text-teal-300">Pricing</Link>
@@ -144,7 +144,7 @@ export default function HelpPage({ publicMode = false }) {
       <div className="rounded-2xl bg-gradient-to-br from-teal-600 to-cyan-700 text-white p-7 sm:p-9 mb-6">
         <h1 className="text-2xl sm:text-3xl font-extrabold">Help &amp; How-To</h1>
         <p className="mt-2 text-white/85 text-sm sm:text-base max-w-2xl">
-          Step-by-step instructions for everything in EventQR. Pick your role, or search.
+          Step-by-step instructions for everything in Festio. Pick your role, or search.
         </p>
         {/* Role switcher */}
         <div className="mt-5 flex flex-wrap gap-2">

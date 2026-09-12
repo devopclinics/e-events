@@ -2301,6 +2301,56 @@ class EventReminderSend(Base):
     sent_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class WhatsAppTemplateSubmission(Base):
+    """A client-authored WhatsApp template submitted for Meta review via Bird.
+    Self-serve counterpart to scripts/bird_submit_message_templates.py (that
+    script stays the developer/batch tool; this is the live-request path
+    shipped in the backend image — see services/bird_templates.py). $5
+    one-time fee per submission, collected before the Bird call fires (see
+    routers/wa_template_submissions.py); up to 5 free resubmissions if Meta
+    rejects it (retry_count, capped in the router, not here).
+
+    status: draft -> awaiting_payment -> pending_review -> approved|rejected
+    (or submit_failed if the paid Bird call itself errored)."""
+    __tablename__ = "whatsapp_template_submissions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
+    created_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+
+    name: Mapped[str] = mapped_column(String(160))
+    # The actual WhatsApp-facing template name sent to Bird/Meta — globally
+    # unique across every Festio customer (one shared Bird workspace), so this
+    # is server-generated (org id + slug + random suffix), never the client's
+    # raw input.
+    platform_name: Mapped[str] = mapped_column(String(160), unique=True, index=True)
+    category: Mapped[str] = mapped_column(String(20), default="UTILITY")
+    body: Mapped[str] = mapped_column(Text)
+    variables: Mapped[list] = mapped_column(JSON, default=list)
+    sample_values: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    status: Mapped[str] = mapped_column(String(20), default="draft", index=True)
+    # A platform-owned template (e.g. the generic announcement carrier) that
+    # every org's picker can see, not just the org that happened to submit it.
+    is_shared: Mapped[bool] = mapped_column(Boolean, default=False)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    reject_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    bird_project_id: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    bird_channel_template_id: Mapped[str | None] = mapped_column(String(60), nullable=True)
+
+    payment_provider: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    payment_reference: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    payment_status: Mapped[str] = mapped_column(String(20), default="unpaid")
+
+    # Set once per status change so the poller emails the submitter exactly
+    # once per transition, not on every poll tick.
+    last_notified_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class ScheduledCommunication(Base):
     """One organizer-authored communication that will be delivered later.
 
@@ -2343,6 +2393,13 @@ class ScheduledCommunication(Base):
     email_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     sms_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     whatsapp_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Same mechanism as MessageTemplate.whatsapp_template_ref/_vars and
+    # EventReminder's copy of the same two fields -- a SPECIFIC approved
+    # WhatsApp template instead of free text (which can't open a new
+    # WhatsApp conversation). Duplicated here rather than reaching into the
+    # message_templates override table, matching EventReminder's precedent.
+    whatsapp_template_ref: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    whatsapp_template_vars: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     mms_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     mms_media_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
 

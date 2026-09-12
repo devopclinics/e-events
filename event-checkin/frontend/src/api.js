@@ -324,6 +324,27 @@ async function downloadLiveEventReport(eventId) {
   document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url)
 }
 
+// Renders every question in the activity (real open-text answers included)
+// via a lease-free headless-browser page that reads straight from the
+// database -- unlike downloadLiveDisplayPng, this never touches the
+// display's connection lease or its curated question list, so it can't
+// conflict with an actively-connected projector and always covers every
+// question in the activity.
+async function downloadLiveSurveyReport(eventId, activityId, displayName = 'festio-live-survey-report') {
+  const token = await getLiveSession(eventId)
+  const res = await fetch(`${BASE}/engagement/v1/activities/${activityId}/export-report.pdf`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(60000),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Report could not be generated' }))
+    throw new Error(err.detail || 'Report could not be generated')
+  }
+  const url = URL.createObjectURL(await res.blob())
+  const anchor = document.createElement('a'); anchor.href = url; anchor.download = `${displayName.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-report.pdf`
+  document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url)
+}
+
 // Steps through every published step in a headless browser server-side
 // (~2-4s each), so this can take well over a minute for a long workflow --
 // give it real room before giving up.
@@ -1131,6 +1152,13 @@ export const api = {
   previewTemplate: (eventId, key, data) => req('POST', `/events/${eventId}/templates/${key}/preview`, data),
   testSendTemplate: (eventId, key, data) => req('POST', `/events/${eventId}/templates/${key}/test-send`, data),
   templateAudit: (eventId) => req('GET', `/events/${eventId}/templates/audit`),
+  listApprovedWhatsAppTemplates: (eventId) => req('GET', `/events/${eventId}/templates/whatsapp/approved`),
+
+  // Self-serve WhatsApp template submission (org-level)
+  listWaTemplateSubmissions: () => req('GET', `/organizations/me/whatsapp-templates/submissions`),
+  createWaTemplateSubmission: (data) => req('POST', `/organizations/me/whatsapp-templates/submissions`, data),
+  checkoutWaTemplateSubmission: (id) => req('POST', `/organizations/me/whatsapp-templates/submissions/${id}/checkout`),
+  retryWaTemplateSubmission: (id, data) => req('POST', `/organizations/me/whatsapp-templates/submissions/${id}/retry`, data),
 
   // Logistics / Fulfillment (admin)
   listShipments: (eventId) => req('GET', `/events/${eventId}/shipments`),
@@ -1595,6 +1623,7 @@ export const api = {
   liveDisplays: (eventId) => liveReq(eventId, 'GET', '/v1/displays'),
   liveCreateDisplay: (eventId, body) => liveReq(eventId, 'POST', '/v1/displays', body),
   liveUpdateDisplay: (eventId, displayId, body) => liveReq(eventId, 'PATCH', `/v1/displays/${displayId}`, body),
+  liveDownloadSurveyReport: (eventId, activityId, displayName) => downloadLiveSurveyReport(eventId, activityId, displayName),
   livePresentDisplayResults: (eventId, displayId, body) => liveReq(eventId, 'PUT', `/v1/control/displays/${displayId}/results`, body),
   liveSetDisplayRehearsal: (eventId, displayId, body) => liveReq(eventId, 'PUT', `/v1/control/displays/${displayId}/rehearsal`, body),
   liveRotateDisplayToken: (eventId, displayId) => liveReq(eventId, 'POST', `/v1/displays/${displayId}/rotate-token`),

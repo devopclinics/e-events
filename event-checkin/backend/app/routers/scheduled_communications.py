@@ -79,8 +79,8 @@ def _validate_content(data) -> None:
         raise HTTPException(422, "Add an email message or remove the email channel")
     if "sms" in data.channels and not (data.sms_body or "").strip():
         raise HTTPException(422, "Add an SMS message or remove the SMS channel")
-    if "whatsapp" in data.channels and not (data.whatsapp_body or "").strip():
-        raise HTTPException(422, "Add a WhatsApp message or remove the WhatsApp channel")
+    if "whatsapp" in data.channels and not (data.whatsapp_body or "").strip() and not getattr(data, "whatsapp_template_ref", None):
+        raise HTTPException(422, "Add a WhatsApp message (or pick an approved template) or remove the WhatsApp channel")
     if "mms" in data.channels:
         if not (data.mms_body or "").strip():
             raise HTTPException(422, "Add an MMS message or remove the MMS channel")
@@ -108,6 +108,8 @@ async def _out(db: AsyncSession, row: ScheduledCommunication) -> ScheduledCommun
         email_body=row.email_body,
         sms_body=row.sms_body,
         whatsapp_body=row.whatsapp_body,
+        whatsapp_template_ref=row.whatsapp_template_ref,
+        whatsapp_template_vars=row.whatsapp_template_vars,
         mms_body=row.mms_body,
         mms_media_url=row.mms_media_url,
         status=row.status,
@@ -173,6 +175,8 @@ async def create_scheduled_communication(
         email_body=data.email_body,
         sms_body=data.sms_body,
         whatsapp_body=data.whatsapp_body,
+        whatsapp_template_ref=data.whatsapp_template_ref,
+        whatsapp_template_vars=data.whatsapp_template_vars,
         mms_body=data.mms_body,
         mms_media_url=data.mms_media_url,
         status=data.status,

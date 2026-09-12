@@ -7,10 +7,11 @@ import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
+from ..message_delivery_report import channel_delivery_report, email_delivery_report
 from ..models import Event, Membership, MessageCreditLedger, Organization, Payment, PlatformSettings, User
 from ..schemas import CheckoutRequest, CheckoutOut, CurrencyRequest
 from ..auth import get_current_user, get_current_user_optional, _org_role
@@ -21,6 +22,7 @@ from ..config import settings
 from ..entitlements import event_allows_addon, FEATURE_ADDON
 from ..organization_entitlements import entitlement_snapshot
 from services import payments
+from services import wa_template_submissions
 from . import org_billing
 
 logger = logging.getLogger(__name__)
@@ -95,21 +97,28 @@ async def credit_ledger(event_id: str, limit: int = 50, user: User = Depends(get
         .order_by(desc(MessageCreditLedger.created_at))
         .limit(min(max(limit, 1), 200))
     )).scalars().all()
-    summary_rows = (await db.execute(
-        select(
-            MessageCreditLedger.channel,
-            func.count(MessageCreditLedger.id),
-            func.coalesce(func.sum(MessageCreditLedger.credits), 0),
-        )
-        .where(MessageCreditLedger.event_id == event.id, MessageCreditLedger.action == "spend")
-        .group_by(MessageCreditLedger.channel)
-    )).all()
+    # Was: only counted action="spend" rows. Org-wallet events log real
+    # sends as action="reserve" instead (see services/credit_ledger.py) --
+    # that filter silently missed nearly every send made under that system,
+    # undercounting volume by roughly 100x on some events. channel_delivery_report
+    # covers both paths and also breaks out delivered/failed, not just a raw count.
+    chan = await channel_delivery_report(db, event.id)
+    email = await email_delivery_report(db, event.id)
+    summary = [
+        {
+            "channel": c, "sends": chan[c]["sent"], "delivered": chan[c]["delivered"],
+            "failed": chan[c]["failed"], "credits": chan[c]["credits_spent"],
+        }
+        for c in ("sms", "mms", "whatsapp")
+    ]
+    summary.append({
+        "channel": "email", "sends": email["recipients"], "delivered": email["delivered"],
+        "failed": email["failed"] + email["blocked_no_credits"], "credits": None,
+    })
     return {
         "balance": event.message_credits,
-        "summary": [
-            {"channel": channel, "sends": int(count or 0), "credits": int(credits or 0)}
-            for channel, count, credits in summary_rows
-        ],
+        "summary": summary,
+        "email_detail": email,
         "rows": [
             {
                 "id": r.id,
@@ -297,10 +306,12 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     etype = evt.get("type")
     if etype == "checkout.session.completed":
         obj = evt["data"]["object"]
-        if obj.get("mode") == "subscription":
+        meta = obj.get("metadata") or {}
+        if meta.get("wa_submission_id"):
+            await wa_template_submissions.fulfill_payment(db, meta["wa_submission_id"])
+        elif obj.get("mode") == "subscription":
             await org_billing.handle_stripe_subscription_checkout(db, obj)
         else:
-            meta = obj.get("metadata") or {}
             await _fulfill(db, "stripe", obj.get("id"), meta.get("event_id"), meta.get("tier_key"))
     elif etype in ("customer.subscription.updated", "customer.subscription.deleted", "invoice.payment_failed"):
         await org_billing.handle_stripe_subscription_event(db, etype, evt["data"]["object"])
@@ -316,10 +327,12 @@ async def paystack_webhook(request: Request, db: AsyncSession = Depends(get_db))
     etype = evt.get("event")
     data = evt.get("data") or {}
     if etype == "charge.success":
-        if data.get("plan"):
+        meta = data.get("metadata") or {}
+        if meta.get("wa_submission_id"):
+            await wa_template_submissions.fulfill_payment(db, meta["wa_submission_id"])
+        elif data.get("plan"):
             await org_billing.handle_paystack_subscription_renewal(db, data)
         else:
-            meta = data.get("metadata") or {}
             await _fulfill(db, "paystack", data.get("reference"), meta.get("event_id"), meta.get("tier_key"))
     elif etype in ("subscription.create", "subscription.disable"):
         await org_billing.handle_paystack_subscription_event(db, etype, data)

@@ -104,6 +104,7 @@ class Settings(BaseSettings):
     bird_workspace_id: str = ""
     bird_sms_channel_id: str = ""
     bird_whatsapp_channel_id: str = ""
+    bird_whatsapp_channel_group_id: str = ""          # WhatsApp channel-group id for new channelTemplate submissions — auto-discovered from an existing approved template's project if unset (see services/bird_templates.py)
     bird_whatsapp_locale: str = "en"                  # Locale of the WhatsApp templates (e.g. en, en_US) — must match Bird
     # Each template below is the Bird template reference as "projectId:version"
     # (both UUIDs from the channel-template project). Version is optional — omit

@@ -136,6 +136,130 @@ export function ChannelPreviewFrame({ channel = 'email', body, html = '' }) {
   )
 }
 
+/* Picks a Meta-approved WhatsApp template (fetched via
+   api.listApprovedWhatsAppTemplates) and maps its {{variables}} to Festio
+   merge fields or literal text. Shared by the Message Template editor
+   (CommunicationsRedesignPage) and the Reminder editor (AddonsRedesignPage)
+   so both use the exact same picker. The caller still owns the free-text
+   WhatsApp textarea and toggles it off/on based on `enabled`. */
+export function WhatsAppTemplatePicker({ approvedTemplates, mergeFieldOptions, enabled, templateRef, templateVars, previewSample, onChange }) {
+  const selected = approvedTemplates.find((t) => t.ref === templateRef) || approvedTemplates[0] || null
+
+  function setEnabled(next) {
+    if (next && !templateRef && selected) {
+      onChange({ enabled: next, templateRef: selected.ref, templateVars: defaultVars(selected) })
+    } else {
+      onChange({ enabled: next, templateRef, templateVars })
+    }
+  }
+
+  function defaultVars(tpl) {
+    const vars = {}
+    for (const key of tpl.variables) vars[key] = mergeFieldOptions[0] || ''
+    return vars
+  }
+
+  function setTemplate(ref) {
+    const tpl = approvedTemplates.find((t) => t.ref === ref)
+    onChange({ enabled, templateRef: ref, templateVars: tpl ? defaultVars(tpl) : {} })
+  }
+
+  function setVar(key, value) {
+    onChange({ enabled, templateRef, templateVars: { ...templateVars, [key]: value } })
+  }
+
+  function renderPreview(tpl) {
+    if (!tpl) return ''
+    let out = tpl.body
+    for (const key of tpl.variables) {
+      const raw = templateVars?.[key] || ''
+      const value = mergeFieldOptions.includes(raw) ? (previewSample?.[raw] ?? raw) : (raw || '…')
+      out = out.split(`{{${key}}}`).join(value)
+    }
+    return out
+  }
+
+  return (
+    <div className="wa-tpl-picker">
+      <div className="rd-toggle-row">
+        <div>
+          <div className="lbl">Send via an approved WhatsApp template</div>
+          <div className="sub">WhatsApp requires a Meta-approved template to start a conversation.</div>
+        </div>
+        <label className="rr-switch">
+          <input type="checkbox" checked={!!enabled} onChange={(e) => setEnabled(e.target.checked)} />
+          <span className="track" />
+          <span className="knob" />
+        </label>
+      </div>
+
+      {enabled && (
+        approvedTemplates.length === 0 ? (
+          <p className="rd-hint" style={{ margin: '10px 0 0' }}>No approved WhatsApp templates yet. Submit one from the WhatsApp Templates tab — approval usually takes minutes to a few hours.</p>
+        ) : (
+          <div className="wa-tpl-body">
+            <div className="tpl-select-row">
+              <select className="rr-select" value={selected?.ref || ''} onChange={(e) => setTemplate(e.target.value)}>
+                {approvedTemplates.map((t) => <option key={t.ref} value={t.ref}>{t.name}</option>)}
+              </select>
+              <span className="rd-status-chip ok">✓ Approved</span>
+            </div>
+
+            {selected && <>
+              <div className="rr-chan-frame" style={{ margin: '12px 0 0' }}>
+                <div className="rr-chan-frame-head">
+                  <span>{selected.category}</span>
+                  <span className="cat-chip">{selected.ref}</span>
+                </div>
+                <div className="rr-chan-frame-body rr-chan-frame-body-whatsapp">
+                  <div className="wa-bubble">{selected.body}</div>
+                </div>
+              </div>
+
+              {selected.variables.length > 0 && (
+                <div className="var-map">
+                  <div className="var-map-title">Map template variables</div>
+                  {selected.variables.map((key) => {
+                    const raw = templateVars?.[key] || ''
+                    const isCustom = raw && !mergeFieldOptions.includes(raw)
+                    return (
+                      <div className="var-row" key={key}>
+                        <span className="var-chip">{`{{${key}}}`}</span>
+                        <select
+                          value={isCustom ? '__custom__' : (raw || mergeFieldOptions[0] || '')}
+                          onChange={(e) => setVar(key, e.target.value === '__custom__' ? '' : e.target.value)}
+                        >
+                          {mergeFieldOptions.map((f) => <option key={f} value={f}>{f}</option>)}
+                          <option value="__custom__">Custom text…</option>
+                        </select>
+                        {isCustom || raw === '' ? (
+                          <input
+                            className="custom-val"
+                            placeholder="Literal text"
+                            value={isCustom ? raw : ''}
+                            onChange={(e) => setVar(key, e.target.value)}
+                          />
+                        ) : <span />}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              <div className="rr-chan-frame">
+                <div className="rr-chan-frame-head">Preview</div>
+                <div className="rr-chan-frame-body rr-chan-frame-body-whatsapp">
+                  <div className="wa-bubble">{renderPreview(selected)}</div>
+                </div>
+              </div>
+            </>}
+          </div>
+        )
+      )}
+    </div>
+  )
+}
+
 export function Icon({ name, size = 18, className }) {
   const paths = {
     grid: <><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></>,

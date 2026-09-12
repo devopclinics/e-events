@@ -546,6 +546,8 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
   const [pushing, setPushing] = useState(false)
   const [pushReceipt, setPushReceipt] = useState('')
   const [livePreviewVersion, setLivePreviewVersion] = useState(0)
+  const [downloadingReport, setDownloadingReport] = useState(false)
+  const [downloadError, setDownloadError] = useState('')
   const settings = display.settings || {}
   const link = `${window.location.origin}/live/${display.display_code}?token=${encodeURIComponent(display.access_token)}`
 
@@ -712,6 +714,12 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
         <input type="checkbox" checked={!!settings.auto_follow_program} onChange={(e) => onUpdate(display.id, { settings: { auto_follow_program: e.target.checked } })} /> Auto-follow program
       </label>
       <button className="rr-btn secondary" onClick={() => navigator.clipboard?.writeText(link)}>Copy link</button>
+      <button className="rr-btn secondary" disabled={downloadingReport || !display.assigned_activity_id} title={!display.assigned_activity_id ? 'Assign an activity to this screen first' : 'Downloads every question in the assigned activity, however it appears on screen or not'} onClick={async () => {
+        setDownloadingReport(true); setDownloadError('')
+        try { await api.liveDownloadSurveyReport(eventId, display.assigned_activity_id, display.name) }
+        catch (e) { setDownloadError(e.message || 'Report could not be generated') }
+        finally { setDownloadingReport(false) }
+      }}>{downloadingReport ? 'Generating…' : 'Download report'}</button>
       <button className="rr-btn primary" onClick={() => setEditing((value) => !value)}>{editing ? 'Close studio' : 'Design scene'}</button>
       <button className="rr-link-btn gr-danger-link" disabled={busy} onClick={() => onDelete(display.id)}>Delete</button>
     </div>
@@ -739,6 +747,7 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
         {pendingActivityId && <button className="rr-btn primary" disabled={busy || pushing} onClick={pushToDisplay}>{pushing ? 'Sending to main screen…' : isDirty ? 'Push to main screen →' : 'Repush to main screen ↻'}</button>}
       </div>
       {pushReceipt && <div className="fl-display-push-receipt" role="status" aria-live="polite">{pushReceipt}</div>}
+      {downloadError && <div className="fl-display-push-receipt" role="alert">{downloadError}</div>}
       {previewLink && <div className="fl-display-preview-canvas"><iframe title={`${display.name} pending preview`} src={previewLink} tabIndex="-1" /></div>}
     </div>
 

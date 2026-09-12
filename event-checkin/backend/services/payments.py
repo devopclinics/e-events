@@ -26,7 +26,7 @@ def paystack_enabled() -> bool:
 async def stripe_create_checkout(
     *, amount: int, currency: str, event_id: str, tier_key: str,
     email: str | None, success_url: str, cancel_url: str,
-    tax_enabled: bool = False,
+    tax_enabled: bool = False, extra_metadata: dict[str, str] | None = None,
 ) -> tuple[str, str]:
     """Create a Checkout Session. Returns (checkout_url, reference=session_id)."""
     data = {
@@ -42,6 +42,8 @@ async def stripe_create_checkout(
         # A receipt/invoice the customer can download (also satisfies records).
         "invoice_creation[enabled]": "true",
     }
+    for key, value in (extra_metadata or {}).items():
+        data[f"metadata[{key}]"] = value
     if email:
         data["customer_email"] = email
     if tax_enabled:
@@ -75,7 +77,7 @@ def stripe_verify(payload: bytes, sig_header: str | None) -> bool:
 
 async def paystack_create_checkout(
     *, amount: int, currency: str, event_id: str, tier_key: str,
-    email: str | None, callback_url: str,
+    email: str | None, callback_url: str, extra_metadata: dict[str, str] | None = None,
 ) -> tuple[str, str]:
     """Initialize a transaction. Returns (authorization_url, reference)."""
     payload = {
@@ -83,7 +85,7 @@ async def paystack_create_checkout(
         "amount": amount,
         "currency": currency.upper(),
         "callback_url": callback_url,
-        "metadata": {"event_id": event_id, "tier_key": tier_key},
+        "metadata": {"event_id": event_id, "tier_key": tier_key, **(extra_metadata or {})},
     }
     headers = {"Authorization": f"Bearer {settings.paystack_secret_key}"}
     async with httpx.AsyncClient(timeout=20) as c:

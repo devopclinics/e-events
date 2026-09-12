@@ -5,9 +5,10 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from ..database import get_db
-from ..models import EmailDeliveryEvent, Guest, Event, User, Zone, MenuCategory, SeatingTable, TicketType, TableGroup, ScanEvent, MessageCreditLedger
+from ..models import EmailDeliveryEvent, Guest, Event, User, Zone, MenuCategory, SeatingTable, TicketType, TableGroup, ScanEvent
 from ..schemas import DashboardStats, GuestOut, ZoneOccupancy, TableReport, DashboardBreakdown, DashboardTimelinePoint, DashboardInviteDelivery, DashboardContactStats, DashboardEmailDelivery, DashboardChannelDelivery, DashboardCredits
 from ..auth import require_dashboard_access, verify_token_user, user_has_dashboard_access
+from ..message_delivery_report import channel_delivery_report
 from .access import zone_occupancy
 from . import sse_subscribers
 
@@ -232,59 +233,13 @@ async def get_dashboard(event_id: str, db: AsyncSession = Depends(get_db), _: Us
 
     # Messaging (SMS/MMS/WhatsApp) delivery breakdown + credit balance/spend,
     # derived from the message-credit ledger (spend = attempt, refund = failure).
-    msg_rows = (await db.execute(
-        select(
-            MessageCreditLedger.id,
-            MessageCreditLedger.channel,
-            MessageCreditLedger.action,
-            MessageCreditLedger.status,
-            MessageCreditLedger.delta,
-            MessageCreditLedger.provider_message_id,
-        )
-        .where(
-            MessageCreditLedger.event_id == event_id,
-            MessageCreditLedger.channel.in_(("sms", "mms", "whatsapp")),
-        )
-    )).all()
-    chan = {c: {"sent": 0, "delivered": 0, "failed": 0} for c in ("sms", "mms", "whatsapp")}
-    credits_spent = 0
-    # Deduplicate by provider_message_id so a spend + refund pair is treated as
-    # one logical message outcome instead of two separate failures.
-    msg_ids = {c: {"sent": set(), "delivered": set(), "failed": set()} for c in ("sms", "mms", "whatsapp")}
-    failed_statuses = {
-        "failed", "undelivered", "error", "rejected", "refunded",
-        "sending_failed", "delivery_failed", "skipped", "deleted",
-        "invalid_recipient", "country_not_enabled", "insufficient_credit",
-    }
-    for row_id, c, action, status, delta, provider_message_id in msg_rows:
-        d = msg_ids.get(c)
-        if d is None:
-            continue
-        message_key = provider_message_id or f"ledger:{row_id}"
-        # Legacy credits log sends as ``spend``; organization wallets use
-        # ``reserve`` and reconcile that same row with the provider outcome.
-        if action in {"spend", "reserve"}:
-            d["sent"].add(message_key)
-            st = (status or "").lower()
-            if "deliver" in st:
-                d["delivered"].add(message_key)
-            elif st in failed_statuses:
-                d["failed"].add(message_key)
-            credits_spent += abs(delta or 0)
-        elif action == "refund":
-            d["failed"].add(message_key)
-    for c in ("sms", "mms", "whatsapp"):
-        sent_ids = msg_ids[c]["sent"]
-        failed_ids = msg_ids[c]["failed"]
-        delivered_ids = msg_ids[c]["delivered"] - failed_ids
-        chan[c] = {
-            "sent": len(sent_ids),
-            "delivered": len(delivered_ids),
-            "failed": len(failed_ids),
-        }
-    message_delivery = [DashboardChannelDelivery(channel=c, **chan[c])
-                        for c in ("sms", "mms", "whatsapp")
-                        if chan[c]["sent"] or chan[c]["failed"]]
+    chan = await channel_delivery_report(db, event_id)
+    credits_spent = sum(c["credits_spent"] for c in chan.values())
+    message_delivery = [
+        DashboardChannelDelivery(channel=c, sent=chan[c]["sent"], delivered=chan[c]["delivered"], failed=chan[c]["failed"])
+        for c in ("sms", "mms", "whatsapp")
+        if chan[c]["sent"] or chan[c]["failed"]
+    ]
     credits = DashboardCredits(balance=event.message_credits or 0, spent=credits_spent)
 
     return DashboardStats(

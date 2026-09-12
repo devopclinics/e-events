@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import RedesignShell, { Icon, Modal, ConfirmDialog } from './redesign/RedesignShell'
+import RedesignShell, { Icon, Modal, ConfirmDialog, WhatsAppTemplatePicker } from './redesign/RedesignShell'
 import { EmptyState, ErrorRetryState, LoadingSkeleton } from './redesign/RedesignPrimitives'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
@@ -914,11 +914,13 @@ function RealRemindersContent({ eventId, event, notify }) {
     label: '7 days before', offset_days: 7, send_time_local: '09:00',
     channels: ['email', 'sms'], audience: 'non-responders',
     subject: 'Reminder: {{event_name}}', email_body: '', sms_body: '', whatsapp_body: '',
+    whatsapp_use_approved: false, whatsapp_template_ref: '', whatsapp_template_vars: {},
   }
   const [reminders, setReminders] = useState(null)
   const [error, setError] = useState('')
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(blank)
+  const [waApprovedTemplates, setWaApprovedTemplates] = useState([])
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [busy, setBusy] = useState(false)
   const [preview, setPreview] = useState(null)
@@ -932,6 +934,8 @@ function RealRemindersContent({ eventId, event, notify }) {
     setError('')
     try { setReminders(await api.listReminders(eventId)) }
     catch (e) { setError(e.message || 'Reminders could not be loaded') }
+    try { setWaApprovedTemplates(await api.listApprovedWhatsAppTemplates(eventId)) }
+    catch { setWaApprovedTemplates([]) }
   }
   useEffect(() => { load() }, [eventId])
 
@@ -943,6 +947,9 @@ function RealRemindersContent({ eventId, event, notify }) {
       channels: item.channels || [], audience: audiencePresetId(item.audience_rsvp_statuses),
       subject: item.subject || '', email_body: item.email_body || '',
       sms_body: item.sms_body || '', whatsapp_body: item.whatsapp_body || '',
+      whatsapp_use_approved: !!item.whatsapp_template_ref,
+      whatsapp_template_ref: item.whatsapp_template_ref || '',
+      whatsapp_template_vars: item.whatsapp_template_vars || {},
     } : blank)
   }
 
@@ -959,12 +966,15 @@ function RealRemindersContent({ eventId, event, notify }) {
     setBusy(true)
     try {
       const audiencePreset = REMINDER_AUDIENCE_PRESETS.find((p) => p.id === form.audience)
+      const useApprovedWa = form.whatsapp_use_approved && form.whatsapp_template_ref
       const payload = {
         label: form.label.trim(), offset_days: Number(form.offset_days) || 0,
         send_time_local: form.send_time_local, channels: form.channels,
         audience_rsvp_statuses: audiencePreset?.statuses ?? null,
         subject: form.subject || null, email_body: form.email_body || null,
         sms_body: form.sms_body || null, whatsapp_body: form.whatsapp_body || null,
+        whatsapp_template_ref: useApprovedWa ? form.whatsapp_template_ref : null,
+        whatsapp_template_vars: useApprovedWa ? form.whatsapp_template_vars : null,
       }
       if (editing === 'new') await api.createReminder(eventId, payload)
       else await api.updateReminder(eventId, editing.id, payload)
@@ -1095,8 +1105,24 @@ function RealRemindersContent({ eventId, event, notify }) {
         <textarea className="rr-textarea" value={form.sms_body} onChange={(e) => setForm((v) => ({ ...v, sms_body: e.target.value }))} />
       </>}
       {form.channels.includes('whatsapp') && <>
-        <label className="rd-field-label" style={{ marginTop: 12 }}>WhatsApp body</label>
-        <textarea className="rr-textarea" value={form.whatsapp_body} onChange={(e) => setForm((v) => ({ ...v, whatsapp_body: e.target.value }))} />
+        <label className="rd-field-label" style={{ marginTop: 12 }}>WhatsApp</label>
+        <WhatsAppTemplatePicker
+          approvedTemplates={waApprovedTemplates}
+          mergeFieldOptions={REMINDER_PLACEHOLDERS.map((p) => `{{${p}}}`)}
+          enabled={form.whatsapp_use_approved}
+          templateRef={form.whatsapp_template_ref}
+          templateVars={form.whatsapp_template_vars}
+          previewSample={{ '{{first_name}}': 'Ahmad', '{{event_name}}': event?.name || 'Your Event' }}
+          onChange={({ enabled, templateRef, templateVars }) => setForm((v) => ({
+            ...v, whatsapp_use_approved: enabled, whatsapp_template_ref: templateRef, whatsapp_template_vars: templateVars,
+          }))}
+        />
+        {!form.whatsapp_use_approved && (
+          <>
+            <p className="rd-hint" style={{ marginTop: 10 }}>Free text can't open a new WhatsApp conversation — turn the toggle above on to use an approved template for real delivery.</p>
+            <textarea className="rr-textarea" value={form.whatsapp_body} onChange={(e) => setForm((v) => ({ ...v, whatsapp_body: e.target.value }))} />
+          </>
+        )}
       </>}
       <div className="rd-field-label" style={{ marginTop: 4 }}>Placeholders</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>

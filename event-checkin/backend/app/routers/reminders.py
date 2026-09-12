@@ -45,6 +45,8 @@ def _out(reminder: EventReminder) -> EventReminderOut:
         audience_rsvp_statuses=reminder.audience_rsvp_statuses,
         subject=reminder.subject, email_body=reminder.email_body,
         sms_body=reminder.sms_body, whatsapp_body=reminder.whatsapp_body,
+        whatsapp_template_ref=reminder.whatsapp_template_ref,
+        whatsapp_template_vars=reminder.whatsapp_template_vars,
         enabled=reminder.enabled, status=reminder.status, fired_at=reminder.fired_at,
         guests_targeted=reminder.guests_targeted, guests_sent=reminder.guests_sent,
         last_error=reminder.last_error, sort_order=reminder.sort_order,
@@ -81,6 +83,7 @@ async def create_reminder(event_id: str, data: EventReminderCreate, db: AsyncSes
         send_time_local=data.send_time_local, fire_at_utc=fire_at, channels=data.channels,
         audience_rsvp_statuses=data.audience_rsvp_statuses, subject=data.subject,
         email_body=data.email_body, sms_body=data.sms_body, whatsapp_body=data.whatsapp_body,
+        whatsapp_template_ref=data.whatsapp_template_ref, whatsapp_template_vars=data.whatsapp_template_vars,
         enabled=data.enabled, sort_order=data.sort_order, updated_by=user.id,
     )
     db.add(reminder)
@@ -151,7 +154,7 @@ async def test_send_reminder(event_id: str, reminder_id: str, data: ReminderTest
     credit or write EventReminderSend -- it's a test, same as the template
     editor's test-send."""
     event = await _reminder_event(event_id, db)
-    await _get_reminder(event_id, reminder_id, db)
+    reminder = await _get_reminder(event_id, reminder_id, db)
     if not (data.to or "").strip():
         raise HTTPException(400, "A destination address/number is required")
     if not recipient_allowed(data.channel, data.to):
@@ -165,5 +168,12 @@ async def test_send_reminder(event_id: str, reminder_id: str, data: ReminderTest
     elif data.channel == "sms":
         await messaging.send_custom_sms(phone=data.to, body=body)
     elif data.channel == "whatsapp":
-        await messaging.send_custom_whatsapp(phone=data.to, body=body)
+        wa_ref = data.whatsapp_template_ref if data.whatsapp_template_ref is not None else reminder.whatsapp_template_ref
+        wa_vars = data.whatsapp_template_vars if data.whatsapp_template_vars is not None else reminder.whatsapp_template_vars
+        if wa_ref and wa_vars:
+            var_keys = list(wa_vars.keys())
+            params = [render(wa_vars[k], ctx) for k in var_keys]
+            await messaging.send_custom_template_whatsapp(phone=data.to, template_ref=wa_ref, params=params, var_keys=var_keys)
+        else:
+            await messaging.send_custom_whatsapp(phone=data.to, body=body)
     return {"ok": True, "channel": data.channel, "to": data.to}

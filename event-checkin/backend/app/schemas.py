@@ -1451,11 +1451,61 @@ class MessageTemplateSave(BaseModel):
     sms_body: Optional[str] = None
     whatsapp_body: Optional[str] = None
     mms_body: Optional[str] = None
+    # A specific approved WhatsApp template to use instead of the generic
+    # announcement fallback — see MessageTemplate.whatsapp_template_ref.
+    whatsapp_template_ref: Optional[str] = None
+    whatsapp_template_vars: Optional[dict[str, str]] = None
 
 
 class TemplatePreviewRequest(MessageTemplateSave):
     """Draft fields to render with sample data (renders unsaved edits)."""
     pass
+
+
+# ── WhatsApp template self-serve submission ─────────────────────────────────
+
+class WhatsAppTemplateSubmissionCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    category: Literal["UTILITY", "MARKETING", "AUTHENTICATION"] = "MARKETING"
+    body: str = Field(min_length=1)
+    sample_values: dict[str, str] = {}
+
+
+class WhatsAppTemplateSubmissionRetry(BaseModel):
+    body: str = Field(min_length=1)
+    category: Literal["UTILITY", "MARKETING", "AUTHENTICATION"]
+    sample_values: dict[str, str] = {}
+
+
+class WhatsAppTemplateSubmissionOut(BaseModel):
+    id: str
+    name: str
+    platform_name: str
+    category: str
+    body: str
+    variables: list[str]
+    sample_values: dict[str, str]
+    status: str
+    retry_count: int
+    max_retries: int
+    reject_reason: Optional[str] = None
+    bird_project_id: Optional[str] = None
+    is_shared: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class WhatsAppTemplateSubmissionCheckoutOut(BaseModel):
+    url: str
+    provider: str
+
+
+class ApprovedWhatsAppTemplateOut(BaseModel):
+    ref: str
+    name: str
+    category: str
+    body: str
+    variables: list[str]
 
 
 class TemplateTestSendRequest(MessageTemplateSave):
@@ -1789,6 +1839,8 @@ class EventReminderCreate(BaseModel):
     email_body: Optional[str] = None
     sms_body: Optional[str] = None
     whatsapp_body: Optional[str] = None
+    whatsapp_template_ref: Optional[str] = None
+    whatsapp_template_vars: Optional[dict[str, str]] = None
     enabled: bool = True
     sort_order: int = 0
 
@@ -1803,6 +1855,8 @@ class EventReminderUpdate(BaseModel):
     email_body: Optional[str] = None
     sms_body: Optional[str] = None
     whatsapp_body: Optional[str] = None
+    whatsapp_template_ref: Optional[str] = None
+    whatsapp_template_vars: Optional[dict[str, str]] = None
     enabled: Optional[bool] = None
     sort_order: Optional[int] = None
 
@@ -1820,6 +1874,8 @@ class EventReminderOut(BaseModel):
     email_body: Optional[str] = None
     sms_body: Optional[str] = None
     whatsapp_body: Optional[str] = None
+    whatsapp_template_ref: Optional[str] = None
+    whatsapp_template_vars: Optional[dict[str, str]] = None
     enabled: bool
     status: str
     fired_at: Optional[datetime] = None
@@ -1845,6 +1901,8 @@ class ReminderTestSendRequest(BaseModel):
     to: str
     subject: Optional[str] = None
     body: str = ""
+    whatsapp_template_ref: Optional[str] = None
+    whatsapp_template_vars: Optional[dict[str, str]] = None
 
 
 ScheduledCommunicationType = Literal[
@@ -1878,6 +1936,8 @@ class ScheduledCommunicationCreate(BaseModel):
     email_body: Optional[str] = None
     sms_body: Optional[str] = None
     whatsapp_body: Optional[str] = None
+    whatsapp_template_ref: Optional[str] = None
+    whatsapp_template_vars: Optional[dict[str, str]] = None
     mms_body: Optional[str] = None
     mms_media_url: Optional[str] = None
     status: Literal["draft", "scheduled", "paused"] = "scheduled"
@@ -1898,6 +1958,8 @@ class ScheduledCommunicationUpdate(BaseModel):
     email_body: Optional[str] = None
     sms_body: Optional[str] = None
     whatsapp_body: Optional[str] = None
+    whatsapp_template_ref: Optional[str] = None
+    whatsapp_template_vars: Optional[dict[str, str]] = None
     mms_body: Optional[str] = None
     mms_media_url: Optional[str] = None
     status: Optional[Literal["draft", "scheduled", "paused", "cancelled"]] = None
@@ -1922,6 +1984,8 @@ class ScheduledCommunicationOut(BaseModel):
     email_body: Optional[str] = None
     sms_body: Optional[str] = None
     whatsapp_body: Optional[str] = None
+    whatsapp_template_ref: Optional[str] = None
+    whatsapp_template_vars: Optional[dict[str, str]] = None
     mms_body: Optional[str] = None
     mms_media_url: Optional[str] = None
     status: str
@@ -2778,6 +2842,12 @@ class BroadcastRequest(BaseModel):
     channels: list[Literal["email", "sms", "whatsapp", "mms"]] = ["sms"]
     # Image to attach when "mms" is selected — required, HTTPS only.
     mms_media_url: Optional[str] = None
+    # Per-send override of which approved WhatsApp template to use, picked in
+    # the Broadcast composer itself. Falls back to the "broadcast"
+    # MessageTemplate override's saved whatsapp_template_ref/_vars (Templates
+    # editor) when omitted -- see routers/events.py::broadcast_message.
+    whatsapp_template_ref: Optional[str] = None
+    whatsapp_template_vars: Optional[dict[str, str]] = None
 
 
 class CheckoutRequest(BaseModel):

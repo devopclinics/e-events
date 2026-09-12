@@ -324,4 +324,27 @@
 .cm-banner-dismiss { background: none; border: none; cursor: pointer; font-size: 1.1rem; color: inherit; padding: 0 4px; line-height: 1; align-self: flex-start; }
 .cm-demo-toggles { display: flex; gap: 14px; margin-bottom: 8px; }
 .rd-switch-disabled { opacity: .45; cursor: not-allowed; }
-.cm-whatsapp-inert-note { background: #fffbeb; border: 1px solid #fcd34d; color: #92400e; border-radius: 6px; padding: 8px 10px; margin: 4px 0 8px; }
+
+/* ── Self-serve WhatsApp template submission ─────────────────────────── */
+.wa-submit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+@media (max-width: 980px) { .wa-submit-grid { grid-template-columns: 1fr; } }
+.wa-cat-hint { font-size: 10px; color: var(--faint); line-height: 1.5; margin: -4px 0 9px; }
+.wa-var-sample-row { display: grid; grid-template-columns: 96px 1fr; gap: 8px; align-items: center; margin-bottom: 8px; }
+.wa-var-sample-row input { margin-bottom: 0; }
+.wa-guidance { list-style: none; margin: 10px 0 16px; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.wa-guidance li { font-size: 11px; display: flex; align-items: flex-start; gap: 7px; line-height: 1.5; color: var(--ink); }
+.wa-guidance li .mark { flex: none; width: 15px; height: 15px; border-radius: 50%; display: grid; place-items: center; font-size: 9px; font-weight: 800; margin-top: 1px; }
+.wa-guidance li.ok .mark { background: var(--success-soft); color: var(--success); }
+.wa-guidance li.warn .mark { background: var(--warning-soft); color: var(--warning); }
+.wa-price-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 10px; padding: 12px 14px; margin: 6px 0 14px; }
+.wa-price-bar .amount { font-size: 19px; font-weight: 800; color: var(--ink); }
+.wa-price-bar .amount small { font-size: 10px; font-weight: 600; color: var(--faint); display: block; }
+table.wa-sub-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+table.wa-sub-table th { text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: var(--faint); font-weight: 700; padding: 0 8px 8px; border-bottom: 1px solid var(--line-soft); }
+table.wa-sub-table td { padding: 9px 8px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; color: var(--ink); }
+table.wa-sub-table tr:last-child td { border-bottom: 0; }
+table.wa-sub-table .name { font-weight: 700; }
+table.wa-sub-table .sub { font-size: 10px; color: var(--faint); }
+.wa-reject-note { font-size: 10px; color: var(--danger); margin-top: 3px; }
+.wa-reject-note button { color: var(--teal); font-weight: 700; background: none; border: 0; padding: 0; cursor: pointer; font-size: 10px; }
+.wa-retry-panel { margin-top: 10px; border-top: 1px dashed var(--line-soft); padding-top: 10px; }

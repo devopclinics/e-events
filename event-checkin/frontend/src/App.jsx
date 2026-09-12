@@ -69,6 +69,7 @@ const LiveGuestPage = lazy(() => import('./pages/LiveGuestPage'))
 const LiveDisplayPage = lazy(() => import('./pages/LiveDisplayPage'))
 const LiveControlPage = lazy(() => import('./pages/LiveControlPage'))
 const LiveStepPreviewPage = lazy(() => import('./pages/LiveStepPreviewPage'))
+const SurveyReportPage = lazy(() => import('./pages/SurveyReportPage'))
 const VendorPortalPage = lazy(() => import('./pages/VendorPortalPage'))
 const TicketingRedesignPage = lazy(() => import('./pages/TicketingRedesignPage'))
 const TicketOrderPage = lazy(() => import('./pages/TicketOrderPage'))
@@ -465,6 +466,7 @@ function AppRoutes() {
       <Route path="/d/:displayShortCode" element={<LiveDisplayPage />} />
       <Route path="/live-display/:activityId" element={<LiveDisplayPage />} />
       <Route path="/live/step-preview/:workflowId/:stepId" element={<LiveStepPreviewPage />} />
+      <Route path="/live/survey-report/:activityId" element={<SurveyReportPage />} />
       <Route path="/live/:displayCode" element={<LiveDisplayPage />} />
       {/* Short authenticated event-context entry for the Festio Live workspace
           and presenter. More specific public /live/:displayCode stays above. */}

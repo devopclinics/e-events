@@ -12,8 +12,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..models import Event, MessageTemplate, MessageTemplateAudit, User
-from ..schemas import MessageTemplateSave, TemplatePreviewRequest, TemplateTestSendRequest
+from ..models import Event, MessageTemplate, MessageTemplateAudit, User, WhatsAppTemplateSubmission
+from ..schemas import MessageTemplateSave, TemplatePreviewRequest, TemplateTestSendRequest, ApprovedWhatsAppTemplateOut
 from ..auth import require_event_admin
 from services import templates as tpl
 from services.email_service import send_simple_email, render_simple_email_preview
@@ -47,6 +47,8 @@ def _effective(spec: dict, ov: MessageTemplate | None) -> dict:
         "sms_body": pick("sms_body"),
         "whatsapp_body": pick("whatsapp_body"),
         "mms_body": pick("mms_body"),
+        "whatsapp_template_ref": ov.whatsapp_template_ref if ov is not None else None,
+        "whatsapp_template_vars": ov.whatsapp_template_vars if ov is not None else None,
     }
 
 
@@ -73,6 +75,8 @@ def _meta(key: str, spec: dict, ov: MessageTemplate | None) -> dict:
             "subject": ov.subject, "email_body": ov.email_body,
             "sms_body": ov.sms_body, "whatsapp_body": ov.whatsapp_body,
             "mms_body": ov.mms_body,
+            "whatsapp_template_ref": ov.whatsapp_template_ref,
+            "whatsapp_template_vars": ov.whatsapp_template_vars,
             "updated_at": ov.updated_at.isoformat() if ov.updated_at else None,
         },
         "effective": eff,
@@ -102,6 +106,33 @@ async def template_audit(event_id: str, db: AsyncSession = Depends(get_db), _: U
         "changed_by_email": r.changed_by_email,
         "changed_at": r.changed_at.isoformat() if r.changed_at else None,
     } for r in rows]
+
+
+@router.get("/{event_id}/templates/whatsapp/approved", response_model=list[ApprovedWhatsAppTemplateOut])
+async def list_approved_whatsapp_templates(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+    """Picker data source for the WhatsApp section of a Message Template or
+    Reminder editor: this event's org's own approved self-serve submissions
+    (services/wa_template_submissions.py) plus any platform-shared ones."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    rows = (await db.execute(
+        select(WhatsAppTemplateSubmission).where(
+            WhatsAppTemplateSubmission.status == "approved",
+            (WhatsAppTemplateSubmission.org_id == event.org_id) | (WhatsAppTemplateSubmission.is_shared.is_(True)),
+        )
+    )).scalars().all()
+    return [
+        ApprovedWhatsAppTemplateOut(
+            # Bird requires "projectId:channelTemplateId" (its "version") to
+            # actually send -- the bare project id 422s with "provided
+            # template information is invalid" the moment a real send is
+            # attempted, even though it looks fine everywhere else.
+            ref=f"{r.bird_project_id}:{r.bird_channel_template_id}" if r.bird_channel_template_id else r.bird_project_id,
+            name=r.name, category=r.category, body=r.body, variables=r.variables or [],
+        )
+        for r in rows if r.bird_project_id
+    ]
 
 
 @router.get("/{event_id}/templates/{key}")
@@ -149,6 +180,8 @@ async def save_template(event_id: str, key: str, data: MessageTemplateSave,
     ov.sms_body = data.sms_body
     ov.whatsapp_body = data.whatsapp_body
     ov.mms_body = data.mms_body
+    ov.whatsapp_template_ref = data.whatsapp_template_ref
+    ov.whatsapp_template_vars = data.whatsapp_template_vars if data.whatsapp_template_ref else None
     ov.updated_at = datetime.utcnow()
     ov.updated_by = user.id
 
@@ -158,6 +191,8 @@ async def save_template(event_id: str, key: str, data: MessageTemplateSave,
             "subject": ov.subject, "email_body": ov.email_body,
             "sms_body": ov.sms_body, "whatsapp_body": ov.whatsapp_body,
             "mms_body": ov.mms_body,
+            "whatsapp_template_ref": ov.whatsapp_template_ref,
+            "whatsapp_template_vars": ov.whatsapp_template_vars,
         }),
         changed_by=user.id, changed_by_email=user.email,
     ))
@@ -242,11 +277,23 @@ async def test_send_template(event_id: str, key: str, data: TemplateTestSendRequ
         # isolation. The body is verifiable via Preview; real MMS fires at check-in.
         raise HTTPException(400, "MMS can't be test-sent here — use Preview; it sends with the ticket card at check-in.")
 
-    rendered = _render_draft(event, key, spec, data, await _override(event_id, key, db))
+    ov = await _override(event_id, key, db)
+    rendered = _render_draft(event, key, spec, data, ov)
     if data.channel == "email":
         await send_simple_email(data.to, rendered["subject"] or f"Test — {spec['label']}", rendered["email_body"])
     elif data.channel == "sms":
         await messaging.send_custom_sms(phone=data.to, body=rendered["sms_body"])
     elif data.channel == "whatsapp":
-        await messaging.send_custom_whatsapp(phone=data.to, body=rendered["whatsapp_body"])
+        wa_ref = data.whatsapp_template_ref if data.whatsapp_template_ref is not None else (ov.whatsapp_template_ref if ov else None)
+        wa_vars = data.whatsapp_template_vars if data.whatsapp_template_vars is not None else (ov.whatsapp_template_vars if ov else None)
+        if wa_ref and wa_vars:
+            ctx = tpl.sample_context(event)
+            var_keys = list(wa_vars.keys())
+            params = [tpl.render(wa_vars[k], ctx) for k in var_keys]
+            await messaging.send_custom_template_whatsapp(phone=data.to, template_ref=wa_ref, params=params, var_keys=var_keys)
+        else:
+            # No approved template configured -- free text can only reach a
+            # number with an open WhatsApp session (started within the last
+            # 24h by the recipient), so this will fail for a cold number.
+            await messaging.send_custom_whatsapp(phone=data.to, body=rendered["whatsapp_body"])
     return {"ok": True, "channel": data.channel, "to": data.to}

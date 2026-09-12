@@ -336,6 +336,92 @@ TEMPLATES: list[TemplateDef] = [
         category="MARKETING",
         group="mbf_summit",
     ),
+    # Utility resubmission of the MARKETING feedback request above -- same
+    # body/vars, different platform_name (Meta requires a fresh submission
+    # per category, not an edit) and category. Live sends of the MARKETING
+    # version hit WhatsApp error 131049 ("not delivered to maintain healthy
+    # ecosystem engagement") on this business number, whose quality rating
+    # is still UNKNOWN (~2 weeks old) -- Meta paces unrated-number MARKETING
+    # sends far harder than UTILITY. Other UTILITY templates on this same
+    # number have not hit this. Real risk: Meta reviews UTILITY claims
+    # strictly and a feedback ask is arguably promotional engagement, not a
+    # transaction update, so this could be rejected for miscategorization --
+    # a deliberate tradeoff accepted to get delivery working now.
+    TemplateDef(
+        "MBF Summit 2026 feedback request (utility)",
+        "festio_mbf_summit_2026_feedback_utility",
+        "As-salamu Alaykum {{firstName}}! JazakumAllahu Khairan for being part of {{eventName}}. "
+        "We'd love your feedback -- it only takes 2-3 minutes and helps us plan next year's Summit, in shaa Allah.\n\n"
+        "Share your feedback: {{feedbackLink}} -- sent via Festio.",
+        ("firstName", "eventName", "feedbackLink"),
+        category="UTILITY",
+        group="mbf_summit",
+    ),
+    # v2 of the utility feedback request above -- warmer copy, stronger
+    # "your response shapes next year's Summit" framing, requested after
+    # v1's wording felt too clinical. Same variables/category/group; WhatsApp
+    # markdown uses single asterisks for bold (*bold*), not double (**bold**).
+    TemplateDef(
+        "MBF Summit 2026 feedback request (utility) v2",
+        "festio_mbf_summit_2026_feedback_utility_v2",
+        "As-salamu Alaykum *{{firstName}}*!\n\n"
+        "JazakumAllahu Khairan for being part of *{{eventName}}*. It was a blessing to come together, "
+        "strengthen our bonds, and grow as a community.\n\n"
+        "*Now, let your voice count.* Please be part of those who help shape the next MBF Summit, in shaa Allah. "
+        "Tell us what worked, what we can improve, and what you would like to see next.\n\n"
+        "*It only takes 2-3 minutes:*\n{{feedbackLink}}\n\n"
+        "JazakumAllahu Khairan. May Allah reward you for your time and participation.\n\n"
+        "-- MBF Summit Team | Sent via Festio",
+        ("firstName", "eventName", "feedbackLink"),
+        category="UTILITY",
+        group="mbf_summit",
+    ),
+    # Retry of v2's exact wording -- Meta silently reclassified the first v2
+    # submission from UTILITY to MARKETING at review time (checked directly
+    # against Bird's API: our request said UTILITY, the approved
+    # deployments/platformInfo came back MARKETING). Meta's classification
+    # isn't perfectly deterministic across submissions, so this tries the
+    # identical content once more before rewriting anything. If this also
+    # comes back MARKETING, that confirms the phrasing itself ("let your
+    # voice count", "help shape the next Summit") reliably reads as
+    # promotional and needs softening, not another blind retry.
+    TemplateDef(
+        "MBF Summit 2026 feedback request (utility) v2 retry",
+        "festio_mbf_summit_2026_feedback_utility_v2b",
+        "As-salamu Alaykum *{{firstName}}*!\n\n"
+        "JazakumAllahu Khairan for being part of *{{eventName}}*. It was a blessing to come together, "
+        "strengthen our bonds, and grow as a community.\n\n"
+        "*Now, let your voice count.* Please be part of those who help shape the next MBF Summit, in shaa Allah. "
+        "Tell us what worked, what we can improve, and what you would like to see next.\n\n"
+        "*It only takes 2-3 minutes:*\n{{feedbackLink}}\n\n"
+        "JazakumAllahu Khairan. May Allah reward you for your time and participation.\n\n"
+        "-- MBF Summit Team | Sent via Festio",
+        ("firstName", "eventName", "feedbackLink"),
+        category="UTILITY",
+        group="mbf_summit",
+    ),
+    # v3 -- both v2 attempts (identical wording, resubmitted twice) came back
+    # reclassified MARKETING even before Meta's review completed (visible on
+    # Bird's own dashboard as soon as submitted), so this isn't review
+    # variance -- it's the phrasing itself. "Now, let your voice count...
+    # help shape the next Summit" reads as a promotional call-to-action.
+    # Keeps v2's warm opening/closing (near-identical to v1, which got
+    # genuine UTILITY) and replaces only the middle with a plain
+    # informational statement instead of a persuasive one.
+    TemplateDef(
+        "MBF Summit 2026 feedback request (utility) v3",
+        "festio_mbf_summit_2026_feedback_utility_v3",
+        "As-salamu Alaykum *{{firstName}}*!\n\n"
+        "JazakumAllahu Khairan for being part of *{{eventName}}*. It was a blessing to come together, "
+        "strengthen our bonds, and grow as a community.\n\n"
+        "We're collecting feedback from attendees to help plan next year's Summit. Please share your input below.\n\n"
+        "*It only takes 2-3 minutes:*\n{{feedbackLink}}\n\n"
+        "JazakumAllahu Khairan. May Allah reward you for your time and participation.\n\n"
+        "-- MBF Summit Team | Sent via Festio",
+        ("firstName", "eventName", "feedbackLink"),
+        category="UTILITY",
+        group="mbf_summit",
+    ),
     # Generic announcement carrier for host broadcasts + FestioMe urgent
     # escalations (the only flows with freeform organizer text). Kept neutral /
     # transactional — no promo or opt-out language — to stay Utility-classified.

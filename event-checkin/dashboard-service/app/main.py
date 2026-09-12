@@ -692,6 +692,12 @@ async def communication_health(db: AsyncSession, event: Event) -> dict:
         "sending_failed", "delivery_failed", "skipped", "deleted",
         "invalid_recipient", "country_not_enabled", "insufficient_credit",
     }
+    # Terminal-success synonyms that don't literally contain "deliver" --
+    # e.g. Twilio/Signal House record "success"/"sent" as their best-known
+    # final state when no separate delivery-receipt webhook ever fires for
+    # this account. Without this, a real successful SMS send counted as
+    # neither delivered nor failed -- invisible in the report.
+    delivered_synonyms = {"success", "sent"}
     channels = ("sms", "mms", "whatsapp")
     msg_ids = {c: {"sent": set(), "delivered": set(), "failed": set()} for c in channels}
     # Every broadcast-originated ledger row is tagged reason="broadcast" (see
@@ -712,7 +718,7 @@ async def communication_health(db: AsyncSession, event: Event) -> dict:
             if bd is not None:
                 bd["sent"].add(key)
             st = (status or "").lower()
-            if "deliver" in st:
+            if "deliver" in st or st in delivered_synonyms:
                 d["delivered"].add(key)
                 if bd is not None:
                     bd["delivered"].add(key)

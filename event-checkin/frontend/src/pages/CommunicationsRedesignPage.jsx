@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import RedesignShell, { Icon, Modal, ChannelPreviewFrame } from './redesign/RedesignShell'
+import RedesignShell, { Icon, Modal, ChannelPreviewFrame, WhatsAppTemplatePicker } from './redesign/RedesignShell'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
 import { useGuests } from '../hooks/useGuests'
@@ -449,6 +449,8 @@ function BroadcastComposer({ notify, onSent, eventId }) {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
+  const [waApprovedTemplates, setWaApprovedTemplates] = useState([])
+  const [waOverride, setWaOverride] = useState({ enabled: false, templateRef: '', templateVars: {} })
 
   const feedbackSteps = experienceSteps.filter((step) => step.enabled !== false && step.type === 'feedback')
   const stageSteps = experienceSteps.filter((step) => step.enabled !== false && step.type !== 'feedback')
@@ -499,6 +501,21 @@ function BroadcastComposer({ notify, onSent, eventId }) {
     return () => { cancelled = true }
     // The URL purpose is intentionally applied only when the composer opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!eventId) return
+    Promise.all([
+      api.listApprovedWhatsAppTemplates(eventId).catch(() => []),
+      api.getTemplate(eventId, 'broadcast').catch(() => null),
+    ]).then(([approved, broadcastTemplate]) => {
+      if (cancelled) return
+      setWaApprovedTemplates(approved)
+      const ref = broadcastTemplate?.effective?.whatsapp_template_ref || ''
+      setWaOverride({ enabled: !!ref, templateRef: ref, templateVars: broadcastTemplate?.effective?.whatsapp_template_vars || {} })
+    })
+    return () => { cancelled = true }
   }, [eventId])
 
   function applyPurpose(nextPurpose) {
@@ -614,6 +631,8 @@ function BroadcastComposer({ notify, onSent, eventId }) {
         channels: Object.entries(channels).filter(([, enabled]) => enabled).map(([channel]) => channel),
         extra_recipients: sendMode === 'test' || contextualPurpose ? [] : typedRecipients.map((recipient) => ({ name: recipient.name, ...(recipient.contact.includes('@') ? { email: recipient.contact } : { phone: recipient.contact }) })),
         mms_media_url: channels.mms ? mmsUrl.trim() : null,
+        whatsapp_template_ref: channels.whatsapp && waOverride.enabled ? waOverride.templateRef : null,
+        whatsapp_template_vars: channels.whatsapp && waOverride.enabled ? waOverride.templateVars : null,
       })
       setResult(result)
       setGuestQuery('')
@@ -768,6 +787,20 @@ function BroadcastComposer({ notify, onSent, eventId }) {
         {channels.mms && (
           <input className="rd-field" placeholder="MMS image URL (https://…)" value={mmsUrl} onChange={(e) => setMmsUrl(e.target.value)} style={{ marginTop: 6 }} />
         )}
+        {channels.whatsapp && (
+          <div style={{ marginTop: 10 }}>
+            <label className="rd-field-label">WhatsApp template for this send</label>
+            <WhatsAppTemplatePicker
+              approvedTemplates={waApprovedTemplates}
+              mergeFieldOptions={['{{guest_first_name}}', '{{event_name}}', '{{message}}']}
+              enabled={waOverride.enabled}
+              templateRef={waOverride.templateRef}
+              templateVars={waOverride.templateVars}
+              previewSample={{ '{{guest_first_name}}': 'Ahmad', '{{event_name}}': 'Your Event', '{{message}}': message || '(broadcast message)' }}
+              onChange={(next) => setWaOverride(next)}
+            />
+          </div>
+        )}
 
         <div className="cm-broadcast-summary">
           <span><Icon name="users" size={14} /> Will send to: <strong>{audienceSummary()}</strong></span>
@@ -792,6 +825,24 @@ function BroadcastComposer({ notify, onSent, eventId }) {
   )
 }
 
+const WA_PREVIEW_MERGE_SAMPLE = {
+  '{{guest_first_name}}': 'Ahmad', '{{event_name}}': 'Your Event', '{{message}}': '(broadcast message)',
+  '{{first_name}}': 'Ahmad', '{{event_date}}': 'Sep 12, 2026', '{{guest_hub_link}}': 'https://festio.events/r/sample#guest-hub',
+  '{{ticket_link}}': 'https://festio.events/scan/sample', '{{consent_link}}': 'https://festio.events/s/sample',
+}
+
+function renderApprovedWaPreview(effective, approvedTemplates) {
+  const tpl = approvedTemplates.find((t) => t.ref === effective.whatsapp_template_ref)
+  if (!tpl) return '(this approved template could not be found — it may still be pending Meta review)'
+  let out = tpl.body
+  for (const key of tpl.variables) {
+    const raw = effective.whatsapp_template_vars?.[key] || ''
+    const value = WA_PREVIEW_MERGE_SAMPLE[raw] || raw || '…'
+    out = out.split(`{{${key}}}`).join(value)
+  }
+  return out
+}
+
 /* ── Messages tab (broadcast + templates) ───────────────────────────── */
 
 function MessagesTab({ notify, onPreview, eventId }) {
@@ -812,6 +863,7 @@ function MessagesTab({ notify, onPreview, eventId }) {
   const [orgMembers, setOrgMembers] = useState([])
   const [communication, setCommunication] = useState(null)
   const [broadcasts, setBroadcasts] = useState([])
+  const [waApprovedTemplates, setWaApprovedTemplates] = useState([])
   const { guests } = useGuests(eventId)
   const attentionGuests = guests.filter((g) => g.invite_status === 'failed' || !g.invite_sent_at)
 
@@ -835,6 +887,11 @@ function MessagesTab({ notify, onPreview, eventId }) {
     } catch (e) {
       setTemplateError(e.message || 'Message templates could not be loaded')
     }
+    try {
+      setWaApprovedTemplates(await api.listApprovedWhatsAppTemplates(eventId))
+    } catch {
+      setWaApprovedTemplates([])
+    }
   }
 
   async function loadDeliveryData() {
@@ -856,6 +913,7 @@ function MessagesTab({ notify, onPreview, eventId }) {
   }
 
   function openTemplateEditor(template) {
+    const ref = template.effective?.whatsapp_template_ref || ''
     setTemplateEditor({
       template,
       subject: template.effective?.subject || '',
@@ -863,6 +921,9 @@ function MessagesTab({ notify, onPreview, eventId }) {
       sms_body: template.effective?.sms_body || '',
       whatsapp_body: template.effective?.whatsapp_body || '',
       mms_body: template.effective?.mms_body || '',
+      whatsapp_use_approved: !!ref,
+      whatsapp_template_ref: ref,
+      whatsapp_template_vars: template.effective?.whatsapp_template_vars || {},
     })
   }
 
@@ -870,12 +931,15 @@ function MessagesTab({ notify, onPreview, eventId }) {
     if (!templateEditor || templateBusy) return
     setTemplateBusy(templateEditor.template.key)
     try {
+      const useApproved = templateEditor.whatsapp_use_approved && templateEditor.whatsapp_template_ref
       await api.saveTemplate(eventId, templateEditor.template.key, {
         subject: templateEditor.subject || null,
         email_body: templateEditor.email_body || null,
         sms_body: templateEditor.sms_body || null,
         whatsapp_body: templateEditor.whatsapp_body || null,
         mms_body: templateEditor.mms_body || null,
+        whatsapp_template_ref: useApproved ? templateEditor.whatsapp_template_ref : null,
+        whatsapp_template_vars: useApproved ? templateEditor.whatsapp_template_vars : null,
       })
       setTemplateEditor(null)
       await loadTemplates()
@@ -1182,6 +1246,9 @@ function MessagesTab({ notify, onPreview, eventId }) {
           {!templateAudit.length && <div className="cm-audit-row">No template changes recorded.</div>}
         </div>
       </div>}
+
+      <WhatsAppTemplatesSection notify={notify} onSubmitted={loadTemplates} />
+
       {templateEditor && (
         <Modal title={`Edit: ${templateEditor.template.label}`} onClose={() => setTemplateEditor(null)} width={680}>
           <p className="rd-hint">Available placeholders: {(templateEditor.template.placeholders || []).map((value) => `{{${value}}}`).join(', ') || 'none'}</p>
@@ -1194,14 +1261,29 @@ function MessagesTab({ notify, onPreview, eventId }) {
           {['sms', 'whatsapp', 'mms'].filter((channel) => templateEditor.template.channels.includes(channel)).map((channel) => (
             <div key={channel}>
               <label className="rd-field-label">{channel.toUpperCase()} body</label>
-              {channel === 'whatsapp' && (
-                <p className="rd-hint cm-whatsapp-inert-note">
-                  ⚠️ WhatsApp requires a Meta-approved message template to open a conversation — this text is <strong>never actually sent</strong>.
-                  Real WhatsApp delivery always uses a pre-approved template managed outside Festio (in Bird's dashboard), regardless of what's saved here.
-                  Kept editable for reference/documentation only.
-                </p>
+              {channel === 'whatsapp' ? (
+                <>
+                  <WhatsAppTemplatePicker
+                    approvedTemplates={waApprovedTemplates}
+                    mergeFieldOptions={(templateEditor.template.placeholders || []).map((p) => `{{${p}}}`)}
+                    enabled={templateEditor.whatsapp_use_approved}
+                    templateRef={templateEditor.whatsapp_template_ref}
+                    templateVars={templateEditor.whatsapp_template_vars}
+                    previewSample={{ '{{guest_first_name}}': 'Ahmad', '{{event_name}}': 'Your Event', '{{message}}': '(broadcast message)' }}
+                    onChange={({ enabled, templateRef, templateVars }) => setTemplateEditor((value) => ({
+                      ...value, whatsapp_use_approved: enabled, whatsapp_template_ref: templateRef, whatsapp_template_vars: templateVars,
+                    }))}
+                  />
+                  {!templateEditor.whatsapp_use_approved && (
+                    <>
+                      <p className="rd-hint" style={{ marginTop: 10 }}>Free text can't open a new WhatsApp conversation — turn the toggle above on to use an approved template for real delivery.</p>
+                      <textarea className="rr-textarea" rows={4} value={templateEditor.whatsapp_body} onChange={(event) => setTemplateEditor((value) => ({ ...value, whatsapp_body: event.target.value }))} />
+                    </>
+                  )}
+                </>
+              ) : (
+                <textarea className="rr-textarea" rows={4} value={templateEditor[`${channel}_body`]} onChange={(event) => setTemplateEditor((value) => ({ ...value, [`${channel}_body`]: event.target.value }))} />
               )}
-              <textarea className="rr-textarea" rows={4} value={templateEditor[`${channel}_body`]} onChange={(event) => setTemplateEditor((value) => ({ ...value, [`${channel}_body`]: event.target.value }))} />
             </div>
           ))}
           <div className="rd-row2" style={{ marginTop: 12 }}>
@@ -1261,6 +1343,19 @@ function MessagesTab({ notify, onPreview, eventId }) {
           />
           {templateTest.selectedLabel && <p className="rd-hint cm-test-selected">Selected: <strong>{templateTest.selectedLabel}</strong> · {templateTest.to}</p>}
 
+          {templateTest.channel === 'whatsapp' && (
+            templateTest.template.effective?.whatsapp_template_ref ? (
+              <div className="rr-chan-frame">
+                <div className="rr-chan-frame-head">Preview — this is what will actually send</div>
+                <div className="rr-chan-frame-body rr-chan-frame-body-whatsapp">
+                  <div className="wa-bubble">{renderApprovedWaPreview(templateTest.template.effective, waApprovedTemplates)}</div>
+                </div>
+              </div>
+            ) : (
+              <p className="rd-hint">⚠️ No approved template is configured here — free text only reaches a number that has messaged you on WhatsApp in the last 24 hours, otherwise it fails with "no active session." Turn on an approved template above to test the real send.</p>
+            )
+          )}
+
           <div className="rd-row2 cm-test-actions">
             <button className="rr-btn secondary" onClick={() => setTemplateTest(null)}>Cancel</button>
             <button className="rr-btn primary" disabled={!templateTest.to.trim() || templateTest.sending} onClick={sendTemplateTest}>
@@ -1293,6 +1388,205 @@ const ADDON_PLAN_KEY = {
 }
 const CHANNEL_FEATURE_KEY = { email: 'notify_email', sms: 'notify_sms', whatsapp: 'notify_whatsapp' }
 const THANKYOU_AUDIENCE_KEY = { 'Checked in': 'admitted', 'Confirmed': 'confirmed', 'All guests': 'all' }
+
+const WA_CATEGORY_HINTS = {
+  UTILITY: 'Transactional only — reminders, confirmations, order updates. No promotional language.',
+  MARKETING: "Meta reviews Marketing templates most strictly — avoid urgency language (\"Act now!\", \"Limited time\") and unrealistic claims.",
+  AUTHENTICATION: 'OTP/verification only — Meta enforces a strict fixed format, no extra copy allowed.',
+}
+const WA_STATUS_CHIP = {
+  approved: { cls: 'ok', label: '✓ Approved' },
+  rejected: { cls: 'fail', label: '✕ Rejected' },
+  pending_review: { cls: 'warn', label: '⏳ Pending review' },
+  awaiting_payment: { cls: 'warn', label: 'Awaiting payment' },
+  submit_failed: { cls: 'fail', label: 'Submission failed' },
+  draft: { cls: '', label: 'Draft' },
+}
+
+function extractWaVars(body) {
+  const found = []
+  const re = /{{\s*([a-zA-Z0-9_]+)\s*}}/g
+  let m
+  while ((m = re.exec(body))) if (!found.includes(m[1])) found.push(m[1])
+  return found
+}
+
+function WaTemplateForm({ name, category, body, sampleValues, onChange }) {
+  const variables = extractWaVars(body)
+  const endsOnVar = /}}\s*$/.test(body.trim())
+  return (
+    <div>
+      {name !== undefined && <>
+        <label className="rd-field-label">Template name</label>
+        <input className="rd-field" value={name} onChange={(e) => onChange({ name: e.target.value })} />
+      </>}
+      <label className="rd-field-label">Category</label>
+      <select className="rr-select" value={category} onChange={(e) => onChange({ category: e.target.value })}>
+        <option value="UTILITY">Utility — transactional updates only</option>
+        <option value="MARKETING">Marketing — promos, feedback asks, announcements</option>
+        <option value="AUTHENTICATION">Authentication — OTP / verification codes</option>
+      </select>
+      <p className="wa-cat-hint">{WA_CATEGORY_HINTS[category]}</p>
+
+      <label className="rd-field-label">Message body</label>
+      <textarea className="rr-textarea" rows={5} value={body} onChange={(e) => onChange({ body: e.target.value })} />
+
+      <label className="rd-field-label">Detected variables — sample values for Meta's reviewer</label>
+      {!variables.length && <p className="rd-hint" style={{ margin: '0 0 9px' }}>No {'{{variables}}'} detected in the body yet.</p>}
+      {variables.map((v) => (
+        <div className="wa-var-sample-row" key={v}>
+          <span className="var-chip">{`{{${v}}}`}</span>
+          <input placeholder="Sample value for reviewers" value={sampleValues[v] || ''} onChange={(e) => onChange({ sampleValues: { ...sampleValues, [v]: e.target.value } })} />
+        </div>
+      ))}
+
+      <ul className="wa-guidance">
+        <li className={endsOnVar ? 'warn' : 'ok'}>
+          <span className="mark">{endsOnVar ? '!' : '✓'}</span>
+          <span>{endsOnVar ? "Body ends on a variable — add static text after the last {{variable}}. Meta rejects templates that end mid-placeholder." : "Body doesn't end on a variable."}</span>
+        </li>
+        <li className={variables.length ? 'ok' : 'warn'}>
+          <span className="mark">{variables.length ? '✓' : '!'}</span>
+          <span>{variables.length ? `${variables.length} variable${variables.length > 1 ? 's' : ''} detected — give each a realistic sample value.` : 'Add at least one {{variable}} if this message is personalized, or leave static if it\'s the same for everyone.'}</span>
+        </li>
+        <li className="ok">
+          <span className="mark">✓</span>
+          <span>Category set to {category} — make sure the wording matches (no promo language outside Marketing).</span>
+        </li>
+      </ul>
+    </div>
+  )
+}
+
+function WhatsAppTemplatesSection({ notify, onSubmitted }) {
+  const [open, setOpen] = useState(true)
+  const [submissions, setSubmissions] = useState([])
+  const [busy, setBusy] = useState(false)
+  const [retryId, setRetryId] = useState(null)
+  const [retryDraft, setRetryDraft] = useState(null)
+  const [draft, setDraft] = useState({ name: '', category: 'MARKETING', body: '', sampleValues: {} })
+
+  async function load() {
+    try {
+      setSubmissions(await api.listWaTemplateSubmissions())
+    } catch (e) {
+      notify(e.message || 'WhatsApp template submissions could not be loaded', true)
+    }
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function submit() {
+    if (busy || !draft.name.trim() || !draft.body.trim()) return
+    setBusy(true)
+    try {
+      const sub = await api.createWaTemplateSubmission({
+        name: draft.name.trim(), category: draft.category, body: draft.body, sample_values: draft.sampleValues,
+      })
+      const checkout = await api.checkoutWaTemplateSubmission(sub.id)
+      window.location.href = checkout.url
+    } catch (e) {
+      notify(e.message || 'WhatsApp template could not be submitted', true)
+      setBusy(false)
+    }
+  }
+
+  function openRetry(sub) {
+    setRetryId(sub.id)
+    setRetryDraft({ category: sub.category, body: sub.body, sampleValues: { ...sub.sample_values } })
+  }
+
+  async function submitRetry(sub) {
+    if (busy) return
+    setBusy(true)
+    try {
+      await api.retryWaTemplateSubmission(sub.id, {
+        category: retryDraft.category, body: retryDraft.body, sample_values: retryDraft.sampleValues,
+      })
+      setRetryId(null)
+      await load()
+      onSubmitted?.()
+      notify('Template resubmitted for review')
+    } catch (e) {
+      notify(e.message || 'Template could not be resubmitted', true)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <>
+      <div className="rr-section-title cm-collapsible-title">
+        <div><h2>WhatsApp Templates</h2><p>Write your own template — we handle Meta's review behind the scenes for a one-time $5 fee</p></div>
+        <div className="cm-section-actions">
+          <span className="cm-section-count">{submissions.length} submitted</span>
+          <button className="rr-btn secondary cm-collapse-btn" type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+            {open ? 'Collapse' : 'Expand'} <span aria-hidden="true" className={open ? 'open' : ''}>⌄</span>
+          </button>
+        </div>
+      </div>
+
+      {open && (
+        <div className="rr-panel">
+          <div className="rd-panel-body wa-submit-grid">
+            <WaTemplateForm
+              name={draft.name} category={draft.category} body={draft.body} sampleValues={draft.sampleValues}
+              onChange={(patch) => setDraft((v) => ({ ...v, ...patch }))}
+            />
+            <div>
+              <div className="wa-price-bar">
+                <div className="amount">$5.00<small>one-time, charged now</small></div>
+                <button className="rr-btn primary" disabled={busy || !draft.name.trim() || !draft.body.trim()} onClick={submit}>
+                  {busy ? 'Submitting…' : 'Submit for approval'}
+                </button>
+              </div>
+              <p className="rd-hint" style={{ margin: '0 0 16px' }}>If Meta rejects it, you can revise and resubmit at no extra charge, up to 5 times.</p>
+
+              <label className="rd-field-label">Your submissions</label>
+              <table className="wa-sub-table">
+                <thead><tr><th>Template</th><th>Category</th><th>Status</th></tr></thead>
+                <tbody>
+                  {submissions.map((s) => {
+                    const chip = WA_STATUS_CHIP[s.status] || { cls: '', label: s.status }
+                    const canRetry = ['rejected', 'submit_failed'].includes(s.status) && s.retry_count < s.max_retries
+                    return (
+                      <tr key={s.id}>
+                        <td><div className="name">{s.name}</div><div className="sub">{s.platform_name}</div></td>
+                        <td>{s.category}</td>
+                        <td>
+                          <span className={`rd-status-chip ${chip.cls}`}>{chip.label}</span>
+                          {s.status === 'rejected' && (
+                            <div className="wa-reject-note">
+                              {s.reject_reason}{' '}
+                              {canRetry && <button type="button" onClick={() => openRetry(s)}>Revise &amp; resubmit — free ({s.max_retries - s.retry_count} left)</button>}
+                            </div>
+                          )}
+                          {retryId === s.id && retryDraft && (
+                            <div className="wa-retry-panel">
+                              <WaTemplateForm
+                                category={retryDraft.category} body={retryDraft.body} sampleValues={retryDraft.sampleValues}
+                                onChange={(patch) => setRetryDraft((v) => ({ ...v, ...patch }))}
+                              />
+                              <div className="rd-row2">
+                                <button className="rr-btn secondary" onClick={() => setRetryId(null)}>Cancel</button>
+                                <button className="rr-btn primary" disabled={busy} onClick={() => submitRetry(s)}>{busy ? 'Resubmitting…' : 'Resubmit'}</button>
+                              </div>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  {!submissions.length && <tr><td colSpan={3} className="rd-rowlink">No WhatsApp templates submitted yet.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
 
 function SettingsTab({ notify, eventId, event, onEventChanged }) {
   const { guests } = useGuests(eventId)
@@ -1972,6 +2266,7 @@ function SchedulerTab({ eventId, event, notify, initialPreset }) {
   const [programSegments, setProgramSegments] = useState([])
   const [editing, setEditing] = useState(null)
   const [busy, setBusy] = useState('')
+  const [waApprovedTemplates, setWaApprovedTemplates] = useState([])
   const initialPresetOpened = useRef(false)
 
   function blankForm(preset = SCHEDULE_PRESETS[0]) {
@@ -1992,6 +2287,9 @@ function SchedulerTab({ eventId, event, notify, initialPreset }) {
       email_body: preset.body || '',
       sms_body: preset.body || '',
       whatsapp_body: preset.body || '',
+      whatsapp_use_approved: false,
+      whatsapp_template_ref: '',
+      whatsapp_template_vars: {},
       mms_body: preset.body || '',
       mms_media_url: '',
       status: 'scheduled',
@@ -2013,6 +2311,11 @@ function SchedulerTab({ eventId, event, notify, initialPreset }) {
     } catch (e) {
       setItems([])
       notify(e.message || 'Communication schedule could not be loaded')
+    }
+    try {
+      setWaApprovedTemplates(await api.listApprovedWhatsAppTemplates(eventId))
+    } catch {
+      setWaApprovedTemplates([])
     }
   }
 
@@ -2051,6 +2354,9 @@ function SchedulerTab({ eventId, event, notify, initialPreset }) {
       email_body: item.email_body || '',
       sms_body: item.sms_body || '',
       whatsapp_body: item.whatsapp_body || '',
+      whatsapp_use_approved: !!item.whatsapp_template_ref,
+      whatsapp_template_ref: item.whatsapp_template_ref || '',
+      whatsapp_template_vars: item.whatsapp_template_vars || {},
       mms_body: item.mms_body || '',
       mms_media_url: item.mms_media_url || '',
       status: item.status,
@@ -2072,6 +2378,7 @@ function SchedulerTab({ eventId, event, notify, initialPreset }) {
     const form = editing.form
     const multiplier = form.offset_unit === 'days' ? 1440 : form.offset_unit === 'hours' ? 60 : 1
     const sign = form.direction === 'before' ? -1 : 1
+    const useApprovedWa = form.whatsapp_use_approved && form.whatsapp_template_ref
     return {
       name: form.name.trim(), communication_type: form.communication_type,
       trigger_type: form.trigger_type,
@@ -2082,6 +2389,8 @@ function SchedulerTab({ eventId, event, notify, initialPreset }) {
       channels: form.channels, audience_type: form.audience_type, audience_mode: form.audience_mode,
       subject: form.subject || null, email_body: form.email_body || null,
       sms_body: form.sms_body || null, whatsapp_body: form.whatsapp_body || null,
+      whatsapp_template_ref: useApprovedWa ? form.whatsapp_template_ref : null,
+      whatsapp_template_vars: useApprovedWa ? form.whatsapp_template_vars : null,
       mms_body: form.mms_body || null, mms_media_url: form.mms_media_url || null,
       status: ['draft', 'paused'].includes(form.status) ? form.status : 'scheduled',
     }
@@ -2247,8 +2556,27 @@ function SchedulerTab({ eventId, event, notify, initialPreset }) {
           {editing.form.channels.includes('email') && <><label className="rd-field-label">Email subject</label><input className="rd-field" value={editing.form.subject} onChange={(e) => setForm({ subject: e.target.value })} /><label className="rd-field-label">Email message</label><textarea className="rr-textarea" rows={5} value={editing.form.email_body} onChange={(e) => setForm({ email_body: e.target.value })} /></>}
           {editing.form.channels.includes('sms') && <><label className="rd-field-label">SMS message</label><textarea className="rr-textarea" rows={3} value={editing.form.sms_body} onChange={(e) => setForm({ sms_body: e.target.value })} /></>}
           {editing.form.channels.includes('mms') && <><label className="rd-field-label">MMS message</label><textarea className="rr-textarea" rows={3} value={editing.form.mms_body} onChange={(e) => setForm({ mms_body: e.target.value })} /><label className="rd-field-label">MMS image URL (HTTPS)</label><input className="rd-field" type="url" value={editing.form.mms_media_url} onChange={(e) => setForm({ mms_media_url: e.target.value })} placeholder="https://…" /></>}
-          {editing.form.channels.includes('whatsapp') && <><label className="rd-field-label">WhatsApp message</label><textarea className="rr-textarea" rows={3} value={editing.form.whatsapp_body} onChange={(e) => setForm({ whatsapp_body: e.target.value })} /></>}
-          {editing.form.communication_type === 'consent_reminder' && editing.form.channels.includes('whatsapp') && <p className="rd-hint">WhatsApp uses the approved Utility template. Festio inserts the current consent link when the reminder sends.</p>}
+          {editing.form.channels.includes('whatsapp') && editing.form.communication_type === 'consent_reminder' && <p className="rd-hint">WhatsApp uses the approved Utility template. Festio inserts the current consent link when the reminder sends.</p>}
+          {editing.form.channels.includes('whatsapp') && editing.form.communication_type !== 'consent_reminder' && <>
+            <label className="rd-field-label">WhatsApp</label>
+            <WhatsAppTemplatePicker
+              approvedTemplates={waApprovedTemplates}
+              mergeFieldOptions={['{{first_name}}', '{{event_name}}', '{{event_date}}', '{{guest_hub_link}}', '{{ticket_link}}']}
+              enabled={editing.form.whatsapp_use_approved}
+              templateRef={editing.form.whatsapp_template_ref}
+              templateVars={editing.form.whatsapp_template_vars}
+              previewSample={{ '{{first_name}}': 'Ahmad', '{{event_name}}': event?.name || 'Your Event' }}
+              onChange={({ enabled, templateRef, templateVars }) => setForm({
+                whatsapp_use_approved: enabled, whatsapp_template_ref: templateRef, whatsapp_template_vars: templateVars,
+              })}
+            />
+            {!editing.form.whatsapp_use_approved && (
+              <>
+                <p className="rd-hint" style={{ marginTop: 10 }}>Free text can't open a new WhatsApp conversation — turn the toggle above on to use an approved template for real delivery.</p>
+                <textarea className="rr-textarea" rows={3} value={editing.form.whatsapp_body} onChange={(e) => setForm({ whatsapp_body: e.target.value })} />
+              </>
+            )}
+          </>}
           <p className="rd-hint">Merge fields: {'{{first_name}}'}, {'{{event_name}}'}, {'{{event_date}}'}, {'{{guest_hub_link}}'}, {'{{ticket_link}}'} and {'{{consent_link}}'}.</p>
         </div>}
 

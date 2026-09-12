@@ -132,6 +132,8 @@ async def _send_custom(
         email_body=communication.email_body,
         sms_body=communication.sms_body,
         whatsapp_body=communication.whatsapp_body,
+        whatsapp_template_ref=communication.whatsapp_template_ref,
+        whatsapp_template_vars=communication.whatsapp_template_vars,
         mms_body=communication.mms_body,
         mms_media_url=communication.mms_media_url,
     )

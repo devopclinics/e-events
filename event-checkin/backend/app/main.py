@@ -30,8 +30,10 @@ from .routers import inbound_email_automations as inbound_email_automations_rout
 from .routers import ticketing_internal as ticketing_internal_router
 from .routers import redesign_telemetry as redesign_telemetry_router
 from .routers import training as training_router
+from .routers import wa_template_submissions as wa_template_submissions_router
 from . import sync_poller, db_migrate, entitlements
 from .services import engagement_sync_outbox, festiome_outbox, webhook_outbox, reminder_outbox, scheduled_communication_outbox, inbound_email_outbox
+from services import wa_template_poller
 from . import routers
 from . import storage
 from .database import AsyncSessionLocal
@@ -100,6 +102,15 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(scheduled_communication_outbox.run())
         if run_scheduled_communication_outbox else None
     )
+    # Polls Bird for self-serve WhatsApp template submissions awaiting Meta
+    # review. No-op if Bird isn't configured (see bird_templates.enabled()).
+    run_wa_template_poller = os.environ.get(
+        "RUN_IN_APP_WA_TEMPLATE_POLLER", "true"
+    ).lower() not in ("false", "0", "no")
+    wa_template_poller_task = (
+        asyncio.create_task(wa_template_poller.run())
+        if run_wa_template_poller else None
+    )
 
     # Start the Redis SSE fan-in subscriber (no-op unless REDIS_URL is set) so
     # dashboard events published by any replica reach the connections on this one.
@@ -153,6 +164,12 @@ async def lifespan(app: FastAPI):
             scheduled_communication_task.cancel()
             try:
                 await scheduled_communication_task
+            except asyncio.CancelledError:
+                pass
+        if wa_template_poller_task is not None:
+            wa_template_poller_task.cancel()
+            try:
+                await wa_template_poller_task
             except asyncio.CancelledError:
                 pass
 
@@ -250,6 +267,7 @@ app.include_router(api_keys_router.router, prefix="/api/organizations/me", tags=
 app.include_router(webhooks_router.router, prefix="/api/organizations/me", tags=["webhooks-outbound"])
 app.include_router(public_api_router.router, prefix="/api/public/v1", tags=["public-api"])
 app.include_router(org_billing_router.router, prefix="/api/organizations/me", tags=["org-billing"])
+app.include_router(wa_template_submissions_router.router, prefix="/api/organizations/me", tags=["whatsapp-templates"])
 app.include_router(calendars_router.router, prefix="/api/organizations/me", tags=["calendars"])
 app.include_router(calendars_router.public_router, prefix="/api/calendars", tags=["calendars-public"])
 app.include_router(shortlinks_router.router, prefix="/api/s", tags=["shortlinks"])

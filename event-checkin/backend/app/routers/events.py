@@ -1733,11 +1733,12 @@ async def broadcast_message(
                 channel_counts["whatsapp"]["skipped_no_consent"] += 1
             elif await reserve_message_credit(event, "whatsapp", db=db, reason="broadcast", guest_id=guest.id):
                 broadcast_override = overrides.get("broadcast")
-                wa_template_ref = broadcast_override.whatsapp_template_ref if broadcast_override else None
-                if wa_template_ref and broadcast_override.whatsapp_template_vars:
+                wa_template_ref = data.whatsapp_template_ref or (broadcast_override.whatsapp_template_ref if broadcast_override else None)
+                wa_template_vars = data.whatsapp_template_vars or (broadcast_override.whatsapp_template_vars if broadcast_override else None)
+                if wa_template_ref and wa_template_vars:
                     wa_ctx = _ctx(guest, guest_message)
-                    var_keys = list(broadcast_override.whatsapp_template_vars.keys())
-                    params = [render_template_text(broadcast_override.whatsapp_template_vars[k], wa_ctx) for k in var_keys]
+                    var_keys = list(wa_template_vars.keys())
+                    params = [render_template_text(wa_template_vars[k], wa_ctx) for k in var_keys]
                     background_tasks.add_task(
                         send_with_credit_ledger,
                         last_credit_ledger_id(event),

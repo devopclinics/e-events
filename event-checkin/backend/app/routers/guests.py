@@ -744,7 +744,12 @@ async def _attach_message_status(guests, event_id: str, db: AsyncSession) -> Non
         .where(MessageCreditLedger.event_id == event_id,
                MessageCreditLedger.guest_id.in_(guest_ids),
                MessageCreditLedger.channel.in_(("sms", "mms", "whatsapp")),
-               MessageCreditLedger.action.in_(("spend", "refund")))
+               # Was missing "reserve" -- the org-wallet credit system logs a
+               # real send as action="reserve", not "spend" (see
+               # services/credit_ledger.py). That filter gap meant almost
+               # every guest showed no delivery status at all for events on
+               # the wallet system, not just refunded/failed ones.
+               MessageCreditLedger.action.in_(("spend", "reserve", "refund")))
         .order_by(MessageCreditLedger.created_at.desc())
     )).scalars().all()
     latest_ch = {}

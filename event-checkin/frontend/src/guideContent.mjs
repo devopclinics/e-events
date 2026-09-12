@@ -20,8 +20,19 @@ export const CONTENT = {
         tip: 'The free tier includes email invites, RSVP tracking, and up to 25 guests. Upgrade to an Event Pass to unlock SMS/WhatsApp, QR check-in, seating, entry areas, and more.',
       },
       {
+        id: 'org-rsvp-only', icon: '✉️', title: 'Just need RSVPs? Start here',
+        intro: 'Not every event needs seating, orders, or entry rules — sometimes you just want a clean guest list and RSVP count.',
+        steps: [
+          'When creating your event, choose attendance mode "Invitation / RSVP" and leave the RSVP form checkbox on — skip the other add-on checkboxes (Seating, Orders, Planner, etc.) entirely.',
+          'Using the guided setup wizard instead? The RSVP step offers two cards: "Skip RSVP" or "With RSVP" — pick "With RSVP".',
+          'That\'s it — you get a free-tier event with an invite page, RSVP tracking, and up to 25 guests, with no paid features enabled.',
+          'You can always turn on more add-ons later from Guest Communication → Features & messaging once you actually need them.',
+        ],
+        tip: 'This path is the fastest way to get a shareable RSVP link out the door — add seating, check-in, or messaging channels only when the event actually needs them.',
+      },
+      {
         id: 'org-create', icon: '📅', title: 'Create your event',
-        img: '/media/help-event-setup.png',
+        img: '/media/help2-event-setup.png',
         intro: 'Each event is a self-contained workspace with its own guests, invites, settings, and day-of tools.',
         steps: [
           'In Event Setup, click New Event.',
@@ -36,7 +47,7 @@ export const CONTENT = {
       },
       {
         id: 'org-guests', icon: '👥', title: 'Add your guest list',
-        img: '/media/help-guests.png',
+        img: '/media/help2-guests.png',
         intro: 'Import from a spreadsheet, sync from Google Sheets, or add guests one at a time.',
         steps: [
           'Go to Start here → Download template. It contains exactly the columns your event uses — with an Excel dropdown for ticket types — so nothing is missed.',
@@ -54,7 +65,7 @@ export const CONTENT = {
       },
       {
         id: 'org-rsvp', icon: '✉️', title: 'Set up your RSVP & invite page',
-        img: '/media/help-invites-rsvp.png',
+        img: '/media/help2-invites-rsvp.png',
         intro: 'The invite page is what guests see when they open their link. Make it yours.',
         steps: [
           'Go to Invites & RSVP → Invitation page & RSVP.',
@@ -68,8 +79,37 @@ export const CONTENT = {
         tip: 'Personal invite links prevent forwarding and double-booking. Use them for formal events or when you need a precise headcount.',
       },
       {
+        id: 'org-design-studio', icon: '🎨', title: 'Design Studio: brand your invite, pass & Guest Hub',
+        badge: 'Paid',
+        img: '/media/help2-design-studio.png',
+        intro: 'Match your invite page, ticket, and Guest Hub to your event\'s look — colors, fonts, and layout, no design tool required.',
+        steps: [
+          'Open Design Studio from the sidebar (requires an Event Pass to publish; you can still browse and edit for free).',
+          'Templates tab: browse ready-made template families (each covering your Event Page, Flyer, Pass, and Email together) and pick one as your starting point.',
+          'Flyer tab: edit wording (title, date, venue) plus colors and font pairing for a shareable flyer image.',
+          'Event Page tab: toggle hero sections, cover image fit and focus, and which event details show — with a live preview of your real invite page.',
+          'Festio Pass tab: edit the admission wording, footer note, and FestioHub intro shown on every guest\'s ticket.',
+          'Guest Hub tab: pick one of the ready-made visual themes — applies colors, font, and layout together across the RSVP page and Guest Hub in one click.',
+          'Email Preview tab: check how your saved wording and colors look across every email type (invitation, RSVP confirmation, pass, reminder, broadcast, check-in confirmation).',
+          'Publish tab: review the checklist, then Publish design to make your changes live for guests.',
+        ],
+        warn: 'Publishing requires an Event Pass — you can design for free, but guests won\'t see your changes until you upgrade and publish. There\'s also no rollback: if a published version has a mistake, publish a corrected version rather than trying to revert.',
+      },
+      {
+        id: 'org-categories', icon: '🗂️', title: 'Invitation categories & auto-seating',
+        intro: 'Let one person register a whole party — spouse, kids, guests — with everyone auto-seated in the right section.',
+        steps: [
+          'Guests tab → Invites & RSVP → turn on "Multi-invitee" so one submitter can register additional people alongside themselves.',
+          'In Category invitee limits & table-category mapping, click + Add category for each group you want (e.g. Family, VIP, Staff).',
+          'For each category, set a maximum number of invitees and choose which seating-table category the submitter and their invitees should land in (matched against the table categories you\'ve already created in Seating).',
+          'On RSVP, the submitter is automatically seated in their bucket and each invitee in theirs — no manual seat assignment needed for that party.',
+          'The auto-generated "Invitation category" question this creates is managed only from this panel, not the general RSVP questions list.',
+        ],
+        tip: 'Set up your seating table categories first — the category mapping dropdowns here are populated from table categories that already exist.',
+      },
+      {
         id: 'org-send', icon: '📤', title: 'Send invitations',
-        img: '/media/help-invites-rsvp.png',
+        img: '/media/help2-invites-rsvp.png',
         intro: 'Reach guests on the channel they actually check — WhatsApp, SMS, or email.',
         steps: [
           'Shared link: copy the event link and share it yourself (WhatsApp group, email, social). Or use Manual invite — search a specific guest and send them a personal link.',
@@ -85,7 +125,7 @@ export const CONTENT = {
       },
       {
         id: 'org-track', icon: '✅', title: 'Track RSVPs & approvals',
-        img: '/media/help-guests.png',
+        img: '/media/help2-guests.png',
         steps: [
           'The Guests tab shows every guest with their current status: Attending, Declined, Pending (submitted, awaiting your approval), or No reply.',
           'Each row also shows whether the guest has been checked in on the day.',
@@ -99,7 +139,7 @@ export const CONTENT = {
       },
       {
         id: 'org-broadcast', icon: '📣', title: 'Broadcast an update',
-        img: '/media/help-invites-rsvp.png',
+        img: '/media/help2-invites-rsvp.png',
         intro: 'Push a message to any subset of guests at any time — before, during, or after the event.',
         steps: [
           'Invites & RSVP → Broadcast Message.',
@@ -113,9 +153,23 @@ export const CONTENT = {
         warn: 'Broadcast sends are immediate and cannot be recalled once sent. Double-check your message and target group before confirming.',
       },
       {
+        id: 'org-templates', icon: '✏️', title: 'Customize your message templates',
+        img: '/media/help2-templates.png',
+        intro: 'Every automatic message — invitations, RSVP confirmations, reminders, and more — has editable wording per channel.',
+        steps: [
+          'Communications → Messages tab → Templates.',
+          'Each channel falls back to the default wording unless you save your own override — cards show a Custom or Default badge.',
+          'Click Edit on a template to change its Email subject/body and SMS/WhatsApp/MMS body text. Use the listed placeholders (e.g. guest name, event name, Guest Hub link, ticket link) to personalize each send.',
+          'Use Preview to see how it renders, or Test send to email/text it to yourself before it goes live.',
+          'Reset returns a customized template to the default wording — only available once you\'ve actually customized it.',
+          'Recent template changes shows an audit log of who edited what and when.',
+        ],
+        warn: 'The WhatsApp body field you edit here is not what guests actually receive. Every real WhatsApp send goes through a fixed, Meta-approved template managed in Bird\'s dashboard — the platform shows an inline reminder of this wherever you edit WhatsApp wording. To change what WhatsApp messages actually say, submit a new template for Meta review (see the WhatsApp Templates section below the editor — a one-time $5 review fee applies) rather than editing the text field.',
+      },
+      {
         id: 'org-seating', icon: '🍽️', title: 'Seating & orders',
         badge: 'Paid',
-        imgs: ['/media/help-orders.png', '/media/help-orders-view.png'],
+        imgs: ['/media/help2-menu-fields.png', '/media/help2-orders.png'],
         intro: 'Assign tables, let guests pick meals, drinks, gifts, or other items, and give staff a live Orders view.',
         steps: [
           'Guest Communication → Features &amp; messaging → turn on Seating and/or Orders (requires an Event Pass).',
@@ -133,7 +187,7 @@ export const CONTENT = {
       {
         id: 'org-access', icon: '🎫', title: 'Entry areas & ticket rules',
         badge: 'Paid',
-        img: '/media/help-entry-areas.png',
+        img: '/media/help2-entry-areas.png',
         intro: 'Control which guests can enter which areas of your venue — enforced automatically at every scan.',
         steps: [
           'Guest Communication → Features &amp; messaging → turn on Venue Access (requires an Event Pass).',
@@ -147,9 +201,36 @@ export const CONTENT = {
         tip: 'Gates are the easiest setup for multi-zone events: staff just select "I\'m at Main Entrance" and scan — the zone and direction are automatic for every scan after that.',
       },
       {
+        id: 'org-sections', icon: '🔲', title: 'Section scanning (multi-entrance seating)',
+        badge: 'Paid',
+        intro: 'For events seated by table group with two or more entrances — each scanner routes walk-ins and manual check-ins into the section it\'s assigned to.',
+        steps: [
+          'Guest Communication → Features & messaging → turn on Section scanning (only shown once you have table groups set up in Seating).',
+          'On the Team page, assign each staff member (or each device) the table-group section they\'re stationed at.',
+          'Walk-ins and manual check-ins scanned at that station seat into that section automatically, instead of a single shared default group.',
+          'A guest\'s own assigned group always wins if it doesn\'t match the scanning station — there\'s no override flow by design.',
+        ],
+        warn: 'Section scanning and Venue Access (zone/gate-based entry rules) can\'t both be on for the same event — turn one off before enabling the other.',
+      },
+      {
+        id: 'org-experience', icon: '🧭', title: 'Experience workflows: consent, souvenirs, rooms & sessions',
+        badge: 'Paid',
+        img: '/media/help2-org-experience.png',
+        intro: 'Build a step-by-step operational journey for each guest — check-in, consent, seating, souvenirs, sessions — tracked from Setup to departure.',
+        steps: [
+          'Guest Communication → Features & messaging → turn on Experience, then open Experience settings.',
+          'Workflow tab: start from a template (VIP Dinner Guest Journey, Conference Registration, Wedding Reception, Simple Check-in) or build your own from steps like check-in, consent, seating assignment, meal selection, souvenir, badge, room assignment, session attendance, or feedback.',
+          'Only one workflow can be live per event at a time. Publish makes it active; to change a published workflow you Clone it first, then publish the clone.',
+          'Consent tab: guests sign consent from their Festio Pass page — this only becomes available after they\'ve checked in, so don\'t make an earlier step depend on consent being signed first.',
+          'Guests tab, Feedback tab, and Analytics tab track each guest\'s progress through the workflow and completion rates per step.',
+          'Inbound Automations and Messages let you react to step completion (e.g. a message once a guest is seated).',
+        ],
+        warn: 'Step ordering matters: the default "welcome pack" preset requires consent before souvenir pickup, but consent can\'t be signed until after check-in — putting a consent-dependent step earlier than check-in will silently block guests from completing it.',
+      },
+      {
         id: 'org-logistics', icon: '📦', title: 'Deliveries: ship merch, aso-ebi & gifts',
         badge: 'Paid',
-        img: '/media/help-deliveries.png',
+        img: '/media/help2-deliveries.png',
         steps: [
           'Guest Communication → Features &amp; messaging → turn on Logistics.',
           'Deliveries tab → New Shipment. Name it (e.g. "Aso-ebi fabric", "Welcome bag", "Gift delivery").',
@@ -164,7 +245,7 @@ export const CONTENT = {
       {
         id: 'org-registry', icon: '🎁', title: 'Gift list',
         badge: 'Paid',
-        img: '/media/help-gift-list.png',
+        img: '/media/help2-gift-list.png',
         steps: [
           'Guest Communication → Features &amp; messaging → turn on Registry.',
           'Gift list tab → Add items: paste a store link and the platform auto-fills the title, image, and price. Or add cash funds (e.g. "Honeymoon fund", "New home contribution").',
@@ -174,6 +255,74 @@ export const CONTENT = {
           'No money moves through Festio — guests purchase or give directly to you. The gift list is purely a wish-list coordination tool.',
           'You can see who has claimed each item from the Gift list tab.',
         ],
+      },
+      {
+        id: 'org-ticketing', icon: '🎫', title: 'Ticket sales',
+        img: '/media/help2-ticketing.png',
+        intro: 'Sell paid tickets — general admission, VIP, donations, or external registrations — instead of (or alongside) free RSVP.',
+        steps: [
+          'Open Ticket sales from the sidebar. 01 Availability: turn on "Sell tickets for this event".',
+          '02 Payouts: connect Paystack or Stripe, choose whether the processor fee is added to the buyer\'s total or deducted from your proceeds, and optionally add event tax.',
+          '03 Ticket types: + Add this ticket type — choose a real ticket (grants admission), a donation/sponsorship (payment only, no pass), or an external registration (price shown here, buyer registers/pays elsewhere). Set name, price, quantity, and which access level it grants.',
+          '04 Catalog: review and Hide any ticket type you want to pull from sale.',
+          'Need to comp someone in? Issue complimentary pass(es) admits guests without payment.',
+          '05 Publish & share: View events opens the public ticket marketplace; Copy link gives your event\'s own storefront page; Copy embed gives an iframe snippet for your own website.',
+          '06 Live sales report: gross revenue, tickets sold, refunds, your proceeds, and a full order ledger with approve/refund actions and a downloadable CSV.',
+          'A purchased ticket issues the same QR pass as a free RSVP guest — check-in works identically either way. A full refund voids that pass and releases the inventory.',
+        ],
+        warn: 'Ticket sales currently runs in test mode only — payments use Stripe/Paystack test keys, so no real money changes hands yet. Treat it as a preview of the checkout flow, not a live revenue channel, until this is confirmed generally available.',
+      },
+      {
+        id: 'org-community', icon: '💬', title: 'FestioMe: guest community & groups',
+        badge: 'Paid',
+        img: '/media/help2-org-community.png',
+        intro: 'A community space for your guests — sub-groups, channels, and announcements, reachable from their Guest Hub.',
+        steps: [
+          'Guest Communication → Features & messaging → turn on FestioMe, then Open FestioMe.',
+          'Community tab → Create group: set a join policy — Open, Requires approval, or Invite only. Tick "Event-team support group" for a staff-only, unlisted group.',
+          'Inside a group, + Create channel: choose Discussion, Announcement, or Staff, and optionally make it private to chosen members.',
+          'Group Settings: write community rules (shown to members) and change the join policy any time.',
+          'Moderation tab: approve or deny join requests, and review reported messages.',
+          'Guests reach FestioMe from their Guest Hub — their Festio Pass signs them straight in, no separate account needed.',
+        ],
+        warn: 'FestioMe\'s own Moderation tab does not cover 1:1 guest-to-host direct messages — those are moderated from Communications → Guest Communication instead.',
+      },
+      {
+        id: 'org-guest-communication', icon: '💌', title: 'Guest Communication: replies & direct messages',
+        steps: [
+          'Communications → Guest Communication tab shows every guest reply and direct message in one inbox, across email, SMS, and WhatsApp.',
+          'Reply to a guest directly from the thread — it goes out on whichever channel they messaged you on.',
+          'This is also where you moderate 1:1 guest↔host direct messages and FestioMe guest chat — FestioMe\'s own Moderation tab links back here for that.',
+          'Use this alongside Messages (template wording) and Scheduler (timed sends) — Guest Communication is specifically for two-way conversations, not outbound campaigns.',
+        ],
+      },
+      {
+        id: 'org-tasks', icon: '✅', title: 'Tasks: run your to-do list as a team',
+        img: '/media/help2-org-tasks.png',
+        intro: 'Assign and track the work behind your event — who\'s doing what, by when.',
+        steps: [
+          'Team & Tasks page → Tasks tab → + Task: set a title, assignee, due date, and notes.',
+          'Switch between List and Board view depending on how your team likes to work.',
+          'Open a task to add subtasks, attach files, or post a comment in its activity thread.',
+          'Move a task through Open → In progress → Done as work happens.',
+          'My Tasks (from your own account) shows everything assigned to you across every event you have access to, separate from any one event\'s task list.',
+        ],
+        tip: 'Planner\'s Timeline milestones can link to tasks automatically — a milestone\'s linked tasks show up in both places.',
+      },
+      {
+        id: 'org-planner', icon: '📘', title: 'Planner: budget, vendors & run sheet',
+        badge: 'Paid',
+        img: '/media/help2-planner.png',
+        intro: 'Keep the planning work — budget, vendors, contracts, timeline — next to your guest list instead of scattered across spreadsheets.',
+        steps: [
+          'Guest Communication → Features & messaging → turn on Planner, then Open your planner.',
+          'Budget tab: track allocated vs. actual spend by category.',
+          'Vendors and Procurement tabs: a workspace per vendor for quotes and orders.',
+          'Contracts tab: draft a contract with title and terms, Save draft, then Send — the vendor signs from their own portal link. Status moves through draft → sent → signed, showing who signed and when.',
+          'Timeline tab: add milestones and link tasks to each one (shares the same task list as Team & Tasks) — this is a milestone list, not a Gantt chart.',
+          'Runsheet and Documents tabs: your day-of schedule and shared files in one place.',
+        ],
+        tip: 'Vendor e-signature happens entirely in the vendor\'s own portal view — you don\'t need to chase a separate signing tool.',
       },
       {
         id: 'org-live', icon: '🎤', title: 'Festio Live: quizzes, polls & surveys',
@@ -195,7 +344,7 @@ export const CONTENT = {
       },
       {
         id: 'org-team', icon: '🧑‍🤝‍🧑', title: 'Add your team',
-        img: '/media/help-team.png',
+        img: '/media/help2-team.png',
         steps: [
           'Team tab → "Add a teammate" → enter their email address and choose a role.',
           'Admin role: can manage the event (edit settings, guests, seating, etc.). Full access except billing.',
@@ -209,7 +358,7 @@ export const CONTENT = {
       },
       {
         id: 'org-checkin', icon: '🎟️', title: 'Check-in day',
-        img: '/media/help-check-in.png',
+        img: '/media/help2-checkin.png',
         steps: [
           'The day before: set the event to Active in Start here. This enables Check-in to process guests.',
           'Ensure all scanning staff are added to the Team tab and assigned to this event.',
@@ -226,7 +375,7 @@ export const CONTENT = {
       },
       {
         id: 'org-dashboard', icon: '📊', title: 'Results',
-        img: '/media/help-results.png',
+        img: '/media/help2-results.png',
         steps: [
           'Open Results from the nav during or after your event.',
           'Stat tiles: Expected, Checked in, Declined, Walk-ins, Checked out, and how many confirmed guests haven\'t arrived yet.',
@@ -242,7 +391,7 @@ export const CONTENT = {
       },
       {
         id: 'org-upgrade', icon: '💳', title: 'Event Pass & message credits',
-        img: '/media/help-event-pass.png',
+        img: '/media/help2-event-pass.png',
         steps: [
           'Free tier: email invites, up to 25 guests, Festio branding on invite pages, no paid features.',
           'Event Pass: buy per event in Invites & RSVP → Event Pass. Unlocks SMS/WhatsApp invites, more guests, QR check-in, seating & orders, entry areas, deliveries, gift list, and removes Festio branding.',
@@ -252,6 +401,32 @@ export const CONTENT = {
           'Trial: new accounts can request a free trial from the Event Setup banner — send the request and we\'ll comp your first event.',
         ],
         tip: 'Check your credit balance before any bulk send. The Event Pass area shows your current balance and usage history.',
+      },
+      {
+        id: 'org-api', icon: '🔌', title: 'Public API & developer access',
+        img: '/media/help2-org-api.png',
+        intro: 'Read or write your event\'s guest data from your own tools using the Public API.',
+        steps: [
+          'Org Settings → API Keys panel → Create new key.',
+          'Name the key and choose a scope: Read-only, or Read-write (requires an active API subscription — the option is disabled without one).',
+          'Your new key is shown once in a banner — copy it immediately, it can\'t be viewed again. Revoke a key any time from the list.',
+          'API docs has the full reference; API Explorer is an in-app console for trying real calls against your own data before writing code.',
+          'The API covers guests, tables, table groups, and Experience — the same data you manage in the app.',
+        ],
+        warn: 'Read-write access is gated behind an active API subscription — a read-only key works immediately, but write calls fail until you subscribe.',
+      },
+      {
+        id: 'org-calendars', icon: '📆', title: 'Event Calendars: curated listing pages',
+        img: '/media/help2-org-calendars.png',
+        intro: 'A public page listing several of your events together — for a season, a venue, or a recurring series.',
+        steps: [
+          'Org Settings → Calendars panel → New calendar: set a title, description, and visibility (Public or Private).',
+          'Manage on a calendar → Add event to curate which events appear, reorder them with the Up/Down buttons, and upload a logo.',
+          'Copy public link to share the page directly, or Copy embed code to add it as an iframe on your own website.',
+          'Each calendar tracks total views, and each listed event tracks its own click-through count.',
+          'For a Private calendar, build a Contact List (paste contacts or upload a CSV/Excel file) and tick it under Private-link audiences, then Send private links to email everyone on that list their own calendar link.',
+        ],
+        warn: '"Send private links" only works on a Private calendar — a Public calendar with an audience selected will show an error when you try to send, rather than disabling the button ahead of time.',
       },
       {
         id: 'org-export', icon: '⬇️', title: 'Export & post-event',
@@ -306,7 +481,7 @@ export const CONTENT = {
       },
       {
         id: 'staff-scan', icon: '📷', title: 'Check guests in',
-        img: '/media/help-check-in.png',
+        img: '/media/help2-checkin.png',
         steps: [
           'Open Check-in on your phone or tablet. No app download needed.',
           'Select your event from the list.',
@@ -334,7 +509,7 @@ export const CONTENT = {
       },
       {
         id: 'staff-zones', icon: '🚪', title: 'Zone scanning & gates',
-        img: '/media/help-check-in.png',
+        img: '/media/help2-checkin.png',
         steps: [
           'If the event has Entry areas enabled, Check-in shows an Area/Gate picker before you start.',
           'Gate mode (recommended): select your named gate once (e.g. "VIP Lounge Door"). The zone and direction are pre-configured — every scan automatically enforces the rules for that gate.',
@@ -346,6 +521,16 @@ export const CONTENT = {
           'Live occupancy is shown below the scan result — you can see if a zone is filling up.',
         ],
         tip: 'If you\'re covering multiple gates, stay on Gate mode and switch your gate selection each time you move — don\'t try to use Manual mode for a fast-moving door.',
+      },
+      {
+        id: 'staff-experience', icon: '🧭', title: 'Running an Experience workflow',
+        intro: 'If the organizer has set up an Experience workflow, check-in is just the first step — you may also mark consent, seating, souvenirs, or session attendance.',
+        steps: [
+          'Each guest\'s Festio Pass page shows their current step in the workflow — what\'s done and what\'s next.',
+          'Consent (if required) can only be signed after the guest is checked in — if a guest asks to sign before arrival, let them know it opens right after their first scan.',
+          'Mark a step complete from the guest\'s pass page as they go through it — souvenir pickup, badge issued, seated, etc.',
+          'If a step won\'t complete, check whether it depends on an earlier step (like consent) that hasn\'t happened yet — direct the guest through steps in order.',
+        ],
       },
       {
         id: 'staff-tips', icon: '💡', title: 'Tips for a smooth check-in',
@@ -373,7 +558,7 @@ export const CONTENT = {
     topics: [
       {
         id: 'guest-open', icon: '🔗', title: 'Open your invite',
-        img: '/media/help-guest-invite.png',
+        img: '/media/help2-guest-invite.png',
         steps: [
           'Tap the link in your email, SMS, or WhatsApp message. It opens in your phone browser — no app download needed.',
           'If the link asks you to "Open with…" — choose your browser (Chrome, Safari, etc.).',
@@ -403,6 +588,23 @@ export const CONTENT = {
           'Printed QR works just as well as showing it on your phone screen.',
         ],
         tip: 'Screenshot your QR code and save it to your phone\'s camera roll before the event, in case you lose internet access on the day.',
+      },
+      {
+        id: 'guest-tickets', icon: '💳', title: 'Buying a paid ticket',
+        steps: [
+          'Some events are ticketed rather than free RSVP — you\'ll see prices and ticket types (General Admission, VIP, etc.) on the event page.',
+          'Pick a ticket type and quantity, then pay by card through the event\'s checkout.',
+          'After payment, you receive the same personal QR pass a free RSVP guest gets — show it at the door the same way.',
+          'A refund (if the organizer issues one) cancels your pass along with the payment.',
+        ],
+      },
+      {
+        id: 'guest-experience', icon: '🧭', title: 'Your guest journey (consent, souvenirs, sessions)',
+        steps: [
+          'Some events track a step-by-step journey on your Festio Pass page — check-in, consent, seating, souvenirs, or session attendance, depending on what the host set up.',
+          'Consent forms (if required) become available on your pass page after you\'ve checked in, not before.',
+          'Your current step and what\'s next are shown right on your pass — staff can also see and update it as you go through each step.',
+        ],
       },
       {
         id: 'guest-meal', icon: '🍽️', title: 'Order choices & seating',
@@ -521,6 +723,26 @@ export const CONTENT = {
           'Message credit packs: edit the credits-per-pack, price, and active status.',
           'Changes apply immediately to the public pricing page and checkout.',
           'Deactivating a tier hides it from checkout but doesn\'t affect events already on that tier.',
+          'Global add-on promotion (in the same Pricing tab): opens every add-on free on all current and future paid events for a set period — "Open paid-event add-ons for 6 months" or "End promotion now". Free events still can\'t use add-ons, and any explicit per-org or per-event override still takes precedence.',
+        ],
+      },
+      {
+        id: 'op-addons', icon: '🧩', title: 'Grant or deny add-ons per organization',
+        steps: [
+          'Console → Add-on Access: search for the organization or event you need.',
+          'Manage add-ons on an organization opens an override editor per add-on — Grant, Deny, or return it to normal billing rules.',
+          'Organization-level grants apply to all of that org\'s current and future events, not just one.',
+          'Use this for one-off exceptions (a customer needs Planner early, or should never get a specific add-on) rather than the blanket Console → Pricing promotion, which affects everyone.',
+        ],
+      },
+      {
+        id: 'op-platform', icon: '⚙️', title: 'Platform-wide settings',
+        steps: [
+          'Console → Support chat: toggle whether the in-app support chat widget is visible to organizers platform-wide.',
+          'Console → Usage: aggregated usage stats across all organizations.',
+          'Console → QA checklist: view results submitted from the staging QA checklist tools.',
+          'Console → Referrals and Affiliate stores: manage referral tracking and affiliate storefronts.',
+          'Console → Org Plans: view and adjust organization-level subscription plans (distinct from per-event Event Pass tiers).',
         ],
       },
       {

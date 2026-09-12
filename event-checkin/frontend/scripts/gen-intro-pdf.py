@@ -7,8 +7,8 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 ROOT = Path(__file__).resolve().parents[1]
 MEDIA = ROOT / "public" / "media"
-OUT = MEDIA / "eventqr-intro.pdf"
-OUT_VERSIONED = MEDIA / "eventqr-intro-target-audience.pdf"
+OUT = MEDIA / "festio-intro.pdf"
+OUT_VERSIONED = MEDIA / "festio-intro-target-audience.pdf"
 
 W, H = 1600, 1131
 M = 84

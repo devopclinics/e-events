@@ -47,5 +47,7 @@ jobs:
         run: npm ci
       - name: Build production frontend
         run: npm run build
+      - name: Check help content for broken media links and old branding
+        run: npm run check:help-content
       - name: Validate Playwright suite discovery
         run: npx playwright test --list

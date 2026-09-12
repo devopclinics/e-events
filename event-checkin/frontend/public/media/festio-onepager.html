@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #0f172a; background: #f8fafc; }
+  .page { width: 210mm; min-height: 296mm; padding: 14mm 16mm; }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 22px; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand .mark { width: 34px; height: 34px; border-radius: 8px; background: #0d9488; color: #fff; display: grid; place-items: center; font-weight: 900; font-size: 15px; }
+  .brand .name { font-size: 20px; font-weight: 900; }
+  .brand .tagline { font-size: 11.5px; color: #64748b; margin-top: 1px; }
+  .meta { text-align: right; font-size: 10.5px; color: #94a3b8; line-height: 1.6; }
+  h1 { font-size: 27px; line-height: 1.25; margin: 0 0 10px; font-weight: 900; }
+  .lede { font-size: 13px; color: #475569; max-width: 620px; line-height: 1.55; margin-bottom: 22px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+  .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; }
+  .card h3 { font-size: 12.5px; margin: 0 0 5px; font-weight: 800; }
+  .card p { font-size: 11px; color: #64748b; margin: 0; line-height: 1.5; }
+  .section-label { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #0d9488; margin: 0 0 10px; }
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+  .pill { border: 1px solid #99f6e4; color: #0f766e; background: #f0fdfa; border-radius: 999px; padding: 5px 12px; font-size: 11px; font-weight: 700; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .stat { background: #0f172a; color: #fff; border-radius: 12px; padding: 14px 12px; }
+  .stat .num { font-size: 19px; font-weight: 900; color: #5eead4; }
+  .stat .lbl { font-size: 9.5px; color: #cbd5e1; margin-top: 3px; line-height: 1.4; }
+  .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; font-size: 10px; color: #94a3b8; }
+  .cta-band { margin-top: 18px; background: #0d9488; color: #fff; border-radius: 12px; padding: 16px 18px; display: flex; justify-content: space-between; align-items: center; }
+  .cta-band h4 { margin: 0 0 4px; font-size: 14px; }
+  .cta-band p { margin: 0; font-size: 11px; color: #ccfbf1; }
+  .cta-band .badge { background: rgba(255,255,255,.15); border-radius: 8px; padding: 6px 12px; font-size: 10.5px; font-weight: 800; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="head">
+    <div class="brand">
+      <span class="mark">F</span>
+      <div><div class="name">Festio</div><div class="tagline">Guest experience, RSVP, check-in, and event operations</div></div>
+    </div>
+    <div class="meta">festio.events<br>info@devopclinics.com<br>September 2026</div>
+  </div>
+
+  <h1>The complete event workflow from invite to door to table.</h1>
+  <p class="lede">Festio helps organizers create branded invite pages, collect RSVPs, send WhatsApp/SMS/email invites, check guests in by QR, manage venue access, seating, orders, deliveries, and gift lists, and watch live Results — one pay-per-event platform.</p>
+
+  <div class="section-label">What it replaces</div>
+  <div class="grid">
+    <div class="card"><h3>Invites &amp; RSVP</h3><p>Open links or personal invite links, approvals, deadlines, custom questions, and broadcast updates.</p></div>
+    <div class="card"><h3>Check-in</h3><p>Browser-based QR check-in for staff — no app install — with offline caching and a live audit trail.</p></div>
+    <div class="card"><h3>Venue access</h3><p>Zones, gates, ticket types and tags, occupancy limits, and guest-journey analytics.</p></div>
+    <div class="card"><h3>Seating &amp; orders</h3><p>Tables, partner pairing, meal/drink/gift choices, and a live kitchen order queue.</p></div>
+    <div class="card"><h3>Deliveries</h3><p>Aso-ebi, merch, welcome bags — vendor packing lists, addresses, and fulfilment status.</p></div>
+    <div class="card"><h3>Gift list</h3><p>Wishlist items and cash funds, claims, and direct giving — no money handled by Festio.</p></div>
+  </div>
+
+  <div class="section-label">Workflow</div>
+  <div class="pills">
+    <span class="pill">Event Setup</span><span class="pill">Invites</span><span class="pill">RSVP</span>
+    <span class="pill">Check-in</span><span class="pill">Orders</span><span class="pill">Results</span>
+  </div>
+
+  <div class="section-label">Built for</div>
+  <div class="stats">
+    <div class="stat"><div class="num">NG + US</div><div class="lbl">WhatsApp-first Nigeria, Stripe/Paystack-ready US</div></div>
+    <div class="stat"><div class="num">$0</div><div class="lbl">Free start, Event Pass when you need more</div></div>
+    <div class="stat"><div class="num">25+</div><div class="lbl">Free guest cap, paid tiers for larger events</div></div>
+    <div class="stat"><div class="num">1</div><div class="lbl">One dataset across guests, staff, vendors, and results</div></div>
+  </div>
+
+  <div class="cta-band">
+    <div><h4>Run the next event end-to-end.</h4><p>Free to start. Upgrade per event for more guests, QR check-in, SMS/WhatsApp, seating, orders, venue access, deliveries, and the gift list.</p></div>
+    <div class="badge">festio.events</div>
+  </div>
+
+  <div class="footer"><span>Festio one-pager · confidential</span><span>festio.events</span></div>
+</div>
+</body>
+</html>

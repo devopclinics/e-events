@@ -8,7 +8,28 @@ import './FestioLiveRedesignPage.css'
 
 const ExperienceWorkflowsPanel = lazy(() => import('../components/live/ExperienceWorkflowsPanel'))
 
-const TABS = ['Overview', 'Control Room', 'Activities', 'Experiences', 'Question Bank', 'Live Control', 'Displays', 'Responses', 'Analytics', 'Settings', 'Help']
+// The control room is the operational home for a live event.  The remaining
+// areas are still available, but they no longer bury the multi-screen controls
+// behind an overview or a preview-only display card.
+const TABS = ['Control Room', 'Displays', 'Activities', 'Experiences', 'Live Control', 'Responses', 'Analytics', 'Question Bank', 'Settings', 'Help', 'Overview']
+const TAB_LABELS = {
+  'Control Room': 'Control room',
+  Displays: 'Channels & devices',
+  Activities: 'Activities',
+  Experiences: 'Presenter & experiences',
+  'Live Control': 'Live activity',
+  Responses: 'Responses',
+  Analytics: 'Insights',
+  'Question Bank': 'Question bank',
+  Settings: 'Settings',
+  Help: 'Help',
+  Overview: 'Event overview',
+}
+function liveTabFromQuery(value) {
+  const normalized = value?.trim().toLowerCase()
+  if (!normalized) return null
+  return TABS.find((tab) => tab.toLowerCase() === normalized || TAB_LABELS[tab].toLowerCase() === normalized) || null
+}
 
 const ACTIVITY_TYPES = [
   ['quiz', 'Quiz'], ['poll', 'Poll'], ['survey', 'Survey'], ['rating', 'Rating'],
@@ -843,7 +864,7 @@ function DisplayCard({ display, draft, onDraftChange, onDraftApplied, eventId, a
 }
 
 
-function UnifiedControlRoom({ activities, displays, selected, loadingActivityId, busy, onSelectActivity, onOpenControls, onAdvance, advanceLabel, onPush, onClear, onManageDisplay }) {
+function UnifiedControlRoom({ activities, displays, selected, loadingActivityId, busy, onSelectActivity, onOpenControls, onAdvance, advanceLabel, onPush, onClear, onManageDisplay, onOpenPresenter, onNewActivity }) {
   const allActivities = activities || []
   const allDisplays = displays || []
   const [targetIds, setTargetIds] = useState([])
@@ -876,6 +897,8 @@ function UnifiedControlRoom({ activities, displays, selected, loadingActivityId,
     || selected?.questions?.find((question) => question.status === 'active')
   const allowedScenes = selected ? compatibleScenes(selected.type) : ['welcome']
   const sceneLabel = DISPLAY_SCENES.find(([key]) => key === scene)?.[1] || scene
+  const connectedScreenCount = allDisplays.reduce((count, display) => count + (display.connected_count ?? (display.connected ? 1 : 0)), 0)
+  const configuredScreenCapacity = allDisplays.reduce((count, display) => count + (display.connection_limit || 1), 0)
 
   function toggleTarget(displayId) {
     setReceipt('')
@@ -895,9 +918,14 @@ function UnifiedControlRoom({ activities, displays, selected, loadingActivityId,
   }
 
   return <section className="fl-control-room" aria-label="Unified Control Room">
+    <header className="fl-control-room-appbar">
+      <div className="fl-control-brand"><span aria-hidden="true">F</span><div><strong>Festio Live</strong><small>Live control desk</small></div></div>
+      <div className="fl-control-breadcrumb"><span>Live desk</span><b>/ Unified Control Room</b></div>
+      <div className="fl-control-room-presence"><span>{connectedScreenCount} of {configuredScreenCapacity || 0} screen{configuredScreenCapacity === 1 ? '' : 's'} connected</span><button className="rr-btn secondary" onClick={() => onManageDisplay(null)}>Channels &amp; devices</button></div>
+    </header>
     <header className="fl-control-room-head">
-      <div><span className="fl-eyebrow">Unified Control Room</span><h2>Activities, live controls, and channels in one view.</h2><p>Choose what is live, select exactly which channels change, and keep every other screen untouched.</p></div>
-      <button className="rr-btn secondary" onClick={() => onManageDisplay(null)}>Manage channels &amp; devices</button>
+      <div><span className="fl-eyebrow">One operator view</span><h2>Activities, live controls, and channels stay together.</h2><p>Choose what is live, select exactly which channels change, and keep every other screen untouched.</p></div>
+      <div className="fl-control-room-head-actions"><button className="rr-btn secondary" onClick={onOpenPresenter}>Presenter controls</button><button className="rr-btn primary" onClick={onNewActivity}>+ New activity</button></div>
     </header>
     <div className="fl-control-room-shell">
       <aside className="fl-control-rail" aria-label="Activities and shows">
@@ -972,7 +1000,7 @@ function FestioLiveEventPage({ eventId }) {
   const liveQuery = new URLSearchParams(window.location.search)
   const presenterEntry = liveQuery.has('present')
   const requestedTab = liveQuery.get('tab')
-  const [tab, setTab] = useState(presenterEntry ? 'Experiences' : (TABS.find((item) => item.toLowerCase() === requestedTab?.toLowerCase()) || 'Overview'))
+  const [tab, setTab] = useState(presenterEntry ? 'Experiences' : (liveTabFromQuery(requestedTab) || 'Control Room'))
 
   const [activities, setActivities] = useState(null)
   const [error, setError] = useState('')
@@ -1637,21 +1665,24 @@ function FestioLiveEventPage({ eventId }) {
 
   return (
     <RedesignShell topActive="live" withEventSidebar eventActive="live">
-      <div className="fl-app">
-      <div className="rr-pagehead fl-pagehead">
+      <div className={`fl-app${tab === 'Control Room' ? ' fl-app-control-room' : ''}`}>
+      {tab === 'Control Room' ? <div className="fl-control-pagehead">
+        <div><span className="fl-eyebrow">Audience engagement suite</span><div className="rr-title-row"><h1>Festio Live</h1><span className="fl-live-badge">● LIVE DESK</span></div><div className="rr-meta">Run every activity and screen from one deliberate workspace.</div></div>
+        <div className="fl-page-actions"><button className="rr-btn secondary" onClick={() => setTab('Displays')}>Channels &amp; devices</button><button className="rr-btn primary" onClick={() => { setTab('Activities'); closeActivity(); setCreating(true) }}>+ New activity</button></div>
+      </div> : <div className="rr-pagehead fl-pagehead">
         <div><span className="fl-eyebrow">Audience engagement suite</span><div className="rr-title-row"><h1>Festio Live</h1><span className="fl-live-badge">● LIVE READY</span></div><div className="rr-meta">Create moments people remember — before, during, and after the event.</div></div>
-        <div className="fl-page-actions"><button className="rr-btn secondary" onClick={() => setTab('Displays')}>Broadcast studio</button><button className="rr-btn primary" onClick={() => { setTab('Activities'); closeActivity(); setCreating(true) }}>+ New activity</button></div>
-      </div>
+        <div className="fl-page-actions"><button className="rr-btn secondary" onClick={() => setTab('Displays')}>Channels &amp; devices</button><button className="rr-btn primary" onClick={() => { setTab('Activities'); closeActivity(); setCreating(true) }}>+ New activity</button></div>
+      </div>}
 
       {error && <div style={{ background: '#fbe9e7', color: '#a3271e', padding: '10px 14px', borderRadius: 10, fontSize: 13, marginBottom: 14 }}><Icon name="info" size={14} /> {error}</div>}
 
       <nav className="fl-tabs" aria-label="Festio Live sections">
         {TABS.map((t) => (
-          <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{t}</button>
+          <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{TAB_LABELS[t]}</button>
         ))}
       </nav>
 
-      {enabled && <section className="fl-operator-bar" aria-label="Live operator controls">
+      {enabled && tab !== 'Control Room' && <section className="fl-operator-bar" aria-label="Live operator controls">
         <div className="fl-operator-fields">
           <label><span>Activity controls</span><select className="rr-select" aria-label="Switch activity" disabled={busy || !activities} value={loadingActivityId || selected?.id || ''} onChange={(event) => { openActivity(event.target.value); setTab('Activities') }}><option value="">Choose an activity</option>{(activities || []).filter((activity) => activity.status !== 'archived' || activity.id === selected?.id).map((activity) => <option key={activity.id} value={activity.id}>{activity.title} · {activity.status}</option>)}</select></label>
           <label><span>Target display</span><select className="rr-select" aria-label="Target display" disabled={busy || !displays?.length} value={operatorDisplay?.id || ''} onChange={(event) => { setOperatorDisplayId(event.target.value); setOperatorReceipt('') }}>{!displays?.length && <option value="">{displays === null ? 'Loading displays…' : 'No displays yet'}</option>}{(displays || []).map((display) => <option key={display.id} value={display.id}>{display.name}</option>)}</select></label>
@@ -1699,6 +1730,8 @@ function FestioLiveEventPage({ eventId }) {
         onPush={pushControlRoomActivity}
         onClear={clearControlRoomChannels}
         onManageDisplay={(displayId) => { if (displayId) setOperatorDisplayId(displayId); setTab('Displays') }}
+        onOpenPresenter={() => setTab('Experiences')}
+        onNewActivity={() => { setTab('Activities'); closeActivity(); setCreating(true) }}
       />}
 
 

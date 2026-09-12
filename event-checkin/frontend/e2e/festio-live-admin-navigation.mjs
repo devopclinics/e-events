@@ -90,8 +90,8 @@ await server.listen()
 const browser = await chromium.launch({ headless: true })
 const base = `http://127.0.0.1:${server.httpServer.address().port}`
 const errors = []
-async function fixture({ mobile = false, primaryType = 'poll', query = '?tab=Displays' } = {}) {
-  const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1400, height: 1000 } })
+async function fixture({ mobile = false, primaryType = 'poll', query = '?tab=Displays', viewport = null } = {}) {
+  const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : (viewport || { width: 1400, height: 1000 }) })
   const page = await context.newPage()
   page.on('pageerror', error => errors.push(error.message))
   await page.route((url) => new URL(url).pathname.startsWith('/live/'), route => route.fulfill({ contentType: 'text/html', body: '<p>Screen preview</p>' }))
@@ -103,7 +103,8 @@ async function fixture({ mobile = false, primaryType = 'poll', query = '?tab=Dis
     window.__liveTest = { calls: [], activities: [activity('activity-one', `Opening ${primaryType}`, primaryType), activity('activity-two', 'Closing poll')], displays: [display('display-one', 'Main stage'), display('display-two', 'Lobby', 'activity-two')] }
   }, { primaryType })
   await page.goto(`${base}/admin-test${query}`)
-  await expect(page.getByRole('combobox', { name: 'Target display', exact: true })).toHaveValue('display-one')
+  const startsInControlRoom = !query || /[?&]tab=Control(?:%20|\+)Room(?:&|$)/.test(query)
+  if (!startsInControlRoom) await expect(page.getByRole('combobox', { name: 'Target display', exact: true })).toHaveValue('display-one')
   return { page, context }
 }
 const tab = (page, name) => page.getByRole('navigation', { name: 'Festio Live sections' }).getByRole('button', { name, exact: true })
@@ -111,14 +112,33 @@ const card = (page, name = 'Main stage') => page.locator('.fl-display-card').fil
 
 try {
   {
+    const { page, context } = await fixture({ query: '', viewport: { width: 1280, height: 900 } })
+    const controlRoom = page.getByRole('region', { name: 'Unified Control Room', exact: true })
+    await expect(controlRoom).toBeVisible()
+    await expect(page.getByRole('navigation', { name: 'Festio Live sections' }).getByRole('button', { name: 'Control room', exact: true })).toHaveClass(/active/)
+    await expect(page.getByRole('combobox', { name: 'Target display', exact: true })).toHaveCount(0)
+    const [rail, main, channels] = await Promise.all([
+      controlRoom.locator('.fl-control-rail').boundingBox(),
+      controlRoom.locator('.fl-control-main').boundingBox(),
+      controlRoom.locator('.fl-control-targets').boundingBox(),
+    ])
+    assert(rail && main && channels, 'all three control-room panes render')
+    assert(rail.x < main.x && main.x < channels.x, 'activity rail, controls, and channels stay visible side by side on desktop')
+    assert(channels.x + channels.width <= 1280, 'the channels pane remains inside a normal laptop viewport')
+    await expect(controlRoom.getByRole('button', { name: 'Presenter controls', exact: true })).toBeVisible()
+    await expect(controlRoom.getByRole('button', { name: 'Channels & devices', exact: true })).toBeVisible()
+    await context.close()
+    console.log('PASS: Live opens directly into the three-pane control workspace')
+  }
+  {
     const { page, context } = await fixture()
     const main = card(page)
     await expect(page.locator('iframe')).toHaveCount(0)
     await main.getByRole('combobox', { name: 'Activity for Main stage', exact: true }).selectOption('activity-two')
     await main.getByTitle('Current result', { exact: true }).click()
-    await tab(page, 'Live Control').click()
+    await tab(page, 'Live activity').click()
     await expect(page.locator('iframe')).toHaveCount(0)
-    await tab(page, 'Displays').click()
+    await tab(page, 'Channels & devices').click()
     await expect(main.getByRole('combobox', { name: 'Activity for Main stage', exact: true })).toHaveValue('activity-two')
     await expect(main.getByTitle('Current result', { exact: true })).toHaveClass('active')
     await main.getByRole('button', { name: 'Preview pending change', exact: true }).click()
@@ -129,7 +149,7 @@ try {
     assert.match(await main.locator('iframe').getAttribute('src'), /observer=true/)
     await tab(page, 'Activities').click()
     await expect(page.locator('iframe')).toHaveCount(0)
-    await tab(page, 'Displays').click()
+    await tab(page, 'Channels & devices').click()
     await expect(page.locator('iframe')).toHaveCount(0)
     await expect(main.getByRole('combobox', { name: 'Activity for Main stage', exact: true })).toHaveValue('activity-two')
     assert.equal(await page.evaluate(() => window.__liveTest.calls.filter(call => call.method === 'liveUpdateDisplay').length), 0)
@@ -245,7 +265,7 @@ try {
     console.log('PASS: contextual presenter event/run links and event state isolation')
   }
   assert.deepEqual(errors, [], 'Browser raised no runtime errors')
-  console.log('Festio Live admin navigation: 6 offline browser scenarios passed')
+  console.log('Festio Live admin navigation: 7 offline browser scenarios passed')
 } finally {
   await browser.close()
   await server.close()

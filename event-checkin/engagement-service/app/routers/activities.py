@@ -280,6 +280,36 @@ async def list_activities(identity: Identity = Depends(current_identity), db: As
     return out
 
 
+@router.get("/control/activities", response_model=list[ActivitySummary])
+async def list_control_activities(identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Prepared and active activities for scoped presenters, including drafts."""
+    require_capability(identity, "control")
+    rows = list((await db.execute(select(EngagementActivity).where(
+        EngagementActivity.event_id == identity.event_id,
+        EngagementActivity.org_id == identity.org_id,
+    ).order_by(EngagementActivity.created_at.desc()))).scalars().all())
+    if not rows:
+        return []
+    ids = [activity.id for activity in rows]
+    response_counts = dict((await db.execute(
+        select(ParticipantResponse.activity_id, func.count())
+        .where(ParticipantResponse.activity_id.in_(ids))
+        .group_by(ParticipantResponse.activity_id)
+    )).all())
+    participant_counts = dict((await db.execute(
+        select(ActivityParticipant.activity_id, func.count())
+        .where(ActivityParticipant.activity_id.in_(ids))
+        .group_by(ActivityParticipant.activity_id)
+    )).all())
+    result = []
+    for activity in rows:
+        summary = ActivitySummary.model_validate(activity)
+        summary.response_count = response_counts.get(activity.id, 0)
+        summary.participant_count = participant_counts.get(activity.id, 0)
+        result.append(summary)
+    return result
+
+
 @router.get("/activities/live", response_model=list[ActivitySummary])
 async def list_live_activities(identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
     """Guest-visible discovery — what's open to join right now. Staff can hit

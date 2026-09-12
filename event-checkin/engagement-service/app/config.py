@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
@@ -12,6 +13,10 @@ class Settings(BaseSettings):
     cors_origins: str = "https://festio.events,http://localhost:4000"
     redis_url: str = "redis://engagement-redis:6379/0"
     local_ai_url: str = "http://local-ai:8080"
+    # A single feed normally mirrors to a small group of physical screens.
+    # Larger rooms can raise this after a staged multi-screen load rehearsal.
+    display_connection_limit: int = Field(default=4, ge=1, le=20)
+    display_snapshot_ttl_ms: int = Field(default=750, ge=100, le=2000)
     # Deliberately off by default. Staging enables this explicitly after the
     # additive migration is applied; production remains unaffected until the
     # workflow acceptance suite has passed.

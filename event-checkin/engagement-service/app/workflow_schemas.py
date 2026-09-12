@@ -99,6 +99,18 @@ class RunCreate(BaseModel):
     display_id: str | None = None
 
 
+class RunDisplayAssignment(BaseModel):
+    display_ids: list[str] = Field(default_factory=list, max_length=100)
+    expected_version: int = Field(ge=0)
+    idempotency_key: str = Field(min_length=8, max_length=100)
+
+    @model_validator(mode="after")
+    def unique_displays(self):
+        if len(set(self.display_ids)) != len(self.display_ids):
+            raise ValueError("Choose each display only once")
+        return self
+
+
 class RunCommand(BaseModel):
     action: Literal[
         "start", "next", "previous", "jump", "pause", "resume", "complete",

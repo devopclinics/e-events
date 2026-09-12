@@ -3,13 +3,14 @@ import hashlib
 import hmac
 from datetime import datetime, timedelta, timezone
 
+import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ..auth import Identity, current_identity, require_activity_session, require_guest
+from ..auth import Identity, current_identity, require_activity_session, require_guest, require_staff
 from ..database import get_db
 from ..config import settings
 from ..models import (
@@ -124,9 +125,12 @@ async def _compute_results(activity: EngagementActivity, db: AsyncSession) -> Ac
     )).scalars().all()
     participant_count = len({r.participant_id for r in responses})
 
+    responses_by_question = defaultdict(list)
+    for response in responses:
+        responses_by_question[response.question_id].append(response)
     questions_out = []
     for question in sorted(activity.questions, key=lambda q: q.sequence):
-        q_responses = [r for r in responses if r.question_id == question.id]
+        q_responses = responses_by_question[question.id]
         option_counts: Counter[str] = Counter()
         for r in q_responses:
             for sel in r.selections:
@@ -263,7 +267,36 @@ def _survey_completion_summary(participants: list[ActivityParticipant], particip
     }
 
 
-async def _display_payload(activity: EngagementActivity, db: AsyncSession) -> dict:
+def _mint_report_token(identity: Identity) -> str:
+    """Mint a short-lived staff token for the headless report renderer."""
+    now = datetime.now(timezone.utc)
+    claims = {
+        "sub": f"report-export:{identity.subject}", "event_id": identity.event_id, "org_id": identity.org_id,
+        "role": identity.role, "identity_kind": "staff", "aud": "engagement", "iss": "guesthub",
+        "iat": int(now.timestamp()), "exp": int((now + timedelta(minutes=10)).timestamp()),
+    }
+    return jwt.encode(claims, settings.internal_service_token, algorithm="HS256")
+
+
+async def _public_display_payload(activity: EngagementActivity, db: AsyncSession) -> dict:
+    from ..display_snapshots import public_activity_snapshot
+
+    async def build():
+        # A concurrent request may have waited for another snapshot build.
+        # Reload presentation state rather than cache an earlier ORM version.
+        fresh = await db.scalar(
+            select(EngagementActivity).where(EngagementActivity.id == activity.id)
+            .options(selectinload(EngagementActivity.questions).selectinload(ActivityQuestion.options))
+            .execution_options(populate_existing=True)
+        )
+        if not fresh:
+            raise HTTPException(404, "Activity not found")
+        return await _display_payload(fresh, db)
+
+    return await public_activity_snapshot(activity, build)
+
+
+async def _display_payload(activity: EngagementActivity, db: AsyncSession, *, redact_open_text: bool = True) -> dict:
     results = await _compute_results(activity, db)
     participants = list((await db.execute(
         select(ActivityParticipant).where(ActivityParticipant.activity_id == activity.id)
@@ -369,8 +402,10 @@ async def _display_payload(activity: EngagementActivity, db: AsyncSession) -> di
                 "time_limit_seconds": next((source.time_limit_seconds for source in activity.questions if source.id == q.question_id), None),
                 "opened_at": next((source.config.get("opened_at") for source in activity.questions if source.id == q.question_id), None),
                 # Open text never reaches a public display without a future,
-                # explicit moderation record. Counts remain safe to show.
-                "text_samples": [],
+                # explicit moderation record; counts remain safe to show there.
+                # The staff-only report receives only the bounded excerpts
+                # already produced by _compute_results.
+                "text_samples": [] if redact_open_text else q.text_samples,
                 "live_state": next((source.live_state for source in activity.questions if source.id == q.question_id), "pending"),
             }
             for q in results.questions
@@ -710,6 +745,19 @@ async def get_results(activity_id: str, identity: Identity = Depends(current_ide
             question.text_samples = []
         return results
     return await _compute_results(activity, db)
+
+
+@router.get("/activities/{activity_id}/report")
+async def activity_report(activity_id: str, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Return every activity question with staff-visible open-text excerpts.
+
+    This report route is independent of LiveDisplay connection leases and
+    display result curation. Open-text values remain bounded excerpts rather
+    than a claim to export every raw answer.
+    """
+    require_staff(identity)
+    activity = await _load_activity(activity_id, identity.event_id, identity.org_id, db)
+    return await _display_payload(activity, db, redact_open_text=False)
 
 
 @router.get("/activities/{activity_id}/leaderboard")

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../../api'
 import WorkflowSceneRenderer from './WorkflowSceneRenderer'
+import WorkflowDisplayTargets from './WorkflowDisplayTargets'
+import usePresenterClock from './usePresenterClock'
 import './ExperienceWorkflowsPanel.css'
 
 const STEP_TYPES = [
@@ -18,18 +20,21 @@ const normalizeVideoUrl = (value = '') => {
   return value.trim()
 }
 
-export default function ExperienceWorkflowsPanel({ eventId, activities = [], displays = [], presenterEntry = false }) {
+export default function ExperienceWorkflowsPanel({ eventId, activities = [], displays = [], presenterEntry = false, requestedWorkflowId = '', requestedRunId = '', requestedDisplayId = '' }) {
   const [items, setItems] = useState(null)
   const [workflow, setWorkflow] = useState(null)
   const [selectedStep, setSelectedStep] = useState(null)
   const [newName, setNewName] = useState('')
   const [stepType, setStepType] = useState('hero')
   const [run, setRun] = useState(null)
-  const [displayId, setDisplayId] = useState('')
+  const [displayId, setDisplayId] = useState(requestedDisplayId)
   const [busy, setBusy] = useState(false)
   const [exportingPptx, setExportingPptx] = useState(false)
   const [error, setError] = useState('')
   const presenterEntryHandled = useRef(false)
+  const openSequence = useRef(0)
+  const activeRunId = useRef(null)
+  activeRunId.current = run?.id
 
   const loadList = async () => {
     try {
@@ -37,29 +42,43 @@ export default function ExperienceWorkflowsPanel({ eventId, activities = [], dis
       setItems(loaded); setError('')
       if (presenterEntry && !presenterEntryHandled.current && loaded.length) {
         presenterEntryHandled.current = true
-        const candidates = [...loaded].sort((left, right) => Number(right.status === 'ready') - Number(left.status === 'ready'))
-        for (const candidate of candidates) {
-          const active = await api.liveActiveWorkflowRun(eventId, candidate.id)
-          if (active.run) { await open(candidate.id); return }
+        if (requestedRunId) {
+          const requested = await api.liveWorkflowRun(eventId, requestedRunId)
+          if (requestedWorkflowId && requested.workflow_id !== requestedWorkflowId) throw new Error('This run belongs to a different experience.')
+          await open(requested.workflow_id, requested)
+        } else if (requestedWorkflowId) {
+          if (!loaded.some((item) => item.id === requestedWorkflowId)) throw new Error('This experience is not available for this event.')
+          await open(requestedWorkflowId)
+        } else if (loaded.length === 1) {
+          await open(loaded[0].id)
         }
-        await open(candidates[0].id)
       }
     }
     catch (e) { setItems([]); setError(e.message) }
   }
-  const open = async (id) => {
+  const open = async (id, requestedRun = null) => {
+    const sequence = ++openSequence.current
+    setBusy(true)
     try {
-      const [detail, active] = await Promise.all([api.liveWorkflow(eventId, id), api.liveActiveWorkflowRun(eventId, id)])
+      const [detail, active] = await Promise.all([api.liveWorkflow(eventId, id), requestedRun ? Promise.resolve({ run: requestedRun }) : api.liveActiveWorkflowRun(eventId, id)])
+      if (sequence !== openSequence.current) return
       setWorkflow(detail); setSelectedStep(detail.steps[0] || null); setRun(active.run || null); setError('')
     }
-    catch (e) { setError(e.message) }
+    catch (e) { if (sequence === openSequence.current) setError(e.message) }
+    finally { if (sequence === openSequence.current) setBusy(false) }
   }
-  useEffect(() => { if (eventId) loadList() }, [eventId])
+  useEffect(() => {
+    openSequence.current += 1
+    presenterEntryHandled.current = false
+    setWorkflow(null); setRun(null); setItems(null); setSelectedStep(null)
+    if (eventId) loadList()
+    return () => { openSequence.current += 1 }
+  }, [eventId])
   useEffect(() => {
     if (!run?.id || !['ready', 'live', 'paused'].includes(run.status)) return undefined
     const id = setInterval(async () => {
-      try { setRun(await api.liveWorkflowRun(eventId, run.id)) } catch { /* keep last authoritative snapshot */ }
-    }, 2000)
+      try { const refreshed = await api.liveWorkflowRun(eventId, run.id); if (activeRunId.current === refreshed.id) setRun(refreshed) } catch { /* keep last authoritative snapshot */ }
+    }, 5000)
     return () => clearInterval(id)
   }, [eventId, run?.id, run?.status])
 
@@ -131,10 +150,30 @@ export default function ExperienceWorkflowsPanel({ eventId, activities = [], dis
   }
   const activeStep = useMemo(() => run?.current_step || selectedStep || workflow?.steps?.[0], [run, selectedStep, workflow])
 
-  const [clock, setClock] = useState(Date.now())
-  useEffect(() => { const id = setInterval(() => setClock(Date.now()), 1000); return () => clearInterval(id) }, [])
+  const clock = usePresenterClock()
   const elapsed = run ? (run.elapsed_seconds || 0) + (run.status === 'live' && run.server_now ? Math.max(0, Math.floor((clock - new Date(run.server_now).getTime()) / 1000)) : 0) : 0
   const timer = run?.runtime?.timer
+
+  const assignDisplays = async (ids) => {
+    setBusy(true); setError('')
+    try {
+      setRun(await api.liveAssignWorkflowDisplays(eventId, run.id, {
+        display_ids: ids, expected_version: run.state_version, idempotency_key: commandKey(),
+      }))
+    } catch (e) {
+      setError(e.message)
+      try { setRun(await api.liveWorkflowRun(eventId, run.id)) } catch {}
+    } finally { setBusy(false) }
+  }
+  const copyPresenterLink = async () => {
+    const query = new URLSearchParams({ present: '1', event: eventId, workflow: workflow.id })
+    if (run) query.set('run', run.id)
+    const target = run?.display_ids?.[0] || displayId
+    if (target) query.set('display', target)
+    const url = `${window.location.origin}/live?${query}`
+    try { await navigator.clipboard.writeText(url); setError('Presenter link copied.') }
+    catch { setError(`Presenter link: ${url}`) }
+  }
 
   if (items === null) return <div className="wf-loading">Loading experiences…</div>
   if (!workflow) return <section className="wf-builder wf-library">
@@ -144,15 +183,17 @@ export default function ExperienceWorkflowsPanel({ eventId, activities = [], dis
   </section>
 
   return <section className="wf-builder">
-    <div className="wf-builder-top"><button onClick={() => { setWorkflow(null); setRun(null) }}>← Experiences</button><div><span>{run ? `PRESENTER · ${run.status}` : 'EXPERIENCE BUILDER'}</span><h2>{workflow.name}</h2></div><div>{!run && <><label className="wf-theme-choice">Guest design<select aria-label="Guest experience design" value={workflow.theme?.guest_preset || 'cinematic'} disabled={busy} onChange={(event) => saveGuestTheme(event.target.value)}><option value="cinematic">A · Cinematic</option><option value="community">B · Community</option><option value="pulse">C · Modern Pulse</option></select></label><button type="button" title="Copy the short presenter entry" onClick={async () => { const url = `${window.location.origin}/live?present=1`; await navigator.clipboard?.writeText(url); setError('Presenter link copied: ' + url) }}>Copy presenter link</button><button disabled={busy || !workflow.steps.length} onClick={publish}>Publish revision</button><button disabled={busy || exportingPptx || workflow.status !== 'ready'} title="Screenshots every published slide and bundles it into a PowerPoint, with your presenter notes on each slide" onClick={exportPptx}>{exportingPptx ? 'Generating PPTX…' : '⬇ Generate PPTX'}</button><button className="rehearse" disabled={busy || workflow.status !== 'ready'} onClick={() => startRun('')}>▶ Rehearse safely</button><select aria-label="Projector display" value={displayId} onChange={(event) => setDisplayId(event.target.value)}><option value="">Choose projector display…</option>{displays.map((display) => <option key={display.id} value={display.id}>{display.name}</option>)}</select><button className="primary" disabled={busy || workflow.status !== 'ready' || !displayId} onClick={() => startRun(displayId)}>Present on display</button></>}{run && <button onClick={() => setRun(null)}>Exit presenter</button>}</div></div>
+    <nav className="wf-presenter-navigation" aria-label="Experience navigation"><label>Experience<select aria-label="Choose experience" value={workflow.id} disabled={busy} onChange={(event) => open(event.target.value)}>{items.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><span>Changing the selected experience leaves its run going.</span></nav>
+    <div className="wf-builder-top"><button disabled={busy} onClick={() => { openSequence.current += 1; setWorkflow(null); setRun(null) }}>← Experiences</button><div><span>{run ? `PRESENTER · ${run.status}` : 'EXPERIENCE BUILDER'}</span><h2>{workflow.name}</h2></div><div>{!run && <><label className="wf-theme-choice">Guest design<select aria-label="Guest experience design" value={workflow.theme?.guest_preset || 'cinematic'} disabled={busy} onChange={(event) => saveGuestTheme(event.target.value)}><option value="cinematic">A · Cinematic</option><option value="community">B · Community</option><option value="pulse">C · Modern Pulse</option></select></label><button disabled={busy || !workflow.steps.length} onClick={publish}>Publish revision</button><button disabled={busy || exportingPptx || workflow.status !== 'ready'} title="Screenshots every published slide and bundles it into a PowerPoint, with your presenter notes on each slide" onClick={exportPptx}>{exportingPptx ? 'Generating PPTX…' : '⬇ Generate PPTX'}</button><button className="rehearse" disabled={busy || workflow.status !== 'ready'} onClick={() => startRun('')}>▶ Rehearse safely</button><select aria-label="Projector display" value={displayId} onChange={(event) => setDisplayId(event.target.value)}><option value="">Choose projector display…</option>{displays.map((display) => <option key={display.id} value={display.id}>{display.name}</option>)}</select><button className="primary" disabled={busy || workflow.status !== 'ready' || !displayId} onClick={() => startRun(displayId)}>Present on display</button></>}{run && <button disabled={busy} onClick={() => { setWorkflow(null); setRun(null) }}>Leave presenter</button>}<button type="button" onClick={copyPresenterLink}>Copy presenter link</button></div></div>
     {error && <div className="wf-error">{error}</div>}
+    {run && <WorkflowDisplayTargets run={run} displays={displays} busy={busy} onAssign={assignDisplays}/>}
     <div className="wf-workspace">
       <aside className="wf-timeline">
         <header><b>Run of show</b><span>{workflow.steps.length} steps</span></header>
-        {workflow.steps.map((step, index) => <button key={step.id} className={(run?.current_step_id === step.id || (!run && selectedStep?.id === step.id)) ? 'active' : ''} onClick={() => run ? command('jump', step.id) : setSelectedStep(step)}><span>{String(index + 1).padStart(2, '0')}</span><i>{step.step_type.replaceAll('_', ' ')}</i><b>{step.title}</b>{!run && <em><i role="button" tabIndex="0" aria-label="Move up" onClick={(event) => { event.stopPropagation(); move(step, -1) }}>↑</i><i role="button" tabIndex="0" aria-label="Move down" onClick={(event) => { event.stopPropagation(); move(step, 1) }}>↓</i></em>}</button>)}
+        {(run?.steps || workflow.steps).map((step, index) => <button disabled={busy || (run && !['live', 'paused'].includes(run.status))} key={step.id} className={(run?.current_step_id === step.id || (!run && selectedStep?.id === step.id)) ? 'active' : ''} onClick={() => run ? command('jump', step.id) : setSelectedStep(step)}><span>{String(index + 1).padStart(2, '0')}</span><i>{step.step_type.replaceAll('_', ' ')}</i><b>{step.title}</b>{!run && <em><i role="button" tabIndex="0" aria-label="Move up" onClick={(event) => { event.stopPropagation(); move(step, -1) }}>↑</i><i role="button" tabIndex="0" aria-label="Move down" onClick={(event) => { event.stopPropagation(); move(step, 1) }}>↓</i></em>}</button>)}
         {!run && <div className="wf-add-step"><select value={stepType} onChange={(event) => setStepType(event.target.value)}>{STEP_TYPES.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><button disabled={busy} onClick={addStep}>+ Add</button></div>}
       </aside>
-      <div className="wf-stage"><WorkflowSceneRenderer key={activeStep?.id} step={activeStep} mode="presenter" eventId={eventId}/>{run && <><div className="wf-presenter-bar"><div><span>Elapsed</span><b>{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</b></div><button type="button" onClick={() => document.querySelector('.wf-stage .wf-scene')?.requestFullscreen?.()}>⛶ Full screen</button><button disabled={busy || run.status === 'ready'} onClick={() => command('previous')}>← Previous</button>{run.status === 'ready' && <button className="primary" disabled={busy} onClick={() => command('start')}>Start experience</button>}{run.status === 'live' && <button onClick={() => command('pause')}>Pause</button>}{run.status === 'paused' && <button onClick={() => command('resume')}>Resume</button>}<button className="primary" disabled={busy || run.status === 'ready'} onClick={() => command('next')}>Next →</button><button disabled={busy || !['live', 'paused'].includes(run.status)} onClick={() => command('complete')}>Finish</button></div>{['poll', 'multi_select', 'rating', 'ranking'].includes(activeStep?.step_type) && <div className="wf-presenter-bar wf-media-controls"><b>Audience poll · {activeStep?.data?.response_count || 0} responses</b>{activeStep?.display_phase === 'results' ? <button className="primary" onClick={() => command('reopen_voting')}>Reopen voting</button> : <button className="primary" onClick={() => command('reveal_results')}>Close voting & reveal results</button>}</div>}{['countdown', 'game'].includes(activeStep?.step_type) && <div className="wf-presenter-bar wf-media-controls"><b>Timer · {timer?.status || 'ready'}</b>{['ready', 'complete'].includes(timer?.status) && <button className="primary" onClick={() => command('timer_start')}>Start timer</button>}{timer?.status === 'running' && <button onClick={() => command('timer_pause')}>Pause timer</button>}{timer?.status === 'paused' && <button onClick={() => command('timer_resume')}>Resume timer</button>}<button onClick={() => command('timer_reset')}>Reset</button><button onClick={() => command('timer_add', null, { seconds: 30 })}>+30 sec</button></div>}{activeStep?.step_type === 'video' && <div className="wf-presenter-bar wf-media-controls"><b>Projector video</b><button className="primary" onClick={() => command('video_play')}>Play</button><button onClick={() => command('video_pause')}>Pause</button><button onClick={() => command('video_restart')}>Restart</button></div>}</>}{run?.current_step?.presenter_notes && <div className="wf-notes"><b>Presenter note</b>{run.current_step.presenter_notes}</div>}</div>
+      <div className="wf-stage"><WorkflowSceneRenderer key={activeStep?.id} step={activeStep} mode="presenter" eventId={eventId}/>{run && <><div className="wf-presenter-bar"><div><span>Elapsed</span><b>{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</b></div><button type="button" onClick={() => document.querySelector('.wf-stage .wf-scene')?.requestFullscreen?.()}>⛶ Full screen</button><button disabled={busy || !['live', 'paused'].includes(run.status)} onClick={() => command('previous')}>← Previous</button>{run.status === 'ready' && <button className="primary" disabled={busy} onClick={() => command('start')}>Start experience</button>}{run.status === 'live' && <button disabled={busy || !['live', 'paused'].includes(run.status)} onClick={() => command('pause')}>Pause</button>}{run.status === 'paused' && <button disabled={busy || !['live', 'paused'].includes(run.status)} onClick={() => command('resume')}>Resume</button>}<button className="primary" disabled={busy || !['live', 'paused'].includes(run.status)} onClick={() => command('next')}>Next →</button><button disabled={busy || !['live', 'paused'].includes(run.status)} onClick={() => command('complete')}>Finish</button></div>{['poll', 'multi_select', 'rating', 'ranking'].includes(activeStep?.step_type) && <div className="wf-presenter-bar wf-media-controls"><b>Audience poll · {activeStep?.data?.response_count || 0} responses</b>{activeStep?.display_phase === 'results' ? <button disabled={busy || !['live', 'paused'].includes(run.status)} className="primary" onClick={() => command('reopen_voting')}>Reopen voting</button> : <button disabled={busy || !['live', 'paused'].includes(run.status)} className="primary" onClick={() => command('reveal_results')}>Close voting & reveal results</button>}</div>}{['countdown', 'game'].includes(activeStep?.step_type) && <div className="wf-presenter-bar wf-media-controls"><b>Timer · {timer?.status || 'ready'}</b>{['ready', 'complete'].includes(timer?.status) && <button disabled={busy || !['live', 'paused'].includes(run.status)} className="primary" onClick={() => command('timer_start')}>Start timer</button>}{timer?.status === 'running' && <button disabled={busy || !['live', 'paused'].includes(run.status)} onClick={() => command('timer_pause')}>Pause timer</button>}{timer?.status === 'paused' && <button disabled={busy || !['live', 'paused'].includes(run.status)} onClick={() => command('timer_resume')}>Resume timer</button>}<button disabled={busy || !['live', 'paused'].includes(run.status)} onClick={() => command('timer_reset')}>Reset</button><button disabled={busy || !['live', 'paused'].includes(run.status)} onClick={() => command('timer_add', null, { seconds: 30 })}>+30 sec</button></div>}{activeStep?.step_type === 'video' && <div className="wf-presenter-bar wf-media-controls"><b>Projector video</b><button disabled={busy || !['live', 'paused'].includes(run.status)} className="primary" onClick={() => command('video_play')}>Play</button><button disabled={busy || !['live', 'paused'].includes(run.status)} onClick={() => command('video_pause')}>Pause</button><button disabled={busy || !['live', 'paused'].includes(run.status)} onClick={() => command('video_restart')}>Restart</button></div>}</>}{run?.current_step?.presenter_notes && <div className="wf-notes"><b>Presenter note</b>{run.current_step.presenter_notes}</div>}</div>
       {!run && selectedStep && <aside className="wf-inspector"><h3>Step settings</h3><label>Title<input value={selectedStep.title} onChange={(event) => setSelectedStep({ ...selectedStep, title: event.target.value })} onBlur={() => saveStep(selectedStep, { title: selectedStep.title })}/></label><label>Subtitle<textarea value={selectedStep.subtitle || ''} onChange={(event) => setSelectedStep({ ...selectedStep, subtitle: event.target.value })} onBlur={() => saveStep(selectedStep, { subtitle: selectedStep.subtitle || null })}/></label>{INTERACTIVE.has(selectedStep.step_type) && <label>Linked activity<select value={selectedStep.linked_activity_id || ''} onChange={(event) => saveStep(selectedStep, { linked_activity_id: event.target.value || null })}>{activities.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>}{['poll', 'multi_select', 'rating', 'ranking', 'poll_results'].includes(selectedStep.step_type) && <label>Result display style<select value={selectedStep.config?.result_style || 'bars'} onChange={(event) => saveStep(selectedStep, { config: { ...selectedStep.config, result_style: event.target.value } })}><option value="bars">Horizontal bars</option><option value="donut">Donut chart</option><option value="ranking">Ranked list</option><option value="winner">Winner spotlight</option><option value="split">Proportional split</option></select></label>}{selectedStep.step_type === 'video' && <><label>Video URL<input value={selectedStep.config?.video_url || ''} placeholder="Paste a YouTube, Vimeo, or direct MP4 link" onChange={(event) => setSelectedStep({ ...selectedStep, config: { ...selectedStep.config, video_url: event.target.value } })} onBlur={() => { const video_url = normalizeVideoUrl(selectedStep.config?.video_url || ''); setSelectedStep((value) => ({ ...value, config: { ...value.config, video_url } })); saveStep(selectedStep, { config: { ...selectedStep.config, video_url: video_url || null } }) }}/><small>Google search-result links are automatically converted to the underlying YouTube video when possible.</small></label><label>Poster image URL<input value={selectedStep.config?.poster_url || ''} placeholder="https://..." onChange={(event) => setSelectedStep({ ...selectedStep, config: { ...selectedStep.config, poster_url: event.target.value } })} onBlur={() => saveStep(selectedStep, { config: { ...selectedStep.config, poster_url: selectedStep.config?.poster_url || null } })}/></label></>}<label>Duration (seconds)<input type="number" min="1" value={selectedStep.duration_seconds || ''} onChange={(event) => setSelectedStep({ ...selectedStep, duration_seconds: Number(event.target.value) || null })} onBlur={() => saveStep(selectedStep, { duration_seconds: selectedStep.duration_seconds })}/></label><label className="wf-check"><input type="checkbox" checked={selectedStep.auto_advance} onChange={(event) => saveStep(selectedStep, { auto_advance: event.target.checked })}/> Auto advance</label><label>Private presenter notes<textarea value={selectedStep.presenter_notes || ''} onChange={(event) => setSelectedStep({ ...selectedStep, presenter_notes: event.target.value })} onBlur={() => saveStep(selectedStep, { presenter_notes: selectedStep.presenter_notes || null })}/></label><button className="danger" disabled={busy} onClick={async () => { if (!window.confirm('Delete this step?')) return; await api.liveDeleteWorkflowStep(eventId, workflow.id, selectedStep.id); await open(workflow.id) }}>Delete step</button></aside>}
     </div>
   </section>

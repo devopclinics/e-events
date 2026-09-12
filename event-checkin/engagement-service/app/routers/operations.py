@@ -1,22 +1,28 @@
+import asyncio
 import csv
 import copy
 import io
 import json
+import re
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import Identity, current_identity, require_admin, require_capability, require_staff
+from ..config import settings
 from ..database import get_db
 from ..models import ActivityParticipant, ActivityQuestion, ActivityRule, EngagementActivity, EngagementEventSettings, EngagementQnaQuestion, LiveDisplay, ParticipantResponse, ProgramSession, QuestionOption, ResponseOptionSelection, WorkflowRun
-from ..realtime import claim_display, display_is_connected, force_release_display, publish_display
-from ..schemas import DisplayControlUpdate, DisplayCreate, DisplayOut, DisplayRehearsalIn, DisplayResultsControlIn, DisplayUpdate, EventSettings, EventSettingsOut, ResponseDetailOut, RuleCreate, RuleOut
+from ..ratelimit import enforce_rate_limit
+from ..report_export import capture_survey_report_pdf
+from ..realtime import display_devices, force_release_display, forget_display, publish_display
+from ..schemas import BulkDisplayUpdate, DisplayDisconnectIn, DisplayControlUpdate, DisplayCreate, DisplayOut, DisplayRehearsalIn, DisplayResultsControlIn, DisplayUpdate, EventSettings, EventSettingsOut, ResponseDetailOut, RuleCreate, RuleOut
 from .activities import _fetch_activity
-from .participate import _display_payload
+from .participate import _display_payload, _public_display_payload
+from .realtime import _claim
 
 router = APIRouter(prefix="/api/engagement/v1", tags=["engagement-operations"])
 
@@ -43,11 +49,17 @@ async def _ensure_display_short_codes(displays: list[LiveDisplay], db: AsyncSess
 
 
 async def _attach_connection_status(displays: list[LiveDisplay]) -> None:
-    """Sets a plain (non-column) `connected` attribute on each row so the
-    admin display list can show which screens actually have a projector
-    attached right now -- DisplayOut.connected reads it via from_attributes."""
-    for display in displays:
-        display.connected = await display_is_connected(display.id)
+    async def attach(display):
+        display.connection_limit = settings.display_connection_limit
+        try:
+            display.devices = await display_devices(display.id)
+            display.connection_status_available = True
+        except Exception:
+            display.devices = []
+            display.connection_status_available = False
+        display.connected_count = len(display.devices)
+        display.connected = bool(display.devices)
+    await asyncio.gather(*(attach(display) for display in displays))
 
 
 def _csv_safe(value) -> str:
@@ -65,6 +77,28 @@ async def _owned_display(display_id: str, identity: Identity, db: AsyncSession) 
     if not display or display.event_id != identity.event_id or (identity.org_id and display.org_id != identity.org_id):
         raise HTTPException(404, "Display not found")
     return display
+
+
+async def _owned_displays(display_ids: list[str], identity: Identity, db: AsyncSession) -> list[LiveDisplay]:
+    """Lock and return every requested display in request order.
+
+    The route deliberately resolves the whole set before changing a row. A
+    missing or cross-tenant display therefore rejects the complete operation
+    instead of leaving the earlier channels pointed at new content.
+    """
+    conditions = [
+        LiveDisplay.id.in_(display_ids),
+        LiveDisplay.event_id == identity.event_id,
+        LiveDisplay.org_id == identity.org_id,
+    ]
+    rows = list((await db.execute(
+        select(LiveDisplay).where(*conditions).with_for_update()
+    )).scalars().all())
+    by_id = {display.id: display for display in rows}
+    missing = [display_id for display_id in display_ids if display_id not in by_id]
+    if missing:
+        raise HTTPException(404, "One or more displays were not found")
+    return [by_id[display_id] for display_id in display_ids]
 
 
 async def _validate_assigned_activity(activity_id: str | None, event_id: str, org_id: str, db: AsyncSession) -> None:
@@ -243,16 +277,36 @@ async def list_displays(identity: Identity = Depends(current_identity), db: Asyn
 
 
 @router.post("/displays/{display_id}/disconnect", response_model=DisplayOut)
-async def disconnect_display(display_id: str, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
-    """Force-release a display's connection lease regardless of who holds
-    it -- for when staff can't reach whatever browser/device is stuck
-    connected (see force_release_display's docstring for why this actually
-    kicks the stuck stream, not just clears the way for a new one)."""
+async def disconnect_display(display_id: str, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db), body: DisplayDisconnectIn | None = None):
+    """Disconnect one device, or all connected devices with the legacy empty body."""
     require_admin(identity)
     display = await _owned_display(display_id, identity, db)
-    await force_release_display(display.id)
-    display.connected = False
+    await force_release_display(display.id, body.client_id if body else None)
+    await _attach_connection_status([display])
     return display
+
+
+@router.get("/activities/{activity_id}/export-report.pdf")
+async def export_survey_report_pdf(activity_id: str, request: Request, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Downloads every question in this survey/feedback activity as a PDF,
+    with staff-visible open-text excerpts. The export never touches a
+    LiveDisplay or its connection lease: it uses a dedicated staff report
+    route, so it cannot conflict with actively connected projectors or a
+    display's curated results settings.
+    """
+    require_capability(identity, "control")
+    await enforce_rate_limit(request, "export_report_pdf", f"{identity.subject}:{activity_id}", limit=5, window=600)
+    activity = await _fetch_activity(activity_id, db)
+    if not activity or activity.event_id != identity.event_id or (identity.org_id and activity.org_id != identity.org_id):
+        raise HTTPException(404, "Activity not found")
+    from .participate import _mint_report_token
+    token = _mint_report_token(identity)
+    pdf_bytes = await capture_survey_report_pdf(settings.internal_display_base_url, activity_id, token)
+    filename = re.sub(r"[^A-Za-z0-9]+", "_", activity.title).strip("_") or "festio-live-survey-report"
+    return Response(
+        content=pdf_bytes, media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}_report.pdf"'},
+    )
 
 
 @router.post("/displays", response_model=DisplayOut, status_code=201)
@@ -262,7 +316,42 @@ async def create_display(body: DisplayCreate, identity: Identity = Depends(curre
     await _validate_assigned_session(body.assigned_session_id, identity.event_id, identity.org_id, db)
     display = LiveDisplay(org_id=identity.org_id, event_id=identity.event_id, name=body.name, display_code=secrets.token_urlsafe(8), short_code=_new_display_short_code(), access_token=secrets.token_urlsafe(32), assigned_session_id=body.assigned_session_id, assigned_activity_id=body.assigned_activity_id, scene=body.scene, settings=body.settings.model_dump(mode="json", exclude_none=True))
     db.add(display); await db.commit(); await db.refresh(display)
+    await _attach_connection_status([display])
     return display
+
+
+@router.patch("/displays/bulk", response_model=list[DisplayOut])
+async def bulk_update_displays(body: BulkDisplayUpdate, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Push one manual activity/scene selection to several display channels.
+
+    All targets are checked and locked before any in-memory mutation, then one
+    database commit makes the change visible together. Redis notifications are
+    sent only after that durable commit, so a projector never receives content
+    that its next fetch cannot read.
+    """
+    require_admin(identity)
+    if not identity.org_id:
+        raise HTTPException(403, "Organization scope is required")
+    changes = body.model_dump(exclude_unset=True, exclude={"display_ids", "settings"})
+    await _validate_assigned_activity(changes.get("assigned_activity_id"), identity.event_id, identity.org_id, db)
+    if "assigned_session_id" in changes:
+        await _validate_assigned_session(changes.get("assigned_session_id"), identity.event_id, identity.org_id, db)
+    displays = await _owned_displays(body.display_ids, identity, db)
+
+    changed_fields = set(changes)
+    for display in displays:
+        _take_manual_display_control(display, changed_fields)
+        for key, value in changes.items():
+            setattr(display, key, value)
+        _merge_display_settings(display, body.settings)
+
+    await db.commit()
+    for display in displays:
+        await db.refresh(display)
+    for display in displays:
+        await publish_display(display.id, "display.changed", {"scene": display.scene})
+    await _attach_connection_status(displays)
+    return displays
 
 
 @router.patch("/displays/{display_id}", response_model=DisplayOut)
@@ -278,6 +367,7 @@ async def update_display(display_id: str, body: DisplayUpdate, identity: Identit
     _merge_display_settings(display, body.settings)
     await db.commit(); await db.refresh(display)
     await publish_display(display.id, "display.changed", {"scene": display.scene})
+    await _attach_connection_status([display])
     return display
 
 
@@ -290,6 +380,7 @@ async def control_displays(identity: Identity = Depends(current_identity), db: A
         LiveDisplay.status == "active",
     ).order_by(LiveDisplay.created_at))).scalars().all())
     await _ensure_display_short_codes(displays, db)
+    await _attach_connection_status(displays)
     return displays
 
 
@@ -304,6 +395,7 @@ async def control_display(display_id: str, body: DisplayControlUpdate, identity:
     _merge_display_settings(display, body.settings)
     await db.commit(); await db.refresh(display)
     await publish_display(display.id, "display.changed", {"scene": display.scene})
+    await _attach_connection_status([display])
     return display
 
 
@@ -350,6 +442,7 @@ async def control_display_results(display_id: str, body: DisplayResultsControlIn
     display.settings = settings
     await db.commit(); await db.refresh(display)
     await publish_display(display.id, "display.changed", {"scene": display.scene, "results_mode": body.mode})
+    await _attach_connection_status([display])
     return display
 
 
@@ -382,6 +475,7 @@ async def control_display_rehearsal(display_id: str, body: DisplayRehearsalIn, i
         }
     await db.commit(); await db.refresh(display)
     await publish_display(display.id, "display.changed", {"scene": display.scene, "rehearsal_mode": bool(body.enabled)})
+    await _attach_connection_status([display])
     return display
 
 
@@ -390,6 +484,7 @@ async def rotate_display_token(display_id: str, identity: Identity = Depends(cur
     require_admin(identity)
     display = await _owned_display(display_id, identity, db)
     display.access_token = secrets.token_urlsafe(32); await db.commit(); await db.refresh(display)
+    await _attach_connection_status([display])
     return display
 
 
@@ -398,29 +493,30 @@ async def delete_display(display_id: str, identity: Identity = Depends(current_i
     require_admin(identity)
     display = await _owned_display(display_id, identity, db)
     await db.delete(display); await db.commit()
+    await forget_display(display.id)
 
 
 @router.get("/live/{display_code}")
-async def public_display(display_code: str, token: str = Query(...), client_id: str | None = Query(None), db: AsyncSession = Depends(get_db)):
+async def public_display(display_code: str, token: str = Query(...), client_id: str | None = Query(None), db: AsyncSession = Depends(get_db), observer: bool = False):
     display = await db.scalar(select(LiveDisplay).where(LiveDisplay.display_code == display_code, LiveDisplay.access_token == token, LiveDisplay.status == "active"))
     if not display: raise HTTPException(404, "Display not found")
-    if client_id:
-        try:
-            claimed = await claim_display(display.id, client_id)
-        except ValueError as exc:
-            raise HTTPException(422, str(exc))
-        if not claimed:
-            raise HTTPException(409, "This display already has a connected projector")
+    if client_id and not observer:
+        await _claim(display.id, client_id)
     # The public TV shell needs the owning event id to fetch the canonical
     # six-character join code from core. No org or organizer data is exposed.
-    sessions = (await db.execute(
-        select(ProgramSession).where(
-            ProgramSession.event_id == display.event_id,
-            ProgramSession.org_id == display.org_id,
-            ProgramSession.status == "published",
-        ).order_by(ProgramSession.starts_at.asc().nullslast(), ProgramSession.sort_order, ProgramSession.id)
-    )).scalars().all()
+    sessions = []
     public_display_settings = {key: value for key, value in (display.settings or {}).items() if key != "results_snapshot"}
+    # Results can refresh many times per minute. The full event agenda is
+    # only consumed by the agenda scene, so avoid this unrelated query for
+    # every answer received by a poll or workshop display.
+    if display.scene == "agenda" and not public_display_settings.get("agenda"):
+        sessions = (await db.execute(
+            select(ProgramSession).where(
+                ProgramSession.event_id == display.event_id,
+                ProgramSession.org_id == display.org_id,
+                ProgramSession.status == "published",
+            ).order_by(ProgramSession.starts_at.asc().nullslast(), ProgramSession.sort_order, ProgramSession.id)
+        )).scalars().all()
     payload = {
         "event_id": display.event_id,
         "display": {
@@ -453,7 +549,7 @@ async def public_display(display_code: str, token: str = Query(...), client_id: 
             if settings.get("results_frozen") and isinstance(settings.get("results_snapshot"), dict):
                 activity_payload = settings["results_snapshot"]
             else:
-                activity_payload = await _display_payload(activity, db)
+                activity_payload = await _public_display_payload(activity, db)
             payload["activity"] = _apply_results_view(activity_payload, settings)
     if getattr(display, "assigned_workflow_run_id", None):
         # Import locally to avoid making existing display operations depend on
@@ -466,14 +562,14 @@ async def public_display(display_code: str, token: str = Query(...), client_id: 
 
 
 @router.get("/live-short/{short_code}")
-async def public_short_display(short_code: str, client_id: str | None = Query(None), db: AsyncSession = Depends(get_db)):
+async def public_short_display(short_code: str, client_id: str | None = Query(None), db: AsyncSession = Depends(get_db), observer: bool = False):
     display = await db.scalar(select(LiveDisplay).where(
         LiveDisplay.short_code == short_code,
         LiveDisplay.status == "active",
     ))
     if not display:
         raise HTTPException(404, "Display not found")
-    return await public_display(display.display_code, display.access_token, client_id, db)
+    return await public_display(display.display_code, display.access_token, client_id, db, observer=observer)
 
 
 @router.get("/activities/{activity_id}/export.csv")

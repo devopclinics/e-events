@@ -130,6 +130,10 @@ class AuthRequiredTests(unittest.TestCase):
 
     def test_displays_require_auth(self):
         self.assertEqual(client.get("/api/engagement/v1/displays").status_code, 401)
+        self.assertEqual(client.patch(
+            "/api/engagement/v1/displays/bulk",
+            json={"display_ids": ["display-a"], "assigned_activity_id": "activity-a"},
+        ).status_code, 401)
 
     def test_program_sessions_require_auth(self):
         self.assertEqual(client.get("/api/engagement/v1/program-sessions").status_code, 401)
@@ -157,6 +161,8 @@ class AuthRequiredTests(unittest.TestCase):
 
     def test_exports_require_auth(self):
         self.assertEqual(client.get("/api/engagement/v1/activities/x/export.csv").status_code, 401)
+        self.assertEqual(client.get("/api/engagement/v1/activities/x/export-report.pdf").status_code, 401)
+        self.assertEqual(client.get("/api/engagement/v1/activities/x/report").status_code, 401)
         self.assertEqual(client.get("/api/engagement/v1/analytics/export.csv").status_code, 401)
         self.assertEqual(client.get("/api/engagement/v1/activities/x/responses").status_code, 401)
 

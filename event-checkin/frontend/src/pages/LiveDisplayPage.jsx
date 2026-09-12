@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import LiveBroadcastCanvas from '../components/LiveBroadcastCanvas'
 import WorkflowSceneRenderer from '../components/live/WorkflowSceneRenderer'
+import { cachedJoinCode, createLiveRefresh, reconnectDelay } from '../lib/liveRefresh.mjs'
 
 const PREVIEW_SCENES = new Set([
   'welcome', 'join', 'agenda', 'question', 'responding', 'results', 'all_results', 'survey_insights',
@@ -41,144 +42,169 @@ export default function LiveDisplayPage() {
   const token = query.get('token') || ''
   const requestedPreviewScene = query.get('previewScene') || ''
   const previewScene = PREVIEW_SCENES.has(requestedPreviewScene) ? requestedPreviewScene : ''
+  const observer = ['true', '1'].includes(query.get('observer')) || !!previewScene || query.has('adminRefresh')
   const [state, setState] = useState(null)
   const [error, setError] = useState('')
-  const [connected, setConnected] = useState(true)
-  const [streamVersion, setStreamVersion] = useState(0)
-  const hasState = useRef(false)
-  const clientId = useRef((() => {
+  const [connected, setConnected] = useState(false)
+  const [disconnected, setDisconnected] = useState(false)
+  const [rejoining, setRejoining] = useState(false)
+  const [sessionVersion, setSessionVersion] = useState(0)
+  const clientId = useRef(null)
+  const preserveLease = useRef(false)
+  if (!clientId.current) {
     try {
-      const existing = sessionStorage.getItem('festioDisplayClientId')
-      if (existing) return existing
-      const created = (crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`).replaceAll('-', '').replace('.', '')
-      sessionStorage.setItem('festioDisplayClientId', created)
-      return created
-    } catch { return `projector${Date.now()}${Math.random().toString(36).slice(2)}` }
-  })())
+      clientId.current = sessionStorage.getItem('festioDisplayClientId')
+      if (!clientId.current) {
+        clientId.current = (crypto.randomUUID?.() || `projector${Date.now()}${Math.random().toString(36).slice(2)}`).replaceAll('-', '')
+        sessionStorage.setItem('festioDisplayClientId', clientId.current)
+      }
+    } catch { clientId.current = `projector${Date.now()}${Math.random().toString(36).slice(2)}` }
+  }
+  const namedDisplay = !!(displayCode || displayShortCode)
+  const basePath = displayShortCode
+    ? `/api/engagement/v1/live-short/${encodeURIComponent(displayShortCode)}`
+    : displayCode
+      ? `/api/engagement/v1/live/${encodeURIComponent(displayCode)}`
+      : `/api/engagement/v1/activities/${encodeURIComponent(activityId || '')}`
+  const params = new URLSearchParams()
+  if (token) params.set('token', token)
+  if (namedDisplay) {
+    if (observer) params.set('observer', 'true')
+    else params.set('client_id', clientId.current)
+  }
+  const queryString = params.toString()
 
-  async function load() {
+  async function rejoin() {
+    setRejoining(true)
     try {
-      const endpoint = displayShortCode
-        ? `/api/engagement/v1/live-short/${encodeURIComponent(displayShortCode)}?client_id=${encodeURIComponent(clientId.current)}`
-        : displayCode
-        ? `/api/engagement/v1/live/${encodeURIComponent(displayCode)}?token=${encodeURIComponent(token)}&client_id=${encodeURIComponent(clientId.current)}`
-        : `/api/engagement/v1/activities/${encodeURIComponent(activityId)}/display?token=${encodeURIComponent(token)}`
-      const response = await fetch(endpoint, { signal: AbortSignal.timeout(8000) })
-      if (response.status === 409) {
-        setState(null)
-        setConnected(false)
-        setError('This display already has a connected projector. Disconnect it before opening another.')
-        return false
-      }
-      if (!response.ok) throw new Error('This display link is no longer valid.')
-      const data = await response.json()
-      const namedDisplay = !!(displayCode || displayShortCode)
-      const nextState = namedDisplay ? { ...(data.activity || {}), event_id: data.event_id, display: data.display, program_sessions: data.program_sessions || [] } : data
-      if (namedDisplay && data.workflow_run) nextState.workflow_run = data.workflow_run
-      if (namedDisplay && !nextState.display?.settings?.agenda?.length) {
-        nextState.display = {
-          ...nextState.display,
-          settings: {
-            ...(nextState.display?.settings || {}),
-            agenda: programAgenda(data.program_sessions, nextState.display?.assigned_session_id),
-          },
-        }
-      }
-      // Admin display cards can audition a scene without changing the real TV.
-      // Force follow_activity off only in this in-browser preview so the chosen
-      // scene is not immediately replaced by the activity's current live state.
-      if (previewScene) {
-        if (namedDisplay) {
-          nextState.display = {
-            ...nextState.display,
-            scene: previewScene,
-            settings: { ...(nextState.display?.settings || {}), follow_activity: false },
-          }
-        } else {
-          nextState.display_config = {
-            ...(nextState.display_config || {}),
-            display_scene: previewScene,
-            follow_activity: false,
-          }
-        }
-      }
-      try {
-        const joinResponse = await fetch(`/api/events/${encodeURIComponent(nextState.event_id || '')}/live/public-join-info`, { signal: AbortSignal.timeout(5000) })
-        if (joinResponse.ok) nextState.live_join_code = (await joinResponse.json()).code
-      } catch { /* QR remains usable even if the optional code label is unavailable */ }
-      setState(nextState)
-      hasState.current = true
-      setError('')
-      setConnected(true)
-      return true
-    } catch (loadError) {
-      setConnected(false)
-      if (!hasState.current) setError(loadError.message)
-      return true
-    }
+      const response = await fetch(`${basePath}/lease?${queryString}`, { method: 'POST', signal: AbortSignal.timeout(8000) })
+      if (response.status === 409) throw new Error('This display has reached its screen limit. Disconnect a screen in the control room, then try again.')
+      if (!response.ok) throw new Error('Could not reconnect this screen. Please try again.')
+      preserveLease.current = true
+      setDisconnected(false); setError(''); setSessionVersion((value) => value + 1)
+    } catch (failure) { setError(failure.message) }
+    finally { setRejoining(false) }
   }
 
   useEffect(() => {
-    if ((!activityId && !displayCode && !displayShortCode) || (!displayShortCode && !token)) {
+    setState(null); setError(''); setDisconnected(false); setConnected(false)
+    if ((!activityId && !namedDisplay) || (!displayShortCode && !token)) {
       setError('This display link is missing information.')
+    preserveLease.current = false
       return undefined
     }
     let cancelled = false
+    let stopped = false
     let events = null
+    let subscription = null
     let retryTimer = null
-    const streamPath = displayShortCode
-      ? `/api/engagement/v1/live-short/${encodeURIComponent(displayShortCode)}/stream?client_id=${encodeURIComponent(clientId.current)}`
-      : displayCode
-      ? `/api/engagement/v1/live/${encodeURIComponent(displayCode)}/stream?token=${encodeURIComponent(token)}&client_id=${encodeURIComponent(clientId.current)}`
-      : `/api/engagement/v1/activities/${encodeURIComponent(activityId)}/display-stream?token=${encodeURIComponent(token)}`
-    const releasePath = displayShortCode
-      ? `/api/engagement/v1/live-short/${encodeURIComponent(displayShortCode)}/lease?client_id=${encodeURIComponent(clientId.current)}`
-      : displayCode
-      ? `/api/engagement/v1/live/${encodeURIComponent(displayCode)}/lease?token=${encodeURIComponent(token)}&client_id=${encodeURIComponent(clientId.current)}`
-      : null
-    const releaseLease = () => {
-      if (releasePath) fetch(releasePath, { method: 'DELETE', keepalive: true }).catch(() => {})
+    let attempts = 0
+    let controller = null
+    let hasState = false
+    const endpoint = `${basePath}${namedDisplay ? '' : '/display'}?${queryString}`
+    const streamPath = `${basePath}${namedDisplay ? '/stream' : '/display-stream'}?${queryString}`
+    const closeStream = () => { events?.close(); events = null; subscription = null }
+    const clearRetry = () => { if (retryTimer !== null) clearTimeout(retryTimer); retryTimer = null }
+    const retry = () => {
+      if (cancelled || stopped || retryTimer !== null) return
+      retryTimer = setTimeout(() => { retryTimer = null; refresh.request(true) }, reconnectDelay(attempts++))
     }
-    window.addEventListener('pagehide', releaseLease)
-    let poll = null
-    const stopFallback = () => { if (poll) { clearInterval(poll); poll = null } }
-    const startFallback = () => { if (!poll) poll = setInterval(load, 5000) }
-    const refresh = () => load()
-    const refreshDisplay = () => { load(); setStreamVersion((version) => version + 1) }
-    load().then((allowed) => {
-      if (cancelled) return
-      if (!allowed) {
-        // A 409 here means another client held the lease at that instant --
-        // not necessarily still true a few seconds later (it may disconnect,
-        // or a presenter may force-disconnect it from the admin panel). A
-        // projector usually has no one there to reload it, so this has to
-        // recover on its own: retry the whole handshake fresh by forcing the
-        // effect to re-run, same as a real page reload would do.
-        retryTimer = setTimeout(() => { if (!cancelled) setStreamVersion((version) => version + 1) }, 5000)
-        return
+    const stopDevice = () => {
+      stopped = true; closeStream(); clearRetry(); refresh.dispose()
+      setState(null); setConnected(false); setDisconnected(true)
+      setError('This screen was disconnected from the control room.')
+    }
+    const openStream = (key) => {
+      if (cancelled || stopped || (events && subscription === key)) return
+      closeStream()
+      const source = new EventSource(streamPath)
+      events = source; subscription = key
+      source.onopen = () => { if (!cancelled && events === source) { setConnected(true); attempts = 0; clearRetry() } }
+      source.onerror = () => {
+        if (cancelled || events !== source) return
+        setConnected(false); closeStream(); retry()
       }
-      events = new EventSource(streamPath)
-      events.onopen = () => { setConnected(true); stopFallback() }
-      events.onerror = () => { setConnected(false); startFallback() }
-      events.onmessage = refresh
-      events.addEventListener('display.changed', refreshDisplay)
+      source.addEventListener('ready', () => refresh.request(true))
+      source.addEventListener('display.disconnected', () => { closeStream(); refresh.request(true) })
+      source.onmessage = () => refresh.request()
+      ;['response.submitted', 'qna.submitted', 'qna.upvoted'].forEach((name) => source.addEventListener(name, () => refresh.request()))
       ;[
+        'display.changed', 'workflow.changed', 'workflow.displays_changed',
         'workflow.start', 'workflow.next', 'workflow.previous', 'workflow.jump',
         'workflow.pause', 'workflow.resume', 'workflow.complete',
         'workflow.video_play', 'workflow.video_pause', 'workflow.video_restart',
         'workflow.timer_start', 'workflow.timer_pause', 'workflow.timer_resume',
-        'workflow.timer_reset', 'workflow.timer_add',
-        'workflow.reveal_results', 'workflow.reopen_voting',
-      ].forEach((name) => events.addEventListener(name, refresh))
-      ;['response.submitted', 'question.changed', 'question.state_changed', 'show.phase_changed', 'qna.submitted', 'qna.upvoted', 'qna.moderated', 'activity.status_changed'].forEach((name) => events.addEventListener(name, refresh))
-    })
-    return () => { cancelled = true; events?.close(); stopFallback(); if (retryTimer) clearTimeout(retryTimer); window.removeEventListener('pagehide', releaseLease) }
-  }, [activityId, displayCode, displayShortCode, token, previewScene, streamVersion]) // eslint-disable-line react-hooks/exhaustive-deps
+        'workflow.timer_reset', 'workflow.timer_add', 'workflow.reveal_results', 'workflow.reopen_voting',
+        'question.changed', 'question.state_changed', 'show.phase_changed', 'qna.moderated', 'activity.status_changed',
+      ].forEach((name) => source.addEventListener(name, () => refresh.request(true)))
+    }
+    const refresh = createLiveRefresh(async ({ isCurrent }) => {
+      if (stopped) return
+      controller = new AbortController()
+      const timeout = setTimeout(() => controller?.abort(), 8000)
+      try {
+        const response = await fetch(endpoint, { signal: controller.signal })
+        if (cancelled || !isCurrent()) return
+        if (response.status === 410 && !observer) { stopDevice(); return }
+        if (response.status === 409) {
+          closeStream(); setState(null); hasState = false; setConnected(false)
+          setError('This display has reached its screen limit. Disconnect a screen in the control room to make room.')
+          retry(); return
+        }
+        if ([401, 403, 404].includes(response.status)) {
+          stopped = true; closeStream(); clearRetry()
+          setState(null); setConnected(false); setError('This display link is no longer valid.'); return
+        }
+        if (!response.ok) throw new Error('Reconnecting to Festio Broadcast…')
+        const data = await response.json()
+        if (cancelled || !isCurrent()) return
+        const nextState = namedDisplay ? { ...(data.activity || {}), event_id: data.event_id, display: data.display, program_sessions: data.program_sessions || [] } : data
+        if (namedDisplay && data.workflow_run) nextState.workflow_run = data.workflow_run
+        if (namedDisplay && !nextState.display?.settings?.agenda?.length) {
+          nextState.display = { ...nextState.display, settings: { ...(nextState.display?.settings || {}), agenda: programAgenda(data.program_sessions, nextState.display?.assigned_session_id) } }
+        }
+        if (previewScene) {
+          // Previewing a manual scene must also bypass any assigned workflow.
+          delete nextState.workflow_run
+          if (namedDisplay) nextState.display = { ...nextState.display, scene: previewScene, settings: { ...(nextState.display?.settings || {}), follow_activity: false } }
+          else nextState.display_config = { ...(nextState.display_config || {}), display_scene: previewScene, follow_activity: false }
+        }
+        setState((current) => ({ ...nextState, live_join_code: current?.event_id === nextState.event_id ? current.live_join_code : undefined }))
+        hasState = true; setError(''); attempts = 0; clearRetry()
+        cachedJoinCode(nextState.event_id).then((code) => {
+          if (!cancelled && !stopped && code) setState((current) => current?.event_id === nextState.event_id ? { ...current, live_join_code: code } : current)
+        })
+        const key = `${data.display?.assigned_activity_id || nextState.activity_id || ''}:${data.display?.assigned_workflow_run_id || data.workflow_run?.id || ''}`
+        openStream(key)
+      } catch (failure) {
+        if (cancelled) return
+        setConnected(false)
+        if (!hasState) setError('Connection interrupted. Retrying…')
+        closeStream(); retry()
+      } finally { clearTimeout(timeout); controller = null }
+    }, { delayMs: observer ? 1000 : 350 })
+    const releaseLease = () => {
+      if (namedDisplay && !observer && !stopped) fetch(`${basePath}/lease?${queryString}`, { method: 'DELETE', keepalive: true }).catch(() => {})
+    }
+    window.addEventListener('pagehide', releaseLease)
+    const onVisible = () => { if (document.visibilityState === 'visible' && !stopped) refresh.request(true) }
+    document.addEventListener('visibilitychange', onVisible)
+    // Low-frequency reconciliation repairs a missed Pub/Sub notification.
+    const reconcile = setInterval(() => {
+      if (!stopped && (!observer || document.visibilityState === 'visible')) refresh.request()
+    }, 30000)
+    refresh.request(true)
+    return () => {
+      cancelled = true; controller?.abort(); refresh.dispose(); closeStream(); clearRetry(); clearInterval(reconcile)
+      window.removeEventListener('pagehide', releaseLease); document.removeEventListener('visibilitychange', onVisible)
+      if (!preserveLease.current) releaseLease()
+    }
+  }, [activityId, namedDisplay, displayShortCode, token, basePath, queryString, observer, previewScene, sessionVersion]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (error) return <div className="grid min-h-screen place-items-center bg-[#07070d] px-8 text-center text-2xl font-extrabold text-white"><div><div className="mb-3 text-sm uppercase tracking-[.25em] text-fuchsia-400">Festio Live</div>{error}</div></div>
+  if (error) return <div className="grid min-h-screen place-items-center bg-[#07070d] px-8 text-center text-2xl font-extrabold text-white"><div><div className="mb-3 text-sm uppercase tracking-[.25em] text-fuchsia-400">Festio Live</div>{error}{disconnected && <button type="button" disabled={rejoining} onClick={rejoin} className="mx-auto mt-6 block rounded-xl bg-white px-6 py-3 text-lg text-slate-950">{rejoining ? 'Reconnecting…' : 'Reconnect this screen'}</button>}</div></div>
   if (!state) return <div className="grid min-h-screen place-items-center bg-[#07070d] text-sm font-bold uppercase tracking-[.22em] text-slate-500">Connecting to Festio Broadcast…</div>
 
-  if (['ready', 'live', 'paused'].includes(state.workflow_run?.status) && state.workflow_run?.current_step) return <div className="min-h-screen w-screen overflow-hidden bg-[#070d24] p-0"><WorkflowSceneRenderer key={state.workflow_run.current_step.id} step={state.workflow_run.current_step} mode="display" eventId={state.event_id} joinCode={state.live_join_code}/></div>
+  if (['ready', 'live', 'paused'].includes(state.workflow_run?.status) && state.workflow_run?.current_step) return <div className="min-h-screen w-screen overflow-hidden bg-[#070d24] p-0"><WorkflowSceneRenderer key={state.workflow_run.current_step.id} step={state.workflow_run.current_step} mode={observer ? "preview" : "display"} eventId={state.event_id} joinCode={state.live_join_code}/></div>
 
   return <LiveBroadcastCanvas state={state} connected={connected} onPresent={() => document.querySelector('.flb-screen')?.requestFullscreen?.()} />
 }

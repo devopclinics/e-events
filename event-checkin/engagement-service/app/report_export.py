@@ -7,25 +7,74 @@ Deliberately independent of LiveDisplay: it drives a headless browser to the
 short-lived staff-scoped token (see participate.py's `_mint_report_token`).
 There is no display, short_code, or connection lease anywhere in this path,
 so generating a report can never conflict with (or be knocked out by) an
-actively-connected projector.
+actively-connected projector. A Redis lease also ensures that, across service
+replicas, only one resource-intensive Chromium render runs at a time.
 """
 from __future__ import annotations
 
 import asyncio
+import secrets
 
 from fastapi import HTTPException
 from playwright.async_api import async_playwright
 
-VIEWPORT = {"width": 1240, "height": 1754}
+from .realtime import redis
 
+VIEWPORT = {"width": 1240, "height": 1754}
+REPORT_EXPORT_LOCK_KEY = "engagement:export-lock:survey-report-pdf"
+REPORT_EXPORT_LOCK_TTL_SECONDS = 150
+REPORT_EXPORT_TIMEOUT_SECONDS = 120
+
+# The in-process semaphore is a fast local rejection for concurrent requests
+# hitting the same pod; the Redis lease below is what actually keeps two
+# replicas from both launching Chromium at once.
 _EXPORT_SLOT = asyncio.Semaphore(1)
+_RELEASE_LOCK_IF_OWNER = (
+    "if redis.call('get', KEYS[1]) == ARGV[1] then "
+    "return redis.call('del', KEYS[1]) else return 0 end"
+)
+
+
+async def _acquire_cluster_slot() -> str:
+    """Claim the cross-replica renderer lease or fail before opening Chromium.
+
+    Report generation is optional and expensive, so Redis trouble fails closed
+    here rather than letting multiple pods consume CPU and memory at once.
+    """
+    owner = secrets.token_urlsafe(24)
+    try:
+        claimed = await redis.set(REPORT_EXPORT_LOCK_KEY, owner, ex=REPORT_EXPORT_LOCK_TTL_SECONDS, nx=True)
+    except Exception as exc:
+        raise HTTPException(503, "Report export is temporarily unavailable. Please try again shortly.") from exc
+    if not claimed:
+        raise HTTPException(503, "Another report export is already running. Please try again shortly.")
+    return owner
+
+
+async def _release_cluster_slot(owner: str) -> None:
+    """Release only the lease this render owns; its TTL is the recovery path."""
+    try:
+        await redis.eval(_RELEASE_LOCK_IF_OWNER, 1, REPORT_EXPORT_LOCK_KEY, owner)
+    except Exception:
+        # A successfully generated PDF remains successful if Redis goes away
+        # during cleanup. The lease expires shortly afterwards.
+        return
 
 
 async def capture_survey_report_pdf(base_url: str, activity_id: str, token: str) -> bytes:
+    """Render one report, enforcing local and cross-replica resource limits."""
     if _EXPORT_SLOT.locked():
         raise HTTPException(503, "Another report export is already running on this server. Please try again shortly.")
     async with _EXPORT_SLOT:
-        return await _capture_unguarded(base_url, activity_id, token)
+        owner = await _acquire_cluster_slot()
+        try:
+            try:
+                async with asyncio.timeout(REPORT_EXPORT_TIMEOUT_SECONDS):
+                    return await _capture_unguarded(base_url, activity_id, token)
+            except TimeoutError as exc:
+                raise HTTPException(504, "The report took too long to render. Please try again shortly.") from exc
+        finally:
+            await _release_cluster_slot(owner)
 
 
 async def _capture_unguarded(base_url: str, activity_id: str, token: str) -> bytes:

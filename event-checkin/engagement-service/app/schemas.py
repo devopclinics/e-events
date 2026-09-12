@@ -1,9 +1,10 @@
 from __future__ import annotations
+from .config import settings
 
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 ActivityType = Literal["quiz", "poll", "survey", "feedback", "rating", "q_and_a", "word_cloud", "voting"]
 ActivityStatus = Literal["draft", "scheduled", "live", "paused", "closed", "completed", "archived"]
@@ -506,6 +507,29 @@ class DisplayUpdate(BaseModel):
     settings: DisplaySettingsUpdate | None = None
 
 
+class BulkDisplayUpdate(BaseModel):
+    """Apply one content selection to several existing display channels.
+
+    This intentionally contains the shared routing fields from ``DisplayUpdate``
+    rather than per-channel metadata such as ``name`` or ``status``. Fields
+    omitted from a PATCH are left untouched; explicit ``null`` clears an
+    existing activity or session assignment.
+    """
+    display_ids: list[str] = Field(min_length=1, max_length=20)
+    assigned_session_id: str | None = None
+    assigned_activity_id: str | None = None
+    scene: DisplayScene | None = None
+    settings: DisplaySettingsUpdate | None = None
+
+    @model_validator(mode="after")
+    def validate_bulk_patch(self):
+        if len(set(self.display_ids)) != len(self.display_ids):
+            raise ValueError("Choose each display only once")
+        if not (self.model_fields_set - {"display_ids"}):
+            raise ValueError("Choose content to send to the selected displays")
+        return self
+
+
 class DisplayControlUpdate(BaseModel):
     """Fields a capability-scoped presenter may change during a show."""
     assigned_activity_id: str | None = None
@@ -530,6 +554,15 @@ class DisplayRehearsalIn(BaseModel):
     participants: int = Field(default=10, ge=1, le=500)
 
 
+class DisplayDisconnectIn(BaseModel):
+    client_id: str | None = Field(default=None, min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+class DisplayDeviceOut(BaseModel):
+    client_id: str
+    last_seen_at: datetime
+
+
 class DisplayOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
@@ -539,12 +572,17 @@ class DisplayOut(BaseModel):
     access_token: str
     assigned_session_id: str | None = None
     assigned_activity_id: str | None = None
+    assigned_workflow_run_id: str | None = None
     scene: str
     status: str
     settings: dict[str, Any] = Field(default_factory=dict)
     # Computed at request time from the Redis lease, not a DB column -- see
     # _attach_connection_status in routers/operations.py.
     connected: bool = False
+    connected_count: int = 0
+    connection_limit: int = Field(default_factory=lambda: settings.display_connection_limit)
+    connection_status_available: bool = True
+    devices: list[DisplayDeviceOut] = Field(default_factory=list)
 
 
 class RuleCreate(BaseModel):

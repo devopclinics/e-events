@@ -10,3 +10,6 @@ DEPENDENCY_LATENCY = Histogram("engagement_dependency_seconds", "Dependency chec
 DEPENDENCY_HEALTH = Gauge("engagement_dependency_health", "Dependency health (1=healthy, 0=degraded)", ["dependency"])
 WORKFLOW_TRANSITIONS = Counter("engagement_workflow_transitions_total", "Authoritative workflow run transitions", ["action"])
 ACTIVE_WORKFLOW_RUNS = Gauge("engagement_active_workflow_runs", "Workflow runs currently live or paused")
+
+DISPLAY_SNAPSHOT_BUILDS = Counter("engagement_display_snapshot_builds_total", "Public activity snapshot aggregations")
+DISPLAY_SNAPSHOT_HITS = Counter("engagement_display_snapshot_hits_total", "Reused public activity snapshots", ["source"])

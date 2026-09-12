@@ -28,7 +28,7 @@ from ..wordcloud import word_cloud
 from ..realtime import publish_display, publish_run
 from ..metrics import WORKFLOW_TRANSITIONS
 from ..workflow_schemas import (
-    ReorderIn, RunCommand, RunCreate, StepCreate, StepOut, StepUpdate,
+    ReorderIn, RunCommand, RunCreate, RunDisplayAssignment, StepCreate, StepOut, StepUpdate,
     TemplateCreate, WorkflowCreate, WorkflowOut, WorkflowUpdate,
 )
 
@@ -437,6 +437,7 @@ async def _run_payload(run: WorkflowRun, db: AsyncSession, presenter: bool) -> d
     return {
         "id": run.id, "workflow_id": run.workflow_id, "revision_id": run.revision_id,
         "event_id": run.event_id, "display_id": run.display_id, "status": run.status,
+        "display_ids": [display.id for display in await _assigned_displays(run, db)] if presenter else [],
         "current_step_id": run.current_step_id, "active_activity_id": run.active_activity_id,
         "active_question_id": run.active_question_id, "state_version": run.state_version,
         "started_at": run.started_at, "paused_at": run.paused_at, "completed_at": run.completed_at,
@@ -494,50 +495,98 @@ async def _activate_step(run: WorkflowRun, target: WorkflowStep | None, db: Asyn
             }
 
 
+async def _assigned_displays(run: WorkflowRun, db: AsyncSession, *, lock: bool = False):
+    query = select(LiveDisplay).where(
+        LiveDisplay.assigned_workflow_run_id == run.id,
+        LiveDisplay.event_id == run.event_id,
+        LiveDisplay.org_id == run.org_id,
+    ).order_by(LiveDisplay.id)
+    if lock:
+        query = query.with_for_update()
+    return list((await db.execute(query)).scalars().all())
+
+
+async def _validate_display_owner(display, run_id: str | None, db: AsyncSession):
+    """Display assignment is authoritative; a former primary is not ownership."""
+    owner_id = display.assigned_workflow_run_id
+    if owner_id and owner_id != run_id:
+        owner = await db.get(WorkflowRun, owner_id)
+        if owner and owner.status in {"ready", "live", "paused"}:
+            raise HTTPException(409, "Display is assigned to another active experience; detach it from that experience first")
+    if display.status != "active":
+        raise HTTPException(422, "Choose an active display")
+
+
 @router.post("/workflows/{workflow_id}/runs", status_code=201)
 async def create_run(workflow_id: str, body: RunCreate, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
     _enabled(); require_capability(identity, "control")
-    workflow = await _workflow(workflow_id, identity, db)
+    # Serialize creation for one workflow. Opening another presenter or moving
+    # its output must never complete the audience's current interaction.
+    workflow = await _workflow(workflow_id, identity, db, lock=True)
     if not workflow.current_revision_id: raise HTTPException(422, "Publish the workflow before starting a run")
+    active = await db.scalar(select(WorkflowRun).where(
+        WorkflowRun.workflow_id == workflow.id,
+        WorkflowRun.status.in_(("ready", "live", "paused")),
+    ).limit(1))
+    if active:
+        raise HTTPException(409, "This experience already has an active run; open its presenter to resume or change displays")
     display = None
     if body.display_id:
-        # Serialize claims on a projector. Without locking the display row,
-        # two different workflow requests can both observe it as available and
-        # leave one physical screen attached to two active realtime channels.
         display = _owned(await db.scalar(select(LiveDisplay).where(
             LiveDisplay.id == body.display_id,
         ).with_for_update()), identity, "Display")
-        conflicting_run = await db.scalar(select(WorkflowRun).where(
-            WorkflowRun.display_id == display.id,
-            WorkflowRun.workflow_id != workflow.id,
-            WorkflowRun.status.in_(("ready", "live", "paused")),
-        ).limit(1))
-        if conflicting_run:
-            raise HTTPException(409, "Display is already assigned to another active workflow; complete that workflow before reusing this display")
-    # A prior run (rehearsal left open, a stale browser tab, a page refresh
-    # mid-presentation) never gets marked complete on its own, so it would
-    # otherwise sit as "live"/"paused" indefinitely — current_guest_run()
-    # picks the most-recently-updated live/paused run for the event, which
-    # becomes ambiguous with more than one candidate, and any activity/question
-    # that stale run had open never gets closed. Close out every other
-    # live/paused run for this workflow before starting the new one, so at
-    # most one run is ever active and guests can't land on a stale one.
-    stale_runs = (await db.execute(select(WorkflowRun).where(
-        WorkflowRun.workflow_id == workflow.id, WorkflowRun.status.in_(("ready", "live", "paused")),
-    ))).scalars().all()
-    for stale in stale_runs:
-        await _activate_step(stale, None, db)
-        stale.status = "completed"
-        stale.completed_at = datetime.now(timezone.utc)
-        if stale.display_id:
-            stale_display = await db.get(LiveDisplay, stale.display_id)
-            if stale_display and stale_display.assigned_workflow_run_id == stale.id:
-                stale_display.assigned_workflow_run_id = None
+        await _validate_display_owner(display, None, db)
     run = WorkflowRun(workflow_id=workflow.id, revision_id=workflow.current_revision_id, org_id=workflow.org_id, event_id=workflow.event_id, display_id=body.display_id, public_token=secrets.token_urlsafe(32), started_by=identity.subject)
     db.add(run); await db.flush()
     if display: display.assigned_workflow_run_id = run.id
     await db.commit(); await db.refresh(run)
+    if display:
+        await publish_display(display.id, "display.changed", {"run_id": run.id})
     return {**await _run_payload(run, db, True), "public_token": run.public_token}
+
+
+@router.put("/runs/{run_id}/displays")
+async def assign_run_displays(run_id: str, body: RunDisplayAssignment, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Attach, detach or move output while the same audience run keeps going."""
+    _enabled(); require_capability(identity, "control")
+    run = _owned(await db.scalar(select(WorkflowRun).where(WorkflowRun.id == run_id).with_for_update()), identity, "Run")
+    existing = await db.scalar(select(WorkflowRunEvent).where(
+        WorkflowRunEvent.run_id == run.id,
+        WorkflowRunEvent.idempotency_key == body.idempotency_key,
+    ))
+    if existing:
+        return await _run_payload(run, db, True)
+    if run.state_version != body.expected_version:
+        raise HTTPException(409, "Run changed; refresh presenter state")
+    if run.status not in {"ready", "live", "paused"}:
+        raise HTTPException(409, "Only an active run can change displays")
+    # Lock the old and new targets in a deterministic order so concurrent
+    # transfers cannot claim the same output or leave a partial assignment.
+    rows = list((await db.execute(select(LiveDisplay).where(
+        LiveDisplay.event_id == run.event_id,
+        LiveDisplay.org_id == run.org_id,
+        (LiveDisplay.assigned_workflow_run_id == run.id) | LiveDisplay.id.in_(body.display_ids),
+    ).order_by(LiveDisplay.id).with_for_update())).scalars().all())
+    by_id = {display.id: display for display in rows}
+    if any(display_id not in by_id for display_id in body.display_ids):
+        raise HTTPException(404, "Display not found")
+    for display_id in body.display_ids:
+        await _validate_display_owner(by_id[display_id], run.id, db)
+    for display in rows:
+        display.assigned_workflow_run_id = run.id if display.id in body.display_ids else None
+    run.display_id = body.display_ids[0] if body.display_ids else None
+    run.state_version += 1
+    db.add(WorkflowRunEvent(
+        run_id=run.id, event_type="workflow.displays_changed", actor_id=identity.subject,
+        from_step_id=run.current_step_id, to_step_id=run.current_step_id,
+        idempotency_key=body.idempotency_key,
+        payload={"display_ids": body.display_ids, "state_version": run.state_version},
+    ))
+    await db.commit(); await db.refresh(run)
+    for display in rows:
+        await publish_display(display.id, "display.changed", {"run_id": display.assigned_workflow_run_id})
+    await publish_run(run.id, "workflow.displays_changed", {"run_id": run.id, "state_version": run.state_version})
+    return await _run_payload(run, db, True)
 
 
 @router.get("/runs/{run_id}")
@@ -556,6 +605,7 @@ async def command_run(run_id: str, body: RunCommand, identity: Identity = Depend
     run = _owned(await db.scalar(select(WorkflowRun).where(WorkflowRun.id == run_id).with_for_update()), identity, "Run")
     if run.state_version != body.expected_version:
         raise HTTPException(409, "Run changed; refresh presenter state")
+    assigned_displays = await _assigned_displays(run, db, lock=True)
     steps = await _run_steps(run, db)
     if not steps: raise HTTPException(422, "Published revision has no steps")
     index = next((i for i, step in enumerate(steps) if step.id == run.current_step_id), -1)
@@ -591,10 +641,9 @@ async def command_run(run_id: str, body: RunCommand, identity: Identity = Depend
         if run.status not in ("live", "paused"): raise HTTPException(409, "Run is not active")
         run.elapsed_before_pause_seconds = _elapsed(run); run.status = "completed"; run.completed_at = now
         await _activate_step(run, None, db)
-        if run.display_id:
-            display = await db.get(LiveDisplay, run.display_id)
-            if display and display.assigned_workflow_run_id == run.id:
-                display.assigned_workflow_run_id = None
+        for display in assigned_displays:
+            display.assigned_workflow_run_id = None
+        run.display_id = None
     elif body.action.startswith("timer_"):
         current = steps[index] if index >= 0 else None
         if not current or current.step_type not in {"countdown", "game"}:
@@ -653,7 +702,8 @@ async def command_run(run_id: str, body: RunCommand, identity: Identity = Depend
     payload = await _run_payload(run, db, True)
     WORKFLOW_TRANSITIONS.labels(body.action).inc()
     await publish_run(run.id, f"workflow.{body.action}", payload)
-    if run.display_id: await publish_display(run.display_id, "workflow.changed", {"run_id": run.id, "state_version": run.state_version})
+    for display in assigned_displays:
+        await publish_display(display.id, "display.changed" if body.action == "complete" else "workflow.changed", {"run_id": run.id, "state_version": run.state_version})
     return payload
 
 
@@ -669,8 +719,9 @@ async def public_run(run_id: str, token: str = Query(...), db: AsyncSession = De
 async def current_guest_run(identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
     _enabled()
     run = await db.scalar(select(WorkflowRun).where(
-        WorkflowRun.event_id == identity.event_id, WorkflowRun.status.in_(("live", "paused")),
-    ).order_by(WorkflowRun.updated_at.desc()))
+        WorkflowRun.event_id == identity.event_id, WorkflowRun.org_id == identity.org_id,
+        WorkflowRun.status.in_(("live", "paused")),
+    ).order_by(WorkflowRun.created_at.desc()))
     if not run: return {"run": None}
     return {"run": {**await _run_payload(run, db, False), "public_token": run.public_token}}
 

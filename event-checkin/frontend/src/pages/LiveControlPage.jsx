@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../api'
+import WorkflowDisplayTargets from '../components/live/WorkflowDisplayTargets'
+import usePresenterClock, { timerRemaining } from '../components/live/usePresenterClock'
+import '../components/live/ExperienceWorkflowsPanel.css'
 
 const BROADCAST_SCENES = [
   ['welcome', 'Welcome'], ['join', 'Join / QR'], ['agenda', 'Agenda'], ['question', 'Question'],
@@ -65,14 +68,80 @@ export default function LiveControlPage() {
   const [results, setResults] = useState(null)
   const [qna, setQna] = useState(null)
   const [displays, setDisplays] = useState(null)
-  const [displayId, setDisplayId] = useState(null)
+  const [displayId, setDisplayId] = useState(params.get('display') || '')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [resultQuestionIds, setResultQuestionIds] = useState([])
   const [resultPageSeconds, setResultPageSeconds] = useState(8)
   const [experienceRun, setExperienceRun] = useState(null)
   const [experienceName, setExperienceName] = useState('')
-  const [experienceDisplay, setExperienceDisplay] = useState(null)
+  const [workflows, setWorkflows] = useState([])
+  const [workflowId, setWorkflowId] = useState(params.get('workflow') || '')
+  const [catalogLoading, setCatalogLoading] = useState(false)
+  const initialSelection = useRef(false)
+  const selection = useRef({ activityId, workflowId, runId: null })
+  selection.current.activityId = activityId
+  selection.current.workflowId = workflowId
+  selection.current.runId = experienceRun?.id
+  const clock = usePresenterClock()
+  const serverOffset = useRef({ snapshot: null, value: 0 })
+  if (experienceRun?.server_now && serverOffset.current.snapshot !== experienceRun.server_now) {
+    serverOffset.current = { snapshot: experienceRun.server_now, value: new Date(experienceRun.server_now).getTime() - Date.now() }
+  }
+  const experienceDisplay = displays?.find((display) => experienceRun?.display_ids?.includes(display.id))
+  const refreshCatalog = useCallback(async () => {
+    if (!token) return
+    setCatalogLoading(true)
+    const responses = await Promise.allSettled([
+      api.liveControlActivities(token, role),
+      ...(role === 'presenter' ? [api.liveControlDisplays(token), api.liveControlWorkflows(token)] : []),
+    ])
+    if (responses[0].status === 'fulfilled') setActivities(responses[0].value)
+    else setError(responses[0].reason.message)
+    if (responses[1]?.status === 'fulfilled') {
+      setDisplays(responses[1].value)
+      setDisplayId((current) => current || responses[1].value[0]?.id || '')
+    }
+    if (responses[2]?.status === 'fulfilled') setWorkflows(responses[2].value)
+    setCatalogLoading(false)
+  }, [token, role])
+
+  function chooseActivity(id) {
+    selection.current = { activityId: id, workflowId: '', runId: null }
+    setActivityId(id || null); setActivity(null); setResults(null); setQna(null)
+    setWorkflowId(''); setExperienceRun(null); setError('')
+  }
+
+  async function chooseWorkflow(id, requestedRunId = '') {
+    selection.current = { activityId: null, workflowId: id, runId: null }
+    setActivityId(null); setActivity(null); setExperienceRun(null); setWorkflowId(id); setError('')
+    if (!id && !requestedRunId) return
+    setBusy(true)
+    try {
+      const run = requestedRunId ? await api.liveControlWorkflowRun(token, requestedRunId) : (await api.liveControlActiveWorkflowRun(token, id)).run
+      if (selection.current.workflowId !== id) return
+      if (run && id && run.workflow_id !== id) throw new Error('This run belongs to a different experience.')
+      setExperienceRun(run || null)
+      if (run) setWorkflowId(run.workflow_id)
+      setExperienceName(workflows.find((item) => item.id === (run?.workflow_id || id))?.name || 'Guided Experience')
+    } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+
+  async function assignExperienceDisplays(ids) {
+    if (!experienceRun) return
+    setBusy(true); setError('')
+    try {
+      setExperienceRun(await api.liveControlAssignWorkflowDisplays(token, experienceRun.id, {
+        display_ids: ids, expected_version: experienceRun.state_version,
+        idempotency_key: crypto.randomUUID(),
+      }))
+      await refreshCatalog()
+    } catch (e) {
+      setError(e.message)
+      setExperienceRun(await api.liveControlWorkflowRun(token, experienceRun.id).catch(() => experienceRun))
+    } finally { setBusy(false) }
+  }
+
 
   useEffect(() => {
     if (!shareCode || token) return
@@ -84,47 +153,29 @@ export default function LiveControlPage() {
   useEffect(() => {
     if (!token) {
       if (!shareCode) setError('This link is missing its access token.')
-      return
+      return undefined
     }
-    api.liveControlActivities(token).then(setActivities).catch((e) => setError(e.message))
-    if (role === 'presenter') Promise.all([
-      api.liveControlDisplays(token),
-      api.liveControlWorkflows(token),
-    ]).then(async ([items, workflows]) => {
-      setDisplays(items)
-      setDisplayId((current) => current || items[0]?.id || null)
+    refreshCatalog()
+    const poll = setInterval(refreshCatalog, 15000)
+    return () => clearInterval(poll)
+  }, [refreshCatalog, token, shareCode])
 
-      // A single event can have multiple live workflows. The presenter must
-      // control the run actually assigned to its projector, not whichever
-      // active workflow happens to be returned first by the API.
-      const assignedRuns = await Promise.all(items.map(async (item) => {
-        const response = await fetch(`/api/engagement/v1/live/${encodeURIComponent(item.display_code)}?token=${encodeURIComponent(item.access_token)}`)
-        if (!response.ok) return null
-        return (await response.json()).workflow_run || null
-      }))
-      const assignedRun = assignedRuns.find((run) => run && ['ready', 'live', 'paused'].includes(run.status))
-      if (assignedRun) {
-        setExperienceDisplay(items[assignedRuns.indexOf(assignedRun)])
-        const run = await api.liveControlWorkflowRun(token, assignedRun.id)
-        setExperienceRun(run)
-        setExperienceName(workflows.find((workflow) => workflow.id === run.workflow_id)?.name || 'Guided Experience')
-        return
-      }
-      for (const workflow of workflows) {
-        const active = await api.liveControlActiveWorkflowRun(token, workflow.id)
-        if (active.run) { setExperienceRun(active.run); setExperienceName(workflow.name); return }
-      }
-    }).catch((e) => setError(e.message))
-  }, [token])
+  useEffect(() => {
+    if (!token || !workflows.length || initialSelection.current) return
+    initialSelection.current = true
+    const requestedWorkflow = params.get('workflow') || ''
+    const requestedRun = params.get('run') || ''
+    if (requestedWorkflow || requestedRun) chooseWorkflow(requestedWorkflow, requestedRun)
+  }, [token, workflows]) // Initial contextual selection only; polling must not change the operator's choice.
 
   useEffect(() => {
     if (!token || !experienceRun?.id || !['ready', 'live', 'paused'].includes(experienceRun.status)) return undefined
-    const refresh = () => api.liveControlWorkflowRun(token, experienceRun.id).then(setExperienceRun).catch(() => {})
+    const refresh = () => api.liveControlWorkflowRun(token, experienceRun.id).then((run) => { if (selection.current.runId === run.id) setExperienceRun(run) }).catch(() => {})
     let poll = null
     const stopFallback = () => { if (poll) { clearInterval(poll); poll = null } }
     const startFallback = () => { if (!poll) poll = setInterval(refresh, 5000) }
     if (!experienceDisplay) { startFallback(); return stopFallback }
-    const events = new EventSource(`/api/engagement/v1/live/${encodeURIComponent(experienceDisplay.display_code)}/stream?token=${encodeURIComponent(experienceDisplay.access_token)}`)
+    const events = new EventSource(`/api/engagement/v1/live/${encodeURIComponent(experienceDisplay.display_code)}/stream?token=${encodeURIComponent(experienceDisplay.access_token)}&observer=true`)
     events.onopen = stopFallback
     events.onerror = startFallback
     ;[
@@ -133,7 +184,7 @@ export default function LiveControlPage() {
       'workflow.video_play', 'workflow.video_pause', 'workflow.video_restart',
       'workflow.timer_start', 'workflow.timer_pause', 'workflow.timer_resume',
       'workflow.timer_reset', 'workflow.timer_add',
-      'workflow.reveal_results', 'workflow.reopen_voting',
+      'workflow.reveal_results', 'workflow.reopen_voting', 'workflow.displays_changed', 'display.changed',
     ].forEach((name) => events.addEventListener(name, refresh))
     return () => { events.close(); stopFallback() }
   }, [token, experienceRun?.id, experienceRun?.status, experienceDisplay?.id])
@@ -154,12 +205,13 @@ export default function LiveControlPage() {
   }
 
   const load = useCallback(async () => {
-    if (!activityId) return
+    if (!activityId || !token) return
     try {
       const a = await api.liveControlActivity(token, activityId)
+      if (selection.current.activityId !== activityId) return
       setActivity(a)
-      if (role === 'presenter') setResults(await api.liveControlResults(token, activityId))
-      if (role === 'moderator') setQna(await api.liveControlQnaList(token, activityId))
+      if (role === 'presenter') { const data = await api.liveControlResults(token, activityId); if (selection.current.activityId === activityId) setResults(data) }
+      if (role === 'moderator') { const data = await api.liveControlQnaList(token, activityId); if (selection.current.activityId === activityId) setQna(data) }
     } catch (e) { setError(e.message) }
   }, [token, activityId, role])
   useEffect(() => { load() }, [load])
@@ -276,39 +328,59 @@ export default function LiveControlPage() {
   const resultPageCount = Math.max(1, Math.ceil(resultQuestionIds.length / 6))
   const resultPage = Math.min(resultPageCount - 1, Number(selectedDisplay?.settings?.results_page || 0))
 
+  const secondsRemaining = questionDeadline ? Math.max(0, Math.ceil((new Date(questionDeadline).getTime() - clock) / 1000)) : null
+  const previewDisplay = (display) => {
+    if (!display) return
+    const url = display.short_code ? `/d/${display.short_code}?observer=true` : `/live/${display.display_code}?token=${encodeURIComponent(display.access_token)}&observer=true`
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+  const navigation = <nav aria-label="Live presenter navigation" className="sticky top-0 z-20 mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-slate-950 shadow-sm">
+    <div className="grid gap-3 sm:grid-cols-2">
+      <label className="grid gap-1 text-xs font-bold">Activity<select aria-label="Control activity" disabled={busy} value={activityId || ''} onChange={(event) => chooseActivity(event.target.value)} className="rounded-lg border p-2"><option value="">Choose activity…</option>{(activities || []).map((item) => <option key={item.id} value={item.id}>{item.title} · {item.status}</option>)}</select></label>
+      {role === 'presenter' && <label className="grid gap-1 text-xs font-bold">Experience<select aria-label="Control experience" disabled={busy} value={workflowId} onChange={(event) => chooseWorkflow(event.target.value)} className="rounded-lg border p-2"><option value="">Choose experience…</option>{workflows.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
+    </div>
+    {role === 'presenter' && <div className="flex flex-wrap items-end gap-2"><label className="grid flex-1 gap-1 text-xs font-bold">Display channel<select aria-label="Control display" value={displayId || ''} onChange={(event) => setDisplayId(event.target.value)} className="rounded-lg border p-2"><option value="">Choose display…</option>{(displays || []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><button type="button" disabled={!selectedDisplay} onClick={() => previewDisplay(selectedDisplay)} className="rounded-lg border p-2 text-xs font-bold">Preview display ↗</button></div>}
+    <div className="flex justify-between gap-2 text-xs"><span>Choose content here; sending it to a display is a separate action.</span><button type="button" disabled={catalogLoading} onClick={refreshCatalog}>Refresh list</button></div>
+  </nav>
+
   if (experienceRun) {
     const current = experienceRun.current_step
     const presenter = current?.config?.presenter || {}
     const timer = experienceRun.runtime?.timer
+    const remaining = timerRemaining(timer, clock, serverOffset.current.value)
+    const activeRun = ['live', 'paused'].includes(experienceRun.status)
     const interactive = ['poll', 'multi_select', 'rating', 'ranking'].includes(current?.step_type)
-    return <div className="min-h-screen bg-[#f5f7fa] px-4 py-7 text-slate-950"><main className="mx-auto grid max-w-2xl gap-4">
-      <header className="text-center"><div className="text-[11px] font-black uppercase tracking-[.22em] text-teal-600">Festio Live · Experience Presenter</div><h1 className="mt-2 text-2xl font-black">{experienceName}</h1><div className="mt-3 flex justify-center gap-4 text-xs font-bold"><span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">● {experienceRun.status.toUpperCase()}</span><span className="px-2 py-1 text-slate-500">▣ Display connected</span></div></header>
+    return <div className="min-h-screen bg-[#f5f7fa] px-4 py-7 text-slate-950"><main className="mx-auto grid max-w-2xl gap-4">{navigation}<WorkflowDisplayTargets run={experienceRun} displays={displays || []} busy={busy} onAssign={assignExperienceDisplays}/>
+      <header className="text-center"><div className="text-[11px] font-black uppercase tracking-[.22em] text-teal-600">Festio Live · Experience Presenter</div><h1 className="mt-2 text-2xl font-black">{experienceName}</h1><div className="mt-3 flex justify-center gap-4 text-xs font-bold"><span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">● {experienceRun.status.toUpperCase()}</span><span className="px-2 py-1 text-slate-500">▣ {experienceRun.display_ids?.length || 0} display channel(s) assigned</span></div></header>
       {error && <div className="rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-700">{error}</div>}
-      <section className="rounded-2xl bg-gradient-to-br from-[#070d24] via-[#201052] to-[#32116d] p-6 text-white shadow-xl"><div className="text-[10px] font-black uppercase tracking-[.2em] text-teal-300">Guided Experience</div><div className="mt-2 flex items-end justify-between gap-4"><div><h2 className="text-2xl font-black">{String((experienceRun.steps || []).findIndex((step) => step.id === current?.id) + 1).padStart(2, '0')} · {current?.title || 'Ready to begin'}</h2><p className="mt-1 text-xs font-bold text-slate-300">Scene {Math.max(1, (experienceRun.steps || []).findIndex((step) => step.id === current?.id) + 1)} of {experienceRun.steps?.length || 0}</p></div>{timer && <strong className="text-5xl tabular-nums">{String(Math.floor((timer.remaining_seconds || 0) / 60)).padStart(2, '0')}:{String((timer.remaining_seconds || 0) % 60).padStart(2, '0')}</strong>}</div>
+      <section className="rounded-2xl bg-gradient-to-br from-[#070d24] via-[#201052] to-[#32116d] p-6 text-white shadow-xl"><div className="text-[10px] font-black uppercase tracking-[.2em] text-teal-300">Guided Experience</div><div className="mt-2 flex items-end justify-between gap-4"><div><h2 className="text-2xl font-black">{String((experienceRun.steps || []).findIndex((step) => step.id === current?.id) + 1).padStart(2, '0')} · {current?.title || 'Ready to begin'}</h2><p className="mt-1 text-xs font-bold text-slate-300">Scene {Math.max(1, (experienceRun.steps || []).findIndex((step) => step.id === current?.id) + 1)} of {experienceRun.steps?.length || 0}</p></div>{timer && <strong className="text-5xl tabular-nums">{String(Math.floor((remaining || 0) / 60)).padStart(2, '0')}:{String((remaining || 0) % 60).padStart(2, '0')}</strong>}</div>
       {experienceRun.status === 'ready' && <button disabled={busy} onClick={() => commandExperience('start')} className="mt-5 min-h-14 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-teal-300 font-black text-slate-950">Start experience</button>}
       {['countdown','game'].includes(current?.step_type) && <button disabled={busy} onClick={() => commandExperience(timer?.status === 'running' ? 'timer_pause' : timer?.status === 'paused' ? 'timer_resume' : 'timer_start')} className="mt-5 min-h-14 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-teal-300 font-black text-slate-950">{timer?.status === 'running' ? 'Pause timer' : timer?.status === 'paused' ? 'Resume timer' : 'Start timer'}</button>}
       <div className="mt-4 text-right text-xs font-bold text-teal-200">✓ Server synchronized</div></section>
-      <section className="grid grid-cols-2 gap-3 rounded-2xl bg-white p-4 shadow-sm sm:grid-cols-4"><button disabled={busy || experienceRun.status === 'ready'} onClick={() => commandExperience('previous')} className="rounded-xl border p-4 font-extrabold">←<br/>Previous</button><button disabled={busy || experienceRun.status === 'ready'} onClick={() => commandExperience('next')} className="rounded-xl border p-4 font-extrabold">→<br/>Next scene</button><button disabled={busy || experienceRun.status === 'ready'} onClick={() => commandExperience(experienceRun.status === 'paused' ? 'resume' : 'pause')} className="rounded-xl border p-4 font-extrabold">Ⅱ<br/>{experienceRun.status === 'paused' ? 'Resume' : 'Pause'}</button><button disabled={busy || !interactive} onClick={() => commandExperience(current?.display_phase === 'results' ? 'reopen_voting' : 'reveal_results')} className="rounded-xl border p-4 font-extrabold text-amber-700">✦<br/>{current?.display_phase === 'results' ? 'Reopen voting' : 'Reveal results'}</button><select aria-label="Jump to scene" value={current?.id || ''} onChange={(event) => commandExperience('jump', event.target.value)} className="col-span-2 rounded-xl border p-3 font-bold"><option value="" disabled>Jump to scene…</option>{experienceRun.steps?.map((step, index) => <option key={step.id} value={step.id}>{String(index + 1).padStart(2,'0')} · {step.title}</option>)}</select><button onClick={() => displays?.[0] && window.open(displays[0].short_code ? `/d/${displays[0].short_code}` : `/live/${displays[0].display_code}?token=${encodeURIComponent(displays[0].access_token)}`, '_blank', 'noopener,noreferrer')} className="col-span-2 rounded-xl border p-3 font-bold">Open display ↗</button></section>
+      <section className="grid grid-cols-2 gap-3 rounded-2xl bg-white p-4 shadow-sm sm:grid-cols-4"><button disabled={busy || !activeRun} onClick={() => commandExperience('previous')} className="rounded-xl border p-4 font-extrabold">←<br/>Previous</button><button disabled={busy || !activeRun} onClick={() => commandExperience('next')} className="rounded-xl border p-4 font-extrabold">→<br/>Next scene</button><button disabled={busy || !activeRun} onClick={() => commandExperience(experienceRun.status === 'paused' ? 'resume' : 'pause')} className="rounded-xl border p-4 font-extrabold">Ⅱ<br/>{experienceRun.status === 'paused' ? 'Resume' : 'Pause'}</button><button disabled={busy || !interactive} onClick={() => commandExperience(current?.display_phase === 'results' ? 'reopen_voting' : 'reveal_results')} className="rounded-xl border p-4 font-extrabold text-amber-700">✦<br/>{current?.display_phase === 'results' ? 'Reopen voting' : 'Reveal results'}</button><select disabled={busy || !activeRun} aria-label="Jump to scene" value={current?.id || ''} onChange={(event) => commandExperience('jump', event.target.value)} className="col-span-2 rounded-xl border p-3 font-bold"><option value="" disabled>Jump to scene…</option>{experienceRun.steps?.map((step, index) => <option key={step.id} value={step.id}>{String(index + 1).padStart(2,'0')} · {step.title}</option>)}</select><button disabled={!experienceDisplay} onClick={() => previewDisplay(experienceDisplay)} className="col-span-2 rounded-xl border p-3 font-bold">Preview assigned display ↗</button></section>
       {current?.step_type === 'video' && <section className="rounded-2xl border border-violet-200 bg-white p-4 shadow-sm"><div className="text-[10px] font-black uppercase tracking-[.18em] text-violet-600">Projector video</div><div className="mt-3 grid grid-cols-3 gap-2"><button disabled={busy} onClick={() => commandExperience('video_play')} className="min-h-12 rounded-xl bg-violet-600 font-black text-white">▶ Play</button><button disabled={busy} onClick={() => commandExperience('video_pause')} className="min-h-12 rounded-xl border font-black">Ⅱ Pause</button><button disabled={busy} onClick={() => commandExperience('video_restart')} className="min-h-12 rounded-xl border font-black">↺ Restart</button></div><p className="mt-2 text-xs font-semibold text-slate-500">These controls operate the video on the assigned projector display.</p></section>}
       <section className="overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm"><header className="flex items-center justify-between bg-amber-50 px-5 py-3"><div><div className="text-[10px] font-black uppercase tracking-[.18em] text-amber-700">Private · Presenter Notes</div><div className="mt-0.5 text-xs font-bold text-slate-500">Only you can see this guidance</div></div>{presenter.target_duration && <b className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">Target {presenter.target_duration}</b>}</header><div className="grid gap-4 p-5"><div><div className="text-[10px] font-black uppercase tracking-wider text-violet-600">Talking point</div><p className="mt-2 text-base font-semibold leading-7 text-slate-800">{presenter.talking_point || current?.presenter_notes || 'No talking point has been added for this scene.'}</p></div>{presenter.action_cue && <div className="rounded-xl border border-teal-200 bg-teal-50 p-4"><div className="text-[10px] font-black uppercase tracking-wider text-teal-700">Action cue</div><b className="mt-1 block text-sm text-teal-950">{presenter.action_cue}</b></div>}{presenter.transition && <div><div className="text-[10px] font-black uppercase tracking-wider text-fuchsia-600">Transition to next scene</div><p className="mt-1 text-sm font-semibold italic text-slate-700">“{presenter.transition}”</p></div>}{presenter.private_notes && <div className="rounded-xl bg-slate-100 p-3 text-xs font-semibold text-slate-600"><b className="mr-1 text-slate-900">Organizer note:</b>{presenter.private_notes}</div>}</div></section>
       <section className="grid grid-cols-2 divide-x rounded-2xl bg-white shadow-sm"><div className="p-4"><div className="text-[10px] font-black uppercase tracking-wider text-violet-600">Up next</div><b>{experienceRun.next_step?.title || 'Closing'}</b></div><div className="p-4"><div className="text-[10px] font-black uppercase tracking-wider text-teal-700">Audience</div><b>{current?.data?.response_count || 0} responses</b></div></section>
+      <button type="button" disabled={busy} onClick={() => chooseActivity('')} className="rounded-lg border bg-white p-3 font-bold">Back to activities</button>
       <footer className="flex items-center justify-between rounded-2xl bg-white p-4 shadow-sm"><button disabled={busy || !['live','paused'].includes(experienceRun.status)} onClick={() => window.confirm('End this experience?') && commandExperience('complete')} className="rounded-lg border border-rose-300 px-4 py-2 text-sm font-black text-rose-600">End experience</button><span className="text-xs font-bold text-emerald-700">✓ Server synchronized</span></footer>
     </main></div>
   }
 
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-8 dark:bg-slate-950">
-      <div className="mx-auto max-w-lg">
+      <div className="mx-auto max-w-2xl">
+        {navigation}
         <div className="mb-6 text-xs font-extrabold uppercase tracking-[0.2em] text-teal-500">Festio Live · {role === 'moderator' ? 'Moderator' : 'Presenter'} console</div>
         {error && <div className="mb-4 rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-700 dark:bg-rose-950 dark:text-rose-200">{error}</div>}
 
-        {!activityId && (
+        {workflowId && !experienceRun && <section className="mb-4 rounded-xl border bg-white p-4"><h2 className="font-bold">{workflows.find((item) => item.id === workflowId)?.name}</h2><p className="my-2 text-sm">No active run. Prepare it, choose the displays, then start when ready.</p><button disabled={busy} className="rounded-lg bg-teal-600 p-3 font-bold text-white" onClick={async () => { setBusy(true); try { setExperienceRun(await api.liveControlCreateWorkflowRun(token, workflowId)); setExperienceName(workflows.find((item) => item.id === workflowId)?.name || 'Guided Experience') } catch (e) { setError(e.message) } finally { setBusy(false) } }}>Prepare experience</button></section>}
+        {!activityId && !workflowId && (
           <div className="grid gap-3">
             <p className="text-sm text-slate-500">Pick an activity to control:</p>
             {activities === null ? <p className="text-sm text-slate-400">Loading…</p> : activities.length === 0 ? (
               <p className="text-sm text-slate-400">Nothing is live right now.</p>
             ) : activities.map((a) => (
-              <button key={a.id} type="button" onClick={() => setActivityId(a.id)}
+              <button key={a.id} type="button" onClick={() => chooseActivity(a.id)}
                 className="rounded-xl border border-slate-200 bg-white p-4 text-left text-sm font-extrabold text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white">
                 {a.title} <span className="ml-2 text-xs font-bold uppercase text-teal-500">{a.status}</span>
               </button>
@@ -316,9 +388,9 @@ export default function LiveControlPage() {
           </div>
         )}
 
-        {activityId && activity && (
+        {activityId && activity?.id === activityId && (
           <div className="grid gap-4">
-            <button type="button" onClick={() => setActivityId(null)} className="text-left text-xs font-extrabold uppercase tracking-wide text-slate-400">← Change activity</button>
+            <button type="button" onClick={() => chooseActivity('')} className="text-left text-xs font-extrabold uppercase tracking-wide text-slate-400">← Change activity</button>
             <div className="text-xl font-extrabold text-slate-900 dark:text-white">{activity.title}</div>
 
             {role === 'presenter' && (
@@ -335,7 +407,7 @@ export default function LiveControlPage() {
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div><div className="text-xs font-extrabold uppercase tracking-[.16em] text-fuchsia-500">Festio Broadcast</div><div className="mt-1 text-sm font-bold text-slate-500">Control every projector without leaving this screen</div></div>
-                    {selectedDisplay && <button type="button" onClick={() => window.open(selectedDisplay.short_code ? `/d/${selectedDisplay.short_code}` : `/live/${selectedDisplay.display_code}?token=${encodeURIComponent(selectedDisplay.access_token)}`, '_blank', 'noopener,noreferrer')} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-extrabold text-slate-700 dark:text-white">Open display ↗</button>}
+                    {selectedDisplay && <button type="button" onClick={() => previewDisplay(selectedDisplay)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-extrabold text-slate-700 dark:text-white">Preview display ↗</button>}
                   </div>
                   {displays?.length ? <div className="mt-4 grid gap-4">
                     <div className="flex gap-2"><select value={displayId || ''} onChange={(e) => setDisplayId(e.target.value)} className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-bold dark:border-slate-700 dark:bg-slate-950 dark:text-white">{displays.map((display) => <option key={display.id} value={display.id}>{display.name}</option>)}</select><button type="button" disabled={busy || selectedDisplay?.assigned_activity_id === activityId} onClick={() => updateDisplay({ assigned_activity_id: activityId })} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-extrabold text-slate-700 disabled:opacity-40 dark:text-white">Use this activity</button></div>

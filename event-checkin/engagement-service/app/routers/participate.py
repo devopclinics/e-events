@@ -125,9 +125,12 @@ async def _compute_results(activity: EngagementActivity, db: AsyncSession) -> Ac
     )).scalars().all()
     participant_count = len({r.participant_id for r in responses})
 
+    responses_by_question = defaultdict(list)
+    for response in responses:
+        responses_by_question[response.question_id].append(response)
     questions_out = []
     for question in sorted(activity.questions, key=lambda q: q.sequence):
-        q_responses = [r for r in responses if r.question_id == question.id]
+        q_responses = responses_by_question[question.id]
         option_counts: Counter[str] = Counter()
         for r in q_responses:
             for sel in r.selections:
@@ -387,7 +390,9 @@ async def _display_payload(activity: EngagementActivity, db: AsyncSession, *, re
                 # Open text never reaches a public display without a future,
                 # explicit moderation record; counts remain safe to show there.
                 # A staff-only report (redact_open_text=False) is exempt --
-                # the organizer already has moderation authority over it.
+                # the organizer already has moderation authority over it, and
+                # only ever sees the bounded excerpts _compute_results already
+                # capped, not raw unbounded answer text.
                 "text_samples": [] if redact_open_text else q.text_samples,
                 "live_state": next((source.live_state for source in activity.questions if source.id == q.question_id), "pending"),
             }
@@ -409,6 +414,32 @@ async def _display_payload(activity: EngagementActivity, db: AsyncSession, *, re
             {"name": "Team Pulse", "score": team_scores[1], "players": team_players[1]},
         ],
     }
+
+
+async def _public_display_payload(activity: EngagementActivity, db: AsyncSession) -> dict:
+    """Cached, redacted display payload for the public /d/{short_code} route.
+
+    Wraps _display_payload behind display_snapshots.py's shared snapshot
+    cache so many simultaneous TV viewers coalesce onto one build instead of
+    each triggering their own full recompute -- unrelated to the staff report
+    route below, which always calls _display_payload directly for fresh,
+    uncached, unredacted data.
+    """
+    from ..display_snapshots import public_activity_snapshot
+
+    async def build():
+        # A concurrent request may have waited for another snapshot build.
+        # Reload presentation state rather than cache an earlier ORM version.
+        fresh = await db.scalar(
+            select(EngagementActivity).where(EngagementActivity.id == activity.id)
+            .options(selectinload(EngagementActivity.questions).selectinload(ActivityQuestion.options))
+            .execution_options(populate_existing=True)
+        )
+        if not fresh:
+            raise HTTPException(404, "Activity not found")
+        return await _display_payload(fresh, db)
+
+    return await public_activity_snapshot(activity, build)
 
 
 async def _approved_word_cloud(activity_id: str, question_id: str, db: AsyncSession) -> list[dict]:
@@ -733,11 +764,13 @@ async def get_results(activity_id: str, identity: Identity = Depends(current_ide
 @router.get("/activities/{activity_id}/report")
 async def activity_report(activity_id: str, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
     """Full per-question report data for staff -- every question this
-    activity has, with real open-text answers, independent of any
-    LiveDisplay's curated results_question_ids or connection lease. Backs
-    both the "Download report" PDF export's headless-browser fetch and any
-    future staff report screen -- unlike the public display route, it is
-    never truncated to a curated or capped subset of questions."""
+    activity has, with staff-visible open-text excerpts (the same bounded
+    samples _compute_results already caps at 20, not raw unbounded answers),
+    independent of any LiveDisplay's curated results_question_ids or
+    connection lease. Backs both the "Download report" PDF export's
+    headless-browser fetch and any future staff report screen -- unlike the
+    public display route, it is never truncated to a curated or capped
+    subset of questions."""
     require_staff(identity)
     activity = await _load_activity(activity_id, identity.event_id, identity.org_id, db)
     return await _display_payload(activity, db, redact_open_text=False)

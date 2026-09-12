@@ -60,17 +60,17 @@ class BranchingAndModerationTests(unittest.TestCase):
 
 class FailureIsolationTests(unittest.TestCase):
     def test_redis_publish_failure_never_fails_durable_request_path(self):
-        with patch("app.realtime.redis.publish", new=AsyncMock(side_effect=ConnectionError("redis down"))):
+        with patch("app.display_snapshots.invalidate_public_snapshot", new=AsyncMock()), \
+             patch("app.realtime.redis.publish", new=AsyncMock(side_effect=ConnectionError("redis down"))):
             asyncio.run(publish("activity", "response.submitted", {"question_id": "q"}))
 
     def test_first_projector_owns_display_lease(self):
-        with patch("app.realtime.redis.set", new=AsyncMock(return_value=True)) as set_value:
+        with patch("app.realtime.redis.eval", new=AsyncMock(return_value=1)) as claim:
             self.assertTrue(asyncio.run(claim_display("display-a", "projector-client-0001")))
-        set_value.assert_awaited_once()
+        claim.assert_awaited_once()
 
-    def test_second_projector_cannot_take_display_lease(self):
-        with patch("app.realtime.redis.set", new=AsyncMock(return_value=False)), \
-             patch("app.realtime.redis.get", new=AsyncMock(return_value="projector-client-0001")):
+    def test_second_projector_cannot_take_full_display_lease(self):
+        with patch("app.realtime.redis.eval", new=AsyncMock(return_value=0)):
             self.assertFalse(asyncio.run(claim_display("display-a", "projector-client-0002")))
 
     def test_disconnected_stream_cannot_reclaim_released_lease(self):
@@ -78,50 +78,32 @@ class FailureIsolationTests(unittest.TestCase):
             self.assertFalse(asyncio.run(renew_display("display-a", "projector-client-0001")))
         renew.assert_awaited_once()
 
-    def test_force_release_clears_the_lease_regardless_of_which_client_holds_it(self):
-        # Unlike release_display (which only a lease's own holder can call),
-        # this is the staff override for a stuck/unreachable projector -- it
-        # must not need to know the stuck client's id.
-        with patch("app.realtime.redis.delete", new=AsyncMock()) as delete:
+    def test_force_release_uses_atomic_device_revocation(self):
+        with patch("app.realtime.redis.eval", new=AsyncMock(return_value=1)) as revoke:
             asyncio.run(force_release_display("display-a"))
-        delete.assert_awaited_once_with("engagement:display-lease:display-a")
+        revoke.assert_awaited_once()
+        self.assertEqual(revoke.await_args.args[-1], "")
 
-    def test_display_is_connected_reflects_whether_a_lease_key_exists(self):
-        with patch("app.realtime.redis.exists", new=AsyncMock(return_value=1)):
+    def test_display_is_connected_reflects_present_devices(self):
+        with patch("app.realtime.display_devices", new=AsyncMock(return_value=[{"client_id": "projector-client-0001"}])):
             self.assertTrue(asyncio.run(display_is_connected("display-a")))
-        with patch("app.realtime.redis.exists", new=AsyncMock(return_value=0)):
+        with patch("app.realtime.display_devices", new=AsyncMock(return_value=[])):
             self.assertFalse(asyncio.run(display_is_connected("display-a")))
 
     def test_display_is_connected_fails_closed_when_redis_is_unreachable(self):
-        with patch("app.realtime.redis.exists", new=AsyncMock(side_effect=ConnectionError("redis down"))):
+        with patch("app.realtime.display_devices", new=AsyncMock(side_effect=ConnectionError("redis down"))):
             self.assertFalse(asyncio.run(display_is_connected("display-a")))
 
 
 class ExperienceWorkflowSafetyTests(unittest.TestCase):
     def test_display_rejects_a_second_active_workflow_channel(self):
-        class Db:
-            def __init__(self):
-                self.rows = iter((
-                    SimpleNamespace(id="display-a", event_id="event-a", org_id="org-a"),
-                    SimpleNamespace(id="run-other"),
-                ))
-
-            async def scalar(self, _statement):
-                return next(self.rows)
-
-        identity = Identity(
-            identity_kind="staff", subject="presenter-a", event_id="event-a", org_id="org-a",
-            role="presenter", capabilities=("control",),
-        )
-        workflow = SimpleNamespace(
-            id="workflow-a", event_id="event-a", org_id="org-a", current_revision_id="revision-a",
-        )
-        with patch.object(settings, "experience_workflows_enabled", True), \
-             patch("app.routers.workflows._workflow", new=AsyncMock(return_value=workflow)):
-            with self.assertRaises(HTTPException) as raised:
-                asyncio.run(create_run("workflow-a", RunCreate(display_id="display-a"), identity, Db()))
+        from app.routers.workflows import _validate_display_owner
+        display = SimpleNamespace(id="display-a", status="active", assigned_workflow_run_id="run-other")
+        db = SimpleNamespace(get=AsyncMock(return_value=SimpleNamespace(status="live")))
+        with self.assertRaises(HTTPException) as raised:
+            asyncio.run(_validate_display_owner(display, None, db))
         self.assertEqual(raised.exception.status_code, 409)
-        self.assertIn("already assigned", raised.exception.detail)
+        self.assertIn("assigned", raised.exception.detail)
 
     def test_manual_scene_or_activity_selection_detaches_workflow(self):
         for field in ("scene", "assigned_activity_id"):

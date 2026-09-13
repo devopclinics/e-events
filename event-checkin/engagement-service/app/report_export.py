@@ -93,7 +93,7 @@ async def _capture_unguarded(base_url: str, activity_id: str, token: str) -> byt
             # default "visible" state, which display:none can never satisfy.
             await page.locator(".flb-report-ready").wait_for(state="attached", timeout=20_000)
             return await page.pdf(
-                format="A4", print_background=True,
+                format="A4", landscape=True, print_background=True,
                 margin={"top": "16mm", "bottom": "20mm", "left": "14mm", "right": "14mm"},
                 display_header_footer=True,
                 header_template="<span></span>",

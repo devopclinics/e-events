@@ -1,124 +1,185 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 
-// Internal-only rendering surface for one activity's full survey report,
-// fetched by the export's headless browser (see report_export.py) and by
-// nobody else -- it needs the same short-lived staff token as the request
-// it renders. Deliberately independent of LiveDisplay: it reads every
-// question straight from the database via /activities/{id}/report, so a
-// report can never be truncated to a display's curated question list, and
-// generating one can never conflict with (or be knocked out by) an
-// actively-connected projector.
-//
-// Front matter (cover, executive summary, ratings/choices/priorities
-// dashboards) is built generically from question_type, never from anything
-// specific to one activity -- so it works the same way for any survey or
-// feedback activity, not just the one it was designed against. Only the
-// per-question appendix at the end existed before this file was rewritten;
-// everything above it is new.
-
-const BRAND = '#4f46e5'
-const PALETTE = ['#4f46e5', '#0ea5a4', '#e11d48', '#d97706', '#0284c7', '#9333ea', '#4d7c0f', '#ea580c']
-const colorFor = (i) => PALETTE[((i % PALETTE.length) + PALETTE.length) % PALETTE.length]
-const tint = (hex, alpha) => `${hex}${alpha}`
-
+// This is a staff-only PDF surface. It is intentionally separate from the
+// live display so it can read complete survey structure without claiming a
+// projector connection or inheriting display curation.
 const RATING_MAX = { rating_5: 5, rating_10: 10, nps: 10 }
-const CHOICE_TYPES = ['single_choice', 'true_false', 'yes_no']
-const PRIORITY_TYPES = ['multiple_choice', 'ranking']
+const SINGLE_SELECT_TYPES = new Set(['single_choice', 'true_false', 'yes_no'])
+const MULTI_SELECT_TYPES = new Set(['multiple_choice'])
+const TEXT_TYPES = new Set(['short_text', 'long_text'])
+const EMPTY_COPY = 'No responses were recorded for this question.'
 
-function formatMMSS(seconds) {
-  if (seconds == null) return '—'
-  const total = Math.round(seconds)
-  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
+function formatNumber(value) {
+  return new Intl.NumberFormat('en-US').format(Number(value || 0))
 }
 
-function barRows(counts, labels) {
+function formatDuration(seconds) {
+  if (seconds == null || !Number.isFinite(Number(seconds))) return '—'
+  const total = Math.max(0, Math.round(Number(seconds)))
+  const minutes = Math.floor(total / 60)
+  const remainder = String(total % 60).padStart(2, '0')
+  return minutes ? `${minutes}m ${remainder}s` : `${remainder}s`
+}
+
+function ratingMax(question) {
+  return RATING_MAX[question.question_type] || 5
+}
+
+function displayRating(question, digits = 2) {
+  return question.average_rating == null ? '—' : Number(question.average_rating).toFixed(digits)
+}
+
+function normalizedRating(question) {
+  if (question.average_rating == null) return null
+  const max = ratingMax(question)
+  return max ? Number(question.average_rating) / max : null
+}
+
+function rowsFromCounts(counts, labels = {}) {
   const entries = Object.entries(counts || {})
-  const max = Math.max(1, ...entries.map(([, count]) => count))
+  const total = entries.reduce((sum, [, count]) => sum + Number(count || 0), 0)
+  const largest = Math.max(1, ...entries.map(([, count]) => Number(count || 0)))
   return entries
-    .sort((a, b) => b[1] - a[1])
-    .map(([id, count]) => ({ id, label: labels?.[id] || id, count, pct: Math.round((count / max) * 100) }))
+    .map(([id, count]) => ({
+      id,
+      label: labels?.[id] || id,
+      count: Number(count || 0),
+      percentOfSelections: total ? Math.round((Number(count || 0) / total) * 100) : 0,
+      percentOfLargest: Math.round((Number(count || 0) / largest) * 100),
+    }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
 }
 
-function categorize(questions) {
-  const rating = [], choice = [], priority = []
-  for (const q of questions) {
-    if (q.question_type in RATING_MAX) rating.push(q)
-    else if (CHOICE_TYPES.includes(q.question_type) || q.question_type === 'word_cloud') choice.push(q)
-    else if (PRIORITY_TYPES.includes(q.question_type)) priority.push(q)
-  }
-  return { rating, choice, priority }
+function questionRows(question) {
+  return rowsFromCounts(
+    question.question_type === 'ranking' ? question.ranking_scores : question.option_counts,
+    question.option_labels,
+  )
 }
 
-function pickOverallRating(rating) {
-  return rating.find((q) => /overall/i.test(q.prompt)) || rating[0] || null
+function topRow(question) {
+  return questionRows(question)[0] || null
 }
 
-function topOption(question) {
-  const entries = Object.entries(question.option_counts || {})
-  if (!entries.length) return null
-  entries.sort((a, b) => b[1] - a[1])
-  const [id, count] = entries[0]
-  const total = entries.reduce((sum, [, c]) => sum + c, 0)
-  return { label: question.option_labels?.[id] || id, count, total, pct: total ? Math.round((count / total) * 100) : 0 }
+function categorizeQuestions(questions) {
+  return {
+    ratings: questions.filter((question) => question.question_type in RATING_MAX),
+    priorities: questions.filter((question) => question.question_type === 'ranking' || MULTI_SELECT_TYPES.has(question.question_type)),
+    selections: questions.filter((question) => SINGLE_SELECT_TYPES.has(question.question_type)),
+    clouds: questions.filter((question) => question.question_type === 'word_cloud'),
+    text: questions.filter((question) => TEXT_TYPES.has(question.question_type)),
+  }
 }
 
-function topPriority(question) {
-  const source = question.question_type === 'ranking' ? question.ranking_scores : question.option_counts
-  const entries = Object.entries(source || {})
-  if (!entries.length) return null
-  entries.sort((a, b) => b[1] - a[1])
-  const [id, count] = entries[0]
-  return { label: question.option_labels?.[id] || id, count }
+function getRatingSignals(ratings) {
+  const measured = ratings
+    .map((question) => ({ question, normalized: normalizedRating(question) }))
+    .filter((item) => item.normalized != null)
+    .sort((a, b) => b.normalized - a.normalized)
+  return { strongest: measured[0]?.question || null, weakest: measured.at(-1)?.question || null }
 }
 
-function buildFindings(data, rating, choice, priority) {
-  const findings = []
-  const summary = data.survey_summary
-  if (summary) {
-    findings.push(`${summary.completion_rate}% of participants who started completed the survey, averaging ${formatMMSS(summary.avg_completion_seconds)}.`)
-  }
-  const rated = rating.filter((q) => q.average_rating != null)
-  if (rated.length > 1) {
-    const sorted = [...rated].sort((a, b) => b.average_rating - a.average_rating)
-    const best = sorted[0], worst = sorted[sorted.length - 1]
-    findings.push(`"${best.prompt}" was the highest-rated aspect at ${best.average_rating.toFixed(2)}/${RATING_MAX[best.question_type]}, while "${worst.prompt}" was the lowest at ${worst.average_rating.toFixed(2)}/${RATING_MAX[worst.question_type]} — the clearest opportunity for improvement.`)
-  } else if (rated.length === 1) {
-    findings.push(`Overall rating averaged ${rated[0].average_rating.toFixed(2)}/${RATING_MAX[rated[0].question_type]} across ${rated[0].response_count} responses.`)
-  }
-  const choiceHits = choice
-    .filter((q) => q.question_type !== 'word_cloud')
-    .map((q) => ({ q, top: topOption(q) }))
-    .filter((x) => x.top)
-    .sort((a, b) => b.top.pct - a.top.pct)
-  if (choiceHits.length) {
-    const { q, top } = choiceHits[0]
-    findings.push(`Most respondents (${top.count} of ${top.total}, ${top.pct}%) answered "${top.label}" for "${q.prompt}".`)
-  }
-  const priorityHits = priority.map((q) => ({ q, top: topPriority(q) })).filter((x) => x.top).sort((a, b) => b.top.count - a.top.count)
-  if (priorityHits.length) {
-    const { q, top } = priorityHits[0]
-    findings.push(`"${top.label}" was the top pick for "${q.prompt}" (${top.count} mentions).`)
-  }
-  const cloudHits = choice
-    .filter((q) => q.question_type === 'word_cloud' && q.word_cloud?.length)
-    .map((q) => ({ q, top: [...q.word_cloud].sort((a, b) => b.count - a.count)[0] }))
-  if (cloudHits.length) {
-    const { q, top } = cloudHits[0]
-    findings.push(`"${top.word}" was the most-mentioned word for "${q.prompt}" (${top.count} mentions).`)
-  }
-  return findings.slice(0, 6)
+function collectVoices(questions) {
+  return questions
+    .flatMap((question) => (question.text_samples || []).map((text) => ({ text, prompt: question.prompt })))
+    .filter((voice) => voice.text?.trim())
+    .slice(0, 6)
 }
 
-function StatTiles({ stats }) {
+function reportTitle(report) {
+  return report.title?.trim() || 'Event feedback briefing'
+}
+
+function reportDeck(report) {
+  return report.description?.trim() || `A decision brief built from ${formatNumber(report.participant_count)} participant voices.`
+}
+
+function pageLabel(report) {
+  return report.type === 'feedback' ? 'Feedback intelligence' : 'Survey intelligence'
+}
+
+function stateForRating(question) {
+  const normalized = normalizedRating(question)
+  if (normalized == null) return 'No score'
+  if (normalized >= 0.84) return 'Strong'
+  if (normalized >= 0.7) return 'Steady'
+  return 'Needs attention'
+}
+
+function toneForRating(question) {
+  const normalized = normalizedRating(question)
+  if (normalized == null) return 'neutral'
+  if (normalized >= 0.84) return 'positive'
+  if (normalized >= 0.7) return 'planning'
+  return 'attention'
+}
+
+function ReportMasthead({ report, section }) {
   return (
-    <div className="stat-row">
-      {stats.map((s, i) => {
-        const color = colorFor(i)
+    <header className="report-masthead">
+      <div className="report-brand"><span className="report-mark">f</span><span>FESTIO</span></div>
+      <div className="report-masthead-meta"><span>{pageLabel(report)}</span><i /> <span>{section}</span></div>
+    </header>
+  )
+}
+
+function SectionHeading({ eyebrow, title, children }) {
+  return (
+    <header className="section-heading">
+      <div>
+        <p className="section-eyebrow">{eyebrow}</p>
+        <h2>{title}</h2>
+      </div>
+      {children && <div className="section-heading-aside">{children}</div>}
+    </header>
+  )
+}
+
+function MetricStrip({ metrics }) {
+  return (
+    <div className="metric-strip">
+      {metrics.map((metric) => (
+        <div className="metric" key={metric.label}>
+          <strong>{metric.value}</strong>
+          <span>{metric.label}</span>
+          {metric.detail && <small>{metric.detail}</small>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function DecisionCard({ kind, title, value, detail, description }) {
+  return (
+    <article className={`decision-card decision-card--${kind}`}>
+      <span className="decision-label">{kind === 'positive' ? 'Preserve' : kind === 'attention' ? 'Improve' : 'Plan next'}</span>
+      <h3>{title}</h3>
+      {value && <strong className="decision-value">{value}</strong>}
+      {detail && <span className="decision-detail">{detail}</span>}
+      {description && <p>{description}</p>}
+    </article>
+  )
+}
+
+function BarList({ rows, responseCount, multiple = false, ranked = false, limit = null }) {
+  const visibleRows = limit ? rows.slice(0, limit) : rows
+  const highest = Math.max(1, ...visibleRows.map((row) => row.count))
+  if (!visibleRows.length) return <p className="empty-state">{EMPTY_COPY}</p>
+  return (
+    <div className="bar-list">
+      {visibleRows.map((row, index) => {
+        const respondentsText = responseCount
+          ? multiple
+            ? `Selected by ${row.count} of ${responseCount}`
+            : `${row.count} of ${responseCount} · ${Math.round((row.count / responseCount) * 100)}%`
+          : `${row.count}`
         return (
-          <div className="stat" key={s.label} style={{ background: `linear-gradient(145deg, ${tint(color, '22')}, ${tint(color, '0a')})`, borderColor: tint(color, '40') }}>
-            <span className="num" style={{ color }}>{s.value}</span>
-            <span className="label">{s.label}</span>
+          <div className="bar-row" key={row.id}>
+            {ranked && <span className="rank">{index + 1}</span>}
+            <div className="bar-copy"><span>{row.label}</span><small>{respondentsText}</small></div>
+            <div className="bar-track" aria-hidden="true"><i style={{ width: `${Math.round((row.count / highest) * 100)}%` }} /></div>
+            <strong className="bar-value">{row.count}</strong>
           </div>
         )
       })}
@@ -126,433 +187,342 @@ function StatTiles({ stats }) {
   )
 }
 
-function Donut({ rows, size = 108 }) {
-  const total = rows.reduce((s, r) => s + r.count, 0) || 1
-  let cumulative = 0
+function RatingScorecard({ ratings, overall }) {
+  if (!ratings.length) return null
+  const ordered = [...ratings].sort((left, right) => (normalizedRating(right) ?? -1) - (normalizedRating(left) ?? -1))
   return (
-    <svg width={size} height={size} viewBox="0 0 42 42">
-      <circle cx="21" cy="21" r="15.5" fill="none" stroke="#f1f1f8" strokeWidth="5" />
-      {rows.map((row) => {
-        const pct = (row.count / total) * 100
-        const rotation = -90 + (cumulative / 100) * 360
-        cumulative += pct
-        return <circle key={row.id} cx="21" cy="21" r="15.5" fill="none" stroke={row.color} strokeWidth="5" strokeDasharray={`${pct} ${100 - pct}`} transform={`rotate(${rotation} 21 21)`} />
-      })}
-      <text x="21" y="19.5" textAnchor="middle" fontSize="7.5" fontWeight="800" fill="#1a1f2e">{total}</text>
-      <text x="21" y="25" textAnchor="middle" fontSize="3" fontWeight="700" letterSpacing=".05em" fill="#9ca3af">RESPONSES</text>
-    </svg>
+    <section className="report-section report-section--new-page" aria-label="Experience quality scorecard">
+      <SectionHeading eyebrow="Experience quality" title="Protect what people valued. Repair what held them back.">
+        <p>Scores are ordered by relative strength, with each rating kept on its original scale.</p>
+      </SectionHeading>
+      <div className="scorecard">
+        {ordered.map((question) => {
+          const normalized = normalizedRating(question) || 0
+          const tone = toneForRating(question)
+          return (
+            <article className={`score-row score-row--${tone}`} key={question.question_id}>
+              <div className="score-topic"><h3>{question.prompt}</h3><span>{question.response_count || 0} responses</span></div>
+              <div className="score-bar"><i style={{ width: `${Math.round(normalized * 100)}%` }} /></div>
+              <div className="score-number"><strong>{displayRating(question)}</strong><span>/ {ratingMax(question)}</span></div>
+              <span className="score-state">{question === overall ? 'Overall · ' : ''}{stateForRating(question)}</span>
+            </article>
+          )
+        })}
+      </div>
+      {overall && <aside className="score-note"><strong>{displayRating(overall, 1)} / {ratingMax(overall)}</strong><span>Overall experience score</span><p>This score appears once as context; the ranked detail shows where the experience gained or lost confidence.</p></aside>}
+    </section>
   )
 }
 
-function gradientFill(color) {
-  return `linear-gradient(90deg, ${tint(color, 'b3')}, ${color})`
+function PrioritiesSection({ questions }) {
+  if (!questions.length) return null
+  return (
+    <section className="report-section" aria-label="Planning priorities">
+      <SectionHeading eyebrow="Planning priorities" title="Turn repeated requests into the next program.">
+        <p>Ranked and multi-select responses are shown with their respondent context, so prominence is never mistaken for consensus.</p>
+      </SectionHeading>
+      <div className="priority-grid">
+        {questions.map((question) => {
+          const rows = questionRows(question)
+          const multiple = MULTI_SELECT_TYPES.has(question.question_type)
+          return (
+            <article className="priority-card" key={question.question_id}>
+              <div className="question-kicker">{question.question_type === 'ranking' ? 'Ranked preference' : 'Selected themes'}</div>
+              <h3>{question.prompt}</h3>
+              <p className="question-meta">{question.response_count || 0} responses{multiple ? ' · guests could select more than one answer' : ''}</p>
+              <BarList rows={rows} responseCount={question.response_count} multiple={multiple} ranked={question.question_type === 'ranking'} limit={12} />
+              {rows.length > 12 && <p className="truncated-note">+ {rows.length - 12} more options appear in the question appendix.</p>}
+            </article>
+          )
+        })}
+      </div>
+    </section>
+  )
 }
 
-function ChoiceTile({ question, tileIndex }) {
-  const baseColor = colorFor(tileIndex)
-  const tileStyle = { background: `linear-gradient(160deg, ${tint(baseColor, '14')}, #ffffff)`, borderColor: tint(baseColor, '35') }
-  if (question.question_type === 'word_cloud') {
-    const words = [...(question.word_cloud || [])].sort((a, b) => b.count - a.count).slice(0, 24)
-    return (
-      <div className="choice-tile" style={tileStyle}>
-        <h4>{question.prompt}</h4>
-        {words.length
-          ? <div className="cloud">{words.map((w) => <span key={w.word} className="cloud-tag" style={{ color: baseColor, fontSize: `${11 + Math.min(w.count, 14)}px` }}>{w.word}</span>)}</div>
-          : <div className="empty">No responses yet</div>}
-      </div>
-    )
-  }
-  const rows = barRows(question.option_counts, question.option_labels)
-  if (!rows.length) {
-    return <div className="choice-tile" style={tileStyle}><h4>{question.prompt}</h4><div className="empty">No responses yet</div></div>
-  }
-  if (rows.length <= 5) {
-    const donutRows = rows.map((r, i) => ({ ...r, color: colorFor(tileIndex * 2 + i) }))
-    return (
-      <div className="choice-tile" style={tileStyle}>
-        <h4>{question.prompt}</h4>
-        <div className="donut-card">
-          <Donut rows={donutRows} />
-          <div className="donut-legend">
-            {donutRows.map((r) => <div className="row" key={r.id}><span className="swatch" style={{ background: r.color }} />{r.label}<b>{r.count}</b></div>)}
-          </div>
-        </div>
-      </div>
-    )
-  }
+function ResponsePatterns({ selections, clouds }) {
+  if (!selections.length && !clouds.length) return null
   return (
-    <div className="choice-tile choice-tile--wide" style={tileStyle}>
-      <h4>{question.prompt}</h4>
-      <div className="bars">
-        {rows.map((r) => (
-          <div className="bar-row" key={r.id}>
-            <div className="bar-label">{r.label}</div>
-            <div className="bar-track"><div className="bar-fill" style={{ width: `${r.pct}%`, background: gradientFill(baseColor) }} /></div>
-            <div className="bar-count">{r.count}</div>
-          </div>
+    <section className="report-section" aria-label="Response patterns">
+      <SectionHeading eyebrow="Response patterns" title="The choices behind the headline findings.">
+        <p>Every label is allowed to wrap so the report preserves participants’ language instead of shortening it for a chart.</p>
+      </SectionHeading>
+      <div className="pattern-grid">
+        {selections.map((question) => (
+          <article className="pattern-card" key={question.question_id}>
+            <h3>{question.prompt}</h3>
+            <p className="question-meta">{question.response_count || 0} responses</p>
+            <BarList rows={questionRows(question)} responseCount={question.response_count} />
+          </article>
         ))}
+        {clouds.map((question) => {
+          const words = [...(question.word_cloud || [])].sort((left, right) => right.count - left.count).slice(0, 28)
+          return (
+            <article className="pattern-card pattern-card--cloud" key={question.question_id}>
+              <h3>{question.prompt}</h3>
+              <p className="question-meta">{question.response_count || 0} responses</p>
+              {words.length ? <div className="word-cloud">{words.map((word) => <span key={word.word} style={{ fontSize: `${12 + Math.min(16, Number(word.count || 0))}px` }}>{word.word}<small>{word.count}</small></span>)}</div> : <p className="empty-state">{EMPTY_COPY}</p>}
+            </article>
+          )
+        })}
       </div>
-    </div>
+    </section>
   )
 }
 
-function PriorityBlock({ question, index }) {
-  const color = colorFor(index + 3)
-  const baseRows = question.question_type === 'ranking' ? barRows(question.ranking_scores, question.option_labels) : barRows(question.option_counts, question.option_labels)
-  const rows = baseRows.map((r, i) => ({ ...r, rank: i + 1 }))
-  const split = rows.length > 8
-  const cols = split ? [rows.slice(0, Math.ceil(rows.length / 2)), rows.slice(Math.ceil(rows.length / 2))] : [rows]
+function GuestVoices({ voices }) {
+  if (!voices.length) return null
   return (
-    <div className="priority-block">
-      <div className="subsection-title" style={{ '--accent': color }}>{question.prompt} — all {rows.length} response{rows.length === 1 ? '' : 's'}</div>
-      {rows.length ? (
-        <div className={split ? 'two-col' : ''}>
-          {cols.map((col, ci) => (
-            <div className="bars" key={ci}>
-              {col.map((r) => (
-                <div className="bar-row bar-row--ranked" key={r.id}>
-                  <span className={`rank-badge${r.rank === 1 ? ' rank-badge--gold' : ''}`}>{r.rank}</span>
-                  <div className="bar-label">{r.label}</div>
-                  <div className="bar-track"><div className="bar-fill" style={{ width: `${r.pct}%`, background: gradientFill(color) }} /></div>
-                  <div className="bar-count">{r.count}</div>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      ) : <div className="empty">No responses yet</div>}
-    </div>
+    <section className="voices" aria-label="Guest voices">
+      <div className="voices-heading"><span>What guests said</span><p>Representative staff-visible excerpts. Responses are not attributed to individuals.</p></div>
+      <div className="voice-grid">
+        {voices.map((voice, index) => <blockquote key={`${voice.prompt}-${index}`}><p>“{voice.text}”</p><footer>{voice.prompt}</footer></blockquote>)}
+      </div>
+    </section>
   )
+}
+
+function NumericSummary({ question }) {
+  const values = (question.numeric_values || []).map(Number).filter(Number.isFinite)
+  if (!values.length) return <p className="empty-state">{EMPTY_COPY}</p>
+  const total = values.reduce((sum, value) => sum + value, 0)
+  return <div className="numeric-summary"><div><strong>{(total / values.length).toFixed(1)}</strong><span>Average</span></div><div><strong>{Math.min(...values)}</strong><span>Lowest</span></div><div><strong>{Math.max(...values)}</strong><span>Highest</span></div></div>
+}
+
+function SpatialSummary({ question }) {
+  const points = question.points || []
+  if (!points.length) return <p className="empty-state">{EMPTY_COPY}</p>
+  return <div className="spatial-summary"><strong>{points.length}</strong><span>placements recorded</span><p>Spatial responses are retained in the activity data. This printable summary avoids inventing a heatmap when the source board or axes are unavailable.</p></div>
 }
 
 function QuestionCard({ question, index }) {
   const type = question.question_type
   const isRating = type in RATING_MAX
-  const isChoice = CHOICE_TYPES.includes(type)
   const isRanking = type === 'ranking'
-  const isNumber = type === 'number'
+  const isSingle = SINGLE_SELECT_TYPES.has(type)
+  const isMulti = MULTI_SELECT_TYPES.has(type)
+  const isText = TEXT_TYPES.has(type)
   const isWordCloud = type === 'word_cloud'
+  const isNumber = type === 'number'
   const isSpatial = type === 'quadrant' || type === 'image_click'
-  const isText = type === 'short_text' || type === 'long_text'
-  const textSamples = question.text_samples || []
-
+  const rows = questionRows(question)
+  const samples = question.text_samples || []
+  const textLike = isText || isWordCloud
   return (
-    <section className="q-card">
-      <div className="q-head">
-        <span className="q-index">Q{index + 1}</span>
-        <h2>{question.prompt}</h2>
-      </div>
-      <div className="q-meta">{question.response_count} response{question.response_count === 1 ? '' : 's'}</div>
-
-      {isChoice && (
-        <div className="bars">
-          {barRows(question.option_counts, question.option_labels).map((row) => (
-            <div className="bar-row" key={row.id}>
-              <div className="bar-label">{row.label}</div>
-              <div className="bar-track"><div className="bar-fill" style={{ width: `${row.pct}%` }} /></div>
-              <div className="bar-count">{row.count}</div>
-            </div>
-          ))}
-          {!Object.keys(question.option_counts || {}).length && <div className="empty">No responses yet</div>}
-        </div>
-      )}
-
-      {isRanking && (
-        <div className="bars">
-          {barRows(question.ranking_scores, question.option_labels).map((row) => (
-            <div className="bar-row" key={row.id}>
-              <div className="bar-label">{row.label}</div>
-              <div className="bar-track"><div className="bar-fill bar-fill--ranking" style={{ width: `${row.pct}%` }} /></div>
-              <div className="bar-count">{row.count}</div>
-            </div>
-          ))}
-          {!Object.keys(question.ranking_scores || {}).length && <div className="empty">No responses yet</div>}
-        </div>
-      )}
-
-      {isRating && (
-        <div className="rating">
-          <div className="rating-avg">
-            <span className="rating-avg-num">{question.average_rating != null ? question.average_rating.toFixed(1) : '—'}</span>
-            <span className="rating-avg-max">/ {RATING_MAX[type]}</span>
-          </div>
-          <div className="bars">
-            {barRows(question.value_counts, null).map((row) => (
-              <div className="bar-row" key={row.id}>
-                <div className="bar-label">{row.label}</div>
-                <div className="bar-track"><div className="bar-fill" style={{ width: `${row.pct}%` }} /></div>
-                <div className="bar-count">{row.count}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {isNumber && (
-        <div className="q-meta">
-          {question.numeric_values?.length
-            ? `Average: ${(question.numeric_values.reduce((a, b) => a + b, 0) / question.numeric_values.length).toFixed(1)} (n=${question.numeric_values.length})`
-            : 'No responses yet'}
-        </div>
-      )}
-
-      {isWordCloud && (
-        <div className="cloud">
-          {(question.word_cloud || []).length
-            ? question.word_cloud.map((entry) => (
-                <span className="cloud-tag" key={entry.word} style={{ fontSize: `${12 + Math.min(entry.count, 20)}px` }}>{entry.word}</span>
-              ))
-            : <div className="empty">No responses yet</div>}
-        </div>
-      )}
-
-      {isSpatial && (
-        <div className="q-meta">
-          {question.points?.length ? `${question.points.length} placements recorded` : 'No responses yet'}
-        </div>
-      )}
-
-      {(isText || isWordCloud) && textSamples.length > 0 && (
-        <ul className="samples">
-          {textSamples.map((sample, i) => <li key={i}>&ldquo;{sample}&rdquo;</li>)}
-        </ul>
-      )}
-      {isText && textSamples.length === 0 && <div className="empty">No responses yet</div>}
-    </section>
+    <article className={`question-card${textLike ? ' question-card--text' : ''}`}>
+      <header className="question-header"><span>Q{index + 1}</span><div><h3>{question.prompt}</h3><p>{question.response_count || 0} response{question.response_count === 1 ? '' : 's'} · {type.replaceAll('_', ' ')}</p></div></header>
+      {isRating && <div className="appendix-rating"><strong>{displayRating(question, 1)}</strong><span>/ {ratingMax(question)}</span><BarList rows={rowsFromCounts(question.value_counts)} responseCount={question.response_count} /></div>}
+      {(isSingle || isMulti) && <BarList rows={rows} responseCount={question.response_count} multiple={isMulti} />}
+      {isRanking && <BarList rows={rows} responseCount={question.response_count} ranked />}
+      {isNumber && <NumericSummary question={question} />}
+      {isWordCloud && <div className="word-cloud word-cloud--appendix">{(question.word_cloud || []).map((word) => <span key={word.word}>{word.word}<small>{word.count}</small></span>)}</div>}
+      {isSpatial && <SpatialSummary question={question} />}
+      {isText && !samples.length && <p className="empty-state">{EMPTY_COPY}</p>}
+      {textLike && samples.length > 0 && <div className="response-excerpts"><span>Staff-visible response excerpts</span>{samples.map((sample, sampleIndex) => <p key={sampleIndex}>“{sample}”</p>)}</div>}
+      {!isRating && !isSingle && !isMulti && !isRanking && !isNumber && !isWordCloud && !isSpatial && !isText && <p className="empty-state">This question type has no printable summary yet. Its response count is retained above.</p>}
+    </article>
   )
+}
+
+function ReportStyles() {
+  return <style>{`
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body { background: #edf1f6; margin: 0; }
+    .report-loading, .report-error { color: #152238; font: 500 16px/1.5 Inter, ui-sans-serif, system-ui, sans-serif; padding: 48px; }
+    .report-document { --ink:#13233d; --muted:#637086; --paper:#fffdf8; --line:#dce2ea; --violet:#6b5ce7; --teal:#159f91; --amber:#d88911; --pale-violet:#eeebff; --pale-teal:#e2f5f0; --pale-amber:#fff1d8; background:var(--paper); color:var(--ink); font-family:Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin:0 auto; max-width:1000px; padding:30px 38px 44px; }
+    .report-document * { box-sizing:border-box; }
+    .report-masthead { align-items:center; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; padding-bottom:15px; }
+    .report-brand { align-items:center; display:flex; font-size:12px; font-weight:800; gap:9px; letter-spacing:.18em; }
+    .report-mark { align-items:center; background:var(--ink); border-radius:7px; color:#fff; display:inline-flex; font-family:Georgia, serif; font-size:19px; font-weight:700; height:25px; justify-content:center; letter-spacing:-.08em; width:25px; }
+    .report-masthead-meta { color:var(--muted); display:flex; font-size:10px; font-weight:750; gap:8px; letter-spacing:.12em; text-transform:uppercase; }
+    .report-masthead-meta i { background:var(--line); height:12px; width:1px; }
+    .report-cover { min-height:640px; padding:0 0 28px; }
+    .cover-kicker, .section-eyebrow, .question-kicker { color:var(--violet); font-size:10px; font-weight:800; letter-spacing:.15em; margin:52px 0 14px; text-transform:uppercase; }
+    .cover-title { font-family:Georgia, "Times New Roman", serif; font-size:46px; font-weight:600; letter-spacing:-.048em; line-height:1.03; margin:0; max-width:730px; }
+    .cover-deck { color:#53627a; font-size:16px; line-height:1.55; margin:18px 0 26px; max-width:710px; }
+    .cover-facts { align-items:center; color:var(--muted); display:flex; flex-wrap:wrap; font-size:11px; gap:12px; margin-bottom:30px; }
+    .cover-facts strong { color:var(--ink); display:block; font-size:11px; }
+    .cover-facts i { background:var(--line); height:25px; width:1px; }
+    .metric-strip { border:1px solid var(--line); border-radius:16px; display:grid; grid-template-columns:repeat(4,1fr); margin:24px 0; overflow:hidden; }
+    .metric { border-left:1px solid var(--line); min-height:86px; padding:17px 16px; }
+    .metric:first-child { border-left:0; }
+    .metric strong { display:block; font-family:Georgia, serif; font-size:30px; font-weight:600; letter-spacing:-.04em; line-height:1; }
+    .metric span { color:var(--muted); display:block; font-size:9px; font-weight:800; letter-spacing:.1em; margin-top:7px; text-transform:uppercase; }
+    .metric small { color:var(--muted); display:block; font-size:10px; margin-top:3px; }
+    .cover-decision-heading { align-items:baseline; display:flex; gap:15px; justify-content:space-between; margin-top:28px; }
+    .cover-decision-heading h2 { font-family:Georgia, serif; font-size:25px; font-weight:600; letter-spacing:-.03em; margin:0; }
+    .cover-decision-heading p { color:var(--muted); font-size:11px; margin:0; text-align:right; }
+    .decision-grid { display:grid; gap:12px; grid-template-columns:repeat(3,1fr); margin-top:14px; }
+    .decision-card { border:1px solid var(--line); border-radius:14px; min-height:158px; padding:17px; }
+    .decision-card--positive { background:var(--pale-teal); border-color:#cce9e2; }
+    .decision-card--attention { background:var(--pale-amber); border-color:#f1d69d; }
+    .decision-card--planning { background:var(--pale-violet); border-color:#dcd7ff; }
+    .decision-label { color:var(--muted); display:block; font-size:9px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
+    .decision-card h3 { font-family:Georgia, serif; font-size:18px; font-weight:600; letter-spacing:-.025em; line-height:1.15; margin:9px 0 3px; overflow-wrap:anywhere; }
+    .decision-value { display:inline-block; font-family:Georgia, serif; font-size:29px; font-weight:600; letter-spacing:-.045em; margin-top:5px; }
+    .decision-detail { color:var(--muted); display:inline-block; font-size:10px; margin-left:5px; }
+    .decision-card p { color:#4d5d73; font-size:11px; line-height:1.4; margin:8px 0 0; }
+    .cover-footer, .section-footer { color:var(--muted); display:flex; font-size:9px; justify-content:space-between; letter-spacing:.1em; margin-top:32px; text-transform:uppercase; }
+    .report-section { margin-top:38px; }
+    .section-heading { align-items:end; border-bottom:1px solid var(--line); display:flex; gap:28px; justify-content:space-between; margin-bottom:22px; padding-bottom:18px; }
+    .section-heading .section-eyebrow { margin:0 0 10px; }
+    .section-heading h2 { font-family:Georgia, serif; font-size:34px; font-weight:600; letter-spacing:-.042em; line-height:1.08; margin:0; }
+    .section-heading-aside { color:var(--muted); font-size:11px; line-height:1.45; max-width:250px; text-align:right; }
+    .scorecard { display:flex; flex-direction:column; gap:11px; }
+    .score-row { align-items:center; border-bottom:1px solid var(--line); display:grid; gap:14px; grid-template-columns:minmax(180px,1.1fr) minmax(130px,1fr) 72px 95px; padding:12px 0; }
+    .score-topic h3, .pattern-card h3, .priority-card h3 { font-size:13px; font-weight:750; line-height:1.35; margin:0; overflow-wrap:anywhere; }
+    .score-topic span, .question-meta { color:var(--muted); display:block; font-size:10px; margin-top:4px; }
+    .score-bar { background:#e9edf3; border-radius:999px; height:8px; overflow:hidden; }
+    .score-bar i { background:var(--violet); border-radius:inherit; display:block; height:100%; }
+    .score-row--positive .score-bar i { background:var(--teal); }
+    .score-row--attention .score-bar i { background:var(--amber); }
+    .score-number { align-items:baseline; display:flex; gap:3px; justify-content:flex-end; }
+    .score-number strong { font-family:Georgia, serif; font-size:24px; font-weight:600; letter-spacing:-.04em; }
+    .score-number span { color:var(--muted); font-size:10px; }
+    .score-state { color:var(--muted); font-size:10px; font-weight:750; text-align:right; }
+    .score-note { align-items:baseline; background:var(--ink); border-radius:14px; color:#fff; display:grid; gap:4px 10px; grid-template-columns:auto 1fr; margin-top:20px; padding:17px 20px; }
+    .score-note strong { color:#7ee3d4; font-family:Georgia, serif; font-size:28px; font-weight:600; letter-spacing:-.04em; }
+    .score-note span { font-size:10px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
+    .score-note p { color:#d6e2f0; font-size:11px; grid-column:1 / -1; line-height:1.45; margin:3px 0 0; }
+    .priority-grid, .pattern-grid { display:grid; gap:16px; grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .priority-card, .pattern-card { border:1px solid var(--line); border-radius:15px; break-inside:avoid; padding:18px; }
+    .priority-card { background:#faf9ff; border-color:#e2ddff; }
+    .question-kicker { margin:0 0 8px; }
+    .truncated-note { color:var(--muted); font-size:10px; margin:12px 0 0; }
+    .bar-list { display:flex; flex-direction:column; gap:10px; margin-top:16px; }
+    .bar-row { align-items:center; display:grid; gap:9px; grid-template-columns:minmax(110px,1.2fr) minmax(60px,1fr) 28px; }
+    .bar-row:has(.rank) { grid-template-columns:20px minmax(98px,1.2fr) minmax(60px,1fr) 28px; }
+    .rank { align-items:center; background:var(--pale-violet); border-radius:6px; color:var(--violet); display:inline-flex; font-size:10px; font-weight:800; height:20px; justify-content:center; width:20px; }
+    .bar-copy { min-width:0; }
+    .bar-copy span { display:block; font-size:11px; font-weight:650; line-height:1.25; overflow-wrap:anywhere; }
+    .bar-copy small { color:var(--muted); display:block; font-size:9px; line-height:1.3; margin-top:3px; }
+    .bar-track { background:#e9edf3; border-radius:999px; height:7px; overflow:hidden; }
+    .bar-track i { background:var(--violet); border-radius:inherit; display:block; height:100%; }
+    .priority-card .bar-track i { background:linear-gradient(90deg, var(--violet), #a095ff); }
+    .bar-value { font-family:Georgia, serif; font-size:17px; font-weight:600; text-align:right; }
+    .word-cloud { align-items:baseline; display:flex; flex-wrap:wrap; gap:8px 12px; margin-top:18px; }
+    .word-cloud span { color:var(--violet); font-weight:750; line-height:1; overflow-wrap:anywhere; }
+    .word-cloud small { color:var(--muted); font-size:9px; margin-left:3px; vertical-align:top; }
+    .voices { background:var(--ink); border-radius:17px; color:#fff; margin-top:24px; padding:22px; }
+    .voices-heading { align-items:baseline; display:flex; justify-content:space-between; }
+    .voices-heading span { font-family:Georgia, serif; font-size:25px; font-weight:600; letter-spacing:-.03em; }
+    .voices-heading p { color:#c7d7eb; font-size:10px; line-height:1.35; margin:0; max-width:280px; text-align:right; }
+    .voice-grid { display:grid; gap:10px; grid-template-columns:repeat(3,1fr); margin-top:18px; }
+    .voice-grid blockquote { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12); border-radius:11px; margin:0; min-height:112px; padding:14px; }
+    .voice-grid p { font-family:Georgia, serif; font-size:14px; line-height:1.32; margin:0; }
+    .voice-grid footer { color:#91e4d7; font-size:9px; line-height:1.3; margin-top:13px; overflow-wrap:anywhere; }
+    .appendix-heading { border-top:2px solid var(--ink); margin-top:38px; padding-top:25px; }
+    .appendix-heading h2 { font-family:Georgia, serif; font-size:32px; font-weight:600; letter-spacing:-.04em; margin:0; }
+    .appendix-heading p { color:var(--muted); font-size:12px; line-height:1.45; margin:9px 0 0; max-width:670px; }
+    .question-card { border:1px solid var(--line); border-radius:14px; break-inside:avoid; margin-top:16px; padding:18px; }
+    .question-card--text { break-inside:auto; }
+    .question-header { align-items:flex-start; display:grid; gap:11px; grid-template-columns:auto 1fr; }
+    .question-header > span { background:var(--pale-violet); border-radius:999px; color:var(--violet); font-size:10px; font-weight:850; letter-spacing:.08em; padding:6px 8px; }
+    .question-header h3 { font-size:14px; line-height:1.34; margin:0; overflow-wrap:anywhere; }
+    .question-header p { color:var(--muted); font-size:10px; margin:4px 0 0; text-transform:capitalize; }
+    .appendix-rating { align-items:baseline; border-bottom:1px solid var(--line); display:flex; gap:4px; margin:15px 0 2px; padding-bottom:12px; }
+    .appendix-rating > strong { color:var(--violet); font-family:Georgia, serif; font-size:34px; font-weight:600; letter-spacing:-.05em; }
+    .appendix-rating > span { color:var(--muted); font-size:12px; }
+    .appendix-rating .bar-list { flex:1; margin:0 0 0 22px; }
+    .numeric-summary { display:flex; gap:28px; margin-top:18px; }
+    .numeric-summary div { border-left:2px solid var(--violet); padding-left:10px; }
+    .numeric-summary strong { display:block; font-family:Georgia, serif; font-size:26px; font-weight:600; }
+    .numeric-summary span, .spatial-summary span { color:var(--muted); font-size:10px; font-weight:750; letter-spacing:.08em; text-transform:uppercase; }
+    .spatial-summary { align-items:baseline; display:flex; flex-wrap:wrap; gap:7px; margin-top:18px; }
+    .spatial-summary strong { color:var(--violet); font-family:Georgia, serif; font-size:31px; }
+    .spatial-summary p { color:var(--muted); flex-basis:100%; font-size:11px; line-height:1.4; margin:3px 0 0; }
+    .response-excerpts { border-left:2px solid var(--teal); margin-top:18px; padding-left:14px; }
+    .response-excerpts > span { color:var(--muted); font-size:9px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
+    .response-excerpts p { font-family:Georgia, serif; font-size:14px; line-height:1.4; margin:9px 0 0; }
+    .empty-state { color:var(--muted); font-size:12px; font-style:italic; margin:16px 0 0; }
+    .flb-report-ready { display:none; }
+    @media print {
+      @page { size:A4 landscape; margin:0; }
+      html, body { background:#fff; print-color-adjust:exact; -webkit-print-color-adjust:exact; }
+      .report-document { max-width:none; padding:0; }
+      .report-cover { break-after:page; min-height:166mm; page-break-after:always; }
+      .report-section--new-page, .appendix-heading { break-before:page; page-break-before:always; }
+      .report-section { margin-top:0; padding-top:0; }
+      .section-heading { break-after:avoid-page; page-break-after:avoid; }
+      .section-heading, .score-row, .priority-card, .pattern-card { break-inside:avoid; page-break-inside:avoid; }
+      .question-card { break-inside:avoid; page-break-inside:avoid; }
+      .question-card--text { break-inside:auto; page-break-inside:auto; }
+      .report-masthead { margin-top:0; }
+    }
+  `}</style>
 }
 
 export default function SurveyReportPage() {
   const { activityId } = useParams()
-  const query = new URLSearchParams(window.location.search)
-  const token = query.get('token') || ''
+  const token = new URLSearchParams(window.location.search).get('token') || ''
   const [report, setReport] = useState(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
     let cancelled = false
-    fetch(`/api/engagement/v1/activities/${activityId}/report`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => { if (!res.ok) throw new Error(`Report failed (${res.status})`); return res.json() })
+    fetch(`/api/engagement/v1/activities/${activityId}/report`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((response) => { if (!response.ok) throw new Error(`Report failed (${response.status})`); return response.json() })
       .then((data) => { if (!cancelled) setReport(data) })
-      .catch((err) => { if (!cancelled) setError(err.message) })
+      .catch((reason) => { if (!cancelled) setError(reason.message) })
     return () => { cancelled = true }
   }, [activityId, token])
 
+  const model = useMemo(() => {
+    if (!report) return null
+    const questions = report.questions || []
+    const categories = categorizeQuestions(questions)
+    const overall = categories.ratings.find((question) => /overall/i.test(question.prompt)) || categories.ratings[0] || null
+    const signals = getRatingSignals(categories.ratings)
+    const priorityCandidate = categories.priorities.map((question) => ({ question, row: topRow(question) })).filter((item) => item.row).sort((left, right) => right.row.count - left.row.count)[0]
+    const voices = collectVoices(categories.text)
+    const completion = report.survey_summary?.completion_rate ?? report.activity_summary?.response_rate
+    const stats = [
+      { label: 'Participant voices', value: formatNumber(report.participant_count), detail: 'Cohort reached' },
+      { label: 'Completion', value: completion == null ? '—' : `${completion}%`, detail: 'Started the survey' },
+      { label: 'Overall experience', value: overall ? `${displayRating(overall, 1)}/${ratingMax(overall)}` : '—', detail: overall ? `${overall.response_count || 0} ratings` : 'No rating question' },
+      { label: 'Responses', value: formatNumber(report.response_count), detail: report.survey_summary ? `Average ${formatDuration(report.survey_summary.avg_completion_seconds)}` : `${questions.length} questions` },
+    ]
+    const decisions = []
+    if (signals.strongest) decisions.push({ kind: 'positive', title: signals.strongest.prompt, value: `${displayRating(signals.strongest)}/${ratingMax(signals.strongest)}`, detail: `${signals.strongest.response_count || 0} ratings`, description: 'The strongest scored experience to protect as the program evolves.' })
+    if (signals.weakest && signals.weakest !== signals.strongest) decisions.push({ kind: 'attention', title: signals.weakest.prompt, value: `${displayRating(signals.weakest)}/${ratingMax(signals.weakest)}`, detail: `${signals.weakest.response_count || 0} ratings`, description: 'The clearest evidence-backed improvement opportunity.' })
+    if (priorityCandidate) decisions.push({ kind: 'planning', title: priorityCandidate.row.label, value: `${priorityCandidate.row.count}`, detail: 'mentions', description: `Most selected in “${priorityCandidate.question.prompt}”.` })
+    return { questions, categories, overall, voices, stats, decisions, completion }
+  }, [report])
+
   if (error) return <div className="report-error">{error}</div>
-  if (!report) return <div className="report-loading">Loading report…</div>
+  if (!report || !model) return <div className="report-loading">Loading report…</div>
 
-  const questions = report.questions || []
-  const { rating, choice, priority } = categorize(questions)
-  const overall = pickOverallRating(rating)
-  const findings = buildFindings(report, rating, choice, priority)
-  const generatedAt = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
-  const stats = [
-    { label: 'Participants', value: report.participant_count ?? 0 },
-    { label: 'Completion', value: report.survey_summary ? `${report.survey_summary.completion_rate}%` : (report.activity_summary ? `${report.activity_summary.response_rate}%` : '—') },
-    { label: 'Avg Time', value: report.survey_summary ? formatMMSS(report.survey_summary.avg_completion_seconds) : '—' },
-    { label: 'Overall Rating', value: overall?.average_rating != null ? `${overall.average_rating.toFixed(1)}/${RATING_MAX[overall.question_type]}` : '—' },
-    { label: 'Answers', value: report.response_count ?? 0 },
-  ]
-  const sections = [
-    'Executive Summary',
-    rating.length && 'Ratings Breakdown',
-    choice.length && 'Response Breakdown',
-    priority.length && 'Priorities & Requests',
-    'Full Question-by-Question Detail',
-  ].filter(Boolean)
-  let sectionCounter = 1
-  const execSectionNum = sectionCounter++
-  const ratingSectionNum = rating.length ? sectionCounter++ : null
-  const choiceSectionNum = choice.length ? sectionCounter++ : null
-  const prioritySectionNum = priority.length ? sectionCounter++ : null
-
+  const generatedAt = new Date().toLocaleDateString('en-US', { dateStyle: 'long' })
   return (
-    <div className="report-page">
-      <style>{`
-        * { box-sizing: border-box; }
-        body { margin: 0; }
-        .report-page { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1a1f2e; background: #fff; max-width: 900px; margin: 0 auto; }
-        .report-loading, .report-error { font-family: sans-serif; padding: 40px; color: #1a1f2e; }
-        .pdf-section { padding: 8px 4px 4px; break-after: page; page-break-after: always; }
+    <main className="report-document">
+      <ReportStyles />
+      <section className="report-cover">
+        <ReportMasthead report={report} section="Post-event report" />
+        <p className="cover-kicker">Decision brief · {generatedAt}</p>
+        <h1 className="cover-title">{reportTitle(report)}</h1>
+        <p className="cover-deck">{reportDeck(report)}</p>
+        <div className="cover-facts"><span><strong>Prepared for</strong>Event organizing team</span><i /><span><strong>Report type</strong>{pageLabel(report)}</span><i /><span><strong>Questions covered</strong>{model.questions.length}</span></div>
+        <MetricStrip metrics={model.stats} />
+        {model.decisions.length > 0 && <><div className="cover-decision-heading"><h2>What should guide planning now</h2><p>Evidence first. Clear next moves.</p></div><div className="decision-grid">{model.decisions.map((decision) => <DecisionCard key={`${decision.kind}-${decision.title}`} {...decision} />)}</div></>}
+        <footer className="cover-footer"><span>Festio · event intelligence</span><span>Report generated {generatedAt}</span></footer>
+      </section>
 
-        /* ---- cover ---- */
-        .cover-band { height: 68px; border-radius: 6px; margin-bottom: 18px; background: linear-gradient(100deg, #4f46e5, #0ea5a4 35%, #d97706 65%, #e11d48); position: relative; }
-        .cover-band span { position: absolute; left: 18px; bottom: 12px; color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; opacity: .92; }
-        .cover-eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: ${BRAND}; margin-bottom: 12px; }
-        .cover-title { font-size: 30px; line-height: 1.25; margin: 0 0 8px; font-weight: 800; }
-        .cover-sub { font-size: 14px; color: #6b7280; margin-bottom: 18px; }
-        .cover-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; border-top: 1px solid #e5e7eb; padding-top: 14px; margin-bottom: 20px; font-size: 12.5px; }
-        .cover-meta div span { display: block; color: #6b7280; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
-        .cover-toc { margin-top: 16px; }
-        .cover-toc h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: #6b7280; margin: 0 0 10px; }
-        .cover-toc ol { list-style: none; margin: 0; padding: 0; counter-reset: toc; }
-        .cover-toc li { counter-increment: toc; display: flex; align-items: baseline; gap: 10px; font-size: 13px; padding: 5px 0; border-bottom: 1px dotted #e5e7eb; }
-        .cover-toc li::before { content: counter(toc); font-weight: 700; color: ${BRAND}; width: 16px; }
+      <section className="report-section report-section--new-page" aria-label="Executive planning brief">
+        <SectionHeading eyebrow="Planning brief" title="A clearer way to read event feedback."><p>This report distinguishes evidence, planning choices, and response detail. It keeps the full question set without turning every answer into a dashboard.</p></SectionHeading>
+        <MetricStrip metrics={model.stats} />
+        <div className="decision-grid">{model.decisions.length ? model.decisions.map((decision) => <DecisionCard key={`brief-${decision.kind}-${decision.title}`} {...decision} />) : <p className="empty-state">There is not enough scored or ranked feedback yet to derive planning signals.</p>}</div>
+        <GuestVoices voices={model.voices} />
+        <footer className="section-footer"><span>Festio · planning brief</span><span>{model.questions.length} questions retained in appendix</span></footer>
+      </section>
 
-        /* ---- headers ---- */
-        .sec-eyebrow { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #6b7280; display: flex; align-items: center; gap: 8px; }
-        .sec-eyebrow::before { content: ""; width: 16px; height: 3px; border-radius: 2px; background: ${BRAND}; }
-        .sec-title { font-size: 20px; font-weight: 800; margin: 5px 0 20px; padding-bottom: 12px; border-bottom: 2px solid ${BRAND}; }
-        .subsection-title { font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #1a1f2e; margin: 22px 0 12px; display: flex; align-items: center; gap: 8px; }
-        .subsection-title:first-of-type { margin-top: 0; }
-        .subsection-title::before { content: ""; width: 4px; height: 14px; background: var(--accent, ${BRAND}); border-radius: 2px; }
+      <RatingScorecard ratings={model.categories.ratings} overall={model.overall} />
+      <PrioritiesSection questions={model.categories.priorities} />
+      <ResponsePatterns selections={model.categories.selections} clouds={model.categories.clouds} />
 
-        /* ---- stats ---- */
-        .stat-row { display: flex; gap: 12px; margin-bottom: 20px; }
-        .stat { flex: 1; border: 1px solid; border-radius: 12px; padding: 14px 10px; text-align: center; box-shadow: 0 1px 2px rgba(20,22,55,.04); }
-        .stat .num { display: block; font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
-        .stat .label { display: block; margin-top: 3px; font-size: 9.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #6b7280; }
-
-        /* ---- findings ---- */
-        .findings { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 13px; }
-        .findings li { display: flex; gap: 13px; font-size: 13px; line-height: 1.6; }
-        .findings .num-badge { flex: none; width: 24px; height: 24px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 11.5px; display: flex; align-items: center; justify-content: center; }
-
-        /* ---- donut ---- */
-        .donut-card { display: flex; align-items: center; gap: 16px; }
-        .donut-legend { font-size: 11px; }
-        .donut-legend .row { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
-        .donut-legend .swatch { width: 9px; height: 9px; border-radius: 2px; flex: none; }
-        .donut-legend .row b { font-variant-numeric: tabular-nums; margin-left: auto; padding-left: 12px; }
-
-        /* ---- bars ---- */
-        .bars { display: flex; flex-direction: column; gap: 9px; }
-        .bar-row { display: grid; grid-template-columns: 160px 1fr 32px; align-items: center; gap: 10px; font-size: 12px; }
-        .bar-row--ranked { grid-template-columns: 20px 150px 1fr 32px; }
-        .bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .bar-track { background: #f1f1f8; border-radius: 999px; height: 11px; overflow: hidden; box-shadow: inset 0 1px 2px rgba(20,22,55,.06); }
-        .bar-fill { height: 100%; border-radius: 999px; background: ${gradientFill(BRAND)}; }
-        .bar-fill--ranking { background: ${gradientFill('#0d9488')}; }
-        .bar-count { text-align: right; color: #6b7280; font-variant-numeric: tabular-nums; font-weight: 600; }
-        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
-        .rank-badge { display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 6px; background: #f1f1f8; color: #6b7280; font-size: 9.5px; font-weight: 800; }
-        .rank-badge--gold { background: linear-gradient(135deg, #fcd34d, #d97706); color: #fff; }
-
-        /* ---- rating table ---- */
-        .rating-list { display: flex; flex-direction: column; gap: 10px; }
-        .rating-row { display: grid; grid-template-columns: 1fr 140px 40px; align-items: center; gap: 10px; font-size: 12px; }
-        .rating-row.overall { background: #fef3e2; margin: -4px -10px 4px; padding: 9px 10px; border-radius: 8px; }
-        .rating-row.overall .rating-label { font-weight: 700; }
-        .rating-track { background: #f1f1f8; border-radius: 999px; height: 11px; overflow: hidden; box-shadow: inset 0 1px 2px rgba(20,22,55,.06); }
-        .rating-fill { height: 100%; border-radius: 999px; }
-        .rating-val { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
-
-        /* ---- choice grid ---- */
-        .choice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-        .choice-tile { border: 1px solid; border-radius: 16px; padding: 17px 19px; break-inside: avoid; page-break-inside: avoid; box-shadow: 0 2px 8px rgba(20,22,55,.05); }
-        .choice-tile--wide { grid-column: 1 / -1; }
-        .choice-tile h4 { font-size: 12.5px; margin: 0 0 12px; }
-
-        /* ---- cloud ---- */
-        .cloud { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
-        .cloud-tag { font-weight: 700; }
-
-        /* ---- priority blocks ---- */
-        .priority-block { margin-bottom: 24px; break-inside: avoid; page-break-inside: avoid; }
-        .priority-block:last-child { margin-bottom: 0; }
-
-        /* ---- appendix divider ---- */
-        .appendix-divider { display: flex; align-items: center; gap: 14px; margin: 4px 4px 22px; }
-        .appendix-divider .line { flex: 1; height: 1px; background: #e5e7eb; }
-        .appendix-divider span { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #6b7280; white-space: nowrap; }
-
-        /* ---- appendix question cards ---- */
-        .q-card { break-inside: avoid; page-break-inside: avoid; border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px 20px; margin: 0 4px 16px; }
-        .q-head { display: flex; align-items: baseline; gap: 10px; }
-        .q-index { font-size: 12px; font-weight: 700; color: ${BRAND}; background: ${tint(BRAND, '14')}; border-radius: 6px; padding: 2px 8px; }
-        .q-head h2 { font-size: 16px; margin: 0; }
-        .q-meta { color: #6b7280; font-size: 12px; margin: 6px 0 12px; }
-        .rating-avg { display: flex; align-items: baseline; gap: 4px; margin-bottom: 12px; }
-        .rating-avg-num { font-size: 28px; font-weight: 700; color: ${BRAND}; }
-        .rating-avg-max { color: #6b7280; font-size: 13px; }
-        .samples { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: #374151; }
-        .samples li { margin-bottom: 6px; }
-        .empty { color: #9ca3af; font-size: 12px; font-style: italic; }
-      `}</style>
-
-      {/* COVER */}
-      <div className="pdf-section">
-        <div className="cover-band"><span>Festio Live · Survey Report</span></div>
-        <div className="cover-eyebrow">Survey Results Report</div>
-        <div className="cover-title">{report.title}</div>
-        <div className="cover-sub">{report.description || 'Full results from this event’s feedback survey'}</div>
-        <div className="cover-meta">
-          <div><span>Survey type</span>{report.type === 'feedback' ? 'Feedback' : 'Survey'}</div>
-          <div><span>Prepared for</span>The event organizing team</div>
-          <div><span>Questions</span>{questions.length}</div>
-          <div><span>Generated</span>{generatedAt}</div>
-        </div>
-        <StatTiles stats={stats} />
-        <div className="cover-toc">
-          <h3>Contents</h3>
-          <ol>{sections.map((s) => <li key={s}>{s}</li>)}</ol>
-        </div>
-      </div>
-
-      {/* EXECUTIVE SUMMARY */}
-      <div className="pdf-section">
-        <div className="sec-eyebrow">Section {execSectionNum}</div>
-        <div className="sec-title">Executive Summary</div>
-        <StatTiles stats={stats} />
-        {findings.length > 0 && <>
-          <div className="subsection-title">Key findings</div>
-          <ol className="findings">
-            {findings.map((text, i) => (
-              <li key={i}><span className="num-badge" style={{ background: colorFor(i) }}>{i + 1}</span><span>{text}</span></li>
-            ))}
-          </ol>
-        </>}
-      </div>
-
-      {/* RATINGS */}
-      {rating.length > 0 && (
-        <div className="pdf-section">
-          <div className="sec-eyebrow">Section {ratingSectionNum} · Survey Insights Wall</div>
-          <div className="sec-title">Ratings Breakdown</div>
-          <div className="rating-list">
-            {rating.map((q, i) => {
-              const isOverall = q === overall
-              const max = RATING_MAX[q.question_type]
-              const pct = q.average_rating != null ? (q.average_rating / max) * 100 : 0
-              return (
-                <div className={`rating-row${isOverall ? ' overall' : ''}`} key={q.question_id}>
-                  <div className="rating-label">{q.prompt}</div>
-                  <div className="rating-track"><div className="rating-fill" style={{ width: `${pct}%`, background: isOverall ? gradientFill('#d97706') : gradientFill(colorFor(i)) }} /></div>
-                  <div className="rating-val">{q.average_rating != null ? q.average_rating.toFixed(2) : '—'}</div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* CHOICE BREAKDOWN */}
-      {choice.length > 0 && (
-        <div className="pdf-section">
-          <div className="sec-eyebrow">Section {choiceSectionNum} · Survey Insights Wall</div>
-          <div className="sec-title">Response Breakdown</div>
-          <div className="choice-grid">
-            {choice.map((q, i) => <ChoiceTile key={q.question_id} question={q} tileIndex={i} />)}
-          </div>
-        </div>
-      )}
-
-      {/* PRIORITIES */}
-      {priority.length > 0 && (
-        <div className="pdf-section">
-          <div className="sec-eyebrow">Section {prioritySectionNum} · Survey Insights Wall</div>
-          <div className="sec-title">Priorities &amp; Requests</div>
-          {priority.map((q, i) => <PriorityBlock key={q.question_id} question={q} index={i} />)}
-        </div>
-      )}
-
-      {/* APPENDIX */}
-      <div className="appendix-divider"><div className="line" /><span>Full question-by-question detail</span><div className="line" /></div>
-      {questions.map((question, index) => <QuestionCard key={question.question_id} question={question} index={index} />)}
-
-      <div className="flb-report-ready" style={{ display: 'none' }} />
-    </div>
+      <section className="appendix-heading" aria-label="Question-by-question detail"><p className="section-eyebrow">Complete evidence</p><h2>Question-by-question detail</h2><p>Every question is retained below. Open-text excerpts are the staff-visible samples supplied to this report, not attributed to individuals.</p></section>
+      {model.questions.map((question, index) => <QuestionCard key={question.question_id || index} question={question} index={index} />)}
+      <div className="flb-report-ready" aria-hidden="true" />
+    </main>
   )
 }

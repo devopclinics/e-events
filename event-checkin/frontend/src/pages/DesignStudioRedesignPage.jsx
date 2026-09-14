@@ -1428,6 +1428,11 @@ export default function DesignStudioRedesignPage() {
                     <input className="rd-field" style={{ marginBottom: 0 }} value={wording[key] || ''} onChange={(e) => setWording((w) => ({ ...w, [key]: e.target.value }))} />
                   </div>
                 ))}
+                <div className="rd-toggle-row" style={{ marginTop: 10 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600 }}>Hide guest-count text in category dropdown</span>
+                  <label className="rd-switch"><input type="checkbox" checked={!!wording.hideCategoryGuestCount} onChange={(e) => setWording((w) => ({ ...w, hideCategoryGuestCount: e.target.checked }))} /><span className="track" /><span className="knob" /></label>
+                </div>
+                <p className="rd-hint" style={{ marginTop: 4 }}>When on, the registrant category dropdown shows just the category name (e.g. "Invited Guest") instead of "Invited Guest - up to 10 additional guests". The guest limit is still enforced.</p>
               </div>
             </div>
 

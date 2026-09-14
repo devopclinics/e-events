@@ -783,7 +783,9 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {} }) {
                       const effectiveLimit = singleGuest ? 0 : limit
                       return (
                       <option key={label} value={label}>
-                        {effectiveLimit <= 0
+                        {dWording.hideCategoryGuestCount
+                          ? label
+                          : effectiveLimit <= 0
                           ? `${label} - submitter only`
                           : `${label} - up to ${effectiveLimit} additional guest${effectiveLimit === 1 ? '' : 's'}`}
                       </option>

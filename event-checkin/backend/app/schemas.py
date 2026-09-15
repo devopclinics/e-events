@@ -2175,6 +2175,9 @@ class JourneyStep(BaseModel):
     scanned_at: datetime
     denied: bool = False
     deny_reason: Optional[str] = None
+    scanned_by_user_id: Optional[str] = None
+    scanned_by_name: Optional[str] = None
+    scanned_by_email: Optional[str] = None
 
 
 # ── Menu ─────────────────────────────────────────────────────────────────────

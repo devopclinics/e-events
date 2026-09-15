@@ -39,9 +39,15 @@ def _guest_payload(guest: Guest) -> dict[str, Any]:
 
 def guest_is_festiome_eligible(guest: Guest, event: Event | None = None) -> bool:
     """Return whether a guest should be an event's FestioMe member."""
-    return guest.rsvp_status == "confirmed" or bool(
+    rsvp_eligible = guest.rsvp_status == "confirmed" or bool(
         event and not event.rsvp_enabled and guest.rsvp_status == "invited"
     )
+    if not rsvp_eligible:
+        return False
+    policy = (event.festiome_access_policy or {}) if event else {}
+    if policy.get("mode") == "approved_adults":
+        return guest.id in set(policy.get("adult_guest_ids") or [])
+    return True
 
 
 def queue_guest_sync(

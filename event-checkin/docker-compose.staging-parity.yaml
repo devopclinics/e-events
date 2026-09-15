@@ -1,0 +1,30 @@
+services:
+  backend:
+    image: dclinics/events:backend-3.0.16-ncnmo-staging
+    pull_policy: never
+  frontend:
+    image: dclinics/events:frontend-3.1.1
+  dashboard-service:
+    image: dclinics/events:dashboard-3.0.6
+  engagement-service:
+    image: dclinics/events:engagement-3.0.7
+  engagement-worker:
+    image: dclinics/events:engagement-3.0.7
+  design-service:
+    image: dclinics/events:design-3.1.1
+  festiome-service:
+    image: dclinics/events:festiome-3.1.1
+  marketing-service:
+    image: dclinics/events:marketing-3.1.1
+  messaging-service:
+    image: dclinics/events:messaging-3.1.1
+  planner-service:
+    image: dclinics/events:planner-3.1.1
+  setup-service:
+    image: dclinics/events:setup-3.1.1
+  support-service:
+    image: dclinics/events:support-3.1.1
+  support-worker:
+    image: dclinics/events:support-3.1.1
+  ticketing-service:
+    image: dclinics/events:ticketing-3.1.1

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth import _org_role, is_org_manager, require_dashboard_access, require_event_admin, require_event_member
 from ..config import settings
 from ..database import get_db
+from ..timeutil import resolve_tz
 from ..models import ConsentForm, ConsentSignature, EngagementSyncOutbox, Event, EventUser, ExperienceEvent, ExperienceStep, ExperienceWorkflow, FeedbackSubmission, Guest, GuestExperienceProgress, InboundEmailAutomation, SeatingTable, TableGroup, TableGroupTable, User
 from .seating import assign_next_seat, group_table_ids
 from ..schemas import (
@@ -519,17 +520,17 @@ def _session_config(step: ExperienceStep) -> dict:
     return {key: value for key, value in session.items() if value not in (None, "")}
 
 
-def _session_now() -> datetime:
-    return datetime.now(EVENT_TZ)
+def _session_now(timezone_name=None) -> datetime:
+    return datetime.now(resolve_tz(timezone_name))
 
 
-def _parse_session_datetime(session: dict, time_key: str) -> datetime | None:
+def _parse_session_datetime(session: dict, time_key: str, timezone_name=None) -> datetime | None:
     date = str(session.get("date") or "").strip()
     time_value = str(session.get(time_key) or "").strip()
     if not date or not time_value:
         return None
     try:
-        return datetime.fromisoformat(f"{date}T{time_value}").replace(tzinfo=EVENT_TZ)
+        return datetime.fromisoformat(f"{date}T{time_value}").replace(tzinfo=resolve_tz(timezone_name))
     except ValueError:
         return None
 
@@ -547,26 +548,26 @@ def _session_check_in_window_minutes(session: dict) -> int | None:
     return value
 
 
-def _assert_session_check_in_open(session: dict) -> None:
+def _assert_session_check_in_open(session: dict, timezone_name=None) -> None:
     window_minutes = _session_check_in_window_minutes(session)
     if window_minutes is None:
         return
-    start_at = _parse_session_datetime(session, "start_time")
+    start_at = _parse_session_datetime(session, "start_time", timezone_name)
     if not start_at:
         return
-    now = _session_now()
+    now = _session_now(timezone_name)
     opens_at = start_at - timedelta(minutes=window_minutes)
     if now < opens_at:
         raise HTTPException(
             409,
             f"Session check-in opens {window_minutes} minutes before start time.",
         )
-    ends_at = _parse_session_datetime(session, "end_time")
+    ends_at = _parse_session_datetime(session, "end_time", timezone_name)
     if ends_at and now > ends_at:
         raise HTTPException(409, "Session check-in is closed for this session.")
 
 
-def _session_check_in_metadata(step: ExperienceStep, metadata: dict | None) -> dict:
+def _session_check_in_metadata(step: ExperienceStep, metadata: dict | None, timezone_name=None) -> dict:
     session = _session_config(step)
     if not any(str(value or "").strip() for value in session.values()):
         raise HTTPException(409, "Session attendance steps need session details before guests can be checked in")
@@ -574,7 +575,7 @@ def _session_check_in_metadata(step: ExperienceStep, metadata: dict | None) -> d
     action = (metadata or {}).get("action")
     if action != "session_check_in":
         raise HTTPException(409, "Session attendance must be recorded as a session check-in")
-    _assert_session_check_in_open(session)
+    _assert_session_check_in_open(session, timezone_name)
 
     return {
         **(metadata or {}),
@@ -1699,7 +1700,7 @@ async def update_guest_step_progress(
         room_assignment = await _assign_room_for_step(event, guest, step, db, existing_metadata)
         metadata = {**(metadata or {}), "room_assignment": room_assignment}
     if data.status == "completed" and step.type == "session_attendance":
-        metadata = _session_check_in_metadata(step, metadata)
+        metadata = _session_check_in_metadata(step, metadata, event.timezone)
 
     newly_completed = False
     if data.status == "completed":

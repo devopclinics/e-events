@@ -291,8 +291,14 @@ async def mark_category_served(
         raise HTTPException(404, "Guest not found")
 
     service = await _default_service_for_category(event_id, cat, db)
+    if service.status != "open":
+        raise HTTPException(409, f"{service.name} is {service.status}; meal collection is closed")
     existing = await db.scalar(select(GuestMealService).where(
         GuestMealService.service_id == service.id, GuestMealService.guest_id == guest_id))
+    if existing and existing.eligibility_status != "eligible":
+        raise HTTPException(403, "Guest is not eligible for this meal service")
+    if existing and existing.fulfillment_status == "served":
+        return {"ok": True, "already_served": True, "served_at": existing.served_at}
     if existing:
         existing.fulfillment_status = "served"
         existing.served_at = datetime.utcnow()
@@ -306,7 +312,7 @@ async def mark_category_served(
         ))
     await _sync_legacy_meal_served(guest_id, db)
     await db.commit()
-    return {"ok": True}
+    return {"ok": True, "already_served": False}
 
 
 @router.delete("/{event_id}/menu-categories/{category_id}/guests/{guest_id}/served", status_code=204)

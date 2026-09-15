@@ -36,12 +36,16 @@ async def access_event(event_id: str, db: AsyncSession) -> Event:
 
 
 async def zone_occupancy(zone_id: str, db: AsyncSession) -> int:
-    """How many guests are currently inside a zone: non-denied ins minus outs."""
-    ins = await db.scalar(select(func.count(ScanEvent.id)).where(
-        ScanEvent.zone_id == zone_id, ScanEvent.direction == "in", ScanEvent.denied.is_(False))) or 0
-    outs = await db.scalar(select(func.count(ScanEvent.id)).where(
-        ScanEvent.zone_id == zone_id, ScanEvent.direction == "out", ScanEvent.denied.is_(False))) or 0
-    return max(int(ins) - int(outs), 0)
+    """Count guests whose latest accepted movement in this zone is an entry."""
+    rows = (await db.execute(
+        select(ScanEvent.guest_id, ScanEvent.direction)
+        .where(ScanEvent.zone_id == zone_id, ScanEvent.denied.is_(False))
+        .order_by(ScanEvent.guest_id, ScanEvent.scanned_at.desc(), ScanEvent.id.desc())
+    )).all()
+    latest: dict[str, str] = {}
+    for guest_id, direction in rows:
+        latest.setdefault(guest_id, direction)
+    return sum(direction == "in" for direction in latest.values())
 
 
 def _zones_of_ticket(tt: TicketType | None) -> set[str] | None:
@@ -305,8 +309,17 @@ async def journey(event_id: str, gid: str, db: AsyncSession = Depends(get_db),
     )).scalars().all()
     names = {z.id: z.name for z in (await db.execute(
         select(Zone).where(Zone.event_id == event_id))).scalars().all()}
+    actor_ids = {s.scanned_by for s in rows if s.scanned_by}
+    actors = {}
+    if actor_ids:
+        actors = {u.id: u for u in (await db.execute(
+            select(User).where(User.id.in_(actor_ids))
+        )).scalars().all()}
     return [
         JourneyStep(zone_name=names.get(s.zone_id), direction=s.direction,
-                    scanned_at=s.scanned_at, denied=s.denied, deny_reason=s.deny_reason)
+                    scanned_at=s.scanned_at, denied=s.denied, deny_reason=s.deny_reason,
+                    scanned_by_user_id=s.scanned_by,
+                    scanned_by_name=actors[s.scanned_by].name if s.scanned_by in actors else None,
+                    scanned_by_email=actors[s.scanned_by].email if s.scanned_by in actors else None)
         for s in rows
     ]

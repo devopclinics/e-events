@@ -349,6 +349,12 @@ async def test_venue_access_zones_tickets_occupancy_journey(ctx):
     assert r["status"] == "ok" and r["denied"] is False
     assert r["occupancy"] == 1
 
+    # A repeated IN is retained as a denied audit attempt and cannot inflate occupancy.
+    duplicate_in = await _scan_zone(ctx, t1, hall, "in")
+    assert duplicate_in["denied"] is True
+    assert duplicate_in["deny_reason"] == "Guest is already inside this zone"
+    assert duplicate_in["occupancy"] == 1
+
     # GA ticket is NOT allowed into the VIP zone → denied.
     r = await _scan_zone(ctx, t1, vip, "in")
     assert r["status"] == "denied" and r["denied"] is True
@@ -367,6 +373,16 @@ async def test_venue_access_zones_tickets_occupancy_journey(ctx):
     out = await _scan_zone(ctx, t1, hall, "out")
     assert out["direction"] == "out" and out["occupancy"] == 1
 
+    # A repeated OUT is denied, while a fresh re-entry starts a new visit.
+    duplicate_out = await _scan_zone(ctx, t1, hall, "out")
+    assert duplicate_out["denied"] is True
+    assert duplicate_out["deny_reason"] == "Guest is already outside this zone"
+    assert duplicate_out["occupancy"] == 1
+    reentry = await _scan_zone(ctx, t1, hall, "in")
+    assert reentry["denied"] is False and reentry["occupancy"] == 2
+    second_out = await _scan_zone(ctx, t1, hall, "out")
+    assert second_out["denied"] is False and second_out["occupancy"] == 1
+
     # VIP ticket may enter the VIP zone freely.
     assert (await _scan_zone(ctx, t3, vip, "in"))["denied"] is False
 
@@ -375,7 +391,8 @@ async def test_venue_access_zones_tickets_occupancy_journey(ctx):
     dirs = [(s["zone_name"], s["direction"], s["denied"]) for s in journey]
     assert ("Main Hall", "in", False) in dirs
     assert ("Main Hall", "out", False) in dirs
-    assert any(d for _, _, d in dirs)  # the denied VIP attempt is recorded
+    assert any(d for _, _, d in dirs)  # denied attempts are recorded
+    assert all(step["scanned_by_user_id"] == ctx.ids["superadmin"].id for step in journey)
 
 
 # ── 6. Entry rules: tag-based gates allow/deny with auto zone+direction ─────────

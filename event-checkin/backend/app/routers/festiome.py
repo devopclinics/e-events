@@ -78,6 +78,11 @@ class FestioMeStatus(BaseModel):
     detail: str | None = None
 
 
+class FestioMeAccessPolicyRequest(BaseModel):
+    mode: Literal["all_eligible", "approved_adults"] = "all_eligible"
+    adult_guest_ids: list[str] = Field(default_factory=list)
+
+
 class GuestPassExchange(BaseModel):
     pass_token: str = Field(min_length=20, max_length=200)
 
@@ -173,6 +178,65 @@ async def festiome_status(
         name=link.name,
         open_url=link.open_url,
     )
+
+
+@router.get("/{event_id}/festiome/access-policy")
+async def get_festiome_access_policy(
+    event_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_paid_event_admin),
+):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    policy = event.festiome_access_policy or {"mode": "all_eligible", "adult_guest_ids": []}
+    guests = (await db.execute(
+        select(Guest).where(Guest.event_id == event_id).order_by(Guest.last_name, Guest.first_name)
+    )).scalars().all()
+    allowed = set(policy.get("adult_guest_ids") or [])
+    return {
+        "mode": policy.get("mode", "all_eligible"),
+        "adult_guest_ids": list(allowed),
+        "guests": [
+            {
+                "id": guest.id,
+                "name": f"{guest.first_name} {guest.last_name}".strip(),
+                "approved": guest.id in allowed,
+            }
+            for guest in guests
+        ],
+    }
+
+
+@router.put("/{event_id}/festiome/access-policy")
+async def set_festiome_access_policy(
+    event_id: str,
+    data: FestioMeAccessPolicyRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_paid_event_admin),
+):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    guests = (await db.execute(select(Guest).where(Guest.event_id == event_id))).scalars().all()
+    known_ids = {guest.id for guest in guests}
+    requested = set(data.adult_guest_ids)
+    if requested - known_ids:
+        raise HTTPException(400, "Every approved adult must be a guest in this event")
+    event.festiome_access_policy = {
+        "mode": data.mode,
+        "adult_guest_ids": sorted(requested) if data.mode == "approved_adults" else [],
+    }
+    revision = f"access-policy:{datetime.utcnow().isoformat(timespec='microseconds')}"
+    for guest in guests:
+        queue_guest_sync(db, guest, event=event, revision=revision)
+    await db.commit()
+    return {
+        "mode": data.mode,
+        "adult_guest_ids": event.festiome_access_policy["adult_guest_ids"],
+        "queued": len(guests),
+    }
+
 
 
 @router.post("/{event_id}/festiome/enable", response_model=FestioMeStatus)

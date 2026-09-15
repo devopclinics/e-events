@@ -473,6 +473,8 @@ class Event(Base):
     platform_addon_overrides: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     addon_promo_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # Cached integration state only; FestioMe data remains service-owned.
+    # Optional event policy. approved_adults limits guest community access to an explicit guest-id allowlist.
+    festiome_access_policy: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     festiome_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     festiome_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     festiome_open_url: Mapped[str | None] = mapped_column(String(500), nullable=True)

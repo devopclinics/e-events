@@ -428,7 +428,7 @@ async def test_session_attendance_respects_check_in_window(ctx, monkeypatch):
     monkeypatch.setattr(
         experience_router,
         "_session_now",
-        lambda: datetime(2026, 7, 28, 8, 20, tzinfo=experience_router.EVENT_TZ),
+        lambda _timezone_name=None: datetime(2026, 7, 28, 8, 20, tzinfo=experience_router.EVENT_TZ),
     )
     early = await ctx.client.put(
         f"/api/events/{event_id}/experience/guests/{guest_id}/steps/{step_id}",
@@ -440,7 +440,7 @@ async def test_session_attendance_respects_check_in_window(ctx, monkeypatch):
     monkeypatch.setattr(
         experience_router,
         "_session_now",
-        lambda: datetime(2026, 7, 28, 8, 35, tzinfo=experience_router.EVENT_TZ),
+        lambda _timezone_name=None: datetime(2026, 7, 28, 8, 35, tzinfo=experience_router.EVENT_TZ),
     )
     allowed = await ctx.client.put(
         f"/api/events/{event_id}/experience/guests/{guest_id}/steps/{step_id}",

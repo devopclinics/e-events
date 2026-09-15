@@ -1346,10 +1346,34 @@ async def scan_qr_zone(
     elif zone.direction_mode == "exit":
         direction = "out"
 
-    # Access decision: ticket-type zone permission, then capacity.
+    # Accepted movements must alternate for each guest and zone. Rejected
+    # attempts remain in the audit log without corrupting current occupancy.
+    latest_movement = await db.scalar(
+        select(ScanEvent)
+        .where(
+            ScanEvent.event_id == event.id,
+            ScanEvent.guest_id == guest.id,
+            ScanEvent.zone_id == zone.id,
+            ScanEvent.denied.is_(False),
+        )
+        .order_by(ScanEvent.scanned_at.desc(), ScanEvent.id.desc())
+        .limit(1)
+    )
+
+    # Access decision: valid state transition, ticket permission, then capacity.
     allowed, reason = await ticket_allows(guest, zone.id, db)
     denied = not allowed
     deny_reason = reason
+    if not denied and latest_movement and latest_movement.direction == direction:
+        denied = True
+        deny_reason = (
+            "Guest is already inside this zone"
+            if direction == "in"
+            else "Guest is already outside this zone"
+        )
+    elif not denied and not latest_movement and direction == "out":
+        denied = True
+        deny_reason = "Guest has no recorded entry to this zone"
     if not denied and direction == "in" and zone.capacity:
         if await zone_occupancy(zone.id, db) >= zone.capacity:
             denied, deny_reason = True, "Zone is at capacity"

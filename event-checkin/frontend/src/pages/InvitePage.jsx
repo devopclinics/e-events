@@ -783,7 +783,9 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {} }) {
                       const effectiveLimit = singleGuest ? 0 : limit
                       return (
                       <option key={label} value={label}>
-                        {effectiveLimit <= 0
+                        {dWording.hideCategoryGuestCount
+                          ? label
+                          : effectiveLimit <= 0
                           ? `${label} - submitter only`
                           : `${label} - up to ${effectiveLimit} additional guest${effectiveLimit === 1 ? '' : 's'}`}
                       </option>
@@ -819,6 +821,11 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {} }) {
                 const rowContactExempt = (event.rsvp_invitee_contact_exempt_types || []).includes(row.guest_type)
                 const rowPhoneRequired = inviteePhoneRequired && !rowContactExempt
                 const rowEmailRequired = inviteeEmailRequired && !rowContactExempt
+                // A row is only "started" once the guest has entered something for it — an
+                // untouched row (e.g. the default blank one) must stay optional so submitters
+                // with no additional guests to add can still submit the form.
+                const rowStarted = !!(row.first_name.trim() || row.last_name.trim() || row.phone.trim() || row.email.trim() || row.relationship.trim() || row.notes.trim())
+                const rowNameRequired = rowStarted || invitees.length > 1
                 return (
                 <div key={index} className="rounded-2xl border border-slate-200 bg-white p-4">
                   <div className="mb-3 flex items-center justify-between">
@@ -829,12 +836,12 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {} }) {
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
-                      <label className="mb-1 block text-xs font-bold text-slate-600">First name <span className="text-red-500">*</span></label>
-                      <input required value={row.first_name} onChange={(e) => setInvitee(index, 'first_name', e.target.value)} className={inputCls} placeholder="Invitee first name" />
+                      <label className="mb-1 block text-xs font-bold text-slate-600">First name {rowNameRequired ? <span className="text-red-500">*</span> : <span className="text-slate-400">(optional)</span>}</label>
+                      <input required={rowNameRequired} value={row.first_name} onChange={(e) => setInvitee(index, 'first_name', e.target.value)} className={inputCls} placeholder="Invitee first name" />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-bold text-slate-600">Last name <span className="text-red-500">*</span></label>
-                      <input required value={row.last_name} onChange={(e) => setInvitee(index, 'last_name', e.target.value)} className={inputCls} placeholder="Invitee last name" />
+                      <label className="mb-1 block text-xs font-bold text-slate-600">Last name {rowNameRequired ? <span className="text-red-500">*</span> : <span className="text-slate-400">(optional)</span>}</label>
+                      <input required={rowNameRequired} value={row.last_name} onChange={(e) => setInvitee(index, 'last_name', e.target.value)} className={inputCls} placeholder="Invitee last name" />
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-bold text-slate-600">Guest type</label>

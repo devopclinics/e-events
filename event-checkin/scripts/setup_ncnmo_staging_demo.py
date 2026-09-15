@@ -106,6 +106,7 @@ async def apply(event_id: str, manifest_path: Path) -> None:
         event.manual_checkin_enabled = True
         event.checkout_enabled = True
         event.junior_guardian_handoff_enabled = True
+        event.separate_admission_access_enabled = True
         event.experience_enabled = True
         event.live_program_enabled = True
         event.live_program_enabled_at = datetime.utcnow()

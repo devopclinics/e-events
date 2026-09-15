@@ -246,6 +246,7 @@ class EventOut(BaseModel):
     self_checkin_enabled: bool = False
     checkout_enabled: bool = False
     junior_guardian_handoff_enabled: bool = False
+    separate_admission_access_enabled: bool = False
     guardian_authorizations: Optional[dict] = None
     event_code: Optional[str] = None
     created_at: datetime

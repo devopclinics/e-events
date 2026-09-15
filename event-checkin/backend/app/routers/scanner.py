@@ -1350,7 +1350,10 @@ async def scan_qr_zone(
     guardian_relationship = None
     guardian_method = None
     guardian_denial = None
-    if event.junior_guardian_handoff_enabled:
+    admission_denial = None
+    if event.separate_admission_access_enabled and not guest.admitted:
+        admission_denial = "Guest must check in to the convention before entering or exiting a zone"
+    if event.junior_guardian_handoff_enabled and not admission_denial:
         entries = (event.guardian_authorizations or {}).get(guest.id) or []
         if entries:
             token = (body.guardian_token or "").strip()
@@ -1380,8 +1383,8 @@ async def scan_qr_zone(
 
     # Access decision: valid state transition, ticket permission, then capacity.
     allowed, reason = await ticket_allows(guest, zone.id, db)
-    denied = not allowed or bool(guardian_denial)
-    deny_reason = guardian_denial or reason
+    denied = not allowed or bool(admission_denial) or bool(guardian_denial)
+    deny_reason = admission_denial or guardian_denial or reason
     if not denied and latest_movement and latest_movement.direction == direction:
         denied = True
         deny_reason = (
@@ -1402,9 +1405,9 @@ async def scan_qr_zone(
         guardian_guest_id=guardian.id if guardian and not guardian_denial else None,
         guardian_relationship=guardian_relationship, guardian_verification_method=guardian_method,
     ))
-    # First allowed entry also marks the guest admitted so the normal dashboard
-    # still reflects arrivals (legacy events never reach this code).
-    if not denied and direction == "in" and not guest.admitted:
+    # Preserve the historical combined admission + zone behavior unless the
+    # event explicitly enables the separated convention/zone workflow.
+    if not event.separate_admission_access_enabled and not denied and direction == "in" and not guest.admitted:
         guest.admitted = True
         guest.admitted_at = datetime.utcnow()
         guest.admit_notified = True

@@ -31,8 +31,22 @@ async def test_guardian_handoff_is_opt_in_and_audited(ctx):
     async with _Session() as db:
         event = await db.get(Event, event_id)
         event.junior_guardian_handoff_enabled = True
+        event.separate_admission_access_enabled = True
         event.guardian_authorizations = {child["id"]: [{"guardian_guest_id": guardian["id"], "relationship": "Parent"}]}
+        child_row = await db.get(Guest, child["id"])
+        child_row.admitted = False
+        child_row.admitted_at = None
         await db.commit()
+
+    before_admission = await ctx.client.post(
+        f"/api/scan/{child['qr_token']}/zone",
+        json={"zone_id": zone["id"], "direction": "in", "guardian_token": guardian["qr_token"]},
+    )
+    assert before_admission.json()["denied"] is True
+    assert "check in to the convention" in before_admission.json()["deny_reason"]
+
+    admission = await ctx.client.post(f"/api/scan/{child['qr_token']}")
+    assert admission.status_code == 200 and admission.json()["status"] == "admitted"
 
     missing = await ctx.client.post(f"/api/scan/{child['qr_token']}/zone", json={"zone_id": zone["id"], "direction": "in"})
     assert missing.json()["denied"] is True

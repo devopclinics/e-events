@@ -12,7 +12,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.database import AsyncSessionLocal
 from app.models import (
@@ -190,15 +190,14 @@ async def apply(event_id: str, manifest_path: Path) -> None:
                 items.append(item)
             menu_rows[meal_name] = (category, items)
 
-        for demo_id, guest in guests.items():
-            is_child = int(demo_id) <= 7
-            for category, items in menu_rows.values():
-                selected = items[2] if is_child else items[(int(demo_id) + category.sort_order) % 2]
-                choice = await db.scalar(select(GuestMenuChoice).where(GuestMenuChoice.guest_id == guest.id, GuestMenuChoice.category_id == category.id))
-                if not choice:
-                    db.add(GuestMenuChoice(guest_id=guest.id, category_id=category.id, menu_item_id=selected.id))
-                else:
-                    choice.menu_item_id = selected.id
+        # NCNMO uses food collection as an entitlement checkpoint: staff scan
+        # the pass and record one collection per meal service. Guests do not
+        # preselect dishes. This removes choices only for synthetic demo guests;
+        # every existing event and ordinary menu-selection workflow is unchanged.
+        await db.execute(delete(GuestMenuChoice).where(
+            GuestMenuChoice.guest_id.in_([guest.id for guest in guests.values()]),
+            GuestMenuChoice.category_id.in_([category.id for category, _items in menu_rows.values()]),
+        ))
 
         workflow = await one(db, ExperienceWorkflow, event_id=event.id, name=f"{MARKER} · Platform 2026 Journey")
         if not workflow:

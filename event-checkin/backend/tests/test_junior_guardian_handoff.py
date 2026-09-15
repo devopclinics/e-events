@@ -45,6 +45,28 @@ async def test_guardian_handoff_is_opt_in_and_audited(ctx):
         assert response.json()["guardian_name"] == "Guardian Demo"
         assert response.json()["guardian_verification_method"] == "guardian_qr"
 
+    config = await ctx.client.get(f"/api/events/{event_id}/access/guardian-authorizations")
+    assert config.status_code == 200
+    assert config.json()["authorizations"][0]["guardian_name"] == "Guardian Demo"
+
+    update = await ctx.client.put(
+        f"/api/events/{event_id}/access/guardian-authorizations",
+        json={"enabled": True, "authorizations": [{
+            "child_guest_id": child["id"], "guardian_guest_id": guardian["id"], "relationship": "Parent"
+        }]},
+    )
+    assert update.status_code == 200 and update.json()["enabled"] is True
+
+    movements = await ctx.client.get(f"/api/events/{event_id}/access/movements")
+    assert movements.status_code == 200
+    verified_movements = [row for row in movements.json() if row["guardian_guest_id"]]
+    assert len(verified_movements) == 4
+    assert all(row["guardian_name"] == "Guardian Demo" for row in verified_movements)
+
+    journey = await ctx.client.get(f"/api/events/{event_id}/guests/{child['id']}/journey")
+    assert journey.status_code == 200
+    assert len([row for row in journey.json() if row["guardian_name"] == "Guardian Demo"]) == 4
+
     async with _Session() as db:
         rows = (await db.execute(ScanEvent.__table__.select().where(ScanEvent.guest_id == child["id"]))).all()
         verified = [row for row in rows if row.guardian_guest_id]

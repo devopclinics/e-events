@@ -75,6 +75,7 @@ function ResultCard({ result, onStepComplete, stepBusy }) {
           </div>
         )}
         {result.zone_name && <div className="sc-result-guest">{result.direction?.toUpperCase()} · {result.zone_name}</div>}
+        {result.guardian_name && <div className="sc-result-guest">Guardian: {result.guardian_name}{result.guardian_verification_method ? ' / QR verified' : ''}</div>}
         {!!result.experience_next_steps?.length && (
           <div className="sc-experience-steps">
             <strong>Next Experience steps</strong>
@@ -106,6 +107,7 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
   const [gateId, setGateId] = useState('')
   const [zoneId, setZoneId] = useState('')
   const [direction, setDirection] = useState('in')
+  const [guardianToken, setGuardianToken] = useState('')
   const [sectionId, setSectionId] = useState(sections.length === 1 ? sections[0].id : '')
   const accessMode = !!event?.venue_access_enabled
 
@@ -125,8 +127,9 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
         if (!navigator.onLine) throw new Error('Check-out needs a network connection so the exit scan can be recorded.')
         response = await api.scanCheckout(value)
       }
+      else if (accessMode && gateId && event.junior_guardian_handoff_enabled) throw new Error('Select a zone for guardian handoff scanning.')
       else if (accessMode && gateId) response = await api.scanGate(event.id, gateId, value)
-      else if (accessMode && zoneId) response = await api.scanZone(value, { zone_id: zoneId, direction })
+      else if (accessMode && zoneId) response = await api.scanZone(value, { zone_id: zoneId, direction, guardian_token: extractToken(guardianToken) || null })
       else if (accessMode) throw new Error('Select a gate or zone before scanning.')
       else {
         const section = sections.find((item) => item.id === sectionId)
@@ -144,6 +147,9 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
       setToken('')
     } catch (err) {
       const networkFailure = !navigator.onLine || /failed to fetch|network|load failed/i.test(err.message || '')
+      if (networkFailure && event.junior_guardian_handoff_enabled) {
+        throw new Error('Guardian handoffs require an online connection for authorization checks.')
+      }
       if (networkFailure && mode !== 'checkout' && action !== 'checkout') {
         const offline = recordOfflineScan({
           eventId: event.id,
@@ -204,6 +210,11 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
           {sections.map((section) => <option key={section.id} value={section.id}>{section.name}</option>)}
         </select>
       )}
+      {accessMode && event.junior_guardian_handoff_enabled && mode !== 'checkout' && (
+        <div className="sc-search-row sc-token-row">
+          <input className="sc-search-input" aria-label="Guardian pass token" value={guardianToken} onChange={(e) => setGuardianToken(e.target.value)} placeholder="Authorized guardian pass URL or QR token"/>
+        </div>
+      )}
       <div className="sc-search-row sc-token-row">
         <input className="sc-search-input" aria-label="Pass token" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Guest pass URL or QR token"/>
         <button className="rr-btn primary" disabled={!token.trim() || busy}>{busy ? 'Recording…' : mode === 'checkout' ? 'Check out' : 'Record scan'}</button>
@@ -226,6 +237,7 @@ function ManualMode({ event, sections, zones, onResult }) {
   const [walkinGroupId, setWalkinGroupId] = useState('')
   const [zoneId, setZoneId] = useState('')
   const [direction, setDirection] = useState('in')
+  const [guardianToken, setGuardianToken] = useState('')
   const groupChoiceEnabled = !!event?.walk_in_group_choice_enabled && !event?.section_mode_enabled
 
   useEffect(() => {
@@ -252,7 +264,7 @@ function ManualMode({ event, sections, zones, onResult }) {
     setBusyId(`${guest.id}:checkin`); setError('')
     try {
       const response = event.venue_access_enabled
-        ? await api.scanZone(guest.qr_token, { zone_id: zoneId, direction })
+        ? await api.scanZone(guest.qr_token, { zone_id: zoneId, direction, guardian_token: extractToken(guardianToken) || null })
         : await api.manualCheckin(event.id, guest.id, event.section_mode_enabled ? sectionId || null : null)
       onResult(response)
       setResults((items) => items.map((item) => item.id === guest.id ? { ...item, admitted: true } : item))
@@ -310,6 +322,11 @@ function ManualMode({ event, sections, zones, onResult }) {
             </select>
           </div>
         )}
+        {event.venue_access_enabled && event.junior_guardian_handoff_enabled && (
+          <div className="sc-search-row">
+            <input className="sc-search-input" aria-label="Manual guardian pass token" value={guardianToken} onChange={(e) => setGuardianToken(e.target.value)} placeholder="Scan or paste authorized guardian pass"/>
+          </div>
+        )}
         <div className="sc-search-row">
           <input className="sc-search-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by name or phone…"/>
           {event.walk_in_enabled && <button className="rr-btn primary" onClick={() => setWalkin(true)}><Icon name="plus" size={14}/> Walk-in</button>}
@@ -320,7 +337,7 @@ function ManualMode({ event, sections, zones, onResult }) {
             <div className="sc-guest-info"><strong>{guest.full_name}</strong><small>{guest.phone_masked || 'No phone'}{guest.table_name ? ` · ${guest.table_name}` : ''}</small></div>
             <div className="sc-guest-actions">
               {event.manual_checkin_enabled && (
-                <button className="rr-btn primary" disabled={!!busyId || (event.venue_access_enabled && !zoneId)} onClick={() => checkin(guest)}>
+                <button className="rr-btn primary" disabled={!!busyId || (event.venue_access_enabled && !zoneId) || (event.junior_guardian_handoff_enabled && !guardianToken.trim())} onClick={() => checkin(guest)}>
                   {busyId === `${guest.id}:checkin` ? 'Recording…' : event.venue_access_enabled ? (direction === 'in' ? 'Enter zone' : 'Exit zone') : guest.admitted ? 'Review' : 'Check in'}
                 </button>
               )}
@@ -330,7 +347,7 @@ function ManualMode({ event, sections, zones, onResult }) {
                 </button>
               )}
               {guest.admitted && (
-                <button className="rr-btn secondary" disabled={!!busyId} onClick={() => setUnadmitTarget(guest)}>Undo check-in</button>
+                <button className="rr-btn secondary" disabled={!!busyId} onClick={() => setUnadmitTarget(guest)}>{event.venue_access_enabled ? 'Correct event admission' : 'Undo check-in'}</button>
               )}
               {!event.manual_checkin_enabled && !guest.admitted && <span className="sc-guest-state">Not checked in</span>}
             </div>

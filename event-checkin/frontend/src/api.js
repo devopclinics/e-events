@@ -1206,6 +1206,9 @@ export const api = {
   accessPeak: (eventId, bucket = 15) => req('GET', `/events/${eventId}/access/peak?bucket_minutes=${bucket}`),
   accessFlow: (eventId) => req('GET', `/events/${eventId}/access/flow`),
   guestJourney: (eventId, gid) => req('GET', `/events/${eventId}/guests/${gid}/journey`),
+  guardianAuthorizations: (eventId) => req('GET', `/events/${eventId}/access/guardian-authorizations`),
+  updateGuardianAuthorizations: (eventId, data) => req('PUT', `/events/${eventId}/access/guardian-authorizations`, data),
+  accessMovements: (eventId, limit = 1000) => req('GET', `/events/${eventId}/access/movements?limit=${limit}`),
   scanZone: (qrToken, body) => req('POST', `/scan/${qrToken}/zone`, body),
 
   // Tag-based zone access (classify module)

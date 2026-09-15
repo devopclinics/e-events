@@ -12,6 +12,7 @@ const TABS = [
   { id: 'tickets', label: 'Ticket types' },
   { id: 'assign', label: 'Assign' },
   { id: 'analytics', label: 'Analytics' },
+  { id: 'operations', label: 'Junior operations' },
   { id: 'rules', label: 'Rules' },
 ]
 
@@ -66,6 +67,9 @@ export default function CheckinRedesignPage() {
   const [journey, setJourney] = useState([])
   const [rulesLoading, setRulesLoading] = useState(false)
   const [analyticsLoading, setAnalyticsLoading] = useState(false)
+  const [guardianConfig, setGuardianConfig] = useState({ enabled: false, authorizations: [] })
+  const [movements, setMovements] = useState([])
+  const [guardianForm, setGuardianForm] = useState({ child_guest_id: '', guardian_guest_id: '', relationship: 'Parent / guardian' })
 
   useEffect(() => {
     const requested = searchParams.get('tab')
@@ -117,7 +121,13 @@ export default function CheckinRedesignPage() {
 
   useEffect(() => { loadTagsAndGates(); loadGuestsList() }, [eventId]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (view === 'rules') loadRulesTab() }, [view, zones]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (view === 'analytics') loadAnalyticsTab() }, [view, eventId]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (view === 'analytics') loadAnalyticsTab() }, [view, eventId])
+  useEffect(() => {
+    if (view !== 'operations' || !eventId) return
+    Promise.all([api.guardianAuthorizations(eventId), api.accessMovements(eventId)])
+      .then(([config, rows]) => { setGuardianConfig(config); setMovements(rows) })
+      .catch((error) => notify(error.message || 'Junior operations could not be loaded'))
+  }, [view, eventId]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!eventId || !journeyGuestId) { setJourney([]); return }
     api.guestJourney(eventId, journeyGuestId).then(setJourney).catch((e) => notify(e.message || 'Journey could not be loaded'))
@@ -263,6 +273,29 @@ export default function CheckinRedesignPage() {
       await loadGuestsList()
       notify('Ticket type assigned')
     } catch (error) { notify(error.message || 'Ticket type could not be assigned') }
+  }
+
+  async function saveGuardianConfig(next) {
+    try {
+      const saved = await api.updateGuardianAuthorizations(eventId, next)
+      setGuardianConfig(saved)
+      notify('Guardian rules saved')
+    } catch (error) { notify(error.message || 'Guardian rules could not be saved') }
+  }
+
+  function addGuardianAuthorization() {
+    if (!guardianForm.child_guest_id || !guardianForm.guardian_guest_id) return
+    if (guardianForm.child_guest_id === guardianForm.guardian_guest_id) { notify('Choose a different guardian'); return }
+    const exists = guardianConfig.authorizations.some((row) => row.child_guest_id === guardianForm.child_guest_id && row.guardian_guest_id === guardianForm.guardian_guest_id)
+    if (exists) { notify('That guardian is already authorized'); return }
+    saveGuardianConfig({ enabled: guardianConfig.enabled, authorizations: [...guardianConfig.authorizations, guardianForm].map(({ child_guest_id, guardian_guest_id, relationship }) => ({ child_guest_id, guardian_guest_id, relationship })) })
+  }
+
+  function exportMovements() {
+    const quote = (value) => '"' + String(value ?? '').replaceAll('"', '""') + '"'
+    const rows = [['Time', 'Junior / guest', 'Direction', 'Zone', 'Decision', 'Guardian', 'Relationship', 'Operator', 'Reason'], ...movements.map((row) => [row.scanned_at, row.guest_name, row.direction, row.zone_name, row.denied ? 'Denied' : 'Allowed', row.guardian_name, row.guardian_relationship, row.scanned_by_name, row.deny_reason])]
+    const blob = new Blob([rows.map((row) => row.map(quote).join(',')).join('\n')], { type: 'text/csv;charset=utf-8' })
+    const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'junior-movements.csv'; link.click(); URL.revokeObjectURL(link.href)
   }
 
   const totalInside = zones.reduce((sum, z) => sum + Number(z.occupancy || 0), 0)
@@ -544,6 +577,7 @@ export default function CheckinRedesignPage() {
                               <span className="rr-dot">·</span>
                               <span>{new Date(j.scanned_at).toLocaleString()}</span>
                             </div>
+                            {j.guardian_name && <div className="ci-deny-reason">Guardian: {j.guardian_name} ({j.guardian_relationship || 'Authorized guardian'})</div>}
                             {j.deny_reason && <div className="ci-deny-reason">{j.deny_reason}</div>}
                           </div>
                         </div>
@@ -556,6 +590,43 @@ export default function CheckinRedesignPage() {
             </>
             )
           })())}
+
+          {view === 'operations' && (
+            <>
+              <div className="rr-panel">
+                <div className="rd-panel-head"><h3>Guardian handoff rules</h3><p>Require a second, authorized guardian credential when a configured junior enters or exits a zone.</p></div>
+                <div className="rd-panel-body">
+                  <label className="gr-required-check">
+                    <input type="checkbox" checked={guardianConfig.enabled} onChange={(e) => saveGuardianConfig({ enabled: e.target.checked, authorizations: guardianConfig.authorizations.map(({ child_guest_id, guardian_guest_id, relationship }) => ({ child_guest_id, guardian_guest_id, relationship })) })}/>
+                    Require guardian verification for configured juniors
+                  </label>
+                  <div className="rd-row2" style={{ marginTop: 14 }}>
+                    <select className="rr-select" value={guardianForm.child_guest_id} onChange={(e) => setGuardianForm({ ...guardianForm, child_guest_id: e.target.value })}>
+                      <option value="">Select junior</option>{guests.map((g) => <option key={g.id} value={g.id}>{[g.first_name, g.last_name].filter(Boolean).join(' ')}</option>)}
+                    </select>
+                    <select className="rr-select" value={guardianForm.guardian_guest_id} onChange={(e) => setGuardianForm({ ...guardianForm, guardian_guest_id: e.target.value })}>
+                      <option value="">Select guardian</option>{guests.map((g) => <option key={g.id} value={g.id}>{[g.first_name, g.last_name].filter(Boolean).join(' ')}</option>)}
+                    </select>
+                    <input className="rd-field" value={guardianForm.relationship} onChange={(e) => setGuardianForm({ ...guardianForm, relationship: e.target.value })} placeholder="Relationship"/>
+                    <button className="rr-btn primary" onClick={addGuardianAuthorization}>Authorize</button>
+                  </div>
+                  <table className="rr-table" style={{ marginTop: 14 }}>
+                    <thead><tr><th>Junior</th><th>Authorized guardian</th><th>Relationship</th><th/></tr></thead>
+                    <tbody>{guardianConfig.authorizations.map((row) => <tr key={row.child_guest_id + row.guardian_guest_id}><td>{row.child_name}</td><td>{row.guardian_name}</td><td>{row.relationship}</td><td><button className="rr-link-btn gr-danger-link" onClick={() => saveGuardianConfig({ enabled: guardianConfig.enabled, authorizations: guardianConfig.authorizations.filter((item) => item !== row).map(({ child_guest_id, guardian_guest_id, relationship }) => ({ child_guest_id, guardian_guest_id, relationship })) })}>Remove</button></td></tr>)}</tbody>
+                  </table>
+                </div>
+              </div>
+              <div className="rr-panel">
+                <div className="rd-panel-head ci-journey-head"><div><h3>Entry and exit report</h3><p>Every allowed and denied zone movement, including the verified guardian.</p></div><button className="rr-btn secondary" onClick={exportMovements}>Export CSV</button></div>
+                <div className="rd-panel-body" style={{ overflowX: 'auto' }}>
+                  <table className="rr-table"><thead><tr><th>Time</th><th>Junior / guest</th><th>Movement</th><th>Guardian</th><th>Decision</th></tr></thead>
+                    <tbody>{movements.map((row) => <tr key={row.id}><td>{new Date(row.scanned_at).toLocaleString()}</td><td>{row.guest_name}</td><td>{row.direction === 'in' ? 'Entered' : 'Exited'} {row.zone_name || ''}</td><td>{row.guardian_name ? row.guardian_name + ' (' + row.guardian_relationship + ')' : ''}</td><td><span className={`rd-status-chip ${row.denied ? 'fail' : 'ok'}`}>{row.denied ? 'Denied' : 'Allowed'}</span></td></tr>)}</tbody>
+                  </table>
+                  {!movements.length && <p className="rd-rowlink">No zone movements recorded yet.</p>}
+                </div>
+              </div>
+            </>
+          )}
 
           {view === 'rules' && (rulesLoading ? <div className="rr-panel ci-empty"><p>Loading rules…</p></div> : (
             <>

@@ -17,7 +17,7 @@ from ..models import Event, Guest, Zone, TicketType, ScanEvent, User
 from ..schemas import (
     ZoneCreate, ZoneUpdate, ZoneOut,
     TicketTypeCreate, TicketTypeUpdate, TicketTypeOut,
-    GuestTicketAssign, PeakBucket, FlowEdge, JourneyStep,
+    GuestTicketAssign, PeakBucket, FlowEdge, JourneyStep, GuardianAuthorizationUpdate,
 )
 from ..auth import require_paid_event_admin, require_paid_event_member
 
@@ -310,16 +310,103 @@ async def journey(event_id: str, gid: str, db: AsyncSession = Depends(get_db),
     names = {z.id: z.name for z in (await db.execute(
         select(Zone).where(Zone.event_id == event_id))).scalars().all()}
     actor_ids = {s.scanned_by for s in rows if s.scanned_by}
+    guardian_ids = {s.guardian_guest_id for s in rows if s.guardian_guest_id}
     actors = {}
     if actor_ids:
         actors = {u.id: u for u in (await db.execute(
             select(User).where(User.id.in_(actor_ids))
+        )).scalars().all()}
+    guardians = {}
+    if guardian_ids:
+        guardians = {g.id: g for g in (await db.execute(
+            select(Guest).where(Guest.id.in_(guardian_ids))
         )).scalars().all()}
     return [
         JourneyStep(zone_name=names.get(s.zone_id), direction=s.direction,
                     scanned_at=s.scanned_at, denied=s.denied, deny_reason=s.deny_reason,
                     scanned_by_user_id=s.scanned_by,
                     scanned_by_name=actors[s.scanned_by].name if s.scanned_by in actors else None,
-                    scanned_by_email=actors[s.scanned_by].email if s.scanned_by in actors else None)
+                    scanned_by_email=actors[s.scanned_by].email if s.scanned_by in actors else None,
+                    guardian_guest_id=s.guardian_guest_id,
+                    guardian_name=((f"{guardians[s.guardian_guest_id].first_name or ''} {guardians[s.guardian_guest_id].last_name or ''}").strip()
+                                   if s.guardian_guest_id in guardians else None),
+                    guardian_relationship=s.guardian_relationship,
+                    guardian_verification_method=s.guardian_verification_method)
         for s in rows
     ]
+
+
+def _guardian_guest_name(guest: Guest) -> str:
+    return f"{guest.first_name or ''} {guest.last_name or ''}".strip() or guest.email or guest.phone or "Unnamed guest"
+
+
+@router.get("/{event_id}/access/guardian-authorizations")
+async def get_guardian_authorizations(event_id: str, db: AsyncSession = Depends(get_db),
+                                      _: User = Depends(require_paid_event_admin)):
+    event = await access_event(event_id, db)
+    guests = (await db.execute(select(Guest).where(Guest.event_id == event_id)
+                               .order_by(Guest.first_name, Guest.last_name))).scalars().all()
+    by_id = {guest.id: guest for guest in guests}
+    rows = []
+    for child_id, entries in (event.guardian_authorizations or {}).items():
+        child = by_id.get(child_id)
+        if not child:
+            continue
+        for entry in entries or []:
+            guardian = by_id.get(entry.get("guardian_guest_id"))
+            if guardian:
+                rows.append({"child_guest_id": child.id, "child_name": _guardian_guest_name(child),
+                             "guardian_guest_id": guardian.id, "guardian_name": _guardian_guest_name(guardian),
+                             "relationship": entry.get("relationship") or "Authorized guardian"})
+    return {"enabled": bool(event.junior_guardian_handoff_enabled), "authorizations": rows}
+
+
+@router.put("/{event_id}/access/guardian-authorizations")
+async def update_guardian_authorizations(event_id: str, body: GuardianAuthorizationUpdate,
+                                         db: AsyncSession = Depends(get_db),
+                                         user: User = Depends(require_paid_event_admin)):
+    event = await access_event(event_id, db)
+    guest_ids = set((await db.execute(select(Guest.id).where(Guest.event_id == event_id))).scalars().all())
+    normalized: dict[str, list[dict]] = defaultdict(list)
+    seen: set[tuple[str, str]] = set()
+    for entry in body.authorizations:
+        if entry.child_guest_id not in guest_ids or entry.guardian_guest_id not in guest_ids:
+            raise HTTPException(400, "Child and guardian must belong to this event")
+        if entry.child_guest_id == entry.guardian_guest_id:
+            raise HTTPException(400, "A junior cannot be their own guardian")
+        key = (entry.child_guest_id, entry.guardian_guest_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized[entry.child_guest_id].append({"guardian_guest_id": entry.guardian_guest_id,
+                                                  "relationship": entry.relationship.strip() or "Authorized guardian"})
+    event.junior_guardian_handoff_enabled = body.enabled
+    event.guardian_authorizations = dict(normalized)
+    await db.commit()
+    return await get_guardian_authorizations(event_id, db, user)
+
+
+@router.get("/{event_id}/access/movements")
+async def access_movements(event_id: str, limit: int = 1000, db: AsyncSession = Depends(get_db),
+                           _: User = Depends(require_paid_event_member)):
+    await access_event(event_id, db)
+    limit = max(1, min(limit, 5000))
+    rows = (await db.execute(select(ScanEvent).where(ScanEvent.event_id == event_id)
+                             .order_by(ScanEvent.scanned_at.desc(), ScanEvent.id.desc()).limit(limit))).scalars().all()
+    guest_ids = {value for row in rows for value in (row.guest_id, row.guardian_guest_id) if value}
+    zone_ids = {row.zone_id for row in rows if row.zone_id}
+    user_ids = {row.scanned_by for row in rows if row.scanned_by}
+    guests = {g.id: g for g in (await db.execute(select(Guest).where(Guest.id.in_(guest_ids)))).scalars().all()} if guest_ids else {}
+    zones = {z.id: z for z in (await db.execute(select(Zone).where(Zone.id.in_(zone_ids)))).scalars().all()} if zone_ids else {}
+    users = {u.id: u for u in (await db.execute(select(User).where(User.id.in_(user_ids)))).scalars().all()} if user_ids else {}
+    return [{"id": row.id, "guest_id": row.guest_id,
+             "guest_name": _guardian_guest_name(guests[row.guest_id]) if row.guest_id in guests else "Unknown guest",
+             "zone_name": zones[row.zone_id].name if row.zone_id in zones else None,
+             "direction": row.direction, "scanned_at": row.scanned_at,
+             "denied": row.denied, "deny_reason": row.deny_reason,
+             "guardian_guest_id": row.guardian_guest_id,
+             "guardian_name": _guardian_guest_name(guests[row.guardian_guest_id]) if row.guardian_guest_id in guests else None,
+             "guardian_relationship": row.guardian_relationship,
+             "guardian_verification_method": row.guardian_verification_method,
+             "scanned_by_name": users[row.scanned_by].name if row.scanned_by in users else None}
+            for row in rows]

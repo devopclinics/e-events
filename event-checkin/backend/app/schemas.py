@@ -2183,6 +2183,21 @@ class JourneyStep(BaseModel):
     scanned_by_user_id: Optional[str] = None
     scanned_by_name: Optional[str] = None
     scanned_by_email: Optional[str] = None
+    guardian_guest_id: Optional[str] = None
+    guardian_name: Optional[str] = None
+    guardian_relationship: Optional[str] = None
+    guardian_verification_method: Optional[str] = None
+
+
+class GuardianAuthorizationEntry(BaseModel):
+    child_guest_id: str
+    guardian_guest_id: str
+    relationship: str = "Authorized guardian"
+
+
+class GuardianAuthorizationUpdate(BaseModel):
+    enabled: bool
+    authorizations: list[GuardianAuthorizationEntry] = Field(default_factory=list)
 
 
 # ── Menu ─────────────────────────────────────────────────────────────────────

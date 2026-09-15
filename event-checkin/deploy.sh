@@ -7,6 +7,7 @@
 #   ./deploy.sh --no-cache   # force rebuild without layer cache
 #   ./deploy.sh --push-only  # skip deploy; just build + push + prune
 #   ./deploy.sh --deploy-only # skip build; just pull & restart services
+#   ./deploy.sh --skip-prune  # retain every existing registry tag
 #
 # Credentials are read from .env in the same directory as this script.
 # Copy .env.example → .env and fill in your values before running.
@@ -49,6 +50,7 @@ KEEP_VERSIONS="${KEEP_VERSIONS:-3}"
 NO_CACHE=""
 DO_BUILD=true
 DO_DEPLOY=true
+SKIP_PRUNE=false
 
 # ── parse args ────────────────────────────────────────────────────────────────
 for arg in "$@"; do
@@ -56,6 +58,7 @@ for arg in "$@"; do
     --no-cache)    NO_CACHE="--no-cache" ;;
     --push-only)   DO_DEPLOY=false ;;
     --deploy-only) DO_BUILD=false ;;
+    --skip-prune)  SKIP_PRUNE=true ;;
     --help|-h)
       grep '^#' "$0" | sed 's/^# \?//'
       exit 0 ;;
@@ -265,6 +268,7 @@ if $DO_BUILD; then
   #     cd festio-infra && make promote TAG=${VERSION}
   # (Compose here = staging; k8s = prod. See event-checkin/README.md release flow.)
 
+  if ! $SKIP_PRUNE; then
   # ── PHASE 3 — Prune old tags from Docker Hub ─────────────────────────────────
   step "3/6  Pruning old tags (keeping last ${KEEP_VERSIONS} per service)"
 
@@ -345,6 +349,10 @@ if $DO_BUILD; then
   prune_service_tags "setup"
   prune_service_tags "dashboard"
   prune_service_tags "marketing"
+
+  else
+    info "Skipping registry tag pruning"
+  fi
 
   # Remove the dangling local build cache (optional, frees disk)
   info "Pruning dangling local image layers..."

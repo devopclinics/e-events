@@ -209,6 +209,7 @@ async def apply(event_id: str, manifest_path: Path) -> None:
 
         step_defs = [
             ("welcome", "custom", "Welcome to Platform 2026", "2026-12-24", "09:00", "09:30", "Registration"),
+            ("badge-pickup", "badge", "Print and issue QR ID badge", "2026-12-24", "09:00", "18:00", "Registration and Badge Desk"),
             ("parenting", "session_attendance", "Parenting Workshop · published program", "2026-12-24", "09:00", "18:00", "Illustrative Workshop Room"),
             ("opening", "session_attendance", "Opening Gathering · illustrative", "2026-12-24", "18:30", "20:00", "Illustrative Main Hall"),
         ]

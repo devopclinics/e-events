@@ -50,6 +50,20 @@ export const INTERNAL_DOCS = [
 
 export const PDFS = [
   {
+    title: 'NCNMO Platform 2026 — Two-Page Overview',
+    description: 'Concise executive overview of the proposed Platform 2026 solution, AGM pilot, phone-based attendance model, staffing options, and next decision.',
+    href: '/media/ncnmo-platform-2026-two-page-overview.pdf',
+    filename: 'ncnmo-platform-2026-two-page-overview.pdf',
+    type: 'PDF',
+  },
+  {
+    title: 'NCNMO Platform 2026 Festio Proposal',
+    description: 'Current client-ready proposal covering the complete NCNMO solution map, lean phone-based attendance operations, Junior Platform, meals and souvenirs, Festio Experience, Festio Live, FestioMe, AGM pilot, proof strategy, QR badges, and reporting. Commercial amounts remain open pending final scope.',
+    href: '/media/ncnmo-platform-2026-festio-proposal.pdf',
+    filename: 'ncnmo-platform-2026-festio-proposal.pdf',
+    type: 'PDF',
+  },
+  {
     title: 'Festio Introductory Guide',
     description: 'Short product introduction covering setup, invites, RSVP, check-in, results, and paid operations.',
     href: '/media/festio-intro-target-audience.pdf',
@@ -73,6 +87,20 @@ export const PDFS = [
 ]
 
 export const HTML_ASSETS = [
+  {
+    title: 'NCNMO Platform 2026 — Two-Page Overview HTML',
+    description: 'Editable source for the concise NCNMO executive overview. Print this page to regenerate its two-page PDF.',
+    href: '/media/ncnmo-platform-2026-two-page-overview.html',
+    filename: 'ncnmo-platform-2026-two-page-overview.html',
+    type: 'HTML',
+  },
+  {
+    title: 'NCNMO Platform 2026 Festio Proposal — Editable HTML',
+    description: 'Editable presentation source for the current client-ready NCNMO proposal. Print this page to regenerate the PDF after approved content or pricing changes.',
+    href: '/media/ncnmo-platform-2026-festio-proposal.html',
+    filename: 'ncnmo-platform-2026-festio-proposal.html',
+    type: 'HTML',
+  },
   {
     title: 'One-Pager HTML',
     description: 'Editable HTML source for the one-pager — this is the PDF\'s source of truth (print this page to regenerate it). Created 2026-09-12 to replace the previous "EventQR"-branded version, which had no editable source.',
@@ -109,8 +137,8 @@ export const HTML_ASSETS = [
     type: 'HTML',
   },
   {
-    title: 'NCNMO Platform 2026 Partnership Proposal',
-    description: "Partnership proposal for the National Council of Nigerian Muslim Organizations' Platform 2026 (multi-day, multi-track, ~2,000 guests): $0 software/support with a $3,000 hard cost cap, real dashboard screenshots (reference event name blurred), and program/multi-session tracking.",
+    title: 'NCNMO Platform 2026 Partnership Proposal — Previous Draft',
+    description: "Earlier partnership concept retained for reference. It contains a different commercial structure and should not be sent as the current client proposal.",
     href: '/media/ncnmo-platform-partnership-proposal.html',
     filename: 'ncnmo-platform-partnership-proposal.html',
     type: 'HTML',

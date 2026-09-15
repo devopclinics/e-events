@@ -103,6 +103,8 @@ async def apply(event_id: str, manifest_path: Path) -> None:
         }
         event.menu_enabled = True
         event.venue_access_enabled = True
+        event.manual_checkin_enabled = True
+        event.checkout_enabled = True
         event.experience_enabled = True
         event.live_program_enabled = True
         event.live_program_enabled_at = datetime.utcnow()

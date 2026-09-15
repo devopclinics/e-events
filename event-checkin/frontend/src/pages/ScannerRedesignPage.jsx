@@ -213,7 +213,7 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
   )
 }
 
-function ManualMode({ event, sections, onResult }) {
+function ManualMode({ event, sections, zones, onResult }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [busyId, setBusyId] = useState('')
@@ -224,6 +224,8 @@ function ManualMode({ event, sections, onResult }) {
   const [sectionId, setSectionId] = useState(sections.length === 1 ? sections[0].id : '')
   const [tableGroups, setTableGroups] = useState([])
   const [walkinGroupId, setWalkinGroupId] = useState('')
+  const [zoneId, setZoneId] = useState('')
+  const [direction, setDirection] = useState('in')
   const groupChoiceEnabled = !!event?.walk_in_group_choice_enabled && !event?.section_mode_enabled
 
   useEffect(() => {
@@ -249,7 +251,9 @@ function ManualMode({ event, sections, onResult }) {
   async function checkin(guest) {
     setBusyId(`${guest.id}:checkin`); setError('')
     try {
-      const response = await api.manualCheckin(event.id, guest.id, event.section_mode_enabled ? sectionId || null : null)
+      const response = event.venue_access_enabled
+        ? await api.scanZone(guest.qr_token, { zone_id: zoneId, direction })
+        : await api.manualCheckin(event.id, guest.id, event.section_mode_enabled ? sectionId || null : null)
       onResult(response)
       setResults((items) => items.map((item) => item.id === guest.id ? { ...item, admitted: true } : item))
     } catch (err) { setError(err.message); onResult({ status: 'invalid', message: err.message }) }
@@ -295,6 +299,17 @@ function ManualMode({ event, sections, onResult }) {
         </select>
       )}
       {!walkin ? <>
+        {event.venue_access_enabled && (
+          <div className="sc-search-row sc-access-row">
+            <select className="sc-selector" aria-label="Manual search zone" value={zoneId} onChange={(e) => setZoneId(e.target.value)}>
+              <option value="">Select zone</option>
+              {zones.filter((zone) => zone.is_active !== false).map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}
+            </select>
+            <select className="sc-selector" aria-label="Manual search direction" value={direction} onChange={(e) => setDirection(e.target.value)}>
+              <option value="in">Check in to zone</option><option value="out">Check out of zone</option>
+            </select>
+          </div>
+        )}
         <div className="sc-search-row">
           <input className="sc-search-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by name or phone…"/>
           {event.walk_in_enabled && <button className="rr-btn primary" onClick={() => setWalkin(true)}><Icon name="plus" size={14}/> Walk-in</button>}
@@ -305,8 +320,8 @@ function ManualMode({ event, sections, onResult }) {
             <div className="sc-guest-info"><strong>{guest.full_name}</strong><small>{guest.phone_masked || 'No phone'}{guest.table_name ? ` · ${guest.table_name}` : ''}</small></div>
             <div className="sc-guest-actions">
               {event.manual_checkin_enabled && (
-                <button className="rr-btn primary" disabled={!!busyId} onClick={() => checkin(guest)}>
-                  {busyId === `${guest.id}:checkin` ? 'Recording…' : guest.admitted ? 'Review' : 'Check in'}
+                <button className="rr-btn primary" disabled={!!busyId || (event.venue_access_enabled && !zoneId)} onClick={() => checkin(guest)}>
+                  {busyId === `${guest.id}:checkin` ? 'Recording…' : event.venue_access_enabled ? (direction === 'in' ? 'Enter zone' : 'Exit zone') : guest.admitted ? 'Review' : 'Check in'}
                 </button>
               )}
               {event.checkout_enabled && guest.admitted && (
@@ -612,7 +627,7 @@ function LiveScannerCommandCenter({
           </div>
           <div className="sc-command-mode-body">
             {(mode === 'camera' || mode === 'checkout') && <TokenScanner event={event} zones={zones} gates={gates} sections={sections} mode={mode} offlineManifest={offlineManifest} onManifestChange={onManifestChange} onQueueChange={onQueueChange} onRefreshManifest={onRefreshManifest} onResult={onResult}/>}
-            {mode === 'manual' && <ManualMode event={event} sections={sections} onResult={onResult}/>}
+            {mode === 'manual' && <ManualMode event={event} sections={sections} zones={zones} onResult={onResult}/>}
             {mode === 'eventqr' && <EventQRMode event={event}/>}
           </div>
         </section>

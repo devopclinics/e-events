@@ -1988,6 +1988,8 @@ async def search_guests(
         "admitted_at": g.admitted_at.isoformat() if g.admitted_at else None,
         "checked_out": latest_directions.get(g.id) == "out",
         "rsvp_status": g.rsvp_status,
+        # Authenticated staff use this only to submit the existing audited zone scan.
+        "qr_token": g.qr_token if event.venue_access_enabled else None,
     } for g in rows]
 
 

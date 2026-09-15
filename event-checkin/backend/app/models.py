@@ -475,6 +475,9 @@ class Event(Base):
     # Cached integration state only; FestioMe data remains service-owned.
     # Optional event policy. approved_adults limits guest community access to an explicit guest-id allowlist.
     festiome_access_policy: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Opt-in junior safeguarding. Off by default; maps child guest ids to authorized adult guest ids.
+    junior_guardian_handoff_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    guardian_authorizations: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     festiome_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     festiome_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     festiome_open_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -2178,6 +2181,9 @@ class ScanEvent(Base):
     scanned_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     denied: Mapped[bool] = mapped_column(Boolean, default=False)
     deny_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    guardian_guest_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("guests.id"), nullable=True, index=True)
+    guardian_relationship: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    guardian_verification_method: Mapped[str | None] = mapped_column(String(30), nullable=True)
 
 
 # ── Customizable message templates ─────────────────────────────────────────────

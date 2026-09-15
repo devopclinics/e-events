@@ -105,6 +105,7 @@ async def apply(event_id: str, manifest_path: Path) -> None:
         event.venue_access_enabled = True
         event.manual_checkin_enabled = True
         event.checkout_enabled = True
+        event.junior_guardian_handoff_enabled = True
         event.experience_enabled = True
         event.live_program_enabled = True
         event.live_program_enabled_at = datetime.utcnow()
@@ -167,6 +168,11 @@ async def apply(event_id: str, manifest_path: Path) -> None:
             guests[demo_id] = guest
             if not await db.scalar(select(GuestTagLink).where(GuestTagLink.guest_id == guest.id, GuestTagLink.tag_id == tags[code].id)):
                 db.add(GuestTagLink(guest_id=guest.id, tag_id=tags[code].id))
+
+        event.guardian_authorizations = {
+            guests[child].id: [{"guardian_guest_id": guests[adult].id, "relationship": "Authorized demo guardian"}]
+            for child, adult in (("01", "09"), ("02", "10"), ("03", "09"), ("04", "10"), ("05", "09"), ("06", "10"), ("07", "10"))
+        }
 
         event.festiome_access_policy = {
             "mode": "approved_adults",

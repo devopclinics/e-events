@@ -245,6 +245,8 @@ class EventOut(BaseModel):
     manual_checkin_enabled: bool = False
     self_checkin_enabled: bool = False
     checkout_enabled: bool = False
+    junior_guardian_handoff_enabled: bool = False
+    guardian_authorizations: Optional[dict] = None
     event_code: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -2141,6 +2143,7 @@ class GuestTicketAssign(BaseModel):
 class ScanZoneRequest(BaseModel):
     zone_id: str
     direction: Optional[Literal["in", "out"]] = None  # default from zone mode
+    guardian_token: Optional[str] = None
 
 
 class ScanZoneResult(BaseModel):
@@ -2155,6 +2158,8 @@ class ScanZoneResult(BaseModel):
     journey_count: int = 0
     seat_number: Optional[str] = None
     table_name: Optional[str] = None
+    guardian_name: Optional[str] = None
+    guardian_verification_method: Optional[str] = None
 
 
 class PeakBucket(BaseModel):

@@ -1346,6 +1346,24 @@ async def scan_qr_zone(
     elif zone.direction_mode == "exit":
         direction = "out"
 
+    guardian = None
+    guardian_relationship = None
+    guardian_method = None
+    guardian_denial = None
+    if event.junior_guardian_handoff_enabled:
+        entries = (event.guardian_authorizations or {}).get(guest.id) or []
+        if entries:
+            token = (body.guardian_token or "").strip()
+            guardian = await db.scalar(select(Guest).where(Guest.event_id == event.id, Guest.qr_token == token)) if token else None
+            match = next((entry for entry in entries if guardian and entry.get("guardian_guest_id") == guardian.id), None)
+            if not token:
+                guardian_denial = "Authorized guardian credential is required"
+            elif not guardian or not match:
+                guardian_denial = "Guardian is not authorized for this junior"
+            else:
+                guardian_relationship = match.get("relationship") or "Authorized guardian"
+                guardian_method = "guardian_qr"
+
     # Accepted movements must alternate for each guest and zone. Rejected
     # attempts remain in the audit log without corrupting current occupancy.
     latest_movement = await db.scalar(
@@ -1362,8 +1380,8 @@ async def scan_qr_zone(
 
     # Access decision: valid state transition, ticket permission, then capacity.
     allowed, reason = await ticket_allows(guest, zone.id, db)
-    denied = not allowed
-    deny_reason = reason
+    denied = not allowed or bool(guardian_denial)
+    deny_reason = guardian_denial or reason
     if not denied and latest_movement and latest_movement.direction == direction:
         denied = True
         deny_reason = (
@@ -1381,6 +1399,8 @@ async def scan_qr_zone(
     db.add(ScanEvent(
         event_id=event.id, guest_id=guest.id, zone_id=zone.id, direction=direction,
         scanned_by=current_user.id, denied=denied, deny_reason=deny_reason,
+        guardian_guest_id=guardian.id if guardian and not guardian_denial else None,
+        guardian_relationship=guardian_relationship, guardian_verification_method=guardian_method,
     ))
     # First allowed entry also marks the guest admitted so the normal dashboard
     # still reflects arrivals (legacy events never reach this code).
@@ -1427,6 +1447,8 @@ async def scan_qr_zone(
         guest_name=f"{guest.first_name} {guest.last_name}", ticket_type=tt_name,
         zone_name=zone.name, direction=direction, occupancy=occ,
         journey_count=int(journey_count), seat_number=guest.seat_number, table_name=table_name,
+        guardian_name=f"{guardian.first_name} {guardian.last_name}" if guardian and not guardian_denial else None,
+        guardian_verification_method=guardian_method,
     )
 
 

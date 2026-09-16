@@ -16,7 +16,7 @@ _HANDS_ON_PREREQS = ["Sign in to your Festio staff account", "Use a safe trainin
 
 _modules = [
     ("foundations", "1. Platform foundations", [
-        ("platform-overview", "Platform overview", "Festio_Complete_Platform.png"),
+        ("platform-overview", "Platform overview", "festio-complete-platform-v3.png"),
         ("audience", "Who Festio serves", "festio-target-audiences.png"),
         ("outcomes", "Value and outcomes", "festio-value-outcomes.png"),
         ("use-cases", "Use-case examples", "festio-use-case-examples.png"),

@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     engagement_service_url: str = "http://engagement-service:8060"
     engagement_internal_token: str = ""
     engagement_request_timeout_seconds: float = 3.0
+    # Optional isolated public website renderer. Core event operations never
+    # depend on it; organizer requests fail locally if it is unavailable.
+    public_site_service_url: str = "http://public-site-service:8070"
+    public_site_internal_token: str = ""
+    public_site_management_enabled: bool = False
     marketing_service_url: str = "http://marketing-service:8050"
     # Staging-only paid admission service. The service itself refuses to boot
     # outside staging; this shared secret authenticates token exchange and

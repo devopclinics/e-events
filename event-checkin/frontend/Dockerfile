@@ -3,6 +3,8 @@ WORKDIR /app
 COPY package.json .npmrc ./
 RUN npm install
 COPY . .
+ARG VITE_EVENT_WEBSITES_ENABLED=false
+ENV VITE_EVENT_WEBSITES_ENABLED=$VITE_EVENT_WEBSITES_ENABLED
 
 RUN npm run build
 

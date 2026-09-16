@@ -102,6 +102,7 @@ const ApiExplorerRedesignPage = lazy(() => import('./pages/ApiExplorerRedesignPa
 const PublicPagesRedesignPage = lazy(() => import('./pages/PublicPagesRedesignPage'))
 const LayoutOptionsPage = lazy(() => import('./pages/LayoutOptionsPage'))
 const TrainingPage = lazy(() => import('./pages/TrainingPage'))
+const EventWebsitePage = lazy(() => import('./pages/EventWebsitePage'))
 
 // ── Preferred-view helpers ────────────────────────────────────────────────────
 
@@ -550,6 +551,7 @@ function AppRoutes() {
       <Route path="/api-explorer-redesign" element={<ProtectedRoute><ApiExplorerRedesignPage /></ProtectedRoute>} />
       <Route path="/public-pages-redesign" element={<PublicPagesRedesignPage />} />
       <Route path="/training" element={<ProtectedRoute><TrainingPage /></ProtectedRoute>} />
+      <Route path="/event-website" element={<ProtectedRoute adminOnly><EventWebsitePage /></ProtectedRoute>} />
       <Route path="/layout-options" element={<ProtectedRoute><LayoutOptionsPage /></ProtectedRoute>} />
 
       {/* Authenticated app with Nav */}

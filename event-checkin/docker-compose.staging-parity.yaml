@@ -1,35 +1,35 @@
 services:
   backend:
-    image: dclinics/events:backend-3.1.10
+    image: dclinics/events:backend-3.1.11
     environment:
       PUBLIC_SITE_MANAGEMENT_ENABLED: "true"
   frontend:
-    image: dclinics/events:frontend-3.1.10
+    image: dclinics/events:frontend-3.1.11
   dashboard-service:
-    image: dclinics/events:dashboard-3.1.10
+    image: dclinics/events:dashboard-3.1.11
   engagement-service:
-    image: dclinics/events:engagement-3.1.10
+    image: dclinics/events:engagement-3.1.11
   engagement-worker:
-    image: dclinics/events:engagement-3.1.10
+    image: dclinics/events:engagement-3.1.11
   design-service:
-    image: dclinics/events:design-3.1.10
+    image: dclinics/events:design-3.1.11
   festiome-service:
-    image: dclinics/events:festiome-3.1.10
+    image: dclinics/events:festiome-3.1.11
   marketing-service:
-    image: dclinics/events:marketing-3.1.10
+    image: dclinics/events:marketing-3.1.11
   messaging-service:
-    image: dclinics/events:messaging-3.1.10
+    image: dclinics/events:messaging-3.1.11
   planner-service:
-    image: dclinics/events:planner-3.1.10
+    image: dclinics/events:planner-3.1.11
   setup-service:
-    image: dclinics/events:setup-3.1.10
+    image: dclinics/events:setup-3.1.11
   support-service:
-    image: dclinics/events:support-3.1.10
+    image: dclinics/events:support-3.1.11
   support-worker:
-    image: dclinics/events:support-3.1.10
+    image: dclinics/events:support-3.1.11
   ticketing-service:
-    image: dclinics/events:ticketing-3.1.10
+    image: dclinics/events:ticketing-3.1.11
   public-site-service:
-    image: dclinics/events:public-site-3.1.10
+    image: dclinics/events:public-site-3.1.11
     environment:
       ENABLED: "true"

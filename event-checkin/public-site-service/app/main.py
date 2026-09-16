@@ -61,7 +61,8 @@ async def site_asset(name: str):
     path = os.path.join(settings.upload_dir, name)
     if not os.path.isfile(path):
         raise HTTPException(404, "Image not found")
-    return FileResponse(path, headers={"Cache-Control": "public, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff"})
+    media_type = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}.get(os.path.splitext(name)[1].lower(), "application/octet-stream")
+    return FileResponse(path, media_type=media_type, headers={"Cache-Control": "public, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff"})
 
 
 @app.get("/health")

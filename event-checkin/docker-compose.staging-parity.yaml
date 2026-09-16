@@ -1,29 +1,29 @@
 services:
   backend:
-    image: dclinics/events:backend-3.1.7
+    image: dclinics/events:backend-3.1.8
   frontend:
-    image: dclinics/events:frontend-3.1.7
+    image: dclinics/events:frontend-3.1.8
   dashboard-service:
-    image: dclinics/events:dashboard-3.1.7
+    image: dclinics/events:dashboard-3.1.8
   engagement-service:
-    image: dclinics/events:engagement-3.1.7
+    image: dclinics/events:engagement-3.1.8
   engagement-worker:
-    image: dclinics/events:engagement-3.1.7
+    image: dclinics/events:engagement-3.1.8
   design-service:
-    image: dclinics/events:design-3.1.7
+    image: dclinics/events:design-3.1.8
   festiome-service:
-    image: dclinics/events:festiome-3.1.7
+    image: dclinics/events:festiome-3.1.8
   marketing-service:
-    image: dclinics/events:marketing-3.1.7
+    image: dclinics/events:marketing-3.1.8
   messaging-service:
-    image: dclinics/events:messaging-3.1.7
+    image: dclinics/events:messaging-3.1.8
   planner-service:
-    image: dclinics/events:planner-3.1.7
+    image: dclinics/events:planner-3.1.8
   setup-service:
-    image: dclinics/events:setup-3.1.7
+    image: dclinics/events:setup-3.1.8
   support-service:
-    image: dclinics/events:support-3.1.7
+    image: dclinics/events:support-3.1.8
   support-worker:
-    image: dclinics/events:support-3.1.7
+    image: dclinics/events:support-3.1.8
   ticketing-service:
-    image: dclinics/events:ticketing-3.1.7
+    image: dclinics/events:ticketing-3.1.8

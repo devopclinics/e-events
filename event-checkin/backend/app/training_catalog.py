@@ -52,8 +52,8 @@ _modules.append(("setup", "4. Capability setup guides", [
     (key, title, f"steps/{i:02d}-festio-{key}-guide.png") for i, (key, title) in enumerate(_setup, 1)
 ]))
 _modules.append(("engagement-community", "5. Engagement & community", [
-    ("festio-live", "Festio Live", "steps/21-festio-live-guide.png"),
-    ("festiome-community", "FestioMe", "steps/22-festiome-guide.png"),
+    ("festio-live", "Festio Live", "steps/21-festio-live-infographic-v2.png"),
+    ("festiome-community", "FestioMe", "steps/22-festiome-infographic-v2.png"),
 ]))
 
 

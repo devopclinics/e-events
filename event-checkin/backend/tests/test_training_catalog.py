@@ -11,20 +11,29 @@ def test_published_course_is_complete_ordered_and_unique():
     items = lessons()
     assert course["version"] == COURSE_VERSION
     assert course["status"] == "published"
-    assert course["lesson_count"] == 33
-    assert [item["order"] for item in items] == list(range(1, 34))
-    assert len({item["key"] for item in items}) == 33
+    assert course["lesson_count"] == 35
+    assert [item["order"] for item in items] == list(range(1, 36))
+    assert len({item["key"] for item in items}) == 35
     assert all(item["image_url"].startswith("/knowledge-transfer/assets/") for item in items)
-    assert len({item["icon"] for item in items}) == 33  # every lesson has its own, non-repeated icon
+    assert len({item["icon"] for item in items}) == 35  # every lesson has its own, non-repeated icon
 
 
 def test_staff_track_is_a_contiguously_ordered_subset_of_the_full_course():
     staff_items = lessons("staff")
-    assert len(staff_items) == 11
-    assert [item["order"] for item in staff_items] == list(range(1, 12))
+    assert len(staff_items) == 13
+    assert [item["order"] for item in staff_items] == list(range(1, 14))
     staff_keys = {item["key"] for item in staff_items}
     all_keys = {item["key"] for item in lessons()}
     assert staff_keys < all_keys  # a proper subset, not the whole course
+
+
+def test_engagement_and_community_lessons_are_visible_to_every_role():
+    expected = {"festio-live", "festiome-community"}
+    for role in (None, "owner", "admin", "staff"):
+        course = published_course(role)
+        module = next(item for item in course["modules"] if item["key"] == "engagement-community")
+        assert {lesson["key"] for lesson in module["lessons"]} == expected
+        assert all(lesson["image_url"].startswith("/knowledge-transfer/assets/steps/") for lesson in module["lessons"])
 
 
 def test_client_catalog_never_exposes_answer_key():
@@ -48,7 +57,7 @@ async def test_training_assignment_quiz_sequence_and_tenant_isolation(ctx, monke
     ctx.login(ctx.ids["user_a"])
     response = await ctx.client.get("/api/training/me")
     assert response.status_code == 200
-    assert response.json()["course"]["lesson_count"] == 33
+    assert response.json()["course"]["lesson_count"] == 35
 
     response = await ctx.client.post("/api/training/manage/assignments", json={
         "org_id": ctx.ids["org_a"], "user_ids": [ctx.ids["user_a"].id]
@@ -130,7 +139,7 @@ async def test_course_is_scoped_by_org_role(ctx, monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["role"] == "staff"
-    assert body["course"]["lesson_count"] == 11
+    assert body["course"]["lesson_count"] == 13
     staff_keys = {lesson["key"] for module in body["course"]["modules"] for lesson in module["lessons"]}
     assert "planner" not in staff_keys
     assert "checkin-scanner" in staff_keys

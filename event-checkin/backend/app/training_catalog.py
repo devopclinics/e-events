@@ -6,7 +6,7 @@ with each other instead of drifting into separately-maintained descriptions.
 """
 
 COURSE_KEY = "festio-platform-foundations"
-COURSE_VERSION = 1
+COURSE_VERSION = 2
 
 ALL_ROLES = {"owner", "admin", "staff"}
 _MANAGER_ROLES = {"owner", "admin"}  # lessons about configuring the product, not running it day-of
@@ -50,6 +50,10 @@ _setup = [
 ]
 _modules.append(("setup", "4. Capability setup guides", [
     (key, title, f"steps/{i:02d}-festio-{key}-guide.png") for i, (key, title) in enumerate(_setup, 1)
+]))
+_modules.append(("engagement-community", "5. Engagement & community", [
+    ("festio-live", "Festio Live", "steps/21-festio-live-guide.png"),
+    ("festiome-community", "FestioMe", "steps/22-festiome-guide.png"),
 ]))
 
 
@@ -969,6 +973,64 @@ LESSON_CONTENT = {
             {"question": "What's the safe response if a customer pastes an API key into a support message?", "options": [
                 "Have them revoke and recreate it immediately", "Use it to help debug, then delete it from the ticket",
                 "Ignore it", "Forward it to another customer as an example",
+            ], "correct": 0},
+        ],
+    },
+    "festio-live": {
+        "icon": "🎙️",
+        "objective": "Set up and operate Festio Live so guests can join an event's polls, quizzes, Q&A, feedback, and moderated live activities from their phones.",
+        "why_it_matters": "Festio Live turns a one-way programme into measurable participation while keeping the organizer in control of what is open, displayed, and retained in the event results.",
+        "steps": [
+            "Open the event's Experience area, confirm the intended experience is synced to Festio Live, and verify the event and audience before opening participation.",
+            "Create or review the required live activities -- poll, quiz, Q&A, feedback, or another supported interaction -- including clear instructions and the correct open and close state.",
+            "Share the guest participation link or QR code and test it in a private browser as a guest before presenting it to the room.",
+            "Use the control room to open, pause, moderate, display, and close each activity; use the projector view only for content that is ready for the audience.",
+            "After the activity closes, review responses and the available event insight so the programme team can act on participation and feedback.",
+        ],
+        "common_mistakes": [
+            "Assuming an Experience sync automatically opens every activity -- verify the activity in the Festio Live control room",
+            "Sharing the organizer or projector URL instead of the guest participation link",
+            "Opening Q&A without assigning a moderator to review submissions before display",
+            "Skipping a rehearsal of the guest phone, control room, and projector views before the session",
+        ],
+        "practical": "In a safe training event, create one poll and one moderated Q&A, join through the guest link, submit a response, display an approved item, close both activities, and verify the results.",
+        "quiz": [
+            {"question": "Which link should attendees receive for a Festio Live activity?", "options": [
+                "The guest participation link or QR code", "The organizer control-room link",
+                "The projector link", "The Academy lesson link",
+            ], "correct": 0},
+            {"question": "What should happen before a live Q&A is shown to the audience?", "options": [
+                "A moderator should review and approve submissions according to the event's process", "Every submission should appear automatically",
+                "The event must be archived", "Guests must be given admin access",
+            ], "correct": 0},
+        ],
+    },
+    "festiome-community": {
+        "icon": "🫂",
+        "objective": "Configure and verify FestioMe as the event community space where approved guests can discover people, join relevant conversations, and continue engagement around the programme.",
+        "why_it_matters": "A useful event community needs deliberate access, audience, privacy, and moderation settings; simply enabling the feature does not prove that the right guests can see the right space.",
+        "steps": [
+            "Enable FestioMe for a safe training event and configure the intended community or group for that event's audience.",
+            "Review who should have access, including age and privacy rules, before adding or inviting participants; keep junior safeguarding requirements separate from adult networking.",
+            "Open the guest's FestioMe entry point from their authorized event or pass link, then verify the community appears for an eligible participant.",
+            "Create a welcome post or conversation prompt, test participant discovery and interaction, and confirm an organizer can moderate the content.",
+            "Use FestioMe for community conversation while keeping formal programme updates in the event's configured announcement or broadcast channel.",
+        ],
+        "common_mistakes": [
+            "Assuming enabling FestioMe automatically gives every guest access without checking audience eligibility",
+            "Treating a general event announcement feed as the same thing as a FestioMe community conversation",
+            "Including junior attendees in adult discovery or networking without the event's safeguarding and privacy rules",
+            "Testing only as an organizer and never confirming the direct guest experience",
+        ],
+        "practical": "Enable FestioMe in a safe training event, admit one eligible test participant, open the community through that guest's link, post a welcome message, and verify the organizer moderation controls.",
+        "quiz": [
+            {"question": "What proves FestioMe is ready for guests?", "options": [
+                "An eligible test guest can open the event community from their authorized guest journey", "The organizer can see the FestioMe menu",
+                "The event has at least one session", "A public social-media link has been posted",
+            ], "correct": 0},
+            {"question": "How should junior participants be handled in FestioMe?", "options": [
+                "Apply the event's safeguarding, audience, and privacy rules before enabling discovery or community access", "Place them in adult networking by default",
+                "Give guardians organizer accounts", "Publish their personal details on badges",
             ], "correct": 0},
         ],
     },

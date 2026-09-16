@@ -555,3 +555,5 @@
 .ds-gh-tpl-parchment-classic .gh-poster { background-image: linear-gradient(160deg, #c99a9a, #3a1414); }
 .ds-gh-tpl-parchment-classic .gh-poster-framed { border: 1.5px solid var(--p-accent); padding: 2px; background-clip: content-box; }
 .ds-gh-tpl-parchment-classic .gh-ornament { text-align: center; color: var(--p-accent); font-size: 9px; padding: 2px 0 6px; }
+
+.ds-website-link{display:inline-flex;align-items:center;margin-left:14px;padding:8px 12px;border:1px solid #cfddd8;border-radius:9px;background:#fff;color:#174b44;text-decoration:none;font-size:13px;font-weight:800}.ds-website-link:hover{background:#eef7f4}

@@ -551,7 +551,8 @@ function AppRoutes() {
       <Route path="/api-explorer-redesign" element={<ProtectedRoute><ApiExplorerRedesignPage /></ProtectedRoute>} />
       <Route path="/public-pages-redesign" element={<PublicPagesRedesignPage />} />
       <Route path="/training" element={<ProtectedRoute><TrainingPage /></ProtectedRoute>} />
-      <Route path="/event-website" element={<ProtectedRoute adminOnly><EventWebsitePage /></ProtectedRoute>} />
+      <Route path="/design-studio-redesign/website" element={<ProtectedRoute adminOnly paidOnly><EventWebsitePage /></ProtectedRoute>} />
+      <Route path="/event-website" element={<Navigate to="/design-studio-redesign/website" replace />} />
       <Route path="/layout-options" element={<ProtectedRoute><LayoutOptionsPage /></ProtectedRoute>} />
 
       {/* Authenticated app with Nav */}

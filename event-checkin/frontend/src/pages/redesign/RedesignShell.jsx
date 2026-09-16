@@ -324,7 +324,6 @@ const TOP_LINKS = [
     gate: ({ user, event }) => user?.role === 'admin' && !!event?.is_paid,
   },
   { id: 'results', label: 'Results', to: '/event-results-redesign', icon: 'barchart' },
-  { id: 'website', label: 'Website', to: '/event-website', icon: 'external', gate: () => import.meta.env.VITE_EVENT_WEBSITES_ENABLED === 'true' },
   {
     id: 'planner', label: 'Planner', to: '/planner-redesign', icon: 'book',
     gate: ({ event }) => !!event?.planner_enabled,

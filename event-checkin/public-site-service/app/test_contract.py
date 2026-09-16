@@ -22,6 +22,18 @@ class PublicSiteContractTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             SiteContent(**bad)
 
+    def test_community_track_image_and_venue_are_linked_safely(self):
+        content = self.sample()
+        content["venue"] = "Convention Center"
+        content["venue_url"] = "https://maps.google.com/?q=Convention+Center"
+        content["tracks"] = [{"title": "Junior Platform", "description": "Learn and play", "icon": "✦", "image_url": "https://cdn.example.com/junior.webp"}]
+        validated = SiteContent(**content).model_dump(mode="json")
+        page = render_site(validated, "community")
+        self.assertIn('class="venue-link"', page)
+        self.assertIn('href="https://maps.google.com/?q=Convention+Center"', page)
+        self.assertIn('src="https://cdn.example.com/junior.webp"', page)
+        self.assertIn("Junior Platform", page)
+
     def test_javascript_links_are_rejected_by_schema(self):
         bad = self.sample(); bad["primary_action"]["url"] = "javascript:alert(1)"
         with self.assertRaises(ValidationError):

@@ -25,6 +25,7 @@ class Track(BaseModel):
     title: str = Field(min_length=1, max_length=100)
     description: str = Field(default="", max_length=180)
     icon: str = Field(default="✦", max_length=8)
+    image_url: HttpUrl | None = None
 
 
 class SiteContent(BaseModel):
@@ -36,6 +37,8 @@ class SiteContent(BaseModel):
     start_date: str = Field(default="", max_length=60)
     end_date: str = Field(default="", max_length=60)
     venue: str = Field(default="", max_length=180)
+    venue_address: str = Field(default="", max_length=300)
+    venue_url: HttpUrl | None = None
     hero_image_url: HttpUrl | None = None
     feature_image_url: HttpUrl | None = None
     logo_url: HttpUrl | None = None

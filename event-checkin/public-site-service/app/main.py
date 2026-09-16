@@ -125,6 +125,18 @@ async def publish(event_id: str, body: PublishRequest, db: AsyncSession = Depend
     return {"version": version, "release_id": release.id, "public_url": f"{settings.public_base_url.rstrip('/')}/site/{site.slug}"}
 
 
+@app.post("/internal/sites/{event_id}/unpublish", dependencies=[Depends(require_internal)])
+async def unpublish(event_id: str, db: AsyncSession = Depends(get_db)):
+    site = await db.scalar(select(Site).where(Site.event_id == event_id))
+    if not site:
+        raise HTTPException(404, "Website not configured")
+    if not site.published_release_id:
+        raise HTTPException(409, "Website is not currently published")
+    site.published_release_id = None
+    await db.commit()
+    return serialize(site)
+
+
 @app.get("/internal/sites/{event_id}/releases", dependencies=[Depends(require_internal)])
 async def releases(event_id: str, db: AsyncSession = Depends(get_db)):
     site = await db.scalar(select(Site).where(Site.event_id == event_id))

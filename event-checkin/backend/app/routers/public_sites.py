@@ -66,6 +66,11 @@ async def publish_website(event_id: str, user: User = Depends(require_event_admi
     return await _call("POST", f"/internal/sites/{event_id}/publish", json={"published_by": user.email})
 
 
+@router.post("/{event_id}/website/unpublish")
+async def unpublish_website(event_id: str, _: User = Depends(require_event_admin)):
+    return await _call("POST", f"/internal/sites/{event_id}/unpublish")
+
+
 @router.get("/{event_id}/website/releases")
 async def website_releases(event_id: str, _: User = Depends(require_event_admin)):
     return await _call("GET", f"/internal/sites/{event_id}/releases")

@@ -34,6 +34,27 @@ class PublicSiteContractTests(unittest.TestCase):
         self.assertIn('src="https://cdn.example.com/junior.webp"', page)
         self.assertIn("Junior Platform", page)
 
+    def test_navigation_renders_only_enabled_valid_destinations(self):
+        content = self.sample()
+        content["contact_email"] = "events@example.com"
+        content["navigation"] = [
+            {"id": "programme", "label": "Programme", "destination_type": "section", "url": "#programme", "enabled": True},
+            {"id": "speakers", "label": "Speakers", "destination_type": "speakers", "url": "https://festio.events/speakers/demo", "enabled": True},
+            {"id": "junior", "label": "Junior", "destination_type": "custom", "url": "", "enabled": False},
+        ]
+        validated = SiteContent(**content).model_dump(mode="json")
+        page = render_site(validated, "community")
+        self.assertIn('href="#programme"', page)
+        self.assertIn('href="https://festio.events/speakers/demo"', page)
+        self.assertNotIn('>Junior</a>', page)
+        self.assertNotIn('<a>Speakers</a>', page)
+
+    def test_unsafe_navigation_destination_is_rejected(self):
+        content = self.sample()
+        content["navigation"] = [{"id": "bad", "label": "Bad", "destination_type": "custom", "url": "javascript:alert(1)"}]
+        with self.assertRaises(ValidationError):
+            SiteContent(**content)
+
     def test_javascript_links_are_rejected_by_schema(self):
         bad = self.sample(); bad["primary_action"]["url"] = "javascript:alert(1)"
         with self.assertRaises(ValidationError):

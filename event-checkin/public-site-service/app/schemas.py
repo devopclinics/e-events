@@ -28,6 +28,30 @@ class Track(BaseModel):
     image_url: HttpUrl | None = None
 
 
+class NavigationItem(BaseModel):
+    id: str = Field(min_length=1, max_length=60)
+    label: str = Field(min_length=1, max_length=60)
+    destination_type: Literal["section", "speakers", "venue", "contact", "custom"] = "custom"
+    url: str = Field(default="", max_length=1000)
+    enabled: bool = True
+
+    @field_validator("url")
+    @classmethod
+    def valid_destination(cls, value: str) -> str:
+        from urllib.parse import urlparse
+        value = value.strip()
+        if not value:
+            return value
+        if value.startswith("#") and len(value) > 1:
+            return value
+        parsed = urlparse(value)
+        if parsed.scheme in {"http", "https"} and parsed.netloc:
+            return value
+        if parsed.scheme == "mailto" and "@" in parsed.path:
+            return value
+        raise ValueError("must be an http(s), mailto, or page-section destination")
+
+
 class SiteContent(BaseModel):
     schema_version: Literal[1] = 1
     event_name: str = Field(min_length=1, max_length=180)
@@ -55,6 +79,9 @@ class SiteContent(BaseModel):
     festio_live_url: HttpUrl | None = None
     festiome_url: HttpUrl | None = None
     contact_email: str = Field(default="", max_length=180)
+    brand_tagline: str = Field(default="", max_length=160)
+    footer_tagline: str = Field(default="", max_length=160)
+    navigation: list[NavigationItem] = Field(default_factory=list, max_length=12)
 
     @field_validator("primary_color", "accent_color")
     @classmethod

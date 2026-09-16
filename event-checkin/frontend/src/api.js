@@ -1844,6 +1844,7 @@ export const api = {
   saveWebsite: (eventId, body) => req('PUT', `/events/${eventId}/website`, body),
   previewWebsite: (eventId) => req('POST', `/events/${eventId}/website/preview`, {}),
   publishWebsite: (eventId) => req('POST', `/events/${eventId}/website/publish`, {}),
+  unpublishWebsite: (eventId) => req('POST', `/events/${eventId}/website/unpublish`, {}),
   websiteReleases: (eventId) => req('GET', `/events/${eventId}/website/releases`),
   rollbackWebsite: (eventId, releaseId) => req('POST', `/events/${eventId}/website/rollback/${releaseId}`, {}),
   trainingMe: (orgId='') => req('GET', `/training/me${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`),

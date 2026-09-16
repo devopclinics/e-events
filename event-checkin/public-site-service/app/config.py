@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     internal_service_token: str = ""
     public_base_url: str = "http://localhost:8070"
     enabled: bool = False
+    upload_dir: str = "/data/public-site-assets"
 
 
 settings = Settings()

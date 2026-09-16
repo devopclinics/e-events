@@ -1,3 +1,4 @@
+from .community import render as render_community
 from html import escape
 from urllib.parse import urlparse
 
@@ -16,6 +17,8 @@ def _action(link, cls="button") -> str:
 
 
 def render_site(content: dict, family: str, *, preview: bool = False) -> str:
+    if family == "community":
+        return render_community(content, preview=preview)
     name = escape(content.get("event_name", "Event"))
     headline = escape(content.get("headline", name))
     summary = escape(content.get("summary", ""))

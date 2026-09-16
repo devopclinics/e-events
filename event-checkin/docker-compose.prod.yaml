@@ -538,6 +538,9 @@ services:
       INTERNAL_SERVICE_TOKEN: ${PUBLIC_SITE_INTERNAL_TOKEN:-${PLANNER_INTERNAL_SERVICE_TOKEN:-}}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:4000}
       ENABLED: ${PUBLIC_SITES_ENABLED:-false}
+      UPLOAD_DIR: /data/public-site-assets
+    volumes:
+      - public-site-assets:/data/public-site-assets
     depends_on:
       public-site-db:
         condition: service_healthy
@@ -775,6 +778,8 @@ volumes:
     name: event-checkin_planner-uploads
   public-site-pgdata:
     name: event-checkin_public-site-pgdata
+  public-site-assets:
+    name: event-checkin_public-site-assets
   ticketing-pgdata:
     name: event-checkin_ticketing-pgdata
   chatwoot-pgdata:

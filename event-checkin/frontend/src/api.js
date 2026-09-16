@@ -35,6 +35,14 @@ async function getToken() {
   return u ? u.getIdToken() : null
 }
 
+async function uploadWebsiteAsset(eventId, file) {
+  const token = await getToken()
+  const form = new FormData(); form.append('file', file)
+  const res = await fetch(`${BASE}/events/${encodeURIComponent(eventId)}/website/assets`, { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: form })
+  if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(data.detail || 'Image upload failed') }
+  return res.json()
+}
+
 async function req(method, path, body) {
   const token = await getToken()
   const opts = {
@@ -1832,6 +1840,7 @@ export const api = {
   marketingPublicForm: (token) => req('GET', `/marketing/forms/${token}`),
   marketingSubmitPublicForm: (token, body) => req('POST', `/marketing/forms/${token}/submit`, body),
   website: (eventId) => req('GET', `/events/${eventId}/website`),
+  uploadWebsiteAsset,
   saveWebsite: (eventId, body) => req('PUT', `/events/${eventId}/website`, body),
   previewWebsite: (eventId) => req('POST', `/events/${eventId}/website/preview`, {}),
   publishWebsite: (eventId) => req('POST', `/events/${eventId}/website/publish`, {}),

@@ -1,8 +1,10 @@
 import secrets
+import os
+import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import Depends, FastAPI, Header, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +15,7 @@ from .render import render_site
 from .schemas import PublishRequest, SiteUpsert
 
 app = FastAPI(title="Festio Public Sites", version="1.0.0")
+ALLOWED_IMAGES = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
 
 
 def require_internal(x_internal_token: str | None = Header(default=None)):
@@ -22,6 +25,43 @@ def require_internal(x_internal_token: str | None = Header(default=None)):
 
 def serialize(site: Site):
     return {"event_id": site.event_id, "org_id": site.org_id, "slug": site.slug, "template_family": site.template_family, "content": site.draft, "published_release_id": site.published_release_id, "enabled": site.enabled, "public_url": f"{settings.public_base_url.rstrip('/')}/site/{site.slug}"}
+
+
+@app.post("/internal/sites/{event_id}/assets", dependencies=[Depends(require_internal)])
+async def upload_asset(event_id: str, file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    site = await db.scalar(select(Site).where(Site.event_id == event_id))
+    if not site:
+        raise HTTPException(404, "Save the website before uploading images")
+    suffix = ALLOWED_IMAGES.get(file.content_type or "")
+    if not suffix:
+        raise HTTPException(415, "Upload a JPG, PNG, or WebP image")
+    data = await file.read(5 * 1024 * 1024 + 1)
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(413, "Image must be 5 MB or smaller")
+    try:
+        from PIL import Image
+        from io import BytesIO
+        image = Image.open(BytesIO(data)); image.verify()
+        width, height = Image.open(BytesIO(data)).size
+    except Exception:
+        raise HTTPException(422, "The uploaded file is not a valid image")
+    if width > 6000 or height > 6000:
+        raise HTTPException(422, "Image dimensions must not exceed 6000 pixels")
+    os.makedirs(settings.upload_dir, exist_ok=True)
+    name = f"{site.id}-{uuid.uuid4().hex}{suffix}"
+    with open(os.path.join(settings.upload_dir, name), "wb") as target:
+        target.write(data)
+    return {"url": f"{settings.public_base_url.rstrip('/')}/site-assets/{name}", "width": width, "height": height}
+
+
+@app.get("/site-assets/{name}", response_class=FileResponse)
+async def site_asset(name: str):
+    if not name or name != os.path.basename(name):
+        raise HTTPException(404)
+    path = os.path.join(settings.upload_dir, name)
+    if not os.path.isfile(path):
+        raise HTTPException(404, "Image not found")
+    return FileResponse(path, headers={"Cache-Control": "public, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff"})
 
 
 @app.get("/health")

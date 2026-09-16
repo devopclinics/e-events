@@ -1,5 +1,5 @@
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_event_admin
@@ -25,6 +25,21 @@ async def _call(method: str, path: str, *, json=None):
         except ValueError:
             pass
         raise HTTPException(response.status_code, detail)
+    return response.json()
+
+
+@router.post("/{event_id}/website/assets")
+async def upload_website_asset(event_id: str, file: UploadFile = File(...), _: User = Depends(require_event_admin)):
+    if not settings.public_site_management_enabled:
+        raise HTTPException(404, "Event websites are not enabled")
+    data = await file.read(5 * 1024 * 1024 + 1)
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(f"{settings.public_site_service_url.rstrip('/')}/internal/sites/{event_id}/assets", headers={"X-Internal-Token": settings.public_site_internal_token}, files={"file": (file.filename or "image", data, file.content_type or "application/octet-stream")})
+    except httpx.RequestError:
+        raise HTTPException(503, "Website service is temporarily unavailable")
+    if response.status_code >= 400:
+        raise HTTPException(response.status_code, response.json().get("detail", "Image upload failed"))
     return response.json()
 
 

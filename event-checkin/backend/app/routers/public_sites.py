@@ -25,13 +25,19 @@ async def _website_connections(event: Event, db: AsyncSession) -> dict:
     live_url = ""
     if event.engagement_enabled:
         live_url = live_join_url(await ensure_live_join_code(event.id, db))
+    # festiome_open_url is an in-app route (e.g. "/festiome?group=…"), meant for
+    # the SPA's own router — resolve it against the public base so it's a real
+    # absolute URL wherever it's used outside the SPA (the site's Link/
+    # NavigationItem fields both require one; see the Al-Azeemah publish 422).
+    festiome_raw = event.festiome_open_url or ""
+    festiome_url = f"{base}{festiome_raw}" if festiome_raw.startswith("/") else festiome_raw
     connections = {
         "section": {"label": "Programme", "url": "#programme", "available": True, "source": "Website programme", "configure_url": "/design-studio-redesign/website"},
         "venue": {"label": "Venue", "url": f"https://www.google.com/maps/search/?api=1&query={quote_plus(venue_query)}" if venue_query else "", "available": bool(venue_query), "source": "Event Setup", "configure_url": "/admin-redesign"},
         "speakers": {"label": "Speakers", "url": speakers_url, "available": bool(speakers_url), "source": "Speakers add-on", "configure_url": "/addons-redesign?tab=speakers"},
         "rsvp": {"label": "Register / RSVP", "url": f"{base}/rsvp/{event.rsvp_token}" if event.rsvp_enabled and event.rsvp_token else "", "available": bool(event.rsvp_enabled and event.rsvp_token), "source": "Invites & RSVP", "configure_url": "/guests-redesign?tab=invite"},
         "festio_live": {"label": "Festio Live", "url": live_url, "available": bool(live_url), "source": "Festio Live", "configure_url": "/festio-live-redesign"},
-        "festiome": {"label": "FestioMe", "url": event.festiome_open_url or "", "available": bool(event.festiome_addon_enabled and event.festiome_open_url), "source": "FestioMe", "configure_url": "/festiome-redesign"},
+        "festiome": {"label": "FestioMe", "url": festiome_url, "available": bool(event.festiome_addon_enabled and festiome_url), "source": "FestioMe", "configure_url": "/festiome-redesign"},
         "contact": {"label": "Contact", "url": "", "available": False, "source": "Website settings", "configure_url": "/design-studio-redesign/website"},
     }
     return connections

@@ -26,10 +26,11 @@ class Session(BaseModel):
     track: str = Field(default="", max_length=80)
     speaker: str = Field(default="", max_length=160)
     description: str = Field(default="", max_length=600)
+    image_url: HttpUrl | None = None
     action_label: str = Field(default="", max_length=60)
     action_url: HttpUrl | None = None
 
-    @field_validator("action_url", mode="before")
+    @field_validator("action_url", "image_url", mode="before")
     @classmethod
     def blank_url_is_none(cls, value):
         return None if value in (None, "") else value
@@ -92,12 +93,21 @@ class Track(BaseModel):
     title: str = Field(min_length=1, max_length=100)
     description: str = Field(default="", max_length=180)
     icon: str = Field(default="✦", max_length=8)
+    color: str = Field(default="", max_length=7)
     image_url: HttpUrl | None = None
 
     @field_validator("image_url", mode="before")
     @classmethod
     def blank_image_url_is_none(cls, value):
         return None if value in (None, "") else value
+
+    @field_validator("color")
+    @classmethod
+    def valid_color(cls, value: str) -> str:
+        import re
+        if value and not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
+            raise ValueError("must be a six-digit hex color")
+        return value
 
 
 class NavigationItem(BaseModel):

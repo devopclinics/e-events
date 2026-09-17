@@ -93,6 +93,7 @@ class NavigationItem(BaseModel):
     destination_type: Literal["section", "speakers", "venue", "rsvp", "festio_live", "festiome", "contact", "custom"] = "custom"
     url: str = Field(default="", max_length=1000)
     enabled: bool = True
+    requested_enabled: bool | None = None
 
     @field_validator("url")
     @classmethod
@@ -113,6 +114,7 @@ class NavigationItem(BaseModel):
 
 class SiteContent(BaseModel):
     schema_version: Literal[1] = 1
+    publication_features_version: Literal[2] = 2
     event_name: str = Field(min_length=1, max_length=180)
     eyebrow: str = Field(default="", max_length=100)
     headline: str = Field(min_length=1, max_length=220)

@@ -9,7 +9,7 @@ from ..auth import require_event_admin
 from ..config import settings
 from ..database import get_db
 from ..models import Event, GuestSpeaker, User
-from .engagement import _ensure_live_join_code, _live_join_url
+from .engagement import ensure_live_join_code, live_join_url
 from ..services.experience import active_workflow
 from .speakers import ensure_speaker_token
 
@@ -24,8 +24,7 @@ async def _website_connections(event: Event, db: AsyncSession) -> dict:
         speakers_url = f"{base}/speakers/{await ensure_speaker_token(event, db)}"
     live_url = ""
     if event.engagement_enabled:
-        live_url = _live_join_url(await _ensure_live_join_code(event.id, db))
-    contact_email = ""
+        live_url = live_join_url(await ensure_live_join_code(event.id, db))
     connections = {
         "section": {"label": "Programme", "url": "#programme", "available": True, "source": "Website programme", "configure_url": "/design-studio-redesign/website"},
         "venue": {"label": "Venue", "url": f"https://www.google.com/maps/search/?api=1&query={quote_plus(venue_query)}" if venue_query else "", "available": bool(venue_query), "source": "Event Setup", "configure_url": "/admin-redesign"},
@@ -33,7 +32,7 @@ async def _website_connections(event: Event, db: AsyncSession) -> dict:
         "rsvp": {"label": "Register / RSVP", "url": f"{base}/rsvp/{event.rsvp_token}" if event.rsvp_enabled and event.rsvp_token else "", "available": bool(event.rsvp_enabled and event.rsvp_token), "source": "Invites & RSVP", "configure_url": "/guests-redesign?tab=invite"},
         "festio_live": {"label": "Festio Live", "url": live_url, "available": bool(live_url), "source": "Festio Live", "configure_url": "/festio-live-redesign"},
         "festiome": {"label": "FestioMe", "url": event.festiome_open_url or "", "available": bool(event.festiome_addon_enabled and event.festiome_open_url), "source": "FestioMe", "configure_url": "/festiome-redesign"},
-        "contact": {"label": "Contact", "url": f"mailto:{contact_email}" if contact_email else "", "available": False, "source": "Website settings", "configure_url": "/design-studio-redesign/website"},
+        "contact": {"label": "Contact", "url": "", "available": False, "source": "Website settings", "configure_url": "/design-studio-redesign/website"},
     }
     return connections
 
@@ -102,7 +101,10 @@ def _resolve_navigation(content: dict, connections: dict) -> dict:
         item = dict(raw)
         source = connections.get(item.get("destination_type"))
         if source is not None:
+            requested = bool(item.get("requested_enabled", item.get("enabled", True)))
+            item["requested_enabled"] = requested
             item["url"] = source["url"]
+            item["enabled"] = bool(requested and source.get("available"))
         navigation.append(item)
     result["navigation"] = navigation
     return result

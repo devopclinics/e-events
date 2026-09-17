@@ -73,10 +73,11 @@ class PublicSiteContractTests(unittest.TestCase):
             "festiome_url": "https://community.example/event",
         })
         validated = SiteContent(**content).model_dump(mode="json")
-        page = render_site(validated, "community")
-        for expected in ("Four-day programme", "Day 1", "Day 2", "Dr. Amina", "Gala Night", "Parking", "Are children included?", "Participate in live Q&amp;A, polls and activities."):
-            self.assertIn(expected, page)
-        self.assertNotIn("<script>", page)
+        for family in ("community", "conference", "celebration"):
+            page = render_site(validated, family)
+            for expected in ("Four-day programme", "Day 1", "Day 2", "Dr. Amina", "Gala Night", "Parking", "Are children included?", "Participate in live Q&amp;A, polls and activities."):
+                self.assertIn(expected, page, f"missing {expected!r} in {family} render")
+            self.assertNotIn("<script>", page)
 
     def test_unsafe_navigation_destination_is_rejected(self):
         content = self.sample()

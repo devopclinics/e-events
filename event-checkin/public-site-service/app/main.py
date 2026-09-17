@@ -23,8 +23,21 @@ def require_internal(x_internal_token: str | None = Header(default=None)):
         raise HTTPException(401, "Invalid internal service token")
 
 
-def serialize(site: Site):
-    return {"event_id": site.event_id, "org_id": site.org_id, "slug": site.slug, "template_family": site.template_family, "content": site.draft, "published_release_id": site.published_release_id, "enabled": site.enabled, "public_url": f"{settings.public_base_url.rstrip('/')}/site/{site.slug}"}
+async def serialize(site: Site, db: AsyncSession):
+    release = await db.get(Release, site.published_release_id) if site.published_release_id else None
+    published_snapshot = release.snapshot if release else None
+    draft_snapshot = {"family": site.template_family, "content": site.draft}
+    return {
+        "event_id": site.event_id, "org_id": site.org_id, "slug": site.slug,
+        "template_family": site.template_family, "content": site.draft,
+        "published_release_id": site.published_release_id, "enabled": site.enabled,
+        "public_url": f"{settings.public_base_url.rstrip('/')}/site/{site.slug}",
+        "draft_updated_at": site.updated_at,
+        "published_at": release.created_at if release else None,
+        "published_version": release.version if release else None,
+        "draft_is_newer": bool(release and published_snapshot != draft_snapshot),
+        "live_release_outdated": bool(release and (release.snapshot.get("content") or {}).get("publication_features_version", 1) < 2),
+    }
 
 
 @app.post("/internal/sites/{event_id}/assets", dependencies=[Depends(require_internal)])
@@ -85,7 +98,7 @@ async def get_site(event_id: str, db: AsyncSession = Depends(get_db)):
     site = await db.scalar(select(Site).where(Site.event_id == event_id))
     if not site:
         raise HTTPException(404, "Website not configured")
-    return serialize(site)
+    return await serialize(site, db)
 
 
 @app.put("/internal/sites/{event_id}", dependencies=[Depends(require_internal)])
@@ -99,7 +112,7 @@ async def put_site(event_id: str, body: SiteUpsert, db: AsyncSession = Depends(g
         db.add(site)
     site.org_id, site.slug, site.template_family, site.draft = body.org_id, body.slug, body.template_family, body.content.model_dump(mode="json")
     await db.commit(); await db.refresh(site)
-    return serialize(site)
+    return await serialize(site, db)
 
 
 @app.post("/internal/sites/{event_id}/preview", dependencies=[Depends(require_internal)])
@@ -134,7 +147,7 @@ async def unpublish(event_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(409, "Website is not currently published")
     site.published_release_id = None
     await db.commit()
-    return serialize(site)
+    return await serialize(site, db)
 
 
 @app.get("/internal/sites/{event_id}/releases", dependencies=[Depends(require_internal)])

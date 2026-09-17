@@ -43,13 +43,13 @@ def _new_live_join_code() -> str:
     return "".join(secrets.choice(LIVE_JOIN_CODE_ALPHABET) for _ in range(LIVE_JOIN_CODE_LENGTH))
 
 
-def _live_join_url(code: str) -> str:
+def live_join_url(code: str) -> str:
     from ..config import settings
     base_url = settings.public_base_url or "https://festio.events"
     return f"{base_url.rstrip('/')}/l/{code}"
 
 
-async def _ensure_live_join_code(event_id: str, db: AsyncSession) -> str:
+async def ensure_live_join_code(event_id: str, db: AsyncSession) -> str:
     """Return the event's stable code, creating it safely on first use.
 
     Locking the event row serializes simultaneous QR/info requests for the
@@ -216,8 +216,8 @@ async def live_join_info(
     if not event.engagement_enabled:
         raise HTTPException(402, "Festio Live needs the Festio Live add-on. Buy it for this event to unlock it.", headers={"X-Required-Addon": "addon_engagement"})
     await _require_live_admin(event, user, db)
-    code = await _ensure_live_join_code(event_id, db)
-    return LiveJoinInfo(code=code, url=_live_join_url(code))
+    code = await ensure_live_join_code(event_id, db)
+    return LiveJoinInfo(code=code, url=live_join_url(code))
 
 
 @router.get("/{event_id}/live/public-join-info", response_model=LiveJoinInfo)
@@ -227,8 +227,8 @@ async def public_live_join_info(
     _: None = Depends(rate_limit(limit=120, window=60, scope="engagement_public_join_info", key="event_id")),
 ):
     """Public display-safe join data (the same information encoded in QR)."""
-    code = await _ensure_live_join_code(event_id, db)
-    return LiveJoinInfo(code=code, url=_live_join_url(code))
+    code = await ensure_live_join_code(event_id, db)
+    return LiveJoinInfo(code=code, url=live_join_url(code))
 
 
 @router.post("/{event_id}/live/anon-token", response_model=LiveAnonJoinOut)
@@ -295,8 +295,8 @@ async def live_join_qr(event_id: str, db: AsyncSession = Depends(get_db)):
     event = await db.get(Event, event_id)
     if not event or not event.engagement_enabled:
         return Response(status_code=404)
-    code = await _ensure_live_join_code(event_id, db)
-    join_url = _live_join_url(code)
+    code = await ensure_live_join_code(event_id, db)
+    join_url = live_join_url(code)
     return Response(content=generate_qr_for_url(join_url), media_type="image/png")
 
 

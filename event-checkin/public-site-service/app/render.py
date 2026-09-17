@@ -5,6 +5,7 @@ from .community import (
     navigation_markup,
     render as render_community,
     safe_url,
+    safe_destination,
     schedule_markup,
     speakers_markup,
     track_colors,
@@ -57,13 +58,14 @@ def render_site(content: dict, family: str, *, preview: bool = False) -> str:
     venue_address = e(content.get("venue_address", ""))
     venue_action = f'<a class="button secondary" href="{venue_url}" target="_blank" rel="noopener">Open directions</a>' if venue_url else ""
     venue_facts = facts_markup(content.get("venue_facts"))
-    venue = f'<section id="venue"><div class="eyebrow">Venue &amp; travel</div><h2>{venue_name or "Plan your arrival"}</h2><p>{venue_address}</p>{venue_action}<div class="facts">{venue_facts}</div></section>' if venue_name or venue_address or content.get("venue_facts") else ""
+    venue_heading = f'<a class="venue-heading-link" href="{venue_url}" target="_blank" rel="noopener"><h2>{venue_name or "Plan your arrival"}</h2><p>{venue_address}</p></a>' if venue_url else f'<h2>{venue_name or "Plan your arrival"}</h2><p>{venue_address}</p>'
+    venue = f'<section id="venue"><div class="eyebrow">Venue &amp; travel</div>{venue_heading}{venue_action}<div class="facts">{venue_facts}</div></section>' if venue_name or venue_address or content.get("venue_facts") else ""
 
     live = action({"label": "Join Festio Live", "url": content.get("festio_live_url")}, "text-link") if content.get("festio_live_url") else ""
-    me = action({"label": "Open FestioMe", "url": content.get("festiome_url")}, "text-link") if content.get("festiome_url") else ""
+    me = action({"label": "Open GuestHub", "url": content.get("festiome_url")}, "text-link") if content.get("festiome_url") else ""
     live_title = e(content.get("festio_live_title") or "Festio Live")
     live_description = e(content.get("festio_live_description") or "Participate in live Q&A, polls and activities.")
-    me_title = e(content.get("festiome_title") or "FestioMe")
+    me_title = e(content.get("festiome_title") or "GuestHub")
     me_description = e(content.get("festiome_description") or "Your personal event hub, pass and programme.")
     live_panel = f'<div><strong>{live_title}</strong><p>{live_description}</p>{live}</div>' if live else ""
     me_panel = f'<div><strong>{me_title}</strong><p>{me_description}</p>{me}</div>' if me else ""
@@ -72,7 +74,8 @@ def render_site(content: dict, family: str, *, preview: bool = False) -> str:
     faqs = "".join(f'<details><summary>{e(item.get("question", ""))}</summary><p>{e(item.get("answer", ""))}</p></details>' for item in content.get("faqs") or [])
     faq_section = f'<section id="faq"><div class="eyebrow">Helpful details</div><h2>Frequently asked questions</h2>{faqs}</section>' if faqs else ""
 
-    contact = f'<section id="contact"><div class="eyebrow">Still have a question?</div><h2>Contact the event team</h2><a class="button" href="mailto:{e(content.get("contact_email"), quote=True)}">Email us</a></section>' if content.get("contact_email") else ""
+    contact_url = safe_destination("mailto:" + str(content.get("contact_email") or ""))
+    contact = f'<section id="contact"><div class="eyebrow">Still have a question?</div><h2>Contact the event team</h2><a class="button" href="{contact_url}">Email us</a></section>' if contact_url else ""
 
     preview_bar = '<div class="preview">Preview — visitors cannot see this draft</div>' if preview else ""
     nav_links = navigation_markup(content)
@@ -97,6 +100,7 @@ main{{max-width:var(--content-max-width);margin:auto;padding:var(--section-spaci
 .feature{{display:grid;grid-template-columns:1fr 1fr;gap:2rem;align-items:center;background:#fff;border-radius:18px;padding:2rem!important;border:1px solid #ece5d8}}.feature.reverse{{direction:rtl}}.feature.reverse>*{{direction:ltr}}.feature-media img,.feature-pattern{{width:100%;border-radius:14px;min-height:220px;object-fit:cover;display:grid;place-items:center;background:var(--primary);color:#fff;font-size:3rem}}
 .connect{{display:flex;gap:1rem;flex-wrap:wrap;background:var(--primary);color:white;padding:2rem;border-radius:24px}}.connect>div{{flex:1;min-width:220px}}.text-link{{font-weight:800;padding:.7rem 1rem;border:1px solid currentColor;border-radius:10px;text-decoration:none;display:inline-block;margin-top:.5rem}}
 details{{border-top:1px solid #ddd5c9;padding:1.1rem 0}}summary{{cursor:pointer;font-weight:900;font-size:1.05rem}}details p{{color:#5f6d68}}
+.venue-heading-link{{color:inherit;text-decoration:underline}}.venue-heading-link p{{text-decoration:none}}
 footer{{padding:2rem 5vw;border-top:1px solid #ddd;display:flex;justify-content:space-between;flex-wrap:wrap;gap:1rem}}
 .modern-professional .hero{{background-color:#092d50;color:white;border-radius:0 0 42px 42px}}
 .clean-elegant{{--paper:#f8f5ee;--ink:#132921}}.clean-elegant .hero{{min-height:72vh;background-size:50% 78%;background-repeat:no-repeat;background-position:88% center}}.clean-elegant .hero-inner{{max-width:52%}}

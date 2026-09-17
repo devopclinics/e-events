@@ -100,6 +100,27 @@ class PublicSiteContractTests(unittest.TestCase):
                 self.assertIn(expected, page, f"missing {expected!r} in {family} render")
             self.assertNotIn("<script>", page)
 
+    def test_contact_links_avoid_cloudflare_email_protection(self):
+        content = self.sample()
+        content["contact_email"] = "events@festio.events"
+        content["navigation"] = [{"id": "contact", "label": "Contact", "destination_type": "contact", "url": "mailto:events@festio.events", "enabled": True}]
+        validated = SiteContent(**content).model_dump(mode="json")
+        for family in ("community", "modern-professional"):
+            page = render_site(validated, family)
+            self.assertIn("mailto:events%40festio.events", page)
+            self.assertNotIn("events@festio.events", page)
+
+    def test_venue_heading_address_and_button_share_event_setup_map(self):
+        content = self.sample()
+        content.update({"venue": "Convention Center", "venue_address": "100 Main Street", "venue_url": "https://maps.example/venue"})
+        validated = SiteContent(**content).model_dump(mode="json")
+        for family in ("community", "modern-professional"):
+            page = render_site(validated, family)
+            self.assertIn('class="venue-heading-link" href="https://maps.example/venue"', page)
+            self.assertIn("Convention Center", page)
+            self.assertIn("100 Main Street", page)
+            self.assertIn("Open directions", page)
+
     def test_unsafe_navigation_destination_is_rejected(self):
         content = self.sample()
         content["navigation"] = [{"id": "bad", "label": "Bad", "destination_type": "custom", "url": "javascript:alert(1)"}]

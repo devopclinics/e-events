@@ -200,7 +200,12 @@ class SiteContent(BaseModel):
 class SiteUpsert(BaseModel):
     org_id: str = Field(min_length=1, max_length=64)
     slug: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=100)
-    template_family: Literal["community", "conference", "celebration"] = "community"
+    template_family: Literal[
+        "community", "conference", "celebration",
+        "modern-professional", "clean-elegant", "storytelling", "bold-dynamic",
+        "card-friendly", "conference-programme", "split-visual", "immersive",
+        "programme-showcase", "elegant-countdown",
+    ] = "community"
     content: SiteContent
 
 

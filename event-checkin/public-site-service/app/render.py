@@ -11,10 +11,13 @@ from .community import (
     track_markup,
 )
 from html import escape
+from .templates import canonical_template
 
 
 def render_site(content: dict, family: str, *, preview: bool = False) -> str:
-    if family == "community":
+    legacy_family = family
+    family = canonical_template(family)
+    if legacy_family == "community":
         return render_community(content, preview=preview)
 
     e = escape
@@ -74,19 +77,19 @@ def render_site(content: dict, family: str, *, preview: bool = False) -> str:
     preview_bar = '<div class="preview">Preview — visitors cannot see this draft</div>' if preview else ""
     nav_links = navigation_markup(content)
     footer_links = navigation_markup(content, footer=True)
-    family_label = {"conference": "Build your agenda", "celebration": "You are invited"}.get(family, "Discover the event")
+    family_label = {"conference-programme": "Build your agenda", "programme-showcase": "Explore every track", "immersive": "You are invited", "elegant-countdown": "The countdown is on"}.get(family, "Discover the event")
 
     return f'''<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{name}</title><meta name="description" content="{summary[:200]}">
+<title>{name}</title><meta name="description" content="{summary[:200]}"><meta property="og:title" content="{headline}"><meta property="og:description" content="{summary[:200]}">{f'<meta property="og:image" content="{hero}">' if hero else ''}
 <style>
-:root{{--primary:{primary};--accent:{accent};--ink:#162522;--paper:#fbf8f2}}
+:root{{--primary:{primary};--accent:{accent};--ink:#162522;--paper:#fbf8f2;--site-max-width:1280px;--content-max-width:1180px;--section-spacing:5rem;--card-radius:18px;--border:#e8e1d5;--shadow:0 18px 50px #182b2620}}
 *{{box-sizing:border-box}}html{{scroll-behavior:smooth}}body{{margin:0;color:var(--ink);background:var(--paper);font:16px/1.55 Inter,system-ui,sans-serif}}a{{color:inherit}}
 .preview{{background:#25143c;color:white;text-align:center;padding:.6rem;font-weight:700}}nav{{display:flex;align-items:center;gap:1.2rem;flex-wrap:wrap;padding:1.1rem max(5vw,24px);background:white;position:sticky;top:0;z-index:10}}nav b{{font-size:1.2rem;margin-right:auto}}nav span{{color:#60706c}}.site-links,.footer-links{{display:flex;gap:1rem;flex-wrap:wrap;align-items:center}}.site-links a,.footer-links a{{text-decoration:none;font-weight:700;font-size:.86rem}}
 .hero{{min-height:65vh;padding:9vw max(6vw,30px);display:grid;align-content:center;background-size:cover;background-position:center;position:relative}}
 .hero-inner{{max-width:780px}}.eyebrow{{text-transform:uppercase;letter-spacing:.18em;font-weight:800;color:var(--accent);font-size:.8rem}}h1{{font:700 clamp(3rem,8vw,7rem)/.94 Georgia,serif;margin:.25em 0}}h2{{font:700 clamp(1.8rem,3.4vw,2.8rem)/1.05 Georgia,serif;margin:.2em 0 .5em}}.lead{{font-size:clamp(1.05rem,2vw,1.35rem);max-width:680px}}.meta{{font-weight:700;margin:1.5rem 0}}
 .actions{{display:flex;gap:.8rem;flex-wrap:wrap;margin-top:2rem}}.button{{background:var(--accent);color:#17110d;padding:.85rem 1.2rem;text-decoration:none;font-weight:800;border-radius:999px;display:inline-block;border:0}}.button.secondary,.button.outline{{background:transparent;border:1px solid currentColor;color:inherit}}
-main{{max-width:1180px;margin:auto;padding:5rem max(5vw,24px)}}main>section{{margin-bottom:5rem}}article{{background:white;border:1px solid #e8e1d5;padding:1.4rem;border-radius:18px}}article h3{{margin:.45rem 0}}ul.tracks{{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;padding:0;list-style:none}}ul.tracks .track{{background:color-mix(in srgb,var(--track-color) 12%,#fff)}}.track img,.track i{{width:44px;height:44px;object-fit:cover;border-radius:10px;display:grid;place-items:center;font-style:normal;font-size:20px;background:var(--track-color);color:#fff}}.track-jump{{display:inline-block;margin-top:.6rem;font-weight:800;font-size:.85rem;color:var(--track-color);text-decoration:none}}
+main{{max-width:var(--content-max-width);margin:auto;padding:var(--section-spacing) max(5vw,24px)}}main>section{{margin-bottom:var(--section-spacing)}}article{{background:white;border:1px solid var(--border);padding:1.4rem;border-radius:var(--card-radius)}}article h3{{margin:.45rem 0}}ul.tracks{{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;padding:0;list-style:none}}ul.tracks .track{{background:color-mix(in srgb,var(--track-color) 12%,#fff)}}.track img,.track i{{width:44px;height:44px;object-fit:cover;border-radius:10px;display:grid;place-items:center;font-style:normal;font-size:20px;background:var(--track-color);color:#fff}}.track-jump{{display:inline-block;margin-top:.6rem;font-weight:800;font-size:.85rem;color:var(--track-color);text-decoration:none}}
 .filter-radio{{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}}.schedule-filters{{display:flex;flex-direction:column;gap:.6rem;margin-bottom:1.4rem}}.day-tabs,.track-pills{{display:flex;gap:.5rem;flex-wrap:wrap}}.day-tab,.track-pill{{display:inline-block;border:1px solid #d9d1c5;background:#fff;color:var(--ink);padding:.6rem 1rem;border-radius:999px;font-weight:700;font-size:.85rem;cursor:pointer}}.day-tab small{{display:block;font-weight:600;font-size:.65rem;opacity:.75}}
 .sessions{{display:grid;gap:.7rem}}.session{{display:grid;grid-template-columns:96px 1fr;gap:1.1rem}}.session:not(:has(.session-thumb)){{grid-template-columns:1fr}}.session-thumb{{width:96px;height:96px;object-fit:cover;border-radius:12px}}.session time{{color:var(--accent);font-weight:800}}.session-tag{{display:inline-block;background:var(--track-color,#6b746f);color:#fff;font-size:.7rem;font-weight:800;padding:.2rem .6rem;border-radius:999px;margin:.3rem 0}}.session-meta{{display:flex;gap:.9rem;flex-wrap:wrap;margin-top:.4rem;color:#65706c;font-size:.85rem}}.session-meta span{{display:inline-flex;align-items:center;gap:.3rem}}.speaker-line{{display:block;color:#65706c;margin-top:.3rem}}.session-action{{font-weight:800;color:var(--accent);display:inline-block;margin-top:.5rem}}
 .speaker-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem}}.speaker-card{{display:flex;gap:1rem;padding:1.2rem;border:1px solid #e5ded3;border-radius:14px;background:#fff}}.speaker-card img,.speaker-initial{{width:60px;height:70px;object-fit:cover;border-radius:8px;flex:0 0 auto}}.speaker-initial{{display:grid;place-items:center;background:var(--primary);color:#fff;font:700 1.6rem Georgia}}
@@ -95,7 +98,17 @@ main{{max-width:1180px;margin:auto;padding:5rem max(5vw,24px)}}main>section{{mar
 .connect{{display:flex;gap:1rem;flex-wrap:wrap;background:var(--primary);color:white;padding:2rem;border-radius:24px}}.connect>div{{flex:1;min-width:220px}}.text-link{{font-weight:800;padding:.7rem 1rem;border:1px solid currentColor;border-radius:10px;text-decoration:none;display:inline-block;margin-top:.5rem}}
 details{{border-top:1px solid #ddd5c9;padding:1.1rem 0}}summary{{cursor:pointer;font-weight:900;font-size:1.05rem}}details p{{color:#5f6d68}}
 footer{{padding:2rem 5vw;border-top:1px solid #ddd;display:flex;justify-content:space-between;flex-wrap:wrap;gap:1rem}}
-.community .hero{{background-color:var(--primary);color:white;border-radius:0 0 48px 48px}}.conference .hero{{background-color:#f0eee9;border-left:16px solid var(--accent)}}.conference h1{{font-family:Inter,system-ui,sans-serif;letter-spacing:-.06em}}.celebration .hero{{text-align:center;background-color:#35102d;color:white}}.celebration .hero-inner{{margin:auto}}.celebration .actions{{justify-content:center}}.celebration article{{border-radius:0;border-color:var(--accent)}}
+.modern-professional .hero{{background-color:#092d50;color:white;border-radius:0 0 42px 42px}}
+.clean-elegant{{--paper:#f8f5ee;--ink:#132921}}.clean-elegant .hero{{min-height:72vh;background-size:50% 78%;background-repeat:no-repeat;background-position:88% center}}.clean-elegant .hero-inner{{max-width:52%}}
+.storytelling .hero,.immersive .hero{{min-height:82vh;color:white;background-position:center}}.storytelling .hero:after,.immersive .hero:after{{content:'';position:absolute;inset:0;background:linear-gradient(90deg,#071813dd 0%,#07181377 52%,transparent)}}.storytelling .hero-inner,.immersive .hero-inner{{position:relative;z-index:1}}.storytelling main>section{{border-left:4px solid var(--accent);padding-left:2rem}}
+.bold-dynamic{{--paper:#071b3f;--ink:#f5f8ff}}.bold-dynamic nav,.bold-dynamic article,.bold-dynamic .fact,.bold-dynamic .day-tab,.bold-dynamic .track-pill{{background:#102752;color:#fff;border-color:#ffffff22}}.bold-dynamic .hero{{color:white;background-color:#071b3f;clip-path:polygon(0 0,100% 0,100% 88%,74% 100%,0 93%)}}.bold-dynamic h1{{font-family:Inter,sans-serif;text-transform:uppercase}}.bold-dynamic main{{color:#fff}}
+.card-friendly{{--paper:#edf7f7;--card-radius:24px}}.card-friendly .hero{{min-height:56vh;margin:2rem auto;max-width:var(--site-max-width);border-radius:28px;background-color:#fff;box-shadow:var(--shadow)}}.card-friendly main>section{{background:#fff;padding:2.2rem;border-radius:24px;box-shadow:0 8px 25px #174b4210}}
+.conference-programme .hero{{min-height:38vh;background-color:#f0eee9;border-left:16px solid var(--accent)}}.conference-programme h1,.programme-showcase h1{{font-family:Inter,system-ui,sans-serif;letter-spacing:-.06em}}.conference-programme #programme{{margin-top:-2rem;background:white;padding:2rem;border-radius:18px;box-shadow:var(--shadow)}}
+.split-visual .hero{{min-height:68vh;background-size:52% 100%;background-repeat:no-repeat;background-position:right center}}.split-visual .hero-inner{{max-width:48%;position:relative;z-index:1}}.split-visual .hero:before{{content:'';position:absolute;inset:0 48% 0 0;background:linear-gradient(120deg,var(--paper) 80%,transparent 80%)}}
+.immersive .hero{{min-height:88vh;text-align:center}}.immersive .hero-inner{{margin:auto}}.immersive .actions{{justify-content:center}}.immersive article{{border-radius:4px;border-color:var(--accent)}}
+.programme-showcase #tracks{{margin-top:-2rem}}.programme-showcase ul.tracks{{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}}.programme-showcase .track{{min-height:210px;color:#fff;background:var(--track-color);display:flex;flex-direction:column;justify-content:end}}.programme-showcase .track-jump{{color:#fff}}
+.elegant-countdown{{--paper:#071d31;--ink:#fff}}.elegant-countdown nav,.elegant-countdown footer{{background:#061725;color:#fff;border-color:#ffffff22}}.elegant-countdown .hero{{min-height:78vh;color:white;background-color:#071d31}}.elegant-countdown article,.elegant-countdown .fact{{background:#10283c;color:#fff;border-color:#ffffff22}}.elegant-countdown main{{color:#fff}}
+@media(max-width:900px){{.clean-elegant .hero,.split-visual .hero{{background-size:100% 48%;background-position:center bottom;padding-bottom:52vh}}.clean-elegant .hero-inner,.split-visual .hero-inner{{max-width:100%}}}}
 @media(max-width:900px){{.feature{{grid-template-columns:1fr}}.feature.reverse{{direction:ltr}}}}
 @media(max-width:600px){{nav span,.site-links{{display:none}}.hero{{min-height:70vh}}h1{{font-size:3rem}}}}
 </style></head><body class="{escape(family)}">{preview_bar}

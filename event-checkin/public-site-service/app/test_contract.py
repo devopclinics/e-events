@@ -2,6 +2,7 @@ import unittest
 from pydantic import ValidationError
 from .render import render_site
 from .schemas import SiteContent, SiteUpsert
+from .templates import TEMPLATE_IDS
 
 
 class PublicSiteContractTests(unittest.TestCase):
@@ -9,11 +10,30 @@ class PublicSiteContractTests(unittest.TestCase):
         return {"schema_version": 1, "event_name": "NCNMO <2026>", "headline": "Faith & family", "primary_color": "#0d5c55", "accent_color": "#d88945", "primary_action": {"label": "Register", "url": "https://festio.events/r/demo"}, "sessions": [{"title": "Opening", "time": "9:00 AM"}]}
 
     def test_all_template_families_are_distinct_and_escape_content(self):
-        pages = [render_site(self.sample(), family) for family in ("community", "conference", "celebration")]
-        self.assertEqual(3, len(set(pages)))
+        pages = [render_site(self.sample(), family) for family in TEMPLATE_IDS]
+        self.assertEqual(10, len(set(pages)))
         for page in pages:
             self.assertIn("NCNMO &lt;2026&gt;", page)
             self.assertNotIn("NCNMO <2026>", page)
+
+    def test_template_switching_preserves_all_event_content(self):
+        content = self.sample()
+        content.update({"venue": "City Hall", "speakers": [{"name": "Amina Bello"}], "tracks": [{"title": "Community"}], "festio_live_url": "https://festio.events/live/demo", "festiome_url": "https://festio.events/me/demo"})
+        validated = SiteContent(**content).model_dump(mode="json")
+        for template_id in TEMPLATE_IDS:
+            page = render_site(validated, template_id)
+            for expected in ("Faith &amp; family", "City Hall", "Amina Bello", "Community", "Festio Live", "FestioMe"):
+                self.assertIn(expected, page, f"{template_id} lost {expected}")
+
+    def test_legacy_template_ids_remain_valid(self):
+        for family in ("community", "conference", "celebration"):
+            site = SiteUpsert(org_id="o", slug=f"legacy-{family}", template_family=family, content=self.sample())
+            self.assertIn("Faith &amp; family", render_site(site.content.model_dump(mode="json"), site.template_family))
+
+    def test_every_new_template_id_is_accepted_by_site_contract(self):
+        for template_id in TEMPLATE_IDS:
+            site = SiteUpsert(org_id="o", slug=f"site-{template_id}", template_family=template_id, content=self.sample())
+            self.assertEqual(template_id, site.template_family)
 
     def test_slug_and_colors_are_validated(self):
         with self.assertRaises(ValidationError):
@@ -74,7 +94,7 @@ class PublicSiteContractTests(unittest.TestCase):
             "festiome_url": "https://community.example/event",
         })
         validated = SiteContent(**content).model_dump(mode="json")
-        for family in ("community", "conference", "celebration"):
+        for family in TEMPLATE_IDS:
             page = render_site(validated, family)
             for expected in ("Four-day programme", "Day 1", "Day 2", "Dr. Amina", "Gala Night", "Parking", "Are children included?", "Participate in live Q&amp;A, polls and activities."):
                 self.assertIn(expected, page, f"missing {expected!r} in {family} render")

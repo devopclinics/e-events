@@ -128,6 +128,11 @@ class PublicSiteContractTests(unittest.TestCase):
         self.assertIn('for="track-junior" class="track-pill"', page)
         self.assertIn('#day-day-1:checked ~ .sessions .session:not([data-day="Day 1"])', page)
         self.assertIn('#track-community:checked ~ .sessions .session:not([data-track="Community"])', page)
+        self.assertIn('class="site-container nav-inner"', page)
+        self.assertIn('class="site-container hero-inner"', page)
+        self.assertIn('class="session-time"><time>9:00 AM</time>', page)
+        self.assertIn('href="#programme">Explore Programme</a>', page)
+        self.assertLess(page.index('id="programme"'), page.index('id="tracks"'))
 
 
 if __name__ == "__main__":

@@ -25,7 +25,9 @@ def test_resolve_navigation_refreshes_system_links_and_preserves_manual_state():
 
     assert resolved["navigation"][0]["url"] == "https://maps.example/current"
     assert resolved["navigation"][1]["url"] == ""
-    assert resolved["navigation"][1]["enabled"] is True
+    assert resolved["navigation"][1]["enabled"] is False
+    assert resolved["navigation"][1]["requested_enabled"] is True
+    assert resolved["navigation"][0]["requested_enabled"] is True
     assert resolved["navigation"][2]["url"] == "mailto:events@example.com"
     assert resolved["navigation"][3] == content["navigation"][3]
     assert content["navigation"][0]["url"] == "https://stale.example"

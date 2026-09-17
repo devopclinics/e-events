@@ -1,4 +1,5 @@
 import httpx
+from urllib.parse import quote_plus
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -6,8 +7,48 @@ from ..auth import require_event_admin
 from ..config import settings
 from ..database import get_db
 from ..models import Event, User
+from .engagement import _ensure_live_join_code, _live_join_url
+from .speakers import ensure_speaker_token
 
 router = APIRouter()
+
+
+async def _website_connections(event: Event, db: AsyncSession) -> dict:
+    base = (event.checkin_base_url or settings.public_base_url or settings.frontend_url).rstrip("/")
+    venue_query = event.venue_address or event.venue_name or ""
+    speakers_url = ""
+    if event.speaker_enabled:
+        speakers_url = f"{base}/speakers/{await ensure_speaker_token(event, db)}"
+    live_url = ""
+    if event.engagement_enabled:
+        live_url = _live_join_url(await _ensure_live_join_code(event.id, db))
+    contact_email = ""
+    connections = {
+        "section": {"label": "Programme", "url": "#programme", "available": True, "source": "Website programme", "configure_url": "/design-studio-redesign/website"},
+        "venue": {"label": "Venue", "url": f"https://www.google.com/maps/search/?api=1&query={quote_plus(venue_query)}" if venue_query else "", "available": bool(venue_query), "source": "Event Setup", "configure_url": "/admin-redesign"},
+        "speakers": {"label": "Speakers", "url": speakers_url, "available": bool(speakers_url), "source": "Speakers add-on", "configure_url": "/addons-redesign?tab=speakers"},
+        "rsvp": {"label": "Register / RSVP", "url": f"{base}/rsvp/{event.rsvp_token}" if event.rsvp_enabled and event.rsvp_token else "", "available": bool(event.rsvp_enabled and event.rsvp_token), "source": "Invites & RSVP", "configure_url": "/guests-redesign?tab=invite"},
+        "festio_live": {"label": "Festio Live", "url": live_url, "available": bool(live_url), "source": "Festio Live", "configure_url": "/festio-live-redesign"},
+        "festiome": {"label": "FestioMe", "url": event.festiome_open_url or "", "available": bool(event.festiome_addon_enabled and event.festiome_open_url), "source": "FestioMe", "configure_url": "/festiome-redesign"},
+        "contact": {"label": "Contact", "url": f"mailto:{contact_email}" if contact_email else "", "available": False, "source": "Website settings", "configure_url": "/design-studio-redesign/website"},
+    }
+    return connections
+
+
+def _resolve_navigation(content: dict, connections: dict) -> dict:
+    result = dict(content or {})
+    contact_email = str(result.get("contact_email") or "").strip()
+    connections = dict(connections)
+    connections["contact"] = {**connections.get("contact", {}), "url": f"mailto:{contact_email}" if contact_email else "", "available": bool(contact_email)}
+    navigation = []
+    for raw in result.get("navigation") or []:
+        item = dict(raw)
+        source = connections.get(item.get("destination_type"))
+        if source is not None:
+            item["url"] = source["url"]
+        navigation.append(item)
+    result["navigation"] = navigation
+    return result
 
 
 async def _call(method: str, path: str, *, json=None):
@@ -48,11 +89,22 @@ async def get_website(event_id: str, _: User = Depends(require_event_admin)):
     return await _call("GET", f"/internal/sites/{event_id}")
 
 
+@router.get("/{event_id}/website/connections")
+async def website_connections(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    return {"connections": await _website_connections(event, db)}
+
+
 @router.put("/{event_id}/website")
 async def save_website(event_id: str, request: Request, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
     event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
     body = await request.json()
     body["org_id"] = event.org_id
+    body["content"] = _resolve_navigation(body.get("content") or {}, await _website_connections(event, db))
     return await _call("PUT", f"/internal/sites/{event_id}", json=body)
 
 
@@ -62,7 +114,14 @@ async def preview_website(event_id: str, _: User = Depends(require_event_admin))
 
 
 @router.post("/{event_id}/website/publish")
-async def publish_website(event_id: str, user: User = Depends(require_event_admin)):
+async def publish_website(event_id: str, user: User = Depends(require_event_admin), db: AsyncSession = Depends(get_db)):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    draft = await _call("GET", f"/internal/sites/{event_id}")
+    draft["org_id"] = event.org_id
+    draft["content"] = _resolve_navigation(draft.get("content") or {}, await _website_connections(event, db))
+    await _call("PUT", f"/internal/sites/{event_id}", json=draft)
     return await _call("POST", f"/internal/sites/{event_id}/publish", json={"published_by": user.email})
 
 

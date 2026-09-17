@@ -31,7 +31,7 @@ class Track(BaseModel):
 class NavigationItem(BaseModel):
     id: str = Field(min_length=1, max_length=60)
     label: str = Field(min_length=1, max_length=60)
-    destination_type: Literal["section", "speakers", "venue", "contact", "custom"] = "custom"
+    destination_type: Literal["section", "speakers", "venue", "rsvp", "festio_live", "festiome", "contact", "custom"] = "custom"
     url: str = Field(default="", max_length=1000)
     enabled: bool = True
 

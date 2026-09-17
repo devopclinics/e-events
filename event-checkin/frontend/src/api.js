@@ -1840,6 +1840,7 @@ export const api = {
   marketingPublicForm: (token) => req('GET', `/marketing/forms/${token}`),
   marketingSubmitPublicForm: (token, body) => req('POST', `/marketing/forms/${token}/submit`, body),
   website: (eventId) => req('GET', `/events/${eventId}/website`),
+  websiteConnections: (eventId) => req('GET', `/events/${eventId}/website/connections`),
   uploadWebsiteAsset,
   saveWebsite: (eventId, body) => req('PUT', `/events/${eventId}/website`, body),
   previewWebsite: (eventId) => req('POST', `/events/${eventId}/website/preview`, {}),

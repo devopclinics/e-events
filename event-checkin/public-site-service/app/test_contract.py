@@ -40,12 +40,18 @@ class PublicSiteContractTests(unittest.TestCase):
         content["navigation"] = [
             {"id": "programme", "label": "Programme", "destination_type": "section", "url": "#programme", "enabled": True},
             {"id": "speakers", "label": "Speakers", "destination_type": "speakers", "url": "https://festio.events/speakers/demo", "enabled": True},
+            {"id": "rsvp", "label": "RSVP", "destination_type": "rsvp", "url": "https://festio.events/rsvp/demo", "enabled": True},
+            {"id": "live", "label": "Festio Live", "destination_type": "festio_live", "url": "https://festio.events/l/LIVE26", "enabled": True},
+            {"id": "community", "label": "FestioMe", "destination_type": "festiome", "url": "https://community.example/event", "enabled": True},
             {"id": "junior", "label": "Junior", "destination_type": "custom", "url": "", "enabled": False},
         ]
         validated = SiteContent(**content).model_dump(mode="json")
         page = render_site(validated, "community")
         self.assertIn('href="#programme"', page)
         self.assertIn('href="https://festio.events/speakers/demo"', page)
+        self.assertIn('href="https://festio.events/rsvp/demo"', page)
+        self.assertIn('href="https://festio.events/l/LIVE26"', page)
+        self.assertIn('href="https://community.example/event"', page)
         self.assertNotIn('>Junior</a>', page)
         self.assertNotIn('<a>Speakers</a>', page)
 

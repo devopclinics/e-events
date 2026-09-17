@@ -90,6 +90,21 @@ class PublicSiteContractTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             SiteContent(**bad)
 
+    def test_blank_action_url_collapses_to_no_button_instead_of_failing(self):
+        """A real event with RSVP not yet enabled sends primary_action with a
+        blank url (label kept, url ''). That must publish, not 422 — see
+        the live 'must be an http(s)... destination' bug on Al-Azeemah."""
+        content = self.sample()
+        content["primary_action"] = {"label": "Register / RSVP →", "url": ""}
+        content["secondary_action"] = {"label": "View your pass", "url": ""}
+        content["feature_sections"] = [{"id": "gala", "title": "Gala Night", "action": {"label": "Learn more", "url": ""}}]
+        validated = SiteContent(**content)
+        self.assertIsNone(validated.primary_action)
+        self.assertIsNone(validated.secondary_action)
+        self.assertIsNone(validated.feature_sections[0].action)
+        page = render_site(validated.model_dump(mode="json"), "community")
+        self.assertNotIn('class="nav-cta"', page)
+
 
 if __name__ == "__main__":
     unittest.main()

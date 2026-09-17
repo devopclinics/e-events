@@ -7,6 +7,14 @@ class Link(BaseModel):
     url: HttpUrl
 
 
+def blank_link_is_none(value):
+    """A Link whose url is blank (e.g. RSVP not yet enabled for this event)
+    isn't a link at all — collapse it to None rather than fail validation."""
+    if isinstance(value, dict) and not str(value.get("url") or "").strip():
+        return None
+    return value
+
+
 class Session(BaseModel):
     source_id: str = Field(default="", max_length=80)
     day: str = Field(default="", max_length=40)
@@ -62,6 +70,11 @@ class FeatureSection(BaseModel):
     @classmethod
     def blank_image_url_is_none(cls, value):
         return None if value in (None, "") else value
+
+    @field_validator("action", mode="before")
+    @classmethod
+    def blank_action_is_none(cls, value):
+        return blank_link_is_none(value)
 
 
 class FAQ(BaseModel):
@@ -159,6 +172,11 @@ class SiteContent(BaseModel):
     @classmethod
     def blank_optional_url_is_none(cls, value):
         return None if value in (None, "") else value
+
+    @field_validator("primary_action", "secondary_action", mode="before")
+    @classmethod
+    def blank_action_is_none(cls, value):
+        return blank_link_is_none(value)
 
     @field_validator("primary_color", "accent_color")
     @classmethod

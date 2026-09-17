@@ -1841,6 +1841,7 @@ export const api = {
   marketingSubmitPublicForm: (token, body) => req('POST', `/marketing/forms/${token}/submit`, body),
   website: (eventId) => req('GET', `/events/${eventId}/website`),
   websiteConnections: (eventId) => req('GET', `/events/${eventId}/website/connections`),
+  websiteContentSources: (eventId) => req('GET', `/events/${eventId}/website/content-sources`),
   uploadWebsiteAsset,
   saveWebsite: (eventId, body) => req('PUT', `/events/${eventId}/website`, body),
   previewWebsite: (eventId) => req('POST', `/events/${eventId}/website/preview`, {}),

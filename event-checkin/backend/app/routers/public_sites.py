@@ -1,13 +1,16 @@
 import httpx
+from datetime import timedelta
 from urllib.parse import quote_plus
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_event_admin
 from ..config import settings
 from ..database import get_db
-from ..models import Event, User
+from ..models import Event, GuestSpeaker, User
 from .engagement import _ensure_live_join_code, _live_join_url
+from ..services.experience import active_workflow
 from .speakers import ensure_speaker_token
 
 router = APIRouter()
@@ -33,6 +36,60 @@ async def _website_connections(event: Event, db: AsyncSession) -> dict:
         "contact": {"label": "Contact", "url": f"mailto:{contact_email}" if contact_email else "", "available": False, "source": "Website settings", "configure_url": "/design-studio-redesign/website"},
     }
     return connections
+
+
+async def _website_content_sources(event: Event, db: AsyncSession) -> dict:
+    """Return public-safe projections from existing event-owned records.
+
+    The website draft may import these projections, but the source records remain
+    owned by Event Setup, Experience, and Speakers. No guest data is exposed.
+    """
+    speaker_rows = (await db.execute(
+        select(GuestSpeaker)
+        .where(GuestSpeaker.event_id == event.id, GuestSpeaker.is_active.is_(True))
+        .order_by(GuestSpeaker.sort_order, GuestSpeaker.created_at)
+    )).scalars().all() if event.speaker_enabled else []
+    speakers = [{
+        "source_id": row.id,
+        "name": row.name,
+        "title": row.title or "",
+        "organization": "",
+        "bio": row.bio or "",
+        "photo_url": row.photo_url or "",
+        "session_titles": [],
+    } for row in speaker_rows]
+
+    sessions = []
+    workflow = await active_workflow(event.id, db) if event.experience_enabled else None
+    if workflow and event.event_date:
+        for step in sorted(workflow.steps, key=lambda item: (item.sort_order, item.title)):
+            if not step.enabled or not step.is_segment or step.starts_offset_seconds is None:
+                continue
+            starts_at = event.event_date + timedelta(seconds=step.starts_offset_seconds)
+            config = step.config or {}
+            program = config.get("program") or {}
+            sessions.append({
+                "source_id": step.id,
+                "day": starts_at.strftime("%A"),
+                "date": starts_at.strftime("%Y-%m-%d"),
+                "time": starts_at.strftime("%-I:%M %p"),
+                "title": step.title,
+                "description": step.description or "",
+                "venue": str(program.get("venue") or ""),
+                "audience": str(program.get("audience") or ""),
+                "track": str(program.get("category") or ""),
+                "speaker": str(program.get("speaker") or ""),
+                "action_label": "",
+                "action_url": "",
+            })
+    return {
+        "sessions": sessions,
+        "speakers": speakers,
+        "sources": {
+            "sessions": "Published Experience programme" if workflow else "Experience programme",
+            "speakers": "Speakers add-on",
+        },
+    }
 
 
 def _resolve_navigation(content: dict, connections: dict) -> dict:
@@ -95,6 +152,14 @@ async def website_connections(event_id: str, db: AsyncSession = Depends(get_db),
     if not event:
         raise HTTPException(404, "Event not found")
     return {"connections": await _website_connections(event, db)}
+
+
+@router.get("/{event_id}/website/content-sources")
+async def website_content_sources(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    return await _website_content_sources(event, db)
 
 
 @router.put("/{event_id}/website")

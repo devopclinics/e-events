@@ -55,6 +55,29 @@ class PublicSiteContractTests(unittest.TestCase):
         self.assertNotIn('>Junior</a>', page)
         self.assertNotIn('<a>Speakers</a>', page)
 
+    def test_rich_event_modules_render_as_reusable_sections(self):
+        content = self.sample()
+        content.update({
+            "programme_title": "Four-day programme",
+            "programme_summary": "Choose your day and track.",
+            "sessions": [
+                {"day": "Day 1", "date": "2026-12-24", "time": "9:00 AM", "title": "Opening", "track": "Community", "venue": "Main Hall", "audience": "All guests", "speaker": "Dr. Amina"},
+                {"day": "Day 2", "date": "2026-12-25", "time": "10:00 AM", "title": "Junior workshop", "track": "Junior", "venue": "Room A", "audience": "Ages 8–12"},
+            ],
+            "speakers": [{"name": "Dr. Amina", "title": "Educator", "organization": "NCNMO", "bio": "Community educator", "photo_url": ""}],
+            "registration_facts": [{"label": "Deadline", "value": "December 1"}],
+            "venue_facts": [{"label": "Parking", "value": "North entrance"}],
+            "feature_sections": [{"id": "gala", "kicker": "Special event", "title": "Gala Night", "summary": "An evening celebration", "image_url": "", "facts": [{"label": "Dress", "value": "Formal"}]}],
+            "faqs": [{"question": "Are children included?", "answer": "Register every child attending."}],
+            "festio_live_url": "https://festio.events/l/LIVE26",
+            "festiome_url": "https://community.example/event",
+        })
+        validated = SiteContent(**content).model_dump(mode="json")
+        page = render_site(validated, "community")
+        for expected in ("Four-day programme", "Day 1", "Day 2", "Dr. Amina", "Gala Night", "Parking", "Are children included?", "Participate in live Q&amp;A, polls and activities."):
+            self.assertIn(expected, page)
+        self.assertNotIn("<script>", page)
+
     def test_unsafe_navigation_destination_is_rejected(self):
         content = self.sample()
         content["navigation"] = [{"id": "bad", "label": "Bad", "destination_type": "custom", "url": "javascript:alert(1)"}]

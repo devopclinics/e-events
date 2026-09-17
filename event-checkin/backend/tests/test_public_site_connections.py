@@ -1,6 +1,6 @@
 import pytest
 
-from app.models import Event
+from app.models import Event, ExperienceStep, ExperienceWorkflow, GuestSpeaker
 from app.routers.public_sites import _resolve_navigation
 from conftest import _Session
 
@@ -47,6 +47,13 @@ async def test_website_connection_catalog_uses_current_event_setup(ctx, monkeypa
         event.engagement_join_code = "LIVE26"
         event.festiome_addon_enabled = True
         event.festiome_open_url = "https://community.example/ncnmo"
+        event.experience_enabled = True
+        event.live_program_enabled = True
+        session.add(GuestSpeaker(event_id=event_id, name="Dr. Amina Bello", title="Educator", bio="Community educator", photo_url="https://cdn.example/speaker.webp", sort_order=1, is_active=True))
+        workflow = ExperienceWorkflow(event_id=event_id, name="Convention programme", status="published", version=1, is_default=True)
+        session.add(workflow)
+        await session.flush()
+        session.add(ExperienceStep(workflow_id=workflow.id, key="opening", type="custom", title="Opening session", description="Welcome and keynote", sort_order=10, required=False, enabled=True, starts_offset_seconds=86400 + 9 * 3600, duration_seconds=3600, is_segment=True, config={"program": {"category": "Community", "venue": "Main Hall", "audience": "All guests", "speaker": "Dr. Amina Bello"}}))
         await session.commit()
 
     monkeypatch.setattr("app.config.settings.public_base_url", "https://staging.festio.events")
@@ -61,6 +68,15 @@ async def test_website_connection_catalog_uses_current_event_setup(ctx, monkeypa
     assert connections["festio_live"]["url"] == "https://staging.festio.events/l/LIVE26"
     assert connections["festiome"]["url"] == "https://community.example/ncnmo"
     assert connections["rsvp"]["configure_url"] == "/guests-redesign?tab=invite"
+
+    source_response = await ctx.client.get(f"/api/events/{event_id}/website/content-sources")
+    assert source_response.status_code == 200
+    source = source_response.json()
+    assert source["speakers"][0]["name"] == "Dr. Amina Bello"
+    assert source["sessions"][0]["title"] == "Opening session"
+    assert source["sessions"][0]["track"] == "Community"
+    assert source["sessions"][0]["venue"] == "Main Hall"
+    assert source["sessions"][0]["speaker"] == "Dr. Amina Bello"
 
     ctx.login(ctx.ids["user_b"])
     forbidden = await ctx.client.get(f"/api/events/{event_id}/website/connections")

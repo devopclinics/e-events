@@ -8,11 +8,65 @@ class Link(BaseModel):
 
 
 class Session(BaseModel):
+    source_id: str = Field(default="", max_length=80)
+    day: str = Field(default="", max_length=40)
+    date: str = Field(default="", max_length=40)
     title: str = Field(min_length=1, max_length=160)
     time: str = Field(default="", max_length=80)
     venue: str = Field(default="", max_length=120)
     audience: str = Field(default="", max_length=120)
     track: str = Field(default="", max_length=80)
+    speaker: str = Field(default="", max_length=160)
+    description: str = Field(default="", max_length=600)
+    action_label: str = Field(default="", max_length=60)
+    action_url: HttpUrl | None = None
+
+    @field_validator("action_url", mode="before")
+    @classmethod
+    def blank_url_is_none(cls, value):
+        return None if value in (None, "") else value
+
+
+class Speaker(BaseModel):
+    source_id: str = Field(default="", max_length=80)
+    name: str = Field(min_length=1, max_length=160)
+    title: str = Field(default="", max_length=160)
+    organization: str = Field(default="", max_length=160)
+    bio: str = Field(default="", max_length=800)
+    photo_url: HttpUrl | None = None
+    session_titles: list[str] = Field(default_factory=list, max_length=12)
+
+    @field_validator("photo_url", mode="before")
+    @classmethod
+    def blank_url_is_none(cls, value):
+        return None if value in (None, "") else value
+
+
+class Fact(BaseModel):
+    label: str = Field(default="", max_length=80)
+    value: str = Field(min_length=1, max_length=300)
+
+
+class FeatureSection(BaseModel):
+    id: str = Field(min_length=1, max_length=60)
+    kicker: str = Field(default="", max_length=80)
+    title: str = Field(min_length=1, max_length=160)
+    summary: str = Field(default="", max_length=1200)
+    image_url: HttpUrl | None = None
+
+    facts: list[Fact] = Field(default_factory=list, max_length=10)
+    action: Link | None = None
+    enabled: bool = True
+
+    @field_validator("image_url", mode="before")
+    @classmethod
+    def blank_image_url_is_none(cls, value):
+        return None if value in (None, "") else value
+
+
+class FAQ(BaseModel):
+    question: str = Field(min_length=1, max_length=240)
+    answer: str = Field(min_length=1, max_length=1200)
 
 
 class Stat(BaseModel):
@@ -26,6 +80,11 @@ class Track(BaseModel):
     description: str = Field(default="", max_length=180)
     icon: str = Field(default="✦", max_length=8)
     image_url: HttpUrl | None = None
+
+    @field_validator("image_url", mode="before")
+    @classmethod
+    def blank_image_url_is_none(cls, value):
+        return None if value in (None, "") else value
 
 
 class NavigationItem(BaseModel):
@@ -70,9 +129,9 @@ class SiteContent(BaseModel):
     accent_color: str = "#d88945"
     primary_action: Link | None = None
     secondary_action: Link | None = None
-    sessions: list[Session] = Field(default_factory=list, max_length=40)
+    sessions: list[Session] = Field(default_factory=list, max_length=120)
     stats: list[Stat] = Field(default_factory=list, max_length=6)
-    tracks: list[Track] = Field(default_factory=list, max_length=8)
+    tracks: list[Track] = Field(default_factory=list, max_length=12)
     highlights: list[str] = Field(default_factory=list, max_length=12)
     visible_sections: list[str] = Field(default_factory=lambda: ["stats", "programme", "tracks", "connect"])
     heritage_message: str = Field(default="", max_length=240)
@@ -81,7 +140,23 @@ class SiteContent(BaseModel):
     contact_email: str = Field(default="", max_length=180)
     brand_tagline: str = Field(default="", max_length=160)
     footer_tagline: str = Field(default="", max_length=160)
-    navigation: list[NavigationItem] = Field(default_factory=list, max_length=12)
+    programme_title: str = Field(default="Full programme", max_length=160)
+    programme_summary: str = Field(default="Choose a day or track to plan your experience.", max_length=400)
+    speakers: list[Speaker] = Field(default_factory=list, max_length=80)
+    feature_sections: list[FeatureSection] = Field(default_factory=list, max_length=16)
+    venue_facts: list[Fact] = Field(default_factory=list, max_length=12)
+    registration_facts: list[Fact] = Field(default_factory=list, max_length=12)
+    faqs: list[FAQ] = Field(default_factory=list, max_length=30)
+    festio_live_title: str = Field(default="Festio Live", max_length=100)
+    festio_live_description: str = Field(default="Participate in live Q&A, polls and activities.", max_length=240)
+    festiome_title: str = Field(default="FestioMe", max_length=100)
+    festiome_description: str = Field(default="Your personal event hub, pass and programme.", max_length=240)
+    navigation: list[NavigationItem] = Field(default_factory=list, max_length=20)
+
+    @field_validator("venue_url", "hero_image_url", "feature_image_url", "logo_url", "festio_live_url", "festiome_url", mode="before")
+    @classmethod
+    def blank_optional_url_is_none(cls, value):
+        return None if value in (None, "") else value
 
     @field_validator("primary_color", "accent_color")
     @classmethod

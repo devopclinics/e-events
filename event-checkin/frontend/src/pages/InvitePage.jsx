@@ -1753,20 +1753,20 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
               not a new pattern. Accent color still shows through on the
               buttons and border glow, just not the whole card body. */}
           {isConfirmed ? (
-            <div className="mt-5 overflow-hidden rounded-[1.4rem] border border-slate-200 bg-white text-center shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+            <div className={`fh-pass-tier fh-hub-style-${hubStyle} mt-5 overflow-hidden rounded-[1.4rem] border border-slate-200 bg-white text-center shadow-2xl dark:border-slate-800 dark:bg-slate-900`}
               style={{ boxShadow: `0 0 40px -14px ${colors.accent || tone.accent}70` }}>
               <div className="p-5">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-extrabold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                <span className="fh-pass-status-chip inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-extrabold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
                   <span aria-hidden="true">{passStatus.icon}</span>{passStatus.label}
                 </span>
-                <div className="mt-3 text-sm font-semibold text-slate-500 dark:text-slate-400">Welcome,</div>
-                <div className="text-xl font-extrabold text-slate-900 dark:text-white">{hub?.guest?.name || 'Guest'}</div>
+                <div className="fh-pass-welcome mt-3 text-sm font-semibold text-slate-500 dark:text-slate-400">Welcome,</div>
+                <div className="fh-hub-guest-name text-xl font-extrabold text-slate-900 dark:text-white">{hub?.guest?.name || 'Guest'}</div>
                 {hub?.guest?.qr_token && (
-                  <div className="relative mx-auto mt-4 max-w-[240px] rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700">
+                  <div className="fh-pass-qr-frame relative mx-auto mt-4 max-w-[240px] rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700">
                     <img src={previewMock ? PREVIEW_QR_DATA_URI : `/api/scan/${hub.guest.qr_token}/qr.png`} alt="Your QR pass code" className="mx-auto h-48 w-48" />
                   </div>
                 )}
-                {hub?.guest?.qr_token && <div className="mt-3 text-xs font-bold text-slate-400">Your Festio Pass · show this at check-in</div>}
+                {hub?.guest?.qr_token && <div className="fh-pass-footnote mt-3 text-xs font-bold text-slate-400">Your Festio Pass · show this at check-in</div>}
                 {hub?.guest?.qr_token && (
                   <div className="mt-4 grid gap-2">
                     <a href={`/scan/${hub.guest.qr_token}`} style={colors.accent ? { background: colors.accent } : undefined} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-400 px-5 py-3 text-base font-extrabold text-slate-950 shadow-sm hover:bg-teal-300">
@@ -2117,7 +2117,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
               .filter(([key]) => key !== 'messages' || (hubModuleVisible('messages') && (hub?.capabilities?.direct_host_messages || hub?.capabilities?.guest_chat)))
               .map(([key, label, icon]) => (
                 <button key={key} type="button" role="tab" aria-selected={hubTab === key} onClick={() => setHubTab(key)}
-                  className="flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-extrabold"
+                  className={`fh-tab-btn${hubTab === key ? ' active' : ''} flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-extrabold`}
                   style={{ background: hubTab === key ? tone.panelStrong : 'transparent' }}>
                   <span className="text-base leading-none" style={{ opacity: hubTab === key ? 1 : 0.55 }} aria-hidden="true">{icon}</span>
                   <span style={{ color: hubTab === key ? tone.accent : tone.muted }}>{label}</span>

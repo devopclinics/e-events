@@ -331,48 +331,66 @@
 
 /* ═══════════════════════════════════════════════════════════════════
    FOREST EDITORIAL
-   Deep forest green & gold. Editorial letter-spacing. Gold tab underline.
+   Deep forest green & gold. Gradient Pass card (this is the one style that
+   overrides the Pass tier's normally-fixed white/dark-mode card — see the
+   "fh-pass-tier" rule below), gold tab underline.
+
+   NOTE for whoever adds the next style here: the selectors above this point
+   in the file (fh-tab-bar, fh-tab-btn, fh-module-card, fh-hub-guest-name,
+   fh-section-divider, etc. on noir-couture/bloom-editorial/etc.) target
+   class names that do not exist anywhere in InvitePage.jsx — dead CSS since
+   whenever they were written. This block uses only real hooks: fh-hub-tabs-
+   {id} (the real tab-bar container class), fh-tab-btn/.active (added to the
+   real tab <button> for this fix), fh-pass-tier/fh-pass-status-chip/
+   fh-pass-welcome/fh-pass-qr-frame/fh-pass-footnote (added to the real Pass
+   card), and fh-hub-guest-name (now real too).
    ═══════════════════════════════════════════════════════════════════ */
 .fh-hub-style-forest-editorial {
   border-radius: 18px !important;
   border: 1px solid rgba(201, 147, 46, 0.3) !important;
   box-shadow: 0 18px 48px rgba(8, 42, 30, 0.16) !important;
 }
-.fh-hub-style-forest-editorial .fh-hub-guest-name {
+/* The Pass card itself — everywhere else this stays a fixed white/dark-mode
+   card on purpose (QR legibility regardless of the organizer's theme); this
+   style deliberately opts out of that default with a palette that still
+   keeps the QR on a plain white tile (fh-pass-qr-frame, untouched below) so
+   scanning it is unaffected. */
+.fh-pass-tier.fh-hub-style-forest-editorial {
+  background: linear-gradient(145deg, #0e4d34, #082a1e) !important;
+  border-color: rgba(201, 147, 46, 0.4) !important;
+}
+.fh-pass-tier.fh-hub-style-forest-editorial .fh-pass-status-chip {
+  background: rgba(201, 147, 46, 0.18) !important;
+  color: #e9c477 !important;
+}
+.fh-pass-tier.fh-hub-style-forest-editorial .fh-pass-welcome {
+  color: rgba(238, 245, 240, 0.65) !important;
+}
+.fh-pass-tier.fh-hub-style-forest-editorial .fh-hub-guest-name {
+  color: #fff !important;
   letter-spacing: -0.01em;
   font-weight: 800;
 }
-.fh-hub-style-forest-editorial .fh-module-card {
-  border-radius: 12px !important;
-  border: 1px solid rgba(14, 77, 52, 0.16) !important;
-  box-shadow: 0 1px 4px rgba(14, 77, 52, 0.08) !important;
+.fh-pass-tier.fh-hub-style-forest-editorial .fh-pass-qr-frame {
+  border-color: #c9932e !important;
 }
-/* Gold section divider ornament, echoing PAMCON's four-petal mark */
-.fh-hub-style-forest-editorial .fh-section-divider::after {
-  content: "✦";
-  display: block;
-  text-align: center;
-  font-size: 11px;
-  color: #c9932e;
-  margin: 8px 0;
+.fh-pass-tier.fh-hub-style-forest-editorial .fh-pass-footnote {
+  color: rgba(238, 245, 240, 0.55) !important;
 }
-.fh-hub-style-forest-editorial .fh-tab-bar {
+.fh-hub-tabs-forest-editorial {
   border-bottom: 1px solid rgba(201, 147, 46, 0.25) !important;
   border-radius: 0 !important;
 }
-.fh-hub-style-forest-editorial .fh-tab-btn {
+.fh-hub-tabs-forest-editorial .fh-tab-btn {
   border-radius: 0 !important;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   font-size: 10.5px;
-  font-weight: 800;
 }
-.fh-hub-style-forest-editorial .fh-tab-btn.active {
+.fh-hub-tabs-forest-editorial .fh-tab-btn.active {
   border-bottom-color: #c9932e !important;
-  color: #0e4d34 !important;
-  background: transparent !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════════

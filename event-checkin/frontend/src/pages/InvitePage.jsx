@@ -1245,7 +1245,7 @@ const HUB_STYLES = new Set([
   // HUB_SIDECARD_STYLES below)
   'classic-navy', 'ivory-formal', 'slate-professional', 'sage-community', 'champagne-minimal',
   'heritage-navy', 'ivory-ledger', 'graphite-tech', 'meadow-community', 'parchment-classic',
-  'sacred-pilgrimage',
+  'sacred-pilgrimage', 'forest-editorial',
 ])
 const HUB_TABBED_STYLES = new Set([
   'wallet-pass', 'story-feed',
@@ -1255,7 +1255,7 @@ const HUB_TABBED_STYLES = new Set([
   // are independent choices -- nothing about a side-card hero requires
   // stacked, non-tabbed sections. Every side-card style gets tabs too.
   'heritage-navy', 'ivory-ledger', 'graphite-tech', 'meadow-community', 'parchment-classic',
-  'sacred-pilgrimage',
+  'sacred-pilgrimage', 'forest-editorial',
 ])
 // Page-level hero layout: the cover photo sits beside the title (like the
 // original default look) instead of full-bleed above it. Design Studio's

@@ -85,6 +85,13 @@ const HUB_STYLES = [
     colorPreset: { background: '#f8f4ec', surface: '#ffffff', accent: '#b8912a', primary: '#0f2040', text: '#0f2040' },
   },
   {
+    id: 'forest-editorial', name: 'Forest Editorial', category: 'Conference',
+    tagline: 'Deep forest green & gold — tabbed pass card, editorial type',
+    bestFor: 'Professional associations and conferences that want a premium, editorial feel.',
+    fontSuggestion: 'bold-sans',
+    colorPreset: { background: '#f3f5ef', surface: '#ffffff', accent: '#c9932e', primary: '#0e4d34', text: '#12211b' },
+  },
+  {
     id: 'haze', name: 'Haze', category: 'Dark',
     tagline: 'Purple glass — moody glassmorphism',
     bestFor: 'Late-night events, festival after-parties, intimate lounge experiences.',
@@ -410,6 +417,20 @@ function GuestHubSwatch({ s, font }) {
           <div className="gh-body">
             <div className="gh-leg"><span className="gh-leg-num">LEG 1</span><span className="gh-leg-name">Harbour Start</span><span className="gh-tag red">Live</span></div>
             <div className="gh-leg"><span className="gh-leg-num">GALA</span><span className="gh-leg-name">Prizegiving Dinner</span><span className="gh-leg-time">19:00</span></div>
+          </div>
+        </div>
+      )
+    case 'forest-editorial':
+      return (
+        <div className="ds-gh-tpl ds-gh-tpl-forest-editorial" style={vars}>
+          <div className="gh-canopy"><span className="gh-badge">Festio GuestHub</span><strong className="gh-event">PAMCON 2026</strong><span className="gh-sub">Party Managers Association of Nigeria</span></div>
+          <div className="gh-pass-card">
+            <span className="gh-qr"><GhMiniQR color={p.primary} /></span>
+            <div className="gh-hero-text"><strong className="gh-guest">Demo Guest</strong><div className="gh-chips"><span className="gh-chip">Event Planner</span></div></div>
+          </div>
+          <GhTabs items={['Pass', 'FestioMe', 'Programme', 'Speakers']} accent={p.accent} />
+          <div className="gh-body">
+            <div className="gh-leg"><span className="gh-leg-num">UP NEXT</span><span className="gh-leg-name">Industry Keynote</span><span className="gh-tag red">Live</span></div>
           </div>
         </div>
       )

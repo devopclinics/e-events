@@ -1,0 +1,179 @@
+/*
+ * FestioMeThemes.css
+ * Per-hub_style visual overrides for the guest-facing FestioMe page
+ * (FestioMePage.jsx, route /festiome/guest). Applied via a
+ * .festiome-style-{id} class on the root ".festiome-unified-home" div,
+ * added only when the event's hub_style matches — every other event keeps
+ * the exact same className it has today, unaffected.
+ *
+ * Base colors this overrides live in FestioMePage.css: dark navy
+ * (#061120/#071629/rgba(13,35,56,…)) with a teal accent family
+ * (#39d9b9/#41dbbf/#2bd4b5/#4edec2/#45ddc0/#40dabe/#46dec2/#42d9bd/#30dab8).
+ * Category tone badges (.tone-1/2/3) and the purple session-number chip are
+ * left alone everywhere — they're functional category color-coding, not
+ * brand identity.
+ */
+
+.festiome-style-forest-editorial.festiome-unified-home {
+  background:
+    radial-gradient(circle at 85% -10%, rgba(201, 147, 46, .12), transparent 34%),
+    linear-gradient(145deg, #0e1712, #071c14) !important;
+}
+
+/* Cards: navy panels -> dark forest panels */
+.festiome-style-forest-editorial .fm-now-card,
+.festiome-style-forest-editorial .fm-announcement-card,
+.festiome-style-forest-editorial .fm-dashboard-section,
+.festiome-style-forest-editorial .fm-guest-side > article,
+.festiome-style-forest-editorial .fm-upcoming-meetup,
+.festiome-style-forest-editorial .fm-people-preview article,
+.festiome-style-forest-editorial .fm-guest-people-grid article,
+.festiome-style-forest-editorial .fm-session-list button,
+.festiome-style-forest-editorial .fm-guest-meetup-form,
+.festiome-style-forest-editorial .fm-guest-meetup-list article,
+.festiome-style-forest-editorial .fm-program-list article {
+  background: linear-gradient(145deg, rgba(20, 32, 26, .96), rgba(12, 22, 17, .96)) !important;
+  border-color: rgba(201, 147, 46, .18) !important;
+}
+.festiome-style-forest-editorial .fm-upcoming-meetup {
+  background:
+    radial-gradient(circle at 90% 0, rgba(201, 147, 46, .16), transparent 38%),
+    linear-gradient(145deg, rgba(20, 32, 26, .96), rgba(12, 22, 17, .96)) !important;
+}
+
+/* Teal accent family -> gold, across headings, buttons, dots, links */
+.festiome-style-forest-editorial .fm-guest-welcome > span,
+.festiome-style-forest-editorial .fm-card-heading > span,
+.festiome-style-forest-editorial .fm-dashboard-title button,
+.festiome-style-forest-editorial .fm-session-art em,
+.festiome-style-forest-editorial .fm-session-hero small,
+.festiome-style-forest-editorial .fm-announcement-card > button,
+.festiome-style-forest-editorial .fm-trending-list button,
+.festiome-style-forest-editorial .fm-community-pulse > .fm-dashboard-title > span,
+.festiome-style-forest-editorial .fm-preview-actions button,
+.festiome-style-forest-editorial .fm-session-list button > span,
+.festiome-style-forest-editorial .fm-session-list b,
+.festiome-style-forest-editorial .fm-guest-meetup-list article > div:nth-child(2) > span,
+.festiome-style-forest-editorial .fm-program-list article > div:first-child > span,
+.festiome-style-forest-editorial .fm-program-list button,
+.festiome-style-forest-editorial .fm-program-list a,
+.festiome-style-forest-editorial .fm-guest-meetup-list article > button {
+  color: #e9c477 !important;
+}
+.festiome-style-forest-editorial .fm-guest-welcome i,
+.festiome-style-forest-editorial .fm-card-heading i,
+.festiome-style-forest-editorial .fm-community-pulse i,
+.festiome-style-forest-editorial .fm-connection-list i {
+  background: #c9932e !important;
+  box-shadow: 0 0 0 4px rgba(201, 147, 46, .16) !important;
+}
+.festiome-style-forest-editorial .fm-session-actions button,
+.festiome-style-forest-editorial .fm-session-actions a {
+  border-color: rgba(201, 147, 46, .5) !important;
+  background: #c9932e !important;
+  color: #12211b !important;
+}
+.festiome-style-forest-editorial .fm-session-actions .outline,
+.festiome-style-forest-editorial .fm-session-actions a {
+  background: transparent !important;
+  color: #e9c477 !important;
+}
+.festiome-style-forest-editorial .fm-preview-actions button {
+  border-color: rgba(201, 147, 46, .45) !important;
+}
+.festiome-style-forest-editorial .fm-preview-actions button.primary,
+.festiome-style-forest-editorial .fm-guest-meetup-form button {
+  background: #c9932e !important;
+  color: #12211b !important;
+}
+.festiome-style-forest-editorial .fm-guest-meetup-list article > button.active {
+  background: rgba(201, 147, 46, .14) !important;
+}
+.festiome-style-forest-editorial .fm-program-list article.ongoing {
+  border-color: rgba(201, 147, 46, .45) !important;
+  box-shadow: inset 3px 0 0 #c9932e !important;
+}
+.festiome-style-forest-editorial .fm-preview-avatar,
+.festiome-style-forest-editorial .fm-connection-list button > span {
+  background: linear-gradient(145deg, #1c6a49, #0e4d34) !important;
+}
+.festiome-style-forest-editorial .fm-session-art {
+  background:
+    radial-gradient(circle at 75% 20%, rgba(201, 147, 46, .35), transparent 22%),
+    linear-gradient(145deg, #0e4d34, #082a1e 55%, #1c6a49) !important;
+  box-shadow: inset 0 0 35px rgba(201, 147, 46, .12) !important;
+}
+.festiome-style-forest-editorial .fm-people-search input {
+  border-color: rgba(201, 147, 46, .2) !important;
+  background: rgba(20, 32, 26, .72) !important;
+}
+.festiome-style-forest-editorial .fm-people-search input:focus {
+  border-color: rgba(201, 147, 46, .5) !important;
+}
+.festiome-style-forest-editorial .fm-guest-meetup-form input,
+.festiome-style-forest-editorial .fm-guest-meetup-form textarea {
+  border-color: rgba(201, 147, 46, .2) !important;
+  background: #0e1712 !important;
+}
+
+/* Headline / muted text: keep the same hierarchy, shift off pure navy-grey */
+.festiome-style-forest-editorial .fm-guest-welcome h2,
+.festiome-style-forest-editorial .fm-card-heading h3,
+.festiome-style-forest-editorial .fm-dashboard-title h3,
+.festiome-style-forest-editorial .fm-dashboard-title h2,
+.festiome-style-forest-editorial .fm-session-hero h3,
+.festiome-style-forest-editorial .fm-announcement-card > h3,
+.festiome-style-forest-editorial .fm-people-preview h4,
+.festiome-style-forest-editorial .fm-guest-people-grid h3,
+.festiome-style-forest-editorial .fm-session-list strong,
+.festiome-style-forest-editorial .fm-connection-list strong,
+.festiome-style-forest-editorial .fm-community-pulse strong,
+.festiome-style-forest-editorial .fm-meetup-day strong,
+.festiome-style-forest-editorial .fm-guest-meetup-list h3,
+.festiome-style-forest-editorial .fm-program-list h3,
+.festiome-style-forest-editorial .fm-upcoming-meetup h3,
+.festiome-style-forest-editorial .fm-next-session h3,
+.festiome-style-forest-editorial .fm-session-art strong,
+.festiome-style-forest-editorial .fm-people-search input {
+  color: #eef5f0 !important;
+}
+.festiome-style-forest-editorial .fm-guest-welcome p,
+.festiome-style-forest-editorial .fm-dashboard-title p,
+.festiome-style-forest-editorial .fm-announcement-card > span,
+.festiome-style-forest-editorial .fm-announcement-card > p,
+.festiome-style-forest-editorial .fm-people-preview p,
+.festiome-style-forest-editorial .fm-guest-people-grid p,
+.festiome-style-forest-editorial .fm-session-list small,
+.festiome-style-forest-editorial .fm-connection-list small,
+.festiome-style-forest-editorial .fm-connection-list p,
+.festiome-style-forest-editorial .fm-trending-list p,
+.festiome-style-forest-editorial .fm-community-pulse small,
+.festiome-style-forest-editorial .fm-community-pulse > p,
+.festiome-style-forest-editorial .fm-dashboard-empty,
+.festiome-style-forest-editorial .fm-guest-meetup-list p,
+.festiome-style-forest-editorial .fm-guest-meetup-list small,
+.festiome-style-forest-editorial .fm-program-list p,
+.festiome-style-forest-editorial .fm-upcoming-meetup p,
+.festiome-style-forest-editorial .fm-upcoming-meetup small,
+.festiome-style-forest-editorial .fm-next-session p,
+.festiome-style-forest-editorial .fm-session-hero p,
+.festiome-style-forest-editorial .fm-people-search input::placeholder {
+  color: #a9b3ac !important;
+}
+.festiome-style-forest-editorial .fm-community-pulse > p {
+  border-top-color: rgba(201, 147, 46, .18) !important;
+}
+.festiome-style-forest-editorial .fm-dashboard-empty {
+  border-color: rgba(201, 147, 46, .22) !important;
+}
+.festiome-style-forest-editorial .fm-trending-list button {
+  border-bottom-color: rgba(201, 147, 46, .14) !important;
+}
+.festiome-style-forest-editorial .fm-people-preview article,
+.festiome-style-forest-editorial .fm-guest-people-grid article {
+  border-color: rgba(201, 147, 46, .16) !important;
+  background: rgba(20, 32, 26, .72) !important;
+}
+.festiome-style-forest-editorial .fm-connection-list button > span {
+  color: #fff !important;
+}

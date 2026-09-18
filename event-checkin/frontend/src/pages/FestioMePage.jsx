@@ -3,6 +3,7 @@ import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useGuestPush } from "../hooks/useGuestPush";
 import "./FestioMePage.css";
+import "./FestioMeThemes.css";
 
 const KINDS = { discussion: "#", announcement: "📣", staff: "🔒" };
 const STAFF_ROLES = ["owner", "admin", "moderator"];
@@ -85,6 +86,19 @@ export default function FestioMePage() {
   const guestPushContext = guestMode ? api.festiomeGuestContext() : null;
   const { pushConfig, pushState, pushBusy, pushError, enablePush, disablePush } =
     useGuestPush(guestPushContext?.eventId, guestPushContext?.passToken, { skip: !guestPushContext });
+  // Purely cosmetic, opt-in: only events on the "forest-editorial" hub_style
+  // get a class added here (see FestioMeThemes.css) -- every other event's
+  // className stays exactly what it is today.
+  const [hubStyle, setHubStyle] = useState("");
+  useEffect(() => {
+    if (!guestPushContext?.eventId) return;
+    let cancelled = false;
+    api.publicDesignTheme(guestPushContext.eventId).then(
+      (theme) => { if (!cancelled) setHubStyle(theme?.hub_style || ""); },
+      () => {},
+    );
+    return () => { cancelled = true; };
+  }, [guestPushContext?.eventId]);
   // "Back to FestioHub" used to rely purely on browser history, which
   // silently no-ops when the guest arrived here fresh (new tab, QR code,
   // bookmark) — there's no history entry to go back to. The guest's Guest
@@ -1006,7 +1020,7 @@ export default function FestioMePage() {
     ];
     const sourceBadge = (children, tone = "teal") => <span className={`rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-wide ${tone === "purple" ? "border-purple-400/30 bg-purple-500/10 text-purple-300" : "border-teal-400/30 bg-teal-500/10 text-teal-300"}`}>{children}</span>;
     return (
-      <div className="festiome-unified-home mx-auto flex min-h-[calc(100dvh-5.5rem)] w-full max-w-7xl overflow-hidden border-y border-teal-400/15 bg-[#061120] text-white shadow-2xl sm:min-h-[calc(100vh-7rem)] sm:rounded-3xl sm:border">
+      <div className={`festiome-unified-home${hubStyle ? ` festiome-style-${hubStyle}` : ''} mx-auto flex min-h-[calc(100dvh-5.5rem)] w-full max-w-7xl overflow-hidden border-y border-teal-400/15 bg-[#061120] text-white shadow-2xl sm:min-h-[calc(100vh-7rem)] sm:rounded-3xl sm:border`}>
         <aside className="hidden w-56 shrink-0 flex-col border-r border-white/10 bg-[#050e1e] p-4 md:flex">
           <div className="mb-8 px-2 text-2xl font-black">Festio<span className="text-teal-300">Me</span></div>
           <nav className="space-y-2">

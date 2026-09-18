@@ -177,3 +177,36 @@
 .festiome-style-forest-editorial .fm-connection-list button > span {
   color: #fff !important;
 }
+
+/* The persistent app shell (sidebar, header, mobile nav, notification bell,
+   avatars) isn't built from .fm-* classes like the dashboard cards above —
+   it's raw Tailwind utility classes (text-teal-300, bg-teal-700, etc.) used
+   consistently as "the accent color" throughout. Overriding those utility
+   classes directly, scoped under this style, retheme the whole shell without
+   needing a class-hook change at every call site. */
+.festiome-style-forest-editorial aside,
+.festiome-style-forest-editorial .bg-\[\#050e1e\] {
+  background: #0a140f !important;
+  border-color: rgba(201, 147, 46, .14) !important;
+}
+.festiome-style-forest-editorial .bg-\[\#061120\] {
+  background: #0e1712 !important;
+}
+.festiome-style-forest-editorial header,
+.festiome-style-forest-editorial aside nav button,
+.festiome-style-forest-editorial .border-white\/10 {
+  border-color: rgba(201, 147, 46, .14) !important;
+}
+.festiome-style-forest-editorial .text-teal-300,
+.festiome-style-forest-editorial .text-teal-200 {
+  color: #e9c477 !important;
+}
+.festiome-style-forest-editorial .bg-teal-600\/30 {
+  background: rgba(201, 147, 46, .22) !important;
+}
+.festiome-style-forest-editorial .bg-teal-700 {
+  background: linear-gradient(145deg, #1c6a49, #0e4d34) !important;
+}
+.festiome-style-forest-editorial .bg-purple-500 {
+  background: #c9932e !important;
+}

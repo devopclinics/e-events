@@ -78,6 +78,34 @@
   box-shadow: 0 0 0 3px rgba(94, 234, 212, .3) !important;
 }
 
+/* D — forest editorial: deep forest green & gold, matches the event site /
+   Pass / FestioMe when the event's hub_style is "forest-editorial". Unlike
+   A/B/C (selected per Experience workflow step), this one is selected by
+   the event's Design Studio choice -- see guestTheme in LiveGuestPage.jsx. */
+.live-guest-forest-editorial {
+  color: #eef5f0;
+  background:
+    radial-gradient(circle at 85% -10%, rgba(201, 147, 46, .16), transparent 34rem),
+    linear-gradient(145deg, #0e1712, #071c14);
+}
+.live-guest-forest-editorial .live-guest-brand { color: #e9c477; }
+.live-guest-forest-editorial .rounded-2xl, .live-guest-forest-editorial .rounded-xl {
+  border-color: rgba(201, 147, 46, .28) !important;
+  background-color: rgba(20, 32, 26, .94) !important;
+  color: #eef5f0 !important;
+  box-shadow: 0 18px 50px rgba(8, 42, 30, .3);
+}
+.live-guest-forest-editorial h1, .live-guest-forest-editorial h2, .live-guest-forest-editorial .text-slate-900,
+.live-guest-forest-editorial .text-slate-950, .live-guest-forest-editorial .text-slate-800 { color: #fff !important; }
+.live-guest-forest-editorial .text-slate-600, .live-guest-forest-editorial .text-slate-500 { color: #a9b3ac !important; }
+.live-guest-forest-editorial .bg-teal-400, .live-guest-forest-editorial .bg-teal-600 { background: #c9932e !important; color: #12211b !important; }
+.live-guest-forest-editorial button[aria-pressed="true"] {
+  border-color: #c9932e !important;
+  background: #c9932e !important;
+  color: #12211b !important;
+  box-shadow: 0 0 0 3px rgba(201, 147, 46, .3) !important;
+}
+
 /* A tap needs to feel registered the instant it happens, before the network
    round trip confirms it -- a quick settle animation on the button that just
    became selected, independent of theme colors above. */

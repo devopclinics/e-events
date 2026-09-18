@@ -863,7 +863,23 @@ export default function LiveGuestPage() {
   const [activities, setActivities] = useState(null)
   const [activityId, setActivityId] = useState(null)
   const [workflowRun, setWorkflowRun] = useState(null)
-  const guestTheme = workflowRun?.current_step?.theme?.guest_preset || workflowRun?.theme?.guest_preset || 'cinematic'
+  // Purely additive: only events on the "forest-editorial" hub_style (set in
+  // Design Studio) get this override -- every other event keeps its exact
+  // existing behavior, picking the guest_preset the Experience workflow step
+  // already configures (or the 'cinematic' default), completely unchanged.
+  const [hubStyle, setHubStyle] = useState('')
+  useEffect(() => {
+    if (!eventId) return
+    let cancelled = false
+    api.publicDesignTheme(eventId).then(
+      (theme) => { if (!cancelled) setHubStyle(theme?.hub_style || '') },
+      () => {},
+    )
+    return () => { cancelled = true }
+  }, [eventId])
+  const guestTheme = hubStyle === 'forest-editorial'
+    ? 'forest-editorial'
+    : (workflowRun?.current_step?.theme?.guest_preset || workflowRun?.theme?.guest_preset || 'cinematic')
   const codeEntryMode = !queryEventId && !joinCode && window.location.pathname.replace(/\/+$/, '') === '/live/join'
 
   useEffect(() => {

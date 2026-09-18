@@ -158,6 +158,13 @@ export const HTML_ASSETS = [
     type: 'HTML',
   },
   {
+    title: 'PAMAN Partnership One-Pager',
+    description: "Single-page visual proposal built around the real PAMCON 2026 demo (not the general association pitch above) — guest-journey diagram, what's already live vs. what's needed from PAMAN, and member reusability, kept deliberately short on text. Print this page to generate a PDF for email.",
+    href: '/media/paman-partnership-onepager.html',
+    filename: 'paman-partnership-onepager.html',
+    type: 'HTML',
+  },
+  {
     title: 'Staging QA Checklist',
     description: 'Full feature-by-feature test pass for staff to run on staging — ~55 test cases across setup, RSVP, check-in, FestioHub, FestioMe, messaging, and more. Testers enter their name, work through the checklist, and download a results file to send back.',
     href: '/media/festio-qa-checklist.html',

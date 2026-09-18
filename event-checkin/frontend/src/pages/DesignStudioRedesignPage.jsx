@@ -188,7 +188,7 @@ const HUB_STYLES = [
     colorPreset: { background: '#0c0b0a', surface: '#1c1815', accent: '#c9a24a', primary: '#c9a24a', text: '#f6f0e2' },
   },
 ]
-const HUB_STYLE_CATEGORIES = ['All', 'Layout', 'Luxury', 'Warm', 'Vibrant', 'Dark', 'Nature', 'Editorial', 'Classic', 'Corporate', 'Tech', 'Community', 'Formal', 'Sacred']
+const HUB_STYLE_CATEGORIES = ['All', 'Layout', 'Luxury', 'Warm', 'Vibrant', 'Dark', 'Nature', 'Editorial', 'Classic', 'Corporate', 'Tech', 'Community', 'Formal', 'Sacred', 'Conference']
 
 // GuestHub tab: same 10 visual themes as FestioHub's "Apply palette" (still
 // reachable there for fine-tuning just the card), presented as whole-

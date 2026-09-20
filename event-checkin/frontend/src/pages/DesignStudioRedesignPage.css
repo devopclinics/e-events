@@ -446,7 +446,7 @@
 .ds-gh-tpl-coastal-club .gh-leg-time { font-size: 8.5px; font-weight: 700; color: #0f2040; }
 
 /* Forest Editorial: forest-green canopy header, gold pass border, editorial tab underline */
-.ds-gh-tpl-forest-editorial { border-radius: 14px; box-shadow: 0 10px 26px rgba(8,42,30,.18); }
+.ds-gh-tpl-forest-editorial { border-radius: 14px; box-shadow: 0 10px 26px rgba(8,42,30,.18); background: #08180f; color: #fff; padding: 10px; }
 .ds-gh-tpl-forest-editorial .gh-canopy { background: #0e4d34; padding: 10px 12px; position: relative; overflow: hidden; background-image: radial-gradient(ellipse 80% 60% at 90% -10%, rgba(201,147,46,.25) 0%, transparent 60%); }
 .ds-gh-tpl-forest-editorial .gh-badge { display: inline-block; font-size: 6.5px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; color: #e9c477; background: rgba(201,147,46,.16); border: 1px solid rgba(201,147,46,.35); padding: 2px 8px; border-radius: 99px; margin-bottom: 5px; }
 .ds-gh-tpl-forest-editorial .gh-event { display: block; font-size: 12px; font-weight: 800; color: #fff; opacity: 1; margin: 0; letter-spacing: -.01em; }
@@ -461,6 +461,22 @@
 .ds-gh-tpl-forest-editorial .gh-leg { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--p-surface); border: 1px solid rgba(14,77,52,.16); border-radius: 8px; }
 .ds-gh-tpl-forest-editorial .gh-leg-num { font-size: 7px; font-weight: 800; letter-spacing: .08em; color: #c9932e; min-width: 40px; }
 .ds-gh-tpl-forest-editorial .gh-leg-name { flex: 1; font-size: 9.5px; font-weight: 600; }
+.ds-gh-tpl-forest-editorial .gh-paired-heading { text-align: center; margin-bottom: 8px; }
+.ds-gh-tpl-forest-editorial .gh-paired-heading .gh-event { color: #fff; font-size: 10px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ds-gh-tpl-forest-editorial .gh-paired-screens { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; align-items: stretch; }
+.ds-gh-tpl-forest-editorial .gh-paired-phone { min-width: 0; border: 1px solid rgba(201,147,46,.28); border-radius: 9px; background: linear-gradient(155deg, #0e4d34, #092d20); padding: 7px; display: flex; flex-direction: column; gap: 4px; }
+.ds-gh-tpl-forest-editorial .gh-screen-label { color: #e9c477; font-size: 6px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.ds-gh-tpl-forest-editorial .gh-paired-phone .gh-guest { color: #fff; font-size: 8px; line-height: 1.15; }
+.ds-gh-tpl-forest-editorial .gh-paired-phone .gh-chip { align-self: flex-start; font-size: 5.5px; padding: 2px 4px; background: rgba(255,255,255,.08); color: #e9f1ec; border-color: rgba(255,255,255,.16); }
+.ds-gh-tpl-forest-editorial .gh-paired-pass .gh-qr { align-self: center; background: #fff; padding: 3px; border-radius: 5px; line-height: 0; }
+.ds-gh-tpl-forest-editorial .gh-paired-meta { color: rgba(255,255,255,.6); font-size: 5.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ds-gh-tpl-forest-editorial .gh-next-mini { border: 1px solid rgba(255,255,255,.12); border-radius: 5px; padding: 4px; display: flex; flex-direction: column; }
+.ds-gh-tpl-forest-editorial .gh-next-mini small { color: #e9c477; font-size: 4.8px; font-weight: 800; }
+.ds-gh-tpl-forest-editorial .gh-next-mini b { font-size: 6px; margin-top: 1px; }
+.ds-gh-tpl-forest-editorial .gh-action-mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
+.ds-gh-tpl-forest-editorial .gh-action-mini-grid span { min-width: 0; border: 1px solid rgba(255,255,255,.12); border-radius: 4px; padding: 4px 2px; color: rgba(255,255,255,.82); font-size: 4.8px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ds-gh-tpl-forest-editorial .gh-paired-footer { display: flex; justify-content: space-around; padding-top: 7px; color: rgba(255,255,255,.55); font-size: 5.5px; }
+
 
 /* 10 — Haze: glassmorphism gradient bg, blurred pass-glass, glow lineup rows */
 .ds-gh-tpl-haze { border-radius: 18px; position: relative; overflow: hidden; box-shadow: 0 14px 32px rgba(0,0,0,.6); background: linear-gradient(145deg, #1a0533 0%, #0d1b4b 40%, #0a1a3a 70%, #1a0328 100%) !important; }

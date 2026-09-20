@@ -85,9 +85,9 @@ const HUB_STYLES = [
     colorPreset: { background: '#f8f4ec', surface: '#ffffff', accent: '#b8912a', primary: '#0f2040', text: '#0f2040' },
   },
   {
-    id: 'forest-editorial', name: 'Forest Editorial', category: 'Conference',
-    tagline: 'Deep forest green & gold — tabbed pass card, editorial type',
-    bestFor: 'Professional associations and conferences that want a premium, editorial feel.',
+    id: 'forest-editorial', name: 'Forest Guest Experience', category: 'Conference',
+    tagline: 'A coordinated Festio Pass and GuestHub in deep forest green and gold',
+    bestFor: 'Conferences and associations that want one polished mobile journey from entry to participation.',
     fontSuggestion: 'bold-sans',
     colorPreset: { background: '#f3f5ef', surface: '#ffffff', accent: '#c9932e', primary: '#0e4d34', text: '#12211b' },
   },
@@ -235,7 +235,7 @@ function GhTabs({ items, accent }) {
 // One case per template id — each mirrors that specific mockup's real DOM
 // shape and sample copy (guest name, event name, programme items), scaled
 // down for a card-sized preview.
-function GuestHubSwatch({ s, font }) {
+function GuestHubSwatch({ s, font, eventName = 'Your event', eventDate = 'Date to be confirmed', venue = 'Venue to be confirmed' }) {
   const p = s.colorPreset
   const vars = { '--p-bg': p.background, '--p-surface': p.surface, '--p-accent': p.accent, '--p-primary': p.primary, '--p-text': p.text, fontFamily: font }
   switch (s.id) {
@@ -423,15 +423,29 @@ function GuestHubSwatch({ s, font }) {
     case 'forest-editorial':
       return (
         <div className="ds-gh-tpl ds-gh-tpl-forest-editorial" style={vars}>
-          <div className="gh-canopy"><span className="gh-badge">Festio GuestHub</span><strong className="gh-event">PAMCON 2026</strong><span className="gh-sub">Party Managers Association of Nigeria</span></div>
-          <div className="gh-pass-card">
-            <span className="gh-qr"><GhMiniQR color={p.primary} /></span>
-            <div className="gh-hero-text"><strong className="gh-guest">Demo Guest</strong><div className="gh-chips"><span className="gh-chip">Event Planner</span></div></div>
+          <div className="gh-paired-heading">
+            <span className="gh-badge">Two connected screens</span>
+            <strong className="gh-event">{eventName}</strong>
           </div>
-          <GhTabs items={['Pass', 'FestioMe', 'Programme', 'Speakers']} accent={p.accent} />
-          <div className="gh-body">
-            <div className="gh-leg"><span className="gh-leg-num">UP NEXT</span><span className="gh-leg-name">Industry Keynote</span><span className="gh-tag red">Live</span></div>
+          <div className="gh-paired-screens">
+            <div className="gh-paired-phone gh-paired-pass">
+              <span className="gh-screen-label">Festio Pass</span>
+              <strong className="gh-guest">Demo Guest</strong>
+              <span className="gh-chip">Event guest</span>
+              <span className="gh-qr"><GhMiniQR color={p.primary} /></span>
+              <span className="gh-paired-meta">{eventDate}</span>
+              <span className="gh-paired-meta">{venue}</span>
+            </div>
+            <div className="gh-paired-phone gh-paired-hub">
+              <span className="gh-screen-label">GuestHub</span>
+              <strong className="gh-guest">Welcome, Demo Guest</strong>
+              <div className="gh-next-mini"><small>UP NEXT</small><b>Opening session</b></div>
+              <div className="gh-action-mini-grid">
+                {['My Pass', 'Programme', 'Speakers', 'Festio Live', 'Activities', 'Event Info'].map((label) => <span key={label}>{label}</span>)}
+              </div>
+            </div>
           </div>
+          <div className="gh-paired-footer"><span>Pass</span><span>Programme</span><span>Live</span><span>Me</span></div>
         </div>
       )
     case 'haze':
@@ -1722,7 +1736,13 @@ export default function DesignStudioRedesignPage() {
                   const font = GUESTHUB_FONT_CSS[s.fontSuggestion] || GUESTHUB_FONT_CSS['modern-sans']
                   return (
                     <div key={s.id} className={`ds-gh-card ${hubStyle === s.id ? 'selected' : ''}`}>
-                      <GuestHubSwatch s={s} font={font} />
+                      <GuestHubSwatch
+                        s={s}
+                        font={font}
+                        eventName={wording.eventTitle || event?.name || 'Your event'}
+                        eventDate={wording.date || 'Date to be confirmed'}
+                        venue={wording.venue || event?.venue_name || 'Venue to be confirmed'}
+                      />
                       <div className="ds-hub-card-meta">
                         <div className="ds-hub-card-top">
                           <strong>{s.name}</strong>

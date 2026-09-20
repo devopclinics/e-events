@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timedelta
 from pydantic import ValidationError
 from .render import render_site
 from .schemas import SiteContent, SiteUpsert
@@ -99,6 +100,102 @@ class PublicSiteContractTests(unittest.TestCase):
             for expected in ("Four-day programme", "Day 1", "Day 2", "Dr. Amina", "Gala Night", "Parking", "Are children included?", "Participate in live Q&amp;A, polls and activities."):
                 self.assertIn(expected, page, f"missing {expected!r} in {family} render")
             self.assertNotIn("<script>", page)
+
+    def test_single_day_event_date_does_not_leak_raw_iso_session_date(self):
+        """A single-day event whose sessions carry ISO dates (from
+        Experience import) must not show the raw ISO string next to the
+        pretty start date, e.g. 'November 10, 2026 – 2026-11-10'."""
+        content = self.sample()
+        content.update({
+            "start_date": "November 10, 2026",
+            "sessions": [
+                {"day": "Event Day", "date": "2026-11-10", "time": "9:00 AM", "title": "Opening"},
+                {"day": "Event Day", "date": "2026-11-10", "time": "10:00 AM", "title": "Keynote"},
+            ],
+        })
+        validated = SiteContent(**content).model_dump(mode="json")
+        page = render_site(validated, "community")
+        self.assertIn("November 10, 2026", page)
+        self.assertNotIn("2026-11-10", page)
+
+    def test_multi_day_event_date_range_is_fully_formatted(self):
+        content = self.sample()
+        content.update({
+            "start_date": "November 10, 2026",
+            "sessions": [
+                {"day": "Day 1", "date": "2026-11-10", "time": "9:00 AM", "title": "Opening"},
+                {"day": "Day 2", "date": "2026-11-12", "time": "9:00 AM", "title": "Closing"},
+            ],
+        })
+        validated = SiteContent(**content).model_dump(mode="json")
+        page = render_site(validated, "community")
+        # The hero date line itself must be fully human-formatted — the raw
+        # ISO session date is still expected to appear separately in the
+        # per-day schedule tabs, which is unrelated to this date-label bug.
+        self.assertIn("▣ November 10–12, 2026", page)
+
+    def test_unconfirmed_speakers_show_a_pending_panel_not_repeated_placeholders(self):
+        content = self.sample()
+        content.update({
+            "speakers_confirmed": False,
+            "tracks": [{"title": "Business Growth"}, {"title": "Event Technology"}],
+            "speakers": [{"name": "Demo Speaker", "title": "Sample Industry Expert"}] * 4,
+        })
+        validated = SiteContent(**content).model_dump(mode="json")
+        page = render_site(validated, "community")
+        self.assertIn("Speaker lineup to be announced.", page)
+        self.assertIn("Business Growth", page)
+        self.assertEqual(page.count("Demo Speaker"), 0)
+
+    def test_exhibitors_section_renders_only_when_opted_in(self):
+        content = self.sample()
+        content.update({
+            "exhibitors": [{"name": "Demo Décor Co.", "category": "Decoration & styling", "description": "Sample listing."}],
+        })
+        validated = SiteContent(**content).model_dump(mode="json")
+        page_without = render_site(validated, "community")
+        self.assertNotIn("Demo Décor", page_without)
+        content["visible_sections"] = ["stats", "programme", "tracks", "connect", "exhibitors"]
+        validated = SiteContent(**content).model_dump(mode="json")
+        page_with = render_site(validated, "community")
+        self.assertIn("Demo Décor", page_with)
+        self.assertIn("Decoration &amp; styling", page_with)
+
+    def test_feature_section_without_image_fills_visual_half_from_its_own_facts(self):
+        content = self.sample()
+        content.update({
+            "feature_sections": [{
+                "id": "partnership", "title": "Built for the people who build unforgettable events.",
+                "facts": [{"label": "Registration & guest management", "value": "Before"}, {"label": "Check-in & FestioMe", "value": "During"}],
+            }],
+        })
+        validated = SiteContent(**content).model_dump(mode="json")
+        page = render_site(validated, "community")
+        self.assertIn("feature-tiles", page)
+        self.assertIn("Registration &amp; guest management", page)
+
+    def test_countdown_shows_days_to_go_matching_rsvp_page_wording(self):
+        content = self.sample()
+        content["start_date"] = (datetime.now() + timedelta(days=10)).strftime("%B %d, %Y")
+        validated = SiteContent(**content).model_dump(mode="json")
+        for family in ("community", "modern-professional"):
+            page = render_site(validated, family)
+            self.assertIn("10 days to go", page)
+
+    def test_countdown_says_tomorrow_on_the_day_before(self):
+        content = self.sample()
+        content["start_date"] = (datetime.now() + timedelta(days=1)).strftime("%B %d, %Y")
+        validated = SiteContent(**content).model_dump(mode="json")
+        page = render_site(validated, "community")
+        self.assertIn("Tomorrow!", page)
+        self.assertNotIn("1 days to go", page)
+
+    def test_countdown_is_hidden_once_the_event_has_started(self):
+        content = self.sample()
+        content["start_date"] = datetime.now().strftime("%B %d, %Y")
+        validated = SiteContent(**content).model_dump(mode="json")
+        page = render_site(validated, "community")
+        self.assertNotIn('<span class="countdown-chip">', page)
 
     def test_contact_links_avoid_cloudflare_email_protection(self):
         content = self.sample()

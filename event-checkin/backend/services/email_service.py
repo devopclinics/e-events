@@ -111,6 +111,9 @@ def _resend_payload(msg: MIMEMultipart) -> dict:
         "to": [a.strip() for a in (msg["To"] or "").split(",") if a.strip()],
         "subject": msg["Subject"] or "",
     }
+    cc = [a.strip() for a in (msg["Cc"] or "").split(",") if a.strip()]
+    if cc:
+        payload["cc"] = cc
     headers = {
         key: value
         for key, value in {
@@ -544,6 +547,7 @@ async def send_simple_email(
     guest_id: str | None = None,
     message_kind: str | None = "simple",
     inline_images: list[tuple[str, bytes, str]] | None = None,
+    cc_email: str | list[str] | None = None,
 ):
     """Shared Festio-branded HTML email for simple transactional templates."""
     if not to_email:
@@ -552,6 +556,8 @@ async def send_simple_email(
     msg["Subject"] = subject
     msg["From"] = settings.email_from
     msg["To"] = to_email
+    if cc_email:
+        msg["Cc"] = ", ".join(cc_email) if isinstance(cc_email, list) else cc_email
     # _charge_email_credit's idempotency_key is keyed off this header (falls
     # back to "" when absent) -- without it, every automatic email to the
     # same guest for the same event collapses onto one shared idempotency

@@ -83,6 +83,18 @@ class FAQ(BaseModel):
     answer: str = Field(min_length=1, max_length=1200)
 
 
+class Exhibitor(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    category: str = Field(default="", max_length=100)
+    description: str = Field(default="", max_length=300)
+    logo_url: HttpUrl | None = None
+
+    @field_validator("logo_url", mode="before")
+    @classmethod
+    def blank_logo_url_is_none(cls, value):
+        return None if value in (None, "") else value
+
+
 class Stat(BaseModel):
     value: str = Field(min_length=1, max_length=40)
     label: str = Field(min_length=1, max_length=80)
@@ -168,7 +180,9 @@ class SiteContent(BaseModel):
     programme_title: str = Field(default="Full programme", max_length=160)
     programme_summary: str = Field(default="Choose a day or track to plan your experience.", max_length=400)
     speakers: list[Speaker] = Field(default_factory=list, max_length=80)
+    speakers_confirmed: bool = True
     feature_sections: list[FeatureSection] = Field(default_factory=list, max_length=16)
+    exhibitors: list[Exhibitor] = Field(default_factory=list, max_length=60)
     venue_facts: list[Fact] = Field(default_factory=list, max_length=12)
     registration_facts: list[Fact] = Field(default_factory=list, max_length=12)
     faqs: list[FAQ] = Field(default_factory=list, max_length=30)

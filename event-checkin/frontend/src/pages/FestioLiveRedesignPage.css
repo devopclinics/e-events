@@ -309,3 +309,36 @@
 @media(max-width:960px){.fla-sidebar{display:none}.fla-stats-row{grid-template-columns:repeat(2,1fr)}.fla-bottom-row{grid-template-columns:1fr}.fla-ai-grid{grid-template-columns:1fr}}
 .fl-automation-panel{margin:14px 0 20px;padding:16px;border:1px solid #b8ded5;border-radius:16px;background:linear-gradient(145deg,#effcf8,#f6f2ff 62%,#fff7ed);box-shadow:0 12px 32px #133b2f10}.fl-automation-panel>header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.fl-automation-panel>header span{color:#087f6c;font-size:10px;font-weight:900;letter-spacing:.14em}.fl-automation-panel h4{margin:3px 0;font-size:17px}.fl-automation-panel p{max-width:650px;margin:0;color:#53655f;font-size:12px;line-height:1.45}.fl-automation-switch{display:flex;align-items:center;gap:7px;padding:9px 11px;border:1px solid #a9d8ce;border-radius:99px;background:#fff;font-size:12px;white-space:nowrap}.fl-automation-switch input{accent-color:#0f9f88}.fl-automation-grid{display:grid;grid-template-columns:repeat(4,minmax(105px,1fr));gap:9px;margin-top:14px}.fl-automation-grid>label{padding:9px;border:1px solid #d8e6df;border-radius:11px;background:#ffffffc7}.fl-automation-grid>label>span{display:block;margin-bottom:6px;color:#43534d;font-size:10px;font-weight:800}.fl-automation-grid>label>div{display:flex;align-items:center;gap:5px}.fl-automation-grid input{min-width:0;width:100%;padding:7px;border:1px solid #cbd8d2;border-radius:8px;background:#fff;font-weight:800}.fl-automation-grid em{color:#718079;font-size:10px;font-style:normal}.fl-automation-panel>footer{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:13px}.fl-automation-panel>footer>span{max-width:650px;color:#5b6a65;font-size:11px;line-height:1.4}
 @media(max-width:900px){.fl-automation-grid{grid-template-columns:repeat(2,minmax(100px,1fr))}.fl-automation-panel>footer{align-items:stretch;flex-direction:column}.fl-automation-panel>footer button{width:100%}}
+
+/* Keep activity and screen controls within reach while running the show. */
+.fl-operator-bar { position: sticky; top: 58px; z-index: 20; margin-bottom: 18px; padding: 12px 14px; border: 1px solid #d9c7b8; border-radius: 14px; background: var(--fl-paper); box-shadow: 0 8px 24px -16px #5d3b27; }
+.fl-operator-fields { display: grid; grid-template-columns: minmax(160px, 1.25fr) minmax(145px, .8fr) minmax(140px, 1fr); align-items: end; gap: 12px; }
+.fl-operator-fields label { min-width: 0; }
+.fl-operator-fields label > span { display: block; margin-bottom: 4px; color: var(--fl-muted); font-size: 11px; font-weight: 750; }
+.fl-operator-fields select { width: 100%; min-width: 0; }
+.fl-operator-current { min-width: 0; padding-bottom: 4px; }
+.fl-operator-current small { display: block; margin-top: 4px; color: var(--fl-muted); font-size: 11px; overflow-wrap: anywhere; }
+.fl-screen-status { color: #78716b; font-size: 11px; font-weight: 750; }
+.fl-screen-status.connected { color: #176344; }
+.fl-operator-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+.fl-operator-actions .rr-btn { min-height: 36px; font-size: 11px; }
+.fl-operator-bar > p { margin: 8px 0 0; color: #176344; font-size: 12px; }
+.fl-preview-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px; }
+.fl-preview-actions small { color: var(--fl-muted); font-size: 11px; }
+.fl-preview-actions button[aria-pressed="true"] { border-color: var(--fl-copper); color: var(--fl-copper-dark); }
+.fl-display-devices { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--fl-line); border-radius: 10px; font-size: 12px; }
+.fl-display-devices summary { cursor: pointer; font-weight: 750; }
+.fl-display-devices ul { list-style: none; margin: 8px 0 0; padding: 0; }
+.fl-display-devices li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0; }
+.fl-display-devices small { display: block; margin-top: 2px; color: var(--fl-muted); }
+button.fl-program-activity-row { width: 100%; border-top: 0; border-left: 0; border-right: 0; background: transparent; color: inherit; text-align: left; font: inherit; }
+.fl-operator-bar button:focus-visible, .fl-operator-bar select:focus-visible, .fl-preview-actions button:focus-visible, button.fl-program-activity-row:focus-visible { outline: 2px solid var(--fl-copper); outline-offset: 3px; }
+@media (max-width: 720px) {
+  .fl-operator-bar { padding: 10px; top: 58px; }
+  .fl-operator-fields { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+  .fl-operator-current { grid-column: 1 / -1; padding: 0; }
+  .fl-operator-current small { margin-top: 2px; }
+  .fl-operator-actions .rr-btn { flex: 1 1 145px; white-space: normal; min-height: 40px; }
+  .fl-display-preview-box-head { flex-wrap: wrap; }
+  .fl-display-heading > select { min-width: 0 !important; }
+}

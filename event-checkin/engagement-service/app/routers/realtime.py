@@ -8,11 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import Identity, current_identity, require_activity_session
 from ..database import get_db
-from ..realtime import claim_display, mint_realtime_ticket, redis, release_display, renew_display, verify_realtime_ticket
+from ..realtime import DisplayDisconnectedError, claim_display, mint_realtime_ticket, redis, release_display, renew_display, verify_realtime_ticket
 from ..metrics import REALTIME_CONNECTIONS
 from ..models import LiveDisplay, WorkflowRun
 from .activities import _fetch_activity
-from .participate import _display_payload
+from .participate import _public_display_payload
 
 router = APIRouter(prefix="/api/engagement/v1", tags=["engagement-realtime"])
 
@@ -21,29 +21,43 @@ async def _sse(channel: str | list[str], display_lease: tuple[str, str] | None =
     channels = [channel] if isinstance(channel, str) else channel
     pubsub = redis.pubsub()
     REALTIME_CONNECTIONS.inc()
+    clock = asyncio.get_running_loop().time
+    next_renewal = clock()
     try:
         try:
             await pubsub.subscribe(*channels)
         except Exception:
-            pass
+            # End the stream after a bounded delay so the browser reconnects
+            # and starts its HTTP fallback. Never spin on a failed subscription.
+            await asyncio.sleep(1)
+            return
         yield "event: ready\ndata: {}\n\n"
         while True:
-            if display_lease and not await renew_display(*display_lease):
-                return
+            if display_lease and clock() >= next_renewal:
+                try:
+                    held = await renew_display(*display_lease)
+                except Exception:
+                    await asyncio.sleep(1)
+                    return
+                if not held:
+                    yield 'event: display.disconnected\ndata: {}\n\n'
+                    return
+                next_renewal = clock() + 5
+            started = clock()
             try:
-                # A short heartbeat lets the ASGI server notice a closed
-                # projector socket and release its exclusive display lease
-                # promptly, without client-side polling.
-                item = await pubsub.get_message(ignore_subscribe_messages=True, timeout=5)
+                timeout = max(.05, min(5, next_renewal - started)) if display_lease else 5
+                item = await pubsub.get_message(ignore_subscribe_messages=True, timeout=timeout)
             except Exception:
-                # Redis unreachable mid-stream: keep the connection open with
-                # keepalives rather than tearing it down — the client's next
-                # manual refresh/poll still works against plain HTTP.
-                item = None
+                await asyncio.sleep(1)
+                return
             if item:
                 payload = json.loads(item["data"])
                 yield f"event: {payload['event']}\ndata: {json.dumps(payload['data'])}\n\n"
             else:
+                # Subscription acknowledgements can return immediately even
+                # with timeout set; protect against a failing/mock transport.
+                if clock() - started < .01:
+                    await asyncio.sleep(.05)
                 yield ": keepalive\n\n"
     finally:
         REALTIME_CONNECTIONS.dec()
@@ -52,11 +66,24 @@ async def _sse(channel: str | list[str], display_lease: tuple[str, str] | None =
             await pubsub.aclose()
         except Exception:
             pass
-        if display_lease:
-            try:
-                await release_display(*display_lease)
-            except Exception:
-                pass
+        # Stream replacement is not a device disconnect. Its old finally may
+        # run after the replacement already renewed the same client. Presence
+        # ends through pagehide DELETE, admin revocation, or TTL instead.
+
+
+async def _claim(display_id, client_id, *, reconnect=False):
+    if not client_id:
+        raise HTTPException(422, "A display client identifier is required")
+    try:
+        allowed = await claim_display(display_id, client_id, reconnect=reconnect)
+    except DisplayDisconnectedError as exc:
+        raise HTTPException(410, str(exc))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    except Exception:
+        raise HTTPException(503, "Display connection service is unavailable", headers={"Retry-After": "2"})
+    if not allowed:
+        raise HTTPException(409, "This display has reached its connected-screen limit")
 
 
 @router.get("/activities/{activity_id}/realtime-ticket")
@@ -92,7 +119,7 @@ async def display_state(activity_id: str, token: str = Query(...), db: AsyncSess
     activity = await _fetch_activity(activity_id, db)
     if not activity or activity.config.get("display_token") != token:
         raise HTTPException(404, "Activity not found")
-    return await _display_payload(activity, db)
+    return await _public_display_payload(activity, db)
 
 
 @router.get("/activities/{activity_id}/display-stream")
@@ -109,7 +136,7 @@ async def display_stream(activity_id: str, token: str = Query(...), db: AsyncSes
 
 
 @router.get("/live/{display_code}/stream")
-async def named_display_stream(display_code: str, token: str = Query(...), client_id: str = Query(...), db: AsyncSession = Depends(get_db)):
+async def named_display_stream(display_code: str, token: str = Query(...), client_id: str | None = Query(None), db: AsyncSession = Depends(get_db), observer: bool = False):
     display = await db.scalar(select(LiveDisplay).where(
         LiveDisplay.display_code == display_code,
         LiveDisplay.access_token == token,
@@ -123,12 +150,8 @@ async def named_display_stream(display_code: str, token: str = Query(...), clien
     display_id = display.id
     assigned_activity_id = display.assigned_activity_id
     assigned_workflow_run_id = display.assigned_workflow_run_id
-    try:
-        claimed = await claim_display(display_id, client_id)
-    except ValueError as exc:
-        raise HTTPException(422, str(exc))
-    if not claimed:
-        raise HTTPException(409, "This display already has a connected projector")
+    if not observer:
+        await _claim(display_id, client_id)
     channels = [f"engagement:display:{display_id}"]
     if assigned_activity_id:
         channels.append(f"engagement:activity:{assigned_activity_id}")
@@ -136,10 +159,23 @@ async def named_display_stream(display_code: str, token: str = Query(...), clien
         channels.append(f"engagement:workflow-run:{assigned_workflow_run_id}")
     await db.rollback()
     return StreamingResponse(
-        _sse(channels, (display_id, client_id)),
+        _sse(channels, None if observer else (display_id, client_id)),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.post("/live/{display_code}/lease", status_code=204)
+async def reconnect_named_display(display_code: str, token: str = Query(...), client_id: str = Query(...), db: AsyncSession = Depends(get_db)):
+    display = await db.scalar(select(LiveDisplay).where(
+        LiveDisplay.display_code == display_code,
+        LiveDisplay.access_token == token,
+        LiveDisplay.status == "active",
+    ))
+    if not display:
+        raise HTTPException(404, "Display not found")
+    await _claim(display.id, client_id, reconnect=True)
+    return Response(status_code=204)
 
 
 @router.delete("/live/{display_code}/lease", status_code=204)
@@ -151,12 +187,15 @@ async def release_named_display(display_code: str, token: str = Query(...), clie
     ))
     if not display:
         raise HTTPException(404, "Display not found")
-    await release_display(display.id, client_id)
+    try:
+        await release_display(display.id, client_id)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
     return Response(status_code=204)
 
 
 @router.get("/live-short/{short_code}/stream")
-async def short_display_stream(short_code: str, client_id: str = Query(...), db: AsyncSession = Depends(get_db)):
+async def short_display_stream(short_code: str, client_id: str | None = Query(None), db: AsyncSession = Depends(get_db), observer: bool = False):
     display = await db.scalar(select(LiveDisplay).where(
         LiveDisplay.short_code == short_code,
         LiveDisplay.status == "active",
@@ -166,12 +205,8 @@ async def short_display_stream(short_code: str, client_id: str = Query(...), db:
     display_id = display.id
     assigned_activity_id = display.assigned_activity_id
     assigned_workflow_run_id = display.assigned_workflow_run_id
-    try:
-        claimed = await claim_display(display_id, client_id)
-    except ValueError as exc:
-        raise HTTPException(422, str(exc))
-    if not claimed:
-        raise HTTPException(409, "This display already has a connected projector")
+    if not observer:
+        await _claim(display_id, client_id)
     channels = [f"engagement:display:{display_id}"]
     if assigned_activity_id:
         channels.append(f"engagement:activity:{assigned_activity_id}")
@@ -179,10 +214,22 @@ async def short_display_stream(short_code: str, client_id: str = Query(...), db:
         channels.append(f"engagement:workflow-run:{assigned_workflow_run_id}")
     await db.rollback()
     return StreamingResponse(
-        _sse(channels, (display_id, client_id)),
+        _sse(channels, None if observer else (display_id, client_id)),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.post("/live-short/{short_code}/lease", status_code=204)
+async def reconnect_short_display(short_code: str, client_id: str = Query(...), db: AsyncSession = Depends(get_db)):
+    display = await db.scalar(select(LiveDisplay).where(
+        LiveDisplay.short_code == short_code,
+        LiveDisplay.status == "active",
+    ))
+    if not display:
+        raise HTTPException(404, "Display not found")
+    await _claim(display.id, client_id, reconnect=True)
+    return Response(status_code=204)
 
 
 @router.delete("/live-short/{short_code}/lease", status_code=204)
@@ -193,7 +240,10 @@ async def release_short_display(short_code: str, client_id: str = Query(...), db
     ))
     if not display:
         raise HTTPException(404, "Display not found")
-    await release_display(display.id, client_id)
+    try:
+        await release_display(display.id, client_id)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
     return Response(status_code=204)
 
 

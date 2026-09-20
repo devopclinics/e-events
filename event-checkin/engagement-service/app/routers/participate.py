@@ -124,9 +124,12 @@ async def _compute_results(activity: EngagementActivity, db: AsyncSession) -> Ac
     )).scalars().all()
     participant_count = len({r.participant_id for r in responses})
 
+    responses_by_question = defaultdict(list)
+    for response in responses:
+        responses_by_question[response.question_id].append(response)
     questions_out = []
     for question in sorted(activity.questions, key=lambda q: q.sequence):
-        q_responses = [r for r in responses if r.question_id == question.id]
+        q_responses = responses_by_question[question.id]
         option_counts: Counter[str] = Counter()
         for r in q_responses:
             for sel in r.selections:
@@ -261,6 +264,24 @@ def _survey_completion_summary(participants: list[ActivityParticipant], particip
         "avg_completion_seconds": round(sum(durations) / len(durations), 2) if durations else None,
         "answer_count": answer_count,
     }
+
+
+async def _public_display_payload(activity: EngagementActivity, db: AsyncSession) -> dict:
+    from ..display_snapshots import public_activity_snapshot
+
+    async def build():
+        # A concurrent request may have waited for another snapshot build.
+        # Reload presentation state rather than cache an earlier ORM version.
+        fresh = await db.scalar(
+            select(EngagementActivity).where(EngagementActivity.id == activity.id)
+            .options(selectinload(EngagementActivity.questions).selectinload(ActivityQuestion.options))
+            .execution_options(populate_existing=True)
+        )
+        if not fresh:
+            raise HTTPException(404, "Activity not found")
+        return await _display_payload(fresh, db)
+
+    return await public_activity_snapshot(activity, build)
 
 
 async def _display_payload(activity: EngagementActivity, db: AsyncSession) -> dict:

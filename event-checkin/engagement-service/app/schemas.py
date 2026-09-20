@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .config import settings
 
 from datetime import datetime
 from typing import Any, Literal
@@ -530,6 +531,15 @@ class DisplayRehearsalIn(BaseModel):
     participants: int = Field(default=10, ge=1, le=500)
 
 
+class DisplayDisconnectIn(BaseModel):
+    client_id: str | None = Field(default=None, min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+class DisplayDeviceOut(BaseModel):
+    client_id: str
+    last_seen_at: datetime
+
+
 class DisplayOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
@@ -539,12 +549,17 @@ class DisplayOut(BaseModel):
     access_token: str
     assigned_session_id: str | None = None
     assigned_activity_id: str | None = None
+    assigned_workflow_run_id: str | None = None
     scene: str
     status: str
     settings: dict[str, Any] = Field(default_factory=dict)
     # Computed at request time from the Redis lease, not a DB column -- see
     # _attach_connection_status in routers/operations.py.
     connected: bool = False
+    connected_count: int = 0
+    connection_limit: int = Field(default_factory=lambda: settings.display_connection_limit)
+    connection_status_available: bool = True
+    devices: list[DisplayDeviceOut] = Field(default_factory=list)
 
 
 class RuleCreate(BaseModel):

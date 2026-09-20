@@ -1599,7 +1599,7 @@ export const api = {
   liveSetDisplayRehearsal: (eventId, displayId, body) => liveReq(eventId, 'PUT', `/v1/control/displays/${displayId}/rehearsal`, body),
   liveRotateDisplayToken: (eventId, displayId) => liveReq(eventId, 'POST', `/v1/displays/${displayId}/rotate-token`),
   liveDeleteDisplay: (eventId, displayId) => liveReq(eventId, 'DELETE', `/v1/displays/${displayId}`),
-  liveDisconnectDisplay: (eventId, displayId) => liveReq(eventId, 'POST', `/v1/displays/${displayId}/disconnect`),
+  liveDisconnectDisplay: (eventId, displayId, clientId) => liveReq(eventId, 'POST', `/v1/displays/${displayId}/disconnect`, clientId ? { client_id: clientId } : {}),
   liveSettings: (eventId) => liveReq(eventId, 'GET', '/v1/settings'),
   liveUpdateSettings: (eventId, body) => liveReq(eventId, 'PUT', '/v1/settings', body),
   liveDownloadExport: (eventId, activityId, title) => downloadLiveExport(eventId, activityId, title),
@@ -1629,6 +1629,7 @@ export const api = {
   liveWorkflowRun: (eventId, runId) => liveReq(eventId, 'GET', `/v1/runs/${runId}`),
   liveActiveWorkflowRun: (eventId, workflowId) => liveReq(eventId, 'GET', `/v1/workflows/${workflowId}/active-run`),
   liveCommandWorkflowRun: (eventId, runId, body) => liveReq(eventId, 'POST', `/v1/runs/${runId}/commands`, body),
+  liveAssignWorkflowDisplays: (eventId, runId, body) => liveReq(eventId, 'PUT', `/v1/runs/${runId}/displays`, body),
   liveWorkflowTemplates: (eventId) => liveReq(eventId, 'GET', '/v1/templates'),
   liveSaveWorkflowTemplate: (eventId, workflowId, body) => liveReq(eventId, 'POST', `/v1/workflows/${workflowId}/template`, body),
 
@@ -1677,7 +1678,7 @@ export const api = {
   // require_capability). Reuses the same raw-bearer-token request shape as
   // guest calls above -- the token's own embedded role/capabilities are what
   // the server actually enforces, not which of these methods gets called.
-  liveControlActivities: (token) => liveGuestReq(token, 'GET', '/v1/activities/live'),
+  liveControlActivities: (token, role = 'presenter') => liveGuestReq(token, 'GET', role === 'moderator' ? '/v1/activities/live' : '/v1/control/activities'),
   liveControlActivity: (token, activityId) => liveGuestReq(token, 'GET', `/v1/activities/${activityId}`),
   liveControlSetStatus: (token, activityId, status) => liveGuestReq(token, 'POST', `/v1/activities/${activityId}/status`, { status }),
   liveControlAdvance: (token, activityId, questionId) => liveGuestReq(token, 'POST', `/v1/activities/${activityId}/advance`, { question_id: questionId }),
@@ -1693,8 +1694,10 @@ export const api = {
   liveControlQnaList: (token, activityId) => liveGuestReq(token, 'GET', `/v1/activities/${activityId}/qna`),
   liveControlQnaModerate: (token, qnaId, status) => liveGuestReq(token, 'PATCH', `/v1/qna/${qnaId}`, { status }),
   liveControlWorkflows: (token) => liveGuestReq(token, 'GET', '/v1/workflows'),
+  liveControlCreateWorkflowRun: (token, workflowId) => liveGuestReq(token, 'POST', `/v1/workflows/${workflowId}/runs`, { display_id: null }),
   liveControlActiveWorkflowRun: (token, workflowId) => liveGuestReq(token, 'GET', `/v1/workflows/${workflowId}/active-run`),
   liveControlWorkflowRun: (token, runId) => liveGuestReq(token, 'GET', `/v1/runs/${runId}`),
+  liveControlAssignWorkflowDisplays: (token, runId, body) => liveGuestReq(token, 'PUT', `/v1/runs/${runId}/displays`, body),
   liveControlCommandWorkflowRun: (token, runId, body) => liveGuestReq(token, 'POST', `/v1/runs/${runId}/commands`, body),
 
   // Paid admission (standalone staging-only ticketing-service).

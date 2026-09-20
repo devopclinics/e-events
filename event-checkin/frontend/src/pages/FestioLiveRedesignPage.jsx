@@ -538,7 +538,17 @@ function ParticipantReviewPreview({ activity, results, onClose }) {
   </div>
 }
 
-function DisplayCard({ display, eventId, activities, programSessions, busy, onUpdate, onDelete, onDisconnect, onPresentResults, onRehearsal }) {
+function displayDraftFor(display) {
+  return { sessionId: display.assigned_session_id || '', activityId: display.assigned_activity_id || '', scene: display.scene }
+}
+
+function displayConnectionLabel(display) {
+  if (display.connection_status_available === false) return 'Screen status unavailable'
+  const count = display.connected_count ?? (display.connected ? 1 : 0)
+  return `${count} screen${count === 1 ? '' : 's'} connected${display.connection_limit ? ` · limit ${display.connection_limit}` : ''}`
+}
+
+function DisplayCard({ display, draft, onDraftChange, onDraftApplied, eventId, activities, programSessions, busy, onUpdate, onDelete, onDisconnect, onPresentResults, onRehearsal }) {
   const [editing, setEditing] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [nameDraft, setNameDraft] = useState(display.name)
@@ -546,23 +556,32 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
   const [pushing, setPushing] = useState(false)
   const [pushReceipt, setPushReceipt] = useState('')
   const [livePreviewVersion, setLivePreviewVersion] = useState(0)
+  const [previewMode, setPreviewMode] = useState('')
   const settings = display.settings || {}
   const link = `${window.location.origin}/live/${display.display_code}?token=${encodeURIComponent(display.access_token)}`
 
-  // Pending selection — nothing here touches the real screen until "Push to
-  // display" is pressed. Resets to whatever's actually live whenever the
-  // display's committed state changes underneath it (including auto-follow).
-  const [pendingSessionId, setPendingSessionId] = useState(display.assigned_session_id || '')
-  const [pendingActivityId, setPendingActivityId] = useState(display.assigned_activity_id || '')
-  const [pendingScene, setPendingScene] = useState(display.scene)
+  // Drafts belong to the page, so leaving this tab can release its preview
+  // connections without losing the operator's pending selections.
+  const pending = draft || displayDraftFor(display)
+  const pendingSessionId = pending.sessionId
+  const pendingActivityId = pending.activityId
+  const pendingScene = pending.scene
+  const setPendingSessionId = (sessionId) => onDraftChange(display.id, { sessionId })
+  const setPendingActivityId = (activityId) => {
+    const activity = activities.find((item) => item.id === activityId)
+    const scene = !activityId ? 'welcome' : compatibleScenes(activity?.type).includes(pendingScene) ? pendingScene : 'join'
+    onDraftChange(display.id, { activityId, scene })
+  }
+  const setPendingScene = (scene) => onDraftChange(display.id, { scene })
   const [activityDetail, setActivityDetail] = useState(null)
   const [resultQuestionIds, setResultQuestionIds] = useState([])
   const [resultPageSeconds, setResultPageSeconds] = useState(settings.results_page_seconds || 8)
+  const configuredResultIds = JSON.stringify(settings.results_question_ids || [])
   useEffect(() => {
-    setPendingSessionId(display.assigned_session_id || '')
-    setPendingActivityId(display.assigned_activity_id || '')
-    setPendingScene(display.scene)
-  }, [display.assigned_session_id, display.assigned_activity_id, display.scene])
+    const stopHiddenPreview = () => { if (document.hidden) setPreviewMode('') }
+    document.addEventListener('visibilitychange', stopHiddenPreview)
+    return () => document.removeEventListener('visibilitychange', stopHiddenPreview)
+  }, [])
   useEffect(() => { if (!renaming) setNameDraft(display.name) }, [display.name, renaming])
 
   async function saveRename() {
@@ -572,15 +591,18 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
     if (updated) setRenaming(false)
   }
 
-  async function disconnectProjector() {
-    if (!window.confirm(`Disconnect the projector currently attached to "${display.name}"? Its screen will go blank until a new one connects.`)) return
+  async function disconnectProjector(clientId) {
+    const target = clientId ? `screen ${clientId.slice(-8)}` : 'all connected screens'
+    if (!window.confirm(`Disconnect ${target} from "${display.name}"? Reconnection must be requested on the disconnected screen.`)) return
     setDisconnecting(true)
-    try { await onDisconnect(display.id) } finally { setDisconnecting(false) }
+    try { await onDisconnect(display.id, clientId) } finally { setDisconnecting(false) }
   }
   useEffect(() => { setPushReceipt('') }, [pendingSessionId, pendingActivityId, pendingScene])
   useEffect(() => {
     if (!pendingActivityId) { setActivityDetail(null); setResultQuestionIds([]); return }
     let cancelled = false
+    setActivityDetail(null)
+    setResultQuestionIds([])
     api.liveGetActivity(eventId, pendingActivityId).then((activity) => {
       if (cancelled) return
       setActivityDetail(activity)
@@ -589,17 +611,17 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
       setResultQuestionIds(configured.length ? configured : activeIds)
     }).catch(() => { if (!cancelled) setActivityDetail(null) })
     return () => { cancelled = true }
-  }, [eventId, pendingActivityId, display.settings?.results_question_ids])
+  }, [eventId, pendingActivityId, configuredResultIds])
 
   // Reuses the activity's read-only TV payload (real component and real data)
   // inside an iframe with a local-only scene override. This makes selection
   // immediately visible without changing the actual projector until pushed.
   const pendingActivity = activities.find((a) => a.id === pendingActivityId)
   const previewToken = pendingActivity?.config?.display_token
-  const previewLink = pendingActivityId && pendingActivityId === (display.assigned_activity_id || '')
-    ? `${link}&previewScene=${encodeURIComponent(pendingScene)}`
+  const previewLink = pendingActivityId === (display.assigned_activity_id || '')
+    ? `${link}&observer=true&previewScene=${encodeURIComponent(pendingScene)}`
     : previewToken
-      ? `${window.location.origin}/live-display/${pendingActivityId}?token=${encodeURIComponent(previewToken)}&previewScene=${encodeURIComponent(pendingScene)}`
+      ? `${window.location.origin}/live-display/${pendingActivityId}?token=${encodeURIComponent(previewToken)}&observer=true&previewScene=${encodeURIComponent(pendingScene)}`
       : null
   const allowedScenes = compatibleScenes(pendingActivity?.type)
   const availableScenes = DISPLAY_SCENES.filter(([key]) => allowedScenes.includes(key))
@@ -615,11 +637,12 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
       assigned_session_id: pendingSessionId || null,
       assigned_activity_id: pendingActivityId || null,
       scene: pendingScene,
-      settings: { control_mode: 'manual', follow_activity: false },
+      settings: { control_mode: 'manual', follow_activity: false, auto_follow_program: false, rehearsal_mode: false, results_frozen: false, results_snapshot: null },
     })
     if (updated) {
+      onDraftApplied(display.id, draft)
       setLivePreviewVersion((version) => version + 1)
-      setPushReceipt(`Main screen refreshed ✓ ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}`)
+      setPushReceipt(`${display.name} updated ✓ ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}`)
     }
     setPushing(false)
   }
@@ -635,7 +658,7 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
   }
 
   async function presentResults(mode, extra = {}) {
-    if (!pendingActivityId || !resultQuestionIds.length) return
+    if (!pendingActivityId || activityDetail?.id !== pendingActivityId || !resultQuestionIds.length) return
     setPushing(true); setPushReceipt('')
     const configuredCurrent = resultQuestionIds.includes(settings.results_question_id) ? settings.results_question_id : null
     const activityCurrent = resultQuestionIds.includes(activityDetail?.config?.current_question_id) ? activityDetail.config.current_question_id : null
@@ -649,9 +672,9 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
       page_seconds: Number(resultPageSeconds) || 8,
     })
     if (updated) {
-      setPendingScene(mode === 'all' ? 'all_results' : 'results')
+      onDraftApplied(display.id, draft)
       setLivePreviewVersion((version) => version + 1)
-      setPushReceipt(`Results sent to main screen ✓ ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}`)
+      setPushReceipt(`Results sent to ${display.name} ✓ ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}`)
     }
     setPushing(false)
   }
@@ -666,15 +689,11 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
     if (activity.status === 'live') count.live += 1; else if (activity.status !== 'archived') count.other += 1
     sessionHasLive.set(activity.session_id, count)
   }
-  const resultQuestions = (activityDetail?.questions || []).filter((question) => question.status === 'active')
+  const resultQuestions = (activityDetail?.id === pendingActivityId ? activityDetail.questions || [] : []).filter((question) => question.status === 'active')
   const resultPageCount = Math.max(1, Math.ceil(resultQuestionIds.length / 6))
   const resultPage = Math.min(resultPageCount - 1, Number(settings.results_page || 0))
 
   return <article className="fl-display-card">
-    <div className="fl-display-preview">
-      <iframe title={`${display.name} broadcast preview`} src={`${link}&adminRefresh=${livePreviewVersion}`} tabIndex="-1" />
-      <div className="fl-display-preview-shade"><span>{DISPLAY_SCENES.find(([key]) => key === display.scene)?.[1] || display.scene}</span><button onClick={() => window.open(link, '_blank', 'noopener,noreferrer')}>Open fullscreen ↗</button></div>
-    </div>
     <div className="fl-display-body">
     <div className="fl-display-heading">
       <div style={{ flex: '1 1 180px' }}>
@@ -688,13 +707,13 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
             </div>}
         <div className="rd-hint" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {display.status} · {DISPLAY_SCENES.find(([key]) => key === display.scene)?.[1] || display.scene}
-          <span title={display.connected ? 'A projector is currently attached to this display' : 'No projector currently attached'} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 700, color: display.connected ? '#1a9c5b' : '#8a8a8a' }}>
-            <span aria-hidden="true" style={{ fontSize: 9 }}>{display.connected ? '●' : '○'}</span>{display.connected ? 'Connected' : 'No projector connected'}
+          <span className={`fl-screen-status ${display.connected ? 'connected' : ''}`}>
+            <span aria-hidden="true">{display.connected ? '●' : '○'}</span> {displayConnectionLabel(display)}
           </span>
         </div>
       </div>
-      {display.connected && <button className="rr-btn secondary" disabled={disconnecting} onClick={disconnectProjector}>{disconnecting ? 'Disconnecting…' : 'Disconnect projector'}</button>}
-      <select className="rr-select" style={{ minWidth: 200 }} aria-label={`Program session for ${display.name}`} value={pendingSessionId} onChange={(event) => {
+      {display.connected && <button className="rr-btn secondary" disabled={disconnecting} onClick={() => disconnectProjector()}>{disconnecting ? 'Disconnecting…' : 'Disconnect all screens'}</button>}
+      <select className="rr-select" style={{ minWidth: 200 }} aria-label={`Program session for ${display.name}`} disabled={busy || pushing} value={pendingSessionId} onChange={(event) => {
         const assignedSessionId = event.target.value || ''
         const currentActivity = activities.find((activity) => activity.id === pendingActivityId)
         setPendingSessionId(assignedSessionId)
@@ -704,7 +723,7 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
         const tag = counts?.live ? ` (${counts.live} live)` : counts?.other ? ` (${counts.other} draft)` : ' (none)'
         return <option key={session.source_step_id} value={session.source_step_id}>{session.title}{tag}</option>
       })}</select>
-      <select className="rr-select" style={{ minWidth: 220 }} aria-label={`Activity for ${display.name}`} disabled={!!settings.auto_follow_program} value={pendingActivityId} onChange={(e) => setPendingActivityId(e.target.value)}>
+      <select className="rr-select" style={{ minWidth: 220 }} aria-label={`Activity for ${display.name}`} disabled={busy || pushing} value={pendingActivityId} onChange={(e) => setPendingActivityId(e.target.value)}>
         <option value="">No activity</option>
         {assignableActivities.map((a) => <option key={a.id} value={a.id}>{a.title} — {a.status}</option>)}
       </select>
@@ -715,6 +734,7 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
       <button className="rr-btn primary" onClick={() => setEditing((value) => !value)}>{editing ? 'Close studio' : 'Design scene'}</button>
       <button className="rr-link-btn gr-danger-link" disabled={busy} onClick={() => onDelete(display.id)}>Delete</button>
     </div>
+    {(display.devices || []).length > 0 && <details className="fl-display-devices"><summary>Connected screens ({display.devices.length})</summary><ul>{display.devices.map((device) => <li key={device.client_id}><span><strong>Screen {device.client_id.slice(-8)}</strong><small>Last seen {new Date(device.last_seen_at).toLocaleTimeString()}</small></span><button className="rr-btn secondary" disabled={disconnecting} onClick={() => disconnectProjector(device.client_id)}>Disconnect screen {device.client_id.slice(-8)}</button></li>)}</ul></details>}
     <div className="fl-results-quickbar" aria-label="Results and rehearsal controls">
       <div><span>RESULTS &amp; REHEARSAL</span><strong>Put results on screen or practise safely</strong></div>
       {!pendingActivityId && <small>Select an activity above to unlock these controls.</small>}
@@ -732,14 +752,17 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
     <div className="fl-display-preview-box">
       <div className="fl-display-preview-box-head">
         <span>{pendingActivityId
-          ? isDirty
-            ? `Preview: ${DISPLAY_SCENES.find(([key]) => key === pendingScene)?.[1] || pendingScene} — not on the main screen yet`
-            : `Live preview: ${DISPLAY_SCENES.find(([key]) => key === pendingScene)?.[1] || pendingScene} — currently on the main screen`
-          : 'No activity selected'}</span>
-        {pendingActivityId && <button className="rr-btn primary" disabled={busy || pushing} onClick={pushToDisplay}>{pushing ? 'Sending to main screen…' : isDirty ? 'Push to main screen →' : 'Repush to main screen ↻'}</button>}
+          ? `${isDirty ? 'Pending' : 'Current'}: ${pendingActivity?.title || 'Activity'} · ${DISPLAY_SCENES.find(([key]) => key === pendingScene)?.[1] || pendingScene}`
+          : 'No activity — send to clear the current activity'}</span>
+        <button className="rr-btn primary" disabled={busy || pushing} onClick={pushToDisplay}>{pushing ? 'Sending…' : pendingActivityId ? `Send to ${display.name}` : `Clear activity on ${display.name}`}</button>
       </div>
       {pushReceipt && <div className="fl-display-push-receipt" role="status" aria-live="polite">{pushReceipt}</div>}
-      {previewLink && <div className="fl-display-preview-canvas"><iframe title={`${display.name} pending preview`} src={previewLink} tabIndex="-1" /></div>}
+      <div className="fl-preview-actions">
+        <button className="rr-btn secondary" aria-pressed={previewMode === 'current'} onClick={() => setPreviewMode((mode) => mode === 'current' ? '' : 'current')}>{previewMode === 'current' ? 'Close preview' : 'Preview current screen'}</button>
+        {previewLink && isDirty && <button className="rr-btn secondary" aria-pressed={previewMode === 'pending'} onClick={() => setPreviewMode((mode) => mode === 'pending' ? '' : 'pending')}>{previewMode === 'pending' ? 'Close draft preview' : 'Preview pending change'}</button>}
+        {!previewMode && <small>Previews open on request and close when you leave this tab.</small>}
+      </div>
+      {previewMode && (previewMode === 'current' || previewLink) && <div className="fl-display-preview-canvas"><iframe title={`${display.name} ${previewMode} preview`} src={`${previewMode === 'current' ? `${link}&observer=true` : previewLink}&adminRefresh=${livePreviewVersion}`} tabIndex="-1" loading="lazy" /></div>}
     </div>
 
     {activityDetail && resultQuestions.length > 0 && <section className="fl-results-control" id={`results-control-${display.id}`}>
@@ -796,7 +819,20 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
 }
 
 export default function FestioLiveRedesignPage() {
-  const [eventId] = useCurrentEvent()
+  const [currentEventId, setCurrentEventId] = useCurrentEvent()
+  const [entryEventId] = useState(() => {
+    const query = new URLSearchParams(window.location.search)
+    return query.has('present') ? query.get('event') : null
+  })
+  const [entryApplied, setEntryApplied] = useState(!entryEventId)
+  useEffect(() => {
+    if (!entryApplied) { setCurrentEventId(entryEventId); setEntryApplied(true) }
+  }, [entryApplied, entryEventId, setCurrentEventId])
+  const eventId = entryApplied ? currentEventId : entryEventId
+  return <FestioLiveEventPage key={eventId} eventId={eventId} />
+}
+
+function FestioLiveEventPage({ eventId }) {
   const { event, loading: eventLoading } = useEventDetails(eventId)
   const liveQuery = new URLSearchParams(window.location.search)
   const presenterEntry = liveQuery.has('present')
@@ -812,6 +848,8 @@ export default function FestioLiveRedesignPage() {
   const [activitySearch, setActivitySearch] = useState('')
   const [activityStatusFilter, setActivityStatusFilter] = useState('')
   const [selected, setSelected] = useState(null) // full activity, with questions
+  const [loadingActivityId, setLoadingActivityId] = useState('')
+  const activityRequestVersion = useRef(0)
   const [editingActivity, setEditingActivity] = useState(false)
   const [activityDraft, setActivityDraft] = useState({ title: '', description: '', session_id: '', moderation_enabled: false, auto_close_enabled: true, auto_start_enabled: false, registered_progress_mode: 'off' })
   const [automationDraft, setAutomationDraft] = useState({ enabled: false, timings: { ...SHOW_AUTOMATION_DEFAULTS } })
@@ -843,6 +881,13 @@ export default function FestioLiveRedesignPage() {
   const [shareBusy, setShareBusy] = useState(false)
   const [displays, setDisplays] = useState(null)
   const [newDisplayName, setNewDisplayName] = useState('Main stage')
+  const [displayDrafts, setDisplayDrafts] = useState({})
+  const [operatorDisplayId, setOperatorDisplayId] = useState(liveQuery.get('display') || '')
+  const [operatorReceipt, setOperatorReceipt] = useState('')
+  const displayRevision = useRef(0)
+  const displayMutations = useRef(0)
+  const operatorDisplay = (displays || []).find((display) => display.id === operatorDisplayId) || displays?.[0] || null
+
   const [liveDefaults, setLiveDefaults] = useState({ guest_hub_participation: true, broadcast_join_enabled: true, allow_answer_changes: false, moderation_enabled: false, profanity_filtering: true, leaderboard_name_style: 'first_last_initial', response_retention_months: 12 })
   const [joinInfo, setJoinInfo] = useState(null)
   const [settingsSaved, setSettingsSaved] = useState(false)
@@ -860,7 +905,7 @@ export default function FestioLiveRedesignPage() {
   useEffect(() => {
     if (!drilledDown) return undefined
     window.history.pushState({ festioLiveDrilldown: true }, '')
-    const onPopState = () => { setSelected(null); setCreating(false) }
+    const onPopState = () => { closeActivity(); setCreating(false) }
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
   }, [drilledDown]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -878,10 +923,6 @@ export default function FestioLiveRedesignPage() {
     catch { setProgramSessions([]) }
   }
   useEffect(() => { loadProgramSessions() }, [eventId, enabled]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (eventId && enabled && displays === null) api.liveDisplays(eventId).then(setDisplays).catch((e) => setError(e.message))
-  }, [eventId, enabled]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (eventId && enabled) api.liveSettings(eventId).then(setLiveDefaults).catch((e) => setError(e.message))
@@ -903,80 +944,135 @@ export default function FestioLiveRedesignPage() {
     catch (e) { setError(e.message) }
   }
   useEffect(() => { if (tab === 'Question Bank') loadBank() }, [tab, eventId, enabled]) // eslint-disable-line react-hooks/exhaustive-deps
+  // One lightweight status request at a time serves every operator tab.
+  // A poll started before a command may not overwrite that command's reply.
   useEffect(() => {
-    if (tab === 'Displays' && eventId && enabled) api.liveDisplays(eventId).then(setDisplays).catch((e) => setError(e.message))
-  }, [tab, eventId, enabled])
-  // Keeps the "connected" badge live while staff are actually looking at
-  // this tab -- the lease itself only lives ~15s, so this is the loop that
-  // makes "which screen is stuck?" answerable without a manual refresh.
-  useEffect(() => {
-    if (tab !== 'Displays' || !eventId || !enabled) return undefined
-    const timer = setInterval(() => { api.liveDisplays(eventId).then(setDisplays).catch(() => {}) }, 10000)
-    return () => clearInterval(timer)
-  }, [tab, eventId, enabled])
+    if (!eventId || !enabled) return undefined
+    let cancelled = false
+    let timer
+    async function poll() {
+      if (!document.hidden && !displayMutations.current) {
+        const revision = displayRevision.current
+        try {
+          const next = await api.liveDisplays(eventId)
+          if (!cancelled && revision === displayRevision.current && !displayMutations.current) setDisplays(next)
+        } catch (e) { if (!cancelled) setError(e.message) }
+      }
+      if (!cancelled) timer = setTimeout(poll, 10000)
+    }
+    poll()
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [eventId, enabled])
 
   useEffect(() => {
-    if (!eventId || !selected?.id || !selected.config?.show_automation_enabled || selected.config?.show_phase === 'complete') return undefined
-    const timer = setInterval(() => {
-      api.liveGetActivity(eventId, selected.id).then(setSelected).catch(() => {})
-    }, 2000)
-    return () => clearInterval(timer)
-  }, [eventId, selected?.id, selected?.config?.show_automation_enabled, selected?.config?.show_phase])
+    if (!eventId || !selected?.id || !selected.config?.show_automation_enabled || selected.config?.show_phase === 'complete' || loadingActivityId) return undefined
+    let cancelled = false
+    let timer
+    async function poll() {
+      if (!document.hidden) {
+        try {
+          const updated = await api.liveGetActivity(eventId, selected.id)
+          if (!cancelled) setSelected((current) => current?.id === updated.id ? updated : current)
+        } catch { /* A transient update does not interrupt the operator. */ }
+      }
+      if (!cancelled) timer = setTimeout(poll, 2000)
+    }
+    timer = setTimeout(poll, 2000)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [eventId, selected?.id, selected?.config?.show_automation_enabled, selected?.config?.show_phase, loadingActivityId])
+
+  function changeDisplayDraft(displayId, patch) {
+    const display = (displays || []).find((item) => item.id === displayId)
+    if (!display) return
+    setDisplayDrafts((current) => ({ ...current, [displayId]: { ...(current[displayId] || displayDraftFor(display)), ...patch } }))
+  }
+
+  function applyDisplayDraft(displayId, submittedDraft) {
+    setDisplayDrafts((current) => {
+      if (current[displayId] !== submittedDraft) return current
+      const next = { ...current }; delete next[displayId]; return next
+    })
+  }
+
+  async function sendOperatorActivity(mode) {
+    if (!operatorDisplay || loadingActivityId || busy || (mode !== 'welcome' && !selected)) return
+    const target = operatorDisplay
+    setOperatorReceipt('')
+    const clearing = mode === 'welcome'
+    const updated = await updateDisplay(target.id, {
+      assigned_activity_id: clearing ? null : selected.id,
+      assigned_session_id: clearing ? null : selected.session_id || null,
+      scene: clearing ? 'welcome' : 'join',
+      settings: { control_mode: clearing ? 'manual' : 'guided', follow_activity: !clearing, auto_follow_program: false, rehearsal_mode: false, results_frozen: false, results_snapshot: null },
+    })
+    if (updated) {
+      setOperatorReceipt(`${clearing ? 'Welcome screen' : selected.title} sent to ${target.name}.`)
+      // A pending studio draft remains available until explicitly sent.
+    }
+  }
 
   async function createDisplay() {
     if (!newDisplayName.trim()) return
+    displayRevision.current += 1; displayMutations.current += 1
     setBusy(true); setError('')
     try {
       await api.liveCreateDisplay(eventId, { name: newDisplayName.trim(), assigned_activity_id: activities?.[0]?.id || null, scene: 'welcome', settings: { theme: 'aurora', motion: true, show_reactions: true } })
       setDisplays(await api.liveDisplays(eventId))
-    } catch (e) { setError(e.message) } finally { setBusy(false) }
+    } catch (e) { setError(e.message) } finally { displayRevision.current += 1; displayMutations.current -= 1; setBusy(false) }
   }
 
   async function updateDisplay(displayId, patch) {
+    displayRevision.current += 1; displayMutations.current += 1
     setBusy(true); setError('')
     try {
       const updated = await api.liveUpdateDisplay(eventId, displayId, patch)
       setDisplays((current) => (current || []).map((display) => display.id === displayId ? updated : display))
       return updated
-    } catch (e) { setError(e.message); return null } finally { setBusy(false) }
+    } catch (e) { setError(e.message); return null } finally { displayRevision.current += 1; displayMutations.current -= 1; setBusy(false) }
   }
 
   async function presentDisplayResults(displayId, body) {
+    displayRevision.current += 1; displayMutations.current += 1
     setBusy(true); setError('')
     try {
       const updated = await api.livePresentDisplayResults(eventId, displayId, body)
       setDisplays((current) => (current || []).map((display) => display.id === displayId ? updated : display))
       return updated
-    } catch (e) { setError(e.message); return null } finally { setBusy(false) }
+    } catch (e) { setError(e.message); return null } finally { displayRevision.current += 1; displayMutations.current -= 1; setBusy(false) }
   }
 
   async function setDisplayRehearsal(displayId, body) {
+    displayRevision.current += 1; displayMutations.current += 1
     setBusy(true); setError('')
     try {
       const updated = await api.liveSetDisplayRehearsal(eventId, displayId, body)
       setDisplays((current) => (current || []).map((display) => display.id === displayId ? updated : display))
       return updated
-    } catch (e) { setError(e.message); return null } finally { setBusy(false) }
+    } catch (e) { setError(e.message); return null } finally { displayRevision.current += 1; displayMutations.current -= 1; setBusy(false) }
   }
 
   async function deleteDisplay(displayId) {
     if (!window.confirm('Delete this display link? Any screen using it will stop updating.')) return
+    displayRevision.current += 1; displayMutations.current += 1
     setBusy(true); setError('')
     try {
       await api.liveDeleteDisplay(eventId, displayId)
       setDisplays((current) => (current || []).filter((display) => display.id !== displayId))
-    } catch (e) { setError(e.message) } finally { setBusy(false) }
+    } catch (e) { setError(e.message) } finally { displayRevision.current += 1; displayMutations.current -= 1; setBusy(false) }
   }
 
   // Not gated on `busy` (unlike the other display actions) -- this is meant
   // to work fast during a live troubleshooting moment (a stuck projector),
   // not queue behind whatever else is in flight.
-  async function disconnectDisplay(displayId) {
+  async function disconnectDisplay(displayId, clientId) {
+    displayRevision.current += 1; displayMutations.current += 1
     setError('')
     try {
-      const updated = await api.liveDisconnectDisplay(eventId, displayId)
+      const updated = await api.liveDisconnectDisplay(eventId, displayId, clientId)
       setDisplays((current) => (current || []).map((display) => display.id === displayId ? updated : display))
-    } catch (e) { setError(e.message) }
+      return updated
+    } catch (e) { setError(e.message); return null }
+    finally { displayRevision.current += 1; displayMutations.current -= 1 }
   }
 
   async function createRule() {
@@ -989,22 +1085,33 @@ export default function FestioLiveRedesignPage() {
     } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
 
+  function closeActivity() {
+    activityRequestVersion.current += 1
+    setLoadingActivityId(''); setSelected(null); setResults(null); setOperatorReceipt('')
+  }
+
   async function openActivity(id) {
-    setError(''); setResults(null); setLeaderboard(null); setWordClouds({}); setAiAnalyses({}); setQnaItems(null); setModerationItems(null); setResponseDetails(null)
+    if (!id) { closeActivity(); return }
+    const request = ++activityRequestVersion.current
+    const isCurrent = () => request === activityRequestVersion.current
+    setLoadingActivityId(id); setCreating(false); setOperatorReceipt('')
+    setError(''); setResults(null); setLeaderboard(null); setWordClouds({}); setAiAnalyses({}); setQnaItems(null); setModerationItems(null); setResponseDetails(null); setRules([])
     try {
       const full = await api.liveGetActivity(eventId, id)
+      if (!isCurrent()) return
       setSelected(full)
       setAutomationDraft(automationDraftFor(full))
       setEditingActivity(false)
       setActivityDraft({ title: full.title, description: full.description || '', session_id: full.session_id || '' })
       setEditingQuestionId(null)
-      api.liveRules(eventId, id).then(setRules).catch(() => setRules([]))
+      api.liveRules(eventId, id).then((next) => { if (isCurrent()) setRules(next) }).catch(() => {})
       if (full.type === 'q_and_a') {
-        try { setQnaItems(await api.liveQnaList(eventId, id)) } catch { /* non-fatal */ }
+        api.liveQnaList(eventId, id).then((next) => { if (isCurrent()) setQnaItems(next) }).catch(() => {})
       } else {
-        try { setModerationItems(await api.liveModerationItems(eventId, id)) } catch { setModerationItems([]) }
+        api.liveModerationItems(eventId, id).then((next) => { if (isCurrent()) setModerationItems(next) }).catch(() => { if (isCurrent()) setModerationItems([]) })
       }
-    } catch (e) { setError(e.message) }
+    } catch (e) { if (isCurrent()) setError(e.message) }
+    finally { if (isCurrent()) setLoadingActivityId('') }
   }
 
   async function createActivity() {
@@ -1347,14 +1454,14 @@ export default function FestioLiveRedesignPage() {
 
   function ActivityListRow({ activity }) {
     const session = programSessionById.get(activity.session_id)
-    return <div onClick={() => openActivity(activity.id)} className="fl-program-activity-row">
+    return <button type="button" disabled={busy} onClick={() => openActivity(activity.id)} className="fl-program-activity-row">
       <div style={{ flex: 1 }}>
         <div style={{ fontWeight: 700, fontSize: 13.5 }}>{activity.title}</div>
         <div style={{ fontSize: 12, color: '#5b6a5c', textTransform: 'capitalize' }}>{activity.type}{session ? ` · ${session.room || 'Program session'}` : ''}</div>
       </div>
       <div style={{ fontSize: 12, color: '#5b6a5c' }}>{activity.response_count} responses</div>
       <StatusChip status={activity.status} />
-    </div>
+    </button>
   }
 
   return (
@@ -1362,7 +1469,7 @@ export default function FestioLiveRedesignPage() {
       <div className="fl-app">
       <div className="rr-pagehead fl-pagehead">
         <div><span className="fl-eyebrow">Audience engagement suite</span><div className="rr-title-row"><h1>Festio Live</h1><span className="fl-live-badge">● LIVE READY</span></div><div className="rr-meta">Create moments people remember — before, during, and after the event.</div></div>
-        <div className="fl-page-actions"><button className="rr-btn secondary" onClick={() => setTab('Displays')}>Broadcast studio</button><button className="rr-btn primary" onClick={() => { setTab('Activities'); setSelected(null); setCreating(true) }}>+ New activity</button></div>
+        <div className="fl-page-actions"><button className="rr-btn secondary" onClick={() => setTab('Displays')}>Broadcast studio</button><button className="rr-btn primary" onClick={() => { setTab('Activities'); closeActivity(); setCreating(true) }}>+ New activity</button></div>
       </div>
 
       {error && <div style={{ background: '#fbe9e7', color: '#a3271e', padding: '10px 14px', borderRadius: 10, fontSize: 13, marginBottom: 14 }}><Icon name="info" size={14} /> {error}</div>}
@@ -1372,6 +1479,21 @@ export default function FestioLiveRedesignPage() {
           <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{t}</button>
         ))}
       </nav>
+
+      {enabled && <section className="fl-operator-bar" aria-label="Live operator controls">
+        <div className="fl-operator-fields">
+          <label><span>Activity controls</span><select className="rr-select" aria-label="Switch activity" disabled={busy || !activities} value={loadingActivityId || selected?.id || ''} onChange={(event) => { openActivity(event.target.value); setTab('Activities') }}><option value="">Choose an activity</option>{(activities || []).filter((activity) => activity.status !== 'archived' || activity.id === selected?.id).map((activity) => <option key={activity.id} value={activity.id}>{activity.title} · {activity.status}</option>)}</select></label>
+          <label><span>Target display</span><select className="rr-select" aria-label="Target display" disabled={busy || !displays?.length} value={operatorDisplay?.id || ''} onChange={(event) => { setOperatorDisplayId(event.target.value); setOperatorReceipt('') }}>{!displays?.length && <option value="">{displays === null ? 'Loading displays…' : 'No displays yet'}</option>}{(displays || []).map((display) => <option key={display.id} value={display.id}>{display.name}</option>)}</select></label>
+          <div className="fl-operator-current"><span className={`fl-screen-status ${operatorDisplay?.connected ? 'connected' : ''}`}>{operatorDisplay ? displayConnectionLabel(operatorDisplay) : 'Add a display in Broadcast studio'}</span><small>On screen: {operatorDisplay ? (activities || []).find((activity) => activity.id === operatorDisplay.assigned_activity_id)?.title || (operatorDisplay.assigned_activity_id ? 'Activity' : 'Welcome / no activity') : '—'}{operatorDisplay?.assigned_workflow_run_id ? ' · Experience assigned' : ''}</small></div>
+        </div>
+        <div className="fl-operator-actions">
+          <button className="rr-btn primary" disabled={busy || !!loadingActivityId || !selected || !operatorDisplay} onClick={() => sendOperatorActivity('current')}>Send activity to screen</button>
+          <button className="rr-btn secondary" disabled={busy || !operatorDisplay} onClick={() => sendOperatorActivity('welcome')}>Show welcome / clear activity</button>
+          {selected && tab !== 'Activities' && <button className="rr-btn secondary" disabled={busy} onClick={() => setTab('Activities')}>Open activity controls</button>}
+          <button className="rr-btn secondary" onClick={() => setTab('Displays')}>Manage screens</button>
+        </div>
+        {operatorReceipt && <p role="status" aria-live="polite">{operatorReceipt}</p>}
+      </section>}
 
       {event?.experience_enabled && ['Activities', 'Live Control', 'Displays', 'Responses', 'Analytics'].includes(tab) && <div className="fl-program-filter">
         <span>Experience program</span>
@@ -1392,15 +1514,17 @@ export default function FestioLiveRedesignPage() {
         {isFiltering && <button type="button" onClick={() => { setActivitySearch(''); setActivityStatusFilter('') }}>Clear</button>}
       </div>}
 
-      {tab === 'Overview' && <OverviewPanel eventId={eventId} joinInfo={joinInfo} activities={activities} displays={displays} onCreate={() => { setTab('Activities'); setSelected(null); setCreating(true) }} onOpen={async (id) => { await openActivity(id); setTab('Activities') }} onTab={setTab} />}
+      {tab === 'Overview' && <OverviewPanel eventId={eventId} joinInfo={joinInfo} activities={activities} displays={displays} onCreate={() => { setTab('Activities'); closeActivity(); setCreating(true) }} onOpen={async (id) => { await openActivity(id); setTab('Activities') }} onTab={setTab} />}
 
       {tab === 'Experiences' && (
         <Suspense fallback={<div className="fl-loading">Loading experiences…</div>}>
-          <ExperienceWorkflowsPanel eventId={eventId} activities={activities || []} displays={displays || []} presenterEntry={presenterEntry}/>
+          <ExperienceWorkflowsPanel eventId={eventId} activities={activities || []} displays={displays || []} presenterEntry={presenterEntry} requestedWorkflowId={liveQuery.get('workflow')} requestedRunId={liveQuery.get('run')} requestedDisplayId={liveQuery.get('display')}/>
         </Suspense>
       )}
 
-      {tab === 'Activities' && !selected && (
+      {tab === 'Activities' && loadingActivityId && <div className="fl-loading" role="status">Loading activity controls…</div>}
+
+      {tab === 'Activities' && !selected && !loadingActivityId && (
         <div className="rr-panel fl-section-panel">
           <div className="rd-panel-head">
             <div><span className="fl-eyebrow">Activity studio</span><h3>Activities</h3><p>Create, schedule, and reuse interactive moments.</p></div>
@@ -1444,9 +1568,9 @@ export default function FestioLiveRedesignPage() {
         </div>
       )}
 
-      {tab === 'Activities' && selected && (
+      {tab === 'Activities' && selected && !loadingActivityId && (
         <div className="fl-builder-view">
-          <button className="rr-link-btn" style={{ marginBottom: 10 }} onClick={() => { setSelected(null); setResults(null) }}>← All activities</button>
+          <button className="rr-link-btn" style={{ marginBottom: 10 }} onClick={closeActivity}>← All activities</button>
           <div className="rr-panel fl-section-panel">
             <div className="rd-panel-head">
               <div><h3>{selected.title}</h3><p style={{ margin: 0, fontSize: 12, color: '#5b6a5c', textTransform: 'capitalize' }}>{selected.type}</p></div>
@@ -1487,7 +1611,7 @@ export default function FestioLiveRedesignPage() {
               <div className="fl-guided-console">
                 <div><span>GUIDED SHOW MODE</span><h3>{SHOW_PHASE_LABELS[selected.config?.show_phase] || 'Ready to begin'}</h3><p>One presenter action keeps the main screen, guest phones, timer, voting and results synchronized.</p></div>
                 <button className="rr-btn primary" disabled={busy} onClick={selected.config?.show_mode === 'guided' && selected.config?.show_phase !== 'complete' ? advanceGuidedShow : startGuidedShow}>{busy ? 'Updating every screen…' : guidedActionLabel(selected)}</button>
-                <small>{(displays || []).some((display) => display.assigned_activity_id === selected.id) ? `${(displays || []).filter((display) => display.assigned_activity_id === selected.id).length} assigned display(s) will follow this show.` : 'Assign a display in the Displays tab; the activity flow can still be rehearsed here.'}</small>
+                <small>{(displays || []).some((display) => display.assigned_activity_id === selected.id) ? `${(displays || []).filter((display) => display.assigned_activity_id === selected.id).length} assigned display(s) will follow this show.` : 'Choose a target display above and send this activity to the screen.'}</small>
               </div>
               <section className="fl-automation-panel">
                 <header>
@@ -1806,7 +1930,7 @@ export default function FestioLiveRedesignPage() {
           <div className="rd-panel-head"><div><span className="fl-eyebrow">Scene manager · 22 presentation styles</span><h3>Festio Broadcast</h3><p>Direct every projector, TV, and LED wall independently in realtime.</p></div><button className="rr-btn primary" disabled={busy} onClick={createDisplay}>+ Add display</button></div>
           <div className="rd-panel-body">
             <div style={{ display: 'flex', gap: 8, marginBottom: 14, maxWidth: 520 }}><input className="rr-input" aria-label="New display name" placeholder="Main stage, lobby, breakout room…" value={newDisplayName} onChange={(e) => setNewDisplayName(e.target.value)} /></div>
-            <div className="fl-display-grid">{visibleDisplays.map((display) => <DisplayCard key={display.id} display={display} eventId={eventId} activities={activities || []} programSessions={programSessions || []} busy={busy} onUpdate={updateDisplay} onDelete={deleteDisplay} onDisconnect={disconnectDisplay} onPresentResults={presentDisplayResults} onRehearsal={setDisplayRehearsal}/>)}</div>
+            <div className="fl-display-grid">{visibleDisplays.map((display) => <DisplayCard key={display.id} display={display} draft={displayDrafts[display.id]} onDraftChange={changeDisplayDraft} onDraftApplied={applyDisplayDraft} eventId={eventId} activities={activities || []} programSessions={programSessions || []} busy={busy} onUpdate={updateDisplay} onDelete={deleteDisplay} onDisconnect={disconnectDisplay} onPresentResults={presentDisplayResults} onRehearsal={setDisplayRehearsal}/>)}</div>
             {visibleDisplays.length === 0 && <p className="rd-hint">No displays match this program session. Create one or assign an existing display to the session.</p>}
           </div>
         </div>
@@ -2025,9 +2149,9 @@ export default function FestioLiveRedesignPage() {
             <div className="rd-panel-body">
               <div className="fl-help-troubleshoot">
                 <article><h4>The activity is missing</h4><p>Confirm the correct event and program filter, then check that the activity is not archived and is linked to the intended session.</p></article>
-                <article><h4>The projector did not change</h4><p>In Displays, choose the activity and scene, then press Push to main screen. Use Repush if it is already selected.</p></article>
+                <article><h4>The projector did not change</h4><p>Choose an activity and target display in the operator controls, then press Send activity to screen. Use Broadcast studio for a specific scene.</p></article>
                 <article><h4>Results are empty</h4><p>Confirm the question is active and guests submitted answers. Use Rehearse with 10 guests to verify the presentation safely.</p></article>
-                <article><h4>Preview and live differ</h4><p>Preview is only a draft until you press Push to main screen. Open the copied display link to confirm what the venue actually sees.</p></article>
+                <article><h4>Preview and live differ</h4><p>Choose Preview current screen to inspect the broadcast. A pending change stays local until you send it to the named display.</p></article>
                 <article><h4>Unsafe text is not visible</h4><p>Moderated or flagged words and Q&amp;A wait for staff approval before appearing publicly.</p></article>
                 <article><h4>The schedule is wrong</h4><p>Correct the session time in Experience, publish the workflow, and verify the activity's linked session before using Auto-start.</p></article>
               </div>

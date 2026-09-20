@@ -30,58 +30,127 @@ DISPLAY_LEASE_SECONDS = 15
 _DISPLAY_CLIENT_RE = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
 
 
+class DisplayDisconnectedError(Exception):
+    """A staff disconnect persists across automatic browser reconnects."""
+
+
 def validate_display_client_id(client_id: str) -> str:
     if not _DISPLAY_CLIENT_RE.fullmatch(client_id or ""):
         raise ValueError("Invalid display client identifier")
     return client_id
 
 
-async def claim_display(display_id: str, client_id: str) -> bool:
-    """First projector owns the display until its stream disconnects."""
+def _display_keys(display_id):
+    return (f"engagement:display-clients:{display_id}",
+            f"engagement:display-revoked:{display_id}",
+            f"engagement:display-lease:{display_id}")
+
+
+# Use Redis time and a single atomic script, so concurrent clients/replicas
+# cannot exceed capacity. Import the legacy lease during a rolling upgrade.
+_PRESENCE_SETUP = """
+local stamp = redis.call('TIME')
+local now = stamp[1] * 1000 + math.floor(stamp[2] / 1000)
+redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', now)
+local legacy = redis.call('GET', KEYS[3])
+if legacy then
+    if redis.call('SISMEMBER', KEYS[2], legacy) == 1 then
+        redis.call('DEL', KEYS[3])
+    elseif not redis.call('ZSCORE', KEYS[1], legacy) then
+        local ttl = redis.call('PTTL', KEYS[3])
+        if ttl > 0 then redis.call('ZADD', KEYS[1], now + ttl, legacy) end
+    end
+end
+"""
+_CLAIM_DISPLAY = _PRESENCE_SETUP + """
+local revoked = redis.call('SISMEMBER', KEYS[2], ARGV[1]) == 1
+if revoked and ARGV[4] ~= '1' then return -1 end
+if not redis.call('ZSCORE', KEYS[1], ARGV[1]) and redis.call('ZCARD', KEYS[1]) >= tonumber(ARGV[2]) then return 0 end
+if revoked then redis.call('SREM', KEYS[2], ARGV[1]) end
+redis.call('ZADD', KEYS[1], now + tonumber(ARGV[3]), ARGV[1])
+redis.call('PEXPIRE', KEYS[1], tonumber(ARGV[3]) * 2)
+redis.call('SET', KEYS[3], ARGV[1], 'PX', ARGV[3], 'NX')
+return 1
+"""
+_RENEW_DISPLAY = _PRESENCE_SETUP + """
+if redis.call('SISMEMBER', KEYS[2], ARGV[1]) == 1 or not redis.call('ZSCORE', KEYS[1], ARGV[1]) then return 0 end
+redis.call('ZADD', KEYS[1], now + tonumber(ARGV[2]), ARGV[1])
+redis.call('PEXPIRE', KEYS[1], tonumber(ARGV[2]) * 2)
+if redis.call('GET', KEYS[3]) == ARGV[1] then redis.call('PEXPIRE', KEYS[3], ARGV[2]) end
+return 1
+"""
+_RELEASE_DISPLAY = """
+redis.call('ZREM', KEYS[1], ARGV[1])
+if redis.call('GET', KEYS[3]) == ARGV[1] then redis.call('DEL', KEYS[3]) end
+return 1
+"""
+_REVOKE_DISPLAY = _PRESENCE_SETUP + """
+local clients = ARGV[1] ~= '' and {ARGV[1]} or redis.call('ZRANGE', KEYS[1], 0, -1)
+for _, client in ipairs(clients) do
+    redis.call('SADD', KEYS[2], client)
+    redis.call('ZREM', KEYS[1], client)
+    if redis.call('GET', KEYS[3]) == client then redis.call('DEL', KEYS[3]) end
+end
+return #clients
+"""
+
+
+async def claim_display(display_id: str, client_id: str, *, reconnect: bool = False) -> bool:
     validate_display_client_id(client_id)
-    key = f"engagement:display-lease:{display_id}"
-    claimed = await redis.set(key, client_id, ex=DISPLAY_LEASE_SECONDS, nx=True)
-    if claimed:
-        return True
-    if await redis.get(key) != client_id:
-        return False
-    await redis.expire(key, DISPLAY_LEASE_SECONDS)
-    return True
+    result = await redis.eval(
+        _CLAIM_DISPLAY, 3, *_display_keys(display_id), client_id,
+        settings.display_connection_limit, DISPLAY_LEASE_SECONDS * 1000,
+        '1' if reconnect else '0',
+    )
+    if result == -1:
+        raise DisplayDisconnectedError("This screen was disconnected. Choose Reconnect to join again.")
+    return bool(result)
 
 
 async def renew_display(display_id: str, client_id: str) -> bool:
-    """Extend an existing lease without allowing a disconnected stream to reclaim it."""
     validate_display_client_id(client_id)
     return bool(await redis.eval(
-        "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('expire', KEYS[1], ARGV[2]) else return 0 end",
-        1, f"engagement:display-lease:{display_id}", client_id, DISPLAY_LEASE_SECONDS,
+        _RENEW_DISPLAY, 3, *_display_keys(display_id), client_id, DISPLAY_LEASE_SECONDS * 1000,
     ))
 
 
 async def release_display(display_id: str, client_id: str) -> None:
-    await redis.eval(
-        "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
-        1, f"engagement:display-lease:{display_id}", client_id,
+    validate_display_client_id(client_id)
+    await redis.eval(_RELEASE_DISPLAY, 3, *_display_keys(display_id), client_id)
+
+
+async def display_devices(display_id: str) -> list[dict]:
+    rows = await redis.eval(
+        _PRESENCE_SETUP + "return redis.call('ZRANGE', KEYS[1], 0, -1, 'WITHSCORES')",
+        3, *_display_keys(display_id),
     )
+    return [
+        {'client_id': rows[index], 'last_seen_at': datetime.fromtimestamp(
+            float(rows[index + 1]) / 1000 - DISPLAY_LEASE_SECONDS, timezone.utc)}
+        for index in range(0, len(rows), 2)
+    ]
 
 
 async def display_is_connected(display_id: str) -> bool:
-    """Whether some projector currently holds this display's lease, for the
-    admin UI's "is anything actually attached?" indicator."""
     try:
-        return bool(await redis.exists(f"engagement:display-lease:{display_id}"))
+        return bool(await display_devices(display_id))
     except Exception:
         return False
 
 
-async def force_release_display(display_id: str) -> None:
-    """Admin override: clear a display's lease regardless of who holds it.
-    Unlike release_display, this doesn't check the caller's own client_id --
-    it's for staff who can't reach whatever browser/device is stuck holding
-    the lease. The held stream's next renewal cycle (~5s, see _sse in
-    routers/realtime.py) then fails and it closes itself: this actively
-    disconnects the stuck projector, not just clears the way for a new one."""
-    await redis.delete(f"engagement:display-lease:{display_id}")
+async def force_release_display(display_id: str, client_id: str | None = None) -> None:
+    """Revoke selected present clients until they explicitly rejoin.
+
+    No expiry: a browser left open overnight must not seize the screen again.
+    The admin-only operation grows this set; explicit rejoin removes its ID.
+    """
+    if client_id:
+        validate_display_client_id(client_id)
+    await redis.eval(_REVOKE_DISPLAY, 3, *_display_keys(display_id), client_id or '')
+
+
+async def forget_display(display_id: str) -> None:
+    await redis.delete(*_display_keys(display_id))
 
 
 def _channel(activity_id: str) -> str:
@@ -89,6 +158,8 @@ def _channel(activity_id: str) -> str:
 
 
 async def publish(activity_id: str, event: str, data: dict) -> None:
+    from .display_snapshots import invalidate_public_snapshot
+    await invalidate_public_snapshot(activity_id, event)
     try:
         await redis.publish(_channel(activity_id), json.dumps({"event": event, "data": data}, default=str))
     except Exception:

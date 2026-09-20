@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../api'
+import { createLiveRefresh, reconnectDelay } from '../lib/liveRefresh.mjs'
 import './LiveGuestExperience.css'
 
 function useQueryParams() {
@@ -49,34 +50,42 @@ function QuestionTimer({ question, deadlineAt }) {
 // working even if the realtime hop is unavailable, so nothing here depends
 // on Redis being up.
 function useLiveRefresh(guestToken, activityId, onEvent) {
-  const sourceRef = useRef(null)
+  const callback = useRef(onEvent)
+  callback.current = onEvent
   useEffect(() => {
     if (!guestToken || !activityId) return undefined
     let cancelled = false
-    let poll
-    const stopFallback = () => { if (poll) { clearInterval(poll); poll = null } }
-    const startFallback = () => { if (!poll) poll = setInterval(onEvent, 5000) }
-    api.liveGuestRealtimeTicket(guestToken, activityId).then(({ ticket }) => {
-      if (cancelled) return
-      const es = new EventSource(`/api/engagement/v1/activities/${activityId}/stream?ticket=${encodeURIComponent(ticket)}`)
-      sourceRef.current = es
-      es.onopen = stopFallback
-      es.onerror = startFallback
-      es.addEventListener('response.submitted', onEvent)
-      es.addEventListener('question.changed', onEvent)
-      es.addEventListener('question.state_changed', onEvent)
-      es.addEventListener('show.phase_changed', onEvent)
-      es.addEventListener('qna.submitted', onEvent)
-      es.addEventListener('qna.upvoted', onEvent)
-      es.addEventListener('qna.moderated', onEvent)
-      es.addEventListener('activity.status_changed', onEvent)
-    }).catch(startFallback)
-    return () => {
-      cancelled = true
-      sourceRef.current?.close()
-      clearInterval(poll)
+    let events = null
+    let retryTimer = null
+    let attempts = 0
+    const refresh = createLiveRefresh((context) => callback.current(context), { delayMs: 500 })
+    const retry = () => {
+      if (cancelled || retryTimer !== null) return
+      retryTimer = setTimeout(() => { retryTimer = null; refresh.request(true); connect() }, reconnectDelay(attempts++))
     }
-  }, [guestToken, activityId]) // eslint-disable-line react-hooks/exhaustive-deps
+    const connect = async () => {
+      try {
+        const { ticket } = await api.liveGuestRealtimeTicket(guestToken, activityId)
+        if (cancelled) return
+        events?.close()
+        const source = new EventSource(`/api/engagement/v1/activities/${activityId}/stream?ticket=${encodeURIComponent(ticket)}`)
+        events = source
+        source.onopen = () => { attempts = 0 }
+        source.onerror = () => { if (events !== source || cancelled) return; source.close(); events = null; retry() }
+        source.addEventListener('ready', () => refresh.request(true))
+        ;['response.submitted', 'qna.submitted', 'qna.upvoted'].forEach((name) => source.addEventListener(name, () => refresh.request()))
+        ;['question.changed', 'question.state_changed', 'show.phase_changed', 'qna.moderated', 'activity.status_changed'].forEach((name) => source.addEventListener(name, () => refresh.request(true)))
+      } catch { retry() }
+    }
+    connect()
+    const reconcile = setInterval(() => { if (document.visibilityState === 'visible') refresh.request() }, 30000)
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh.request(true) }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      cancelled = true; events?.close(); refresh.dispose(); clearTimeout(retryTimer); clearInterval(reconcile)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [guestToken, activityId])
 }
 
 // `draftMode` is the additive path used only by the survey/feedback cohesive
@@ -676,24 +685,25 @@ function ActivityView({ guestToken, activityId, onBack }) {
   const [error, setError] = useState('')
   const idemKeys = useRef({})
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ isCurrent = () => true } = {}) => {
     try {
       setError('')
       const s = await api.liveGuestParticipate(guestToken, activityId)
+      if (!isCurrent()) return
       setState(s)
       const isComplete = s.activity.config?.show_mode === 'guided' && s.activity.config?.show_phase === 'complete'
       if (isComplete) {
         const payload = await api.liveGuestResults(guestToken, activityId)
-        setReviewResults(payload)
+        if (isCurrent()) setReviewResults(payload)
       } else setReviewResults(null)
       const revealed = s.activity.questions.find((question) => question.id === s.activity.config?.current_question_id && ['results_visible', 'answer_revealed'].includes(question.live_state))
       if (revealed) {
-        api.liveGuestResults(guestToken, activityId).then((payload) => setRevealedResult(payload.questions.find((question) => question.question_id === revealed.id) || null)).catch(() => setRevealedResult(null))
+        api.liveGuestResults(guestToken, activityId).then((payload) => { if (isCurrent()) setRevealedResult(payload.questions.find((question) => question.question_id === revealed.id) || null) }).catch(() => { if (isCurrent()) setRevealedResult(null) })
       } else setRevealedResult(null)
       if (s.activity.config?.leaderboard_enabled) {
-        api.liveGuestLeaderboard(guestToken, activityId).then((r) => setLeaderboard(r.entries)).catch(() => {})
+        api.liveGuestLeaderboard(guestToken, activityId).then((r) => { if (isCurrent()) setLeaderboard(r.entries) }).catch(() => {})
       }
-    } catch (e) { setError(e) }
+    } catch (e) { if (isCurrent()) setError(e) }
   }, [guestToken, activityId])
   useEffect(() => { load() }, [load])
   useLiveRefresh(guestToken, activityId, load)

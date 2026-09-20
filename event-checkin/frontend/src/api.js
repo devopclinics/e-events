@@ -324,6 +324,23 @@ async function downloadLiveEventReport(eventId) {
   document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url)
 }
 
+
+async function downloadLiveSurveyReport(eventId, activityId, displayName = 'festio-live-survey-report') {
+  const token = await getLiveSession(eventId)
+  // Let the server's 120-second renderer deadline return a useful error rather
+  // than abandoning the request while its cluster-wide renderer lease is held.
+  const res = await fetch(`${BASE}/engagement/v1/activities/${activityId}/export-report.pdf`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(135000),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Report could not be generated' }))
+    throw new Error(err.detail || 'Report could not be generated')
+  }
+  const url = URL.createObjectURL(await res.blob())
+  const anchor = document.createElement('a'); anchor.href = url; anchor.download = `${displayName.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-report.pdf`
+  document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url)
+}
 // Steps through every published step in a headless browser server-side
 // (~2-4s each), so this can take well over a minute for a long workflow --
 // give it real room before giving up.
@@ -1595,6 +1612,7 @@ export const api = {
   liveDisplays: (eventId) => liveReq(eventId, 'GET', '/v1/displays'),
   liveCreateDisplay: (eventId, body) => liveReq(eventId, 'POST', '/v1/displays', body),
   liveUpdateDisplay: (eventId, displayId, body) => liveReq(eventId, 'PATCH', `/v1/displays/${displayId}`, body),
+  liveDownloadSurveyReport: (eventId, activityId, displayName) => downloadLiveSurveyReport(eventId, activityId, displayName),
   livePresentDisplayResults: (eventId, displayId, body) => liveReq(eventId, 'PUT', `/v1/control/displays/${displayId}/results`, body),
   liveSetDisplayRehearsal: (eventId, displayId, body) => liveReq(eventId, 'PUT', `/v1/control/displays/${displayId}/rehearsal`, body),
   liveRotateDisplayToken: (eventId, displayId) => liveReq(eventId, 'POST', `/v1/displays/${displayId}/rotate-token`),

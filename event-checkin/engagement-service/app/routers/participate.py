@@ -3,13 +3,14 @@ import hashlib
 import hmac
 from datetime import datetime, timedelta, timezone
 
+import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ..auth import Identity, current_identity, require_activity_session, require_guest
+from ..auth import Identity, current_identity, require_activity_session, require_guest, require_staff
 from ..database import get_db
 from ..config import settings
 from ..models import (
@@ -263,7 +264,22 @@ def _survey_completion_summary(participants: list[ActivityParticipant], particip
     }
 
 
-async def _display_payload(activity: EngagementActivity, db: AsyncSession) -> dict:
+def _mint_report_token(identity: Identity) -> str:
+    """A short-lived token for the report exporter's own headless browser to
+    fetch the survey-report route with -- same claim shape current_identity()
+    verifies, scoped to this staff member's own event/org/role. Mirrors
+    workflows.py's _mint_preview_token; kept separate since a survey report
+    export has nothing to do with workflow steps."""
+    now = datetime.now(timezone.utc)
+    claims = {
+        "sub": f"report-export:{identity.subject}", "event_id": identity.event_id, "org_id": identity.org_id,
+        "role": identity.role, "identity_kind": "staff", "aud": "engagement", "iss": "guesthub",
+        "iat": int(now.timestamp()), "exp": int((now + timedelta(minutes=10)).timestamp()),
+    }
+    return jwt.encode(claims, settings.internal_service_token, algorithm="HS256")
+
+
+async def _display_payload(activity: EngagementActivity, db: AsyncSession, *, redact_open_text: bool = True) -> dict:
     results = await _compute_results(activity, db)
     participants = list((await db.execute(
         select(ActivityParticipant).where(ActivityParticipant.activity_id == activity.id)
@@ -369,8 +385,10 @@ async def _display_payload(activity: EngagementActivity, db: AsyncSession) -> di
                 "time_limit_seconds": next((source.time_limit_seconds for source in activity.questions if source.id == q.question_id), None),
                 "opened_at": next((source.config.get("opened_at") for source in activity.questions if source.id == q.question_id), None),
                 # Open text never reaches a public display without a future,
-                # explicit moderation record. Counts remain safe to show.
-                "text_samples": [],
+                # explicit moderation record; counts remain safe to show there.
+                # A staff-only report (redact_open_text=False) is exempt --
+                # the organizer already has moderation authority over it.
+                "text_samples": [] if redact_open_text else q.text_samples,
                 "live_state": next((source.live_state for source in activity.questions if source.id == q.question_id), "pending"),
             }
             for q in results.questions
@@ -710,6 +728,19 @@ async def get_results(activity_id: str, identity: Identity = Depends(current_ide
             question.text_samples = []
         return results
     return await _compute_results(activity, db)
+
+
+@router.get("/activities/{activity_id}/report")
+async def activity_report(activity_id: str, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Full per-question report data for staff -- every question this
+    activity has, with staff-visible open-text excerpts, independent of any
+    LiveDisplay's curated results_question_ids or connection lease. Backs
+    both the "Download report" PDF export's headless-browser fetch and any
+    future staff report screen -- unlike the public display route, it is
+    never truncated to a curated or capped subset of questions."""
+    require_staff(identity)
+    activity = await _load_activity(activity_id, identity.event_id, identity.org_id, db)
+    return await _display_payload(activity, db, redact_open_text=False)
 
 
 @router.get("/activities/{activity_id}/leaderboard")

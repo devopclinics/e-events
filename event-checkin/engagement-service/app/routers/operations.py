@@ -2,17 +2,21 @@ import csv
 import copy
 import io
 import json
+import re
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import Identity, current_identity, require_admin, require_capability, require_staff
+from ..config import settings
 from ..database import get_db
 from ..models import ActivityParticipant, ActivityQuestion, ActivityRule, EngagementActivity, EngagementEventSettings, EngagementQnaQuestion, LiveDisplay, ParticipantResponse, ProgramSession, QuestionOption, ResponseOptionSelection, WorkflowRun
+from ..ratelimit import enforce_rate_limit
+from ..report_export import capture_survey_report_pdf
 from ..realtime import claim_display, display_is_connected, force_release_display, publish_display
 from ..schemas import DisplayControlUpdate, DisplayCreate, DisplayOut, DisplayRehearsalIn, DisplayResultsControlIn, DisplayUpdate, EventSettings, EventSettingsOut, ResponseDetailOut, RuleCreate, RuleOut
 from .activities import _fetch_activity
@@ -253,6 +257,32 @@ async def disconnect_display(display_id: str, identity: Identity = Depends(curre
     await force_release_display(display.id)
     display.connected = False
     return display
+
+
+@router.get("/activities/{activity_id}/export-report.pdf")
+async def export_survey_report_pdf(activity_id: str, request: Request, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Downloads every question in this survey/feedback activity as a PDF,
+    with staff-visible open-text excerpts -- for sharing with an event owner who
+    shouldn't need a Festio login. Deliberately never touches a LiveDisplay
+    or its connection lease: it mints a short-lived staff-scoped token and
+    renders a dedicated report-preview page that reads straight from the
+    database, so it can't 409 against (or be disrupted by) an
+    actively-connected projector, and it always includes every question
+    rather than whatever subset a display's settings currently curate for
+    the TV."""
+    require_capability(identity, "control")
+    await enforce_rate_limit(request, "export_report_pdf", f"{identity.subject}:{activity_id}", limit=5, window=600)
+    activity = await _fetch_activity(activity_id, db)
+    if not activity or activity.event_id != identity.event_id or (identity.org_id and activity.org_id != identity.org_id):
+        raise HTTPException(404, "Activity not found")
+    from .participate import _mint_report_token
+    token = _mint_report_token(identity)
+    pdf_bytes = await capture_survey_report_pdf(settings.internal_display_base_url, activity_id, token)
+    filename = re.sub(r"[^A-Za-z0-9]+", "_", activity.title).strip("_") or "festio-live-survey-report"
+    return Response(
+        content=pdf_bytes, media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}_report.pdf"'},
+    )
 
 
 @router.post("/displays", response_model=DisplayOut, status_code=201)

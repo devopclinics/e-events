@@ -157,6 +157,8 @@ class AuthRequiredTests(unittest.TestCase):
 
     def test_exports_require_auth(self):
         self.assertEqual(client.get("/api/engagement/v1/activities/x/export.csv").status_code, 401)
+        self.assertEqual(client.get("/api/engagement/v1/activities/x/export-report.pdf").status_code, 401)
+        self.assertEqual(client.get("/api/engagement/v1/activities/x/report").status_code, 401)
         self.assertEqual(client.get("/api/engagement/v1/analytics/export.csv").status_code, 401)
         self.assertEqual(client.get("/api/engagement/v1/activities/x/responses").status_code, 401)
 

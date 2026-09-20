@@ -1,35 +1,10 @@
+# Optional overlay for manual staging Compose commands. Image versions continue
+# to come from APP_VERSION and docker-compose.prod.yaml, keeping every service
+# on the same release.
 services:
   backend:
-    image: dclinics/events:backend-3.1.21
     environment:
       PUBLIC_SITE_MANAGEMENT_ENABLED: "true"
-  frontend:
-    image: dclinics/events:frontend-3.1.21
-  dashboard-service:
-    image: dclinics/events:dashboard-3.1.21
-  engagement-service:
-    image: dclinics/events:engagement-3.1.21
-  engagement-worker:
-    image: dclinics/events:engagement-3.1.21
-  design-service:
-    image: dclinics/events:design-3.1.21
-  festiome-service:
-    image: dclinics/events:festiome-3.1.21
-  marketing-service:
-    image: dclinics/events:marketing-3.1.21
-  messaging-service:
-    image: dclinics/events:messaging-3.1.21
-  planner-service:
-    image: dclinics/events:planner-3.1.21
-  setup-service:
-    image: dclinics/events:setup-3.1.21
-  support-service:
-    image: dclinics/events:support-3.1.21
-  support-worker:
-    image: dclinics/events:support-3.1.21
-  ticketing-service:
-    image: dclinics/events:ticketing-3.1.21
   public-site-service:
-    image: dclinics/events:public-site-3.1.21
     environment:
       ENABLED: "true"

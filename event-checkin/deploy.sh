@@ -70,6 +70,11 @@ done
 [[ -f "$VERSION_FILE" ]] || die "VERSION file not found at $VERSION_FILE"
 VERSION=$(tr -d '[:space:]' < "$VERSION_FILE")
 [[ -n "$VERSION" ]] || die "VERSION file is empty"
+# deploy.sh is the Compose staging pipeline (production promotion is handled
+# by festio-infra). Keep staging-only capabilities enabled on every invocation
+# so deployment does not depend on a local untracked .env file.
+export PUBLIC_SITES_ENABLED="${PUBLIC_SITES_ENABLED:-true}"
+export PUBLIC_SITE_MANAGEMENT_ENABLED="${PUBLIC_SITE_MANAGEMENT_ENABLED:-true}"
 
 # dashboard-service's connection URL is interpolated from the root .env,
 # while db_migrate.py reads the role password from backend/.env. Refuse to

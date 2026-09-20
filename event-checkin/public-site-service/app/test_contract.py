@@ -17,6 +17,24 @@ class PublicSiteContractTests(unittest.TestCase):
             self.assertIn("NCNMO &lt;2026&gt;", page)
             self.assertNotIn("NCNMO <2026>", page)
 
+    def test_template_families_change_composition_not_only_color(self):
+        content = self.sample()
+        content.update({
+            "feature_image_url": "https://cdn.example.com/hero.webp",
+            "tracks": [{"title": "Community"}],
+            "stats": [{"value": "4", "label": "Days"}],
+            "registration_facts": [{"label": "Deadline", "value": "December 1"}],
+        })
+        validated = SiteContent(**content).model_dump(mode="json")
+        pages = {family: render_site(validated, family) for family in TEMPLATE_IDS}
+        for family, page in pages.items():
+            self.assertIn(f'data-template="{family}"', page)
+        self.assertIn('class="hero-visual"', pages["clean-elegant"])
+        self.assertNotIn('class="hero-visual"', pages["modern-professional"])
+        self.assertLess(pages["conference-programme"].index('id="programme"'), pages["conference-programme"].index('class="glance"'))
+        self.assertLess(pages["programme-showcase"].index('id="tracks"'), pages["programme-showcase"].index('id="programme"'))
+        self.assertLess(pages["clean-elegant"].index('class="glance"'), pages["clean-elegant"].index('id="registration"'))
+
     def test_template_switching_preserves_all_event_content(self):
         content = self.sample()
         content.update({"venue": "City Hall", "speakers": [{"name": "Amina Bello"}], "tracks": [{"title": "Community"}], "festio_live_url": "https://festio.events/live/demo", "festiome_url": "https://festio.events/me/demo"})

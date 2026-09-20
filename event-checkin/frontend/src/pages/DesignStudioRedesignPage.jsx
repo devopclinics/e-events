@@ -1339,7 +1339,7 @@ export default function DesignStudioRedesignPage() {
     <RedesignShell topActive="design" withEventSidebar={false} eventScoped>
       <div className="rr-pagehead">
         <div>
-          <div className="rr-title-row"><h1>Design Studio</h1>{import.meta.env.VITE_EVENT_WEBSITES_ENABLED === 'true' && <Link className="ds-website-link" to="/design-studio-redesign/website">Event website</Link>}</div>
+          <div className="rr-title-row"><h1>Design Studio</h1>{import.meta.env.VITE_EVENT_WEBSITES_ENABLED !== 'false' && <Link className="ds-website-link" to="/design-studio-redesign/website">Event website</Link>}</div>
           <div className="rr-meta"><Icon name="calendar" size={13} /> {event?.name || (eventId ? 'Loading…' : 'No event selected')} <span className="rr-dot">·</span> Template: {activeTemplate?.name || 'None'}</div>
         </div>
         <div className={`ds-save-state ${saveStatus}`} role={saveStatus === 'error' ? 'alert' : 'status'}>

@@ -590,3 +590,20 @@
 .ds-gh-tpl-parchment-classic .gh-ornament { text-align: center; color: var(--p-accent); font-size: 9px; padding: 2px 0 6px; }
 
 .ds-website-link{display:inline-flex;align-items:center;margin-left:14px;padding:8px 12px;border:1px solid #cfddd8;border-radius:9px;background:#fff;color:#174b44;text-decoration:none;font-size:13px;font-weight:800}.ds-website-link:hover{background:#eef7f4}
+
+
+/* GuestHub Mobile Dashboard — selectable, capability-led mobile home. */
+.ds-gh-tpl-mobile-dashboard { padding: 10px; border-radius: 14px; background: #091810; color: #f4f7f5; box-shadow: 0 10px 26px rgba(3,20,12,.3); }
+.ds-gh-tpl-mobile-dashboard .gh-md-head { display:flex; align-items:center; justify-content:space-between; color:#e9c477; font-size:7px; font-weight:800; text-transform:uppercase; }
+.ds-gh-tpl-mobile-dashboard .gh-md-head b { display:grid; place-items:center; width:18px; height:18px; border:1px solid rgba(255,255,255,.22); border-radius:50%; color:#fff; font-size:6px; }
+.ds-gh-tpl-mobile-dashboard .gh-md-welcome { display:block; margin:7px 0; font-size:11px; color:#fff; }
+.ds-gh-tpl-mobile-dashboard .gh-md-pass, .ds-gh-tpl-mobile-dashboard .gh-md-next { display:flex; align-items:center; gap:7px; margin-top:6px; padding:7px; border:1px solid rgba(255,255,255,.12); border-radius:8px; background:rgba(255,255,255,.025); }
+.ds-gh-tpl-mobile-dashboard .gh-md-pass .gh-qr { padding:2px; border-radius:4px; background:#fff; line-height:0; }
+.ds-gh-tpl-mobile-dashboard .gh-md-pass div, .ds-gh-tpl-mobile-dashboard .gh-md-next { display:flex; flex:1; flex-direction:column; min-width:0; }
+.ds-gh-tpl-mobile-dashboard .gh-md-pass b, .ds-gh-tpl-mobile-dashboard .gh-md-next b { font-size:7px; }
+.ds-gh-tpl-mobile-dashboard .gh-md-pass small, .ds-gh-tpl-mobile-dashboard .gh-md-next small { color:#d6a62f; font-size:5px; }
+.ds-gh-tpl-mobile-dashboard .gh-md-next span { margin-top:2px; overflow:hidden; color:rgba(255,255,255,.55); font-size:5px; text-overflow:ellipsis; white-space:nowrap; }
+.ds-gh-tpl-mobile-dashboard .gh-md-grid { display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-top:7px; }
+.ds-gh-tpl-mobile-dashboard .gh-md-grid span { padding:7px 5px; border:1px solid rgba(255,255,255,.12); border-radius:7px; color:#fff; font-size:6px; font-weight:700; }
+.ds-gh-tpl-mobile-dashboard .gh-md-nav { display:flex; justify-content:space-around; margin:8px -10px -10px; padding:7px 4px; border-top:1px solid rgba(255,255,255,.1); color:rgba(255,255,255,.55); font-size:5px; }
+.ds-gh-tpl-mobile-dashboard .gh-md-nav b { color:#36a879; }

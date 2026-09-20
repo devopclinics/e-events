@@ -210,3 +210,39 @@
 .festiome-style-forest-editorial .bg-purple-500 {
   background: #c9932e !important;
 }
+
+
+/* GuestHub Mobile Dashboard — separate opt-in layout selected in Design Studio. */
+.fm-mobile-dashboard-page { min-height:calc(100dvh - 5.5rem); padding:24px 12px; background:#07140d; color:#f4f7f5; }
+.fm-mobile-dashboard { width:min(100%, 390px); margin:0 auto; overflow:hidden; border:1px solid rgba(214,166,47,.18); border-radius:26px; background:linear-gradient(180deg,#0d3e2c 0,#0a2117 21%,#0b1b13 100%); box-shadow:0 28px 80px rgba(0,0,0,.42); }
+.fm-mobile-dashboard-header { display:flex; align-items:center; justify-content:space-between; padding:20px 20px 13px; border-bottom:1px solid rgba(255,255,255,.08); }
+.fm-mobile-dashboard-header div { min-width:0; display:flex; flex-direction:column; }
+.fm-mobile-dashboard-header span { overflow:hidden; color:#e9c477; font-size:11px; font-weight:900; letter-spacing:.08em; text-overflow:ellipsis; text-transform:uppercase; white-space:nowrap; }
+.fm-mobile-dashboard-header small { margin-top:3px; color:rgba(255,255,255,.48); font-size:10px; }
+.fm-mobile-dashboard-header > b { display:grid; width:34px; height:34px; place-items:center; border:1px solid rgba(255,255,255,.25); border-radius:50%; background:#164f39; font-size:11px; }
+.fm-mobile-dashboard-welcome { padding:17px 20px 15px; }
+.fm-mobile-dashboard-welcome > span { color:#e9c477; font-size:9px; font-weight:900; letter-spacing:.12em; }
+.fm-mobile-dashboard-welcome h1 { margin:7px 0 2px; color:#fff; font-size:21px; font-weight:900; letter-spacing:-.025em; }
+.fm-mobile-dashboard-welcome p { margin:0; color:#b8c7bf; font-size:12px; text-transform:capitalize; }
+.fm-mobile-pass-card,.fm-mobile-next-card { width:calc(100% - 32px); margin:0 16px 12px; border:1px solid rgba(255,255,255,.1); border-radius:15px; background:rgba(255,255,255,.025); color:#fff; text-align:left; }
+.fm-mobile-pass-card { display:flex; align-items:center; gap:12px; padding:13px; }
+.fm-mobile-pass-card > span { display:grid; width:42px; height:42px; place-items:center; border-radius:9px; background:#f7faf8; color:#0d3e2c; font-size:22px; }
+.fm-mobile-pass-card div { min-width:0; flex:1; display:flex; flex-direction:column; }
+.fm-mobile-pass-card strong { font-size:13px; }
+.fm-mobile-pass-card small { margin-top:3px; overflow:hidden; color:#7f9288; font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
+.fm-mobile-pass-card > b { color:#2fac7b; font-size:11px; }
+.fm-mobile-next-card { display:flex; flex-direction:column; padding:15px; }
+.fm-mobile-next-card small { color:#e9c477; font-size:9px; font-weight:900; letter-spacing:.08em; }
+.fm-mobile-next-card strong { margin-top:7px; font-size:14px; }
+.fm-mobile-next-card span { margin-top:4px; color:#82968b; font-size:10px; }
+.fm-mobile-action-grid { display:grid; grid-template-columns:1fr 1fr; gap:9px; padding:2px 16px 17px; }
+.fm-mobile-action-grid button { min-height:82px; display:flex; flex-direction:column; justify-content:space-between; padding:13px; border:1px solid rgba(255,255,255,.1); border-radius:14px; background:rgba(255,255,255,.018); color:#fff; text-align:left; }
+.fm-mobile-action-grid button:hover { border-color:rgba(54,168,121,.55); background:rgba(54,168,121,.07); }
+.fm-mobile-action-grid button > span { display:grid; width:30px; height:30px; place-items:center; border-radius:9px; background:rgba(54,168,121,.08); color:#2fac7b; font-size:16px; }
+.fm-mobile-action-grid strong { font-size:12px; }
+.fm-mobile-bottom-nav { display:grid; grid-template-columns:repeat(4,1fr); border-top:1px solid rgba(255,255,255,.08); background:#0a1811; }
+.fm-mobile-bottom-nav button { min-height:58px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; border:0; background:transparent; color:#75877d; font-size:9px; }
+.fm-mobile-bottom-nav button span { font-size:15px; }
+.fm-mobile-bottom-nav button.active { color:#2fac7b; }
+.fm-mobile-bottom-nav button:disabled { opacity:.35; }
+@media (min-width:640px) { .fm-mobile-dashboard-page { padding:38px 16px; } }

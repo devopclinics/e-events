@@ -2734,6 +2734,9 @@ class InvitePageOut(BaseModel):
     speaker_enabled: bool = False
     speaker_token: Optional[str] = None
     speaker_show_before_rsvp: bool = False
+    # Partner/exhibitor showcase cross-link for capability-aware guest homes.
+    partner_enabled: bool = False
+    partner_token: Optional[str] = None
     seating_term: Optional[str] = None
     seat_term: Optional[str] = None
     # Invite page display toggles (all default True)

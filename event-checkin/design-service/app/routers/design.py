@@ -30,7 +30,7 @@ HUB_STYLES = {
     "soleil", "mono-print", "verdant", "coastal-club", "haze",
     "classic-navy", "ivory-formal", "slate-professional", "sage-community", "champagne-minimal",
     "heritage-navy", "ivory-ledger", "graphite-tech", "meadow-community", "parchment-classic",
-    "forest-editorial",
+    "forest-editorial", "guesthub-mobile-dashboard",
 }
 HUB_VARIANTS = {"guest_pass": {"compact"}, "live_program": {"now_plus_two", "now_only"}}
 DEFAULT_HUB_LAYOUT = {

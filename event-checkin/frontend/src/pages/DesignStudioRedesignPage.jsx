@@ -92,6 +92,13 @@ const HUB_STYLES = [
     colorPreset: { background: '#f3f5ef', surface: '#ffffff', accent: '#c9932e', primary: '#0e4d34', text: '#12211b' },
   },
   {
+    id: 'guesthub-mobile-dashboard', name: 'GuestHub Mobile Dashboard', category: 'Conference',
+    tagline: 'Pass, programme and event tools in one focused mobile home',
+    bestFor: 'Multi-day events whose guests need a clear operational home throughout the programme.',
+    fontSuggestion: 'bold-sans',
+    colorPreset: { background: '#07140d', surface: '#102018', accent: '#d6a62f', primary: '#0d6544', text: '#f4f7f5' },
+  },
+  {
     id: 'haze', name: 'Haze', category: 'Dark',
     tagline: 'Purple glass — moody glassmorphism',
     bestFor: 'Late-night events, festival after-parties, intimate lounge experiences.',
@@ -418,6 +425,17 @@ function GuestHubSwatch({ s, font, eventName = 'Your event', eventDate = 'Date t
             <div className="gh-leg"><span className="gh-leg-num">LEG 1</span><span className="gh-leg-name">Harbour Start</span><span className="gh-tag red">Live</span></div>
             <div className="gh-leg"><span className="gh-leg-num">GALA</span><span className="gh-leg-name">Prizegiving Dinner</span><span className="gh-leg-time">19:00</span></div>
           </div>
+        </div>
+      )
+    case 'guesthub-mobile-dashboard':
+      return (
+        <div className="ds-gh-tpl ds-gh-tpl-mobile-dashboard" style={vars}>
+          <div className="gh-md-head"><span>{eventName}</span><b>DG</b></div>
+          <strong className="gh-md-welcome">Welcome, Demo Guest</strong>
+          <div className="gh-md-pass"><span className="gh-qr"><GhMiniQR color={p.primary} /></span><div><b>Your Festio Pass</b><small>View pass →</small></div></div>
+          <div className="gh-md-next"><small>● UP NEXT</small><b>Opening session</b><span>{eventDate} · {venue}</span></div>
+          <div className="gh-md-grid">{['My Pass', 'Programme', 'Speakers', 'Exhibitors', 'Festio Live', 'Activities', 'Feedback', 'Event Info'].map((label) => <span key={label}>{label}</span>)}</div>
+          <div className="gh-md-nav"><b>Home</b><span>Programme</span><span>Live</span><span>Me</span></div>
         </div>
       )
     case 'forest-editorial':

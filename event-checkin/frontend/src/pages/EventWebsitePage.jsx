@@ -27,19 +27,16 @@ const defaultNavigation = [
   { id: 'rsvp', label: 'Register / RSVP', destination_type: 'rsvp', url: '', enabled: true },
   { id: 'festio-live', label: 'Festio Live', destination_type: 'festio_live', url: '', enabled: true },
   { id: 'festiome', label: 'GuestHub', destination_type: 'festiome', url: '', enabled: true },
-  { id: 'junior', label: 'Junior Platform', destination_type: 'custom', url: '', enabled: false },
-  { id: 'faqs', label: 'FAQs', destination_type: 'custom', url: '', enabled: false },
 ]
 const blank = {
   schema_version: 1, publication_features_version:2, event_name: '', eyebrow: 'Welcome', headline: '', summary: '', start_date: '', end_date: '', venue: '', venue_address: '', venue_url: '',
   hero_image_url: '', feature_image_url: '', logo_url: '', primary_color: '#0d5c55', accent_color: '#d88945',
   primary_action: { label: 'Register / RSVP →', url: '' }, secondary_action: null,
-  sessions: [], stats: [{ value: '4 Days', label: 'Convention', detail: 'Multi-day programme' }, { value: '30+', label: 'Sessions', detail: 'Talks, panels and workshops' }, { value: '6', label: 'Programme Tracks', detail: 'Topics for every interest' }, { value: 'All ages', label: 'Family & Junior', detail: 'Something for all generations' }],
-  tracks: [{ image_url: '', icon: '▣', title: 'Junior Platform', description: 'Learn, play, grow' }, { image_url: '', icon: '◉', title: 'Youth & Sports', description: 'Energy, skills, opportunity' }, { image_url: '', icon: '★', title: 'Gala Night', description: 'A night to celebrate' }, { image_url: '', icon: '♟', title: 'Community & Learning', description: 'Ideas, connections, impact' }],
-  visible_sections: ['stats','programme','tracks','connect'], heritage_message: 'Our heritage. Our people. A brighter tomorrow.', highlights: [], festio_live_url: '', festiome_url: '', contact_email: '',
-  brand_tagline: 'PEOPLE · PURPOSE · A STRONGER TOMORROW', footer_tagline: 'Same roots. Brighter tomorrows.', programme_title:'Full programme', programme_summary:'Choose a day or track to plan your experience.',
+  sessions: [], stats: [], tracks: [],
+  visible_sections: ['stats','programme','tracks','connect'], heritage_message: '', highlights: [], festio_live_url: '', festiome_url: '', contact_email: '',
+  brand_tagline: '', footer_tagline: '', programme_title:'Full programme', programme_summary:'Choose a day or track to plan your experience.',
   speakers:[], registration_facts:[], venue_facts:[], feature_sections:[], faqs:[],
-  festio_live_title:'Festio Live', festio_live_description:'Participate in live Q&A, polls and activities.', festiome_title:'GuestHub', festiome_description:'Your personal convention hub, pass and programme.', navigation: defaultNavigation,
+  festio_live_title:'Festio Live', festio_live_description:'Participate in live Q&A, polls and activities.', festiome_title:'GuestHub', festiome_description:'Your personal event hub, pass and programme.', navigation: defaultNavigation,
 }
 const tabs = [['identity','Identity'],['design','Design'],['navigation','Header & footer'],['style','Style & media'],['programme','Programme'],['speakers','Speakers'],['sections','Content sections'],['connections','Connections'],['history','History']]
 

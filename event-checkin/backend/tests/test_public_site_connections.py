@@ -1,7 +1,7 @@
 import pytest
 
 from app.models import Event, ExperienceStep, ExperienceWorkflow, GuestSpeaker
-from app.routers.public_sites import _resolve_navigation
+from app.routers.public_sites import _absolute_site_urls, _resolve_navigation
 from conftest import _Session
 
 
@@ -83,3 +83,26 @@ async def test_website_connection_catalog_uses_current_event_setup(ctx, monkeypa
     ctx.login(ctx.ids["user_b"])
     forbidden = await ctx.client.get(f"/api/events/{event_id}/website/connections")
     assert forbidden.status_code == 404
+
+
+def test_absolute_site_urls_resolves_nested_event_media_and_actions():
+    content = {
+        "hero_image_url": "/uploads/hero.webp",
+        "tracks": [{"image_url": "/uploads/track.webp"}],
+        "feature_sections": [{"image_url": "/uploads/gala.webp", "action": {"url": "/rsvp/demo"}}],
+        "navigation": [
+            {"url": "#programme"},
+            {"url": "mailto:events@example.com"},
+            {"url": "//unsafe.example/path"},
+        ],
+    }
+
+    resolved = _absolute_site_urls(content, "https://staging.festio.events/")
+
+    assert resolved["hero_image_url"] == "https://staging.festio.events/uploads/hero.webp"
+    assert resolved["tracks"][0]["image_url"] == "https://staging.festio.events/uploads/track.webp"
+    assert resolved["feature_sections"][0]["image_url"] == "https://staging.festio.events/uploads/gala.webp"
+    assert resolved["feature_sections"][0]["action"]["url"] == "https://staging.festio.events/rsvp/demo"
+    assert [item["url"] for item in resolved["navigation"]] == [
+        "#programme", "mailto:events@example.com", "//unsafe.example/path",
+    ]

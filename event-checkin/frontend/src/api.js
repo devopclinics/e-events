@@ -61,7 +61,7 @@ async function req(method, path, body) {
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
-    const detail = Array.isArray(err.detail) ? err.detail.map((d) => d.msg || JSON.stringify(d)).join('; ') : (err.detail?.message || err.detail || err.message)
+    const detail = Array.isArray(err.detail) ? err.detail.map((d) => `${(d.loc || []).filter((part) => part !== 'body').join('.')} ${d.msg || JSON.stringify(d)}`.trim()).join('; ') : (err.detail?.message || err.detail || err.message)
     const message = typeof detail === 'string' ? detail : detail?.message || detail?.error || res.statusText
     const e = new Error(message || res.statusText)
     e.status = res.status

@@ -3,7 +3,7 @@
    mockup of the actual PUBLIC site inside the card, which has no dark mode of
    its own — those intentionally keep literal colors, not tokens. */
 
-.ews-studio{height:calc(100vh - 62px);display:flex;flex-direction:column;background:var(--page-bg);color:var(--ink);overflow:hidden}
+.ews-studio{height:calc(100vh - 86px);height:calc(100dvh - 86px);display:flex;flex-direction:column;background:var(--page-bg);color:var(--ink);overflow:hidden}
 .ews-studio>header{height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;border-bottom:1px solid var(--line);background:var(--surface)}
 .ews-breadcrumb,.ews-actions,.ews-nav-head,.ews-nav-foot,.ews-section-head,.ews-preview-toolbar{display:flex;align-items:center;gap:9px}
 .ews-breadcrumb{font-size:13px;color:var(--muted)}

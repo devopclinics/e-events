@@ -42,7 +42,7 @@ async def test_donation_tracker_public_flow_keeps_pledges_separate_and_private(c
     assert snapshot["confirmed_minor"] == 0
     assert snapshot["pledged_minor"] == 30000
     assert snapshot["pledge_count"] == 1
-    assert {item["type"] for item in snapshot["pledge_payment_channels"]} == {"festio_pay", "cash_app", "zelle", "bank_transfer", "offline"}
+    assert {item["type"] for item in snapshot["pledge_payment_channels"]} == {"festio_pay", "cash_app", "zelle", "paypal", "bank_transfer", "offline"}
     assert snapshot["recent_public"][0]["name"] == "Anonymous donor"
     assert snapshot["recent_public"][0]["amount_minor"] is None
 
@@ -55,6 +55,33 @@ async def test_donation_tracker_public_flow_keeps_pledges_separate_and_private(c
     public = (await ctx.client.get(f"/api/give/{token}")).json()
     assert public["confirmed_minor"] == 30000
     assert public["pledged_minor"] == 0
+
+
+@pytest.mark.asyncio
+async def test_paypal_channel_accepts_public_contributions(ctx):
+    ctx.login(ctx.ids["superadmin"])
+    event_id = ctx.ids["event_a"]
+    campaign = {
+        "enabled": True, "title": "Support the mission", "description": None,
+        "goal_minor": 0, "currency": "USD", "public_total_mode": "confirmed_and_pledged_separate",
+        "show_donor_names": True, "show_donor_amounts": True, "show_pledged_total": True,
+        "celebrate_milestones": False, "milestones_minor": [],
+        "channels": [{"type": "paypal", "enabled": True, "label": "PayPal", "public_instructions": "Send to paypal.me/example"}],
+    }
+    saved = await ctx.client.put(f"/api/events/{event_id}/donation-campaign", json=campaign)
+    assert saved.status_code == 200, saved.text
+    token = saved.json()["public_token"]
+
+    public = await ctx.client.get(f"/api/give/{token}")
+    assert public.status_code == 200
+    assert [item["type"] for item in public.json()["channels"]] == ["paypal"]
+
+    contribution = await ctx.client.post(f"/api/give/{token}/contributions", json={
+        "channel": "paypal", "amount_minor": 2000, "donor_name": "PayPal Donor",
+    })
+    assert contribution.status_code == 201, contribution.text
+    assert contribution.json()["status"] == "pending_verification"
+    assert contribution.json()["instructions"] == "Send to paypal.me/example"
 
 
 @pytest.mark.asyncio

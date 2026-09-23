@@ -3,7 +3,7 @@ import { api } from '../../api'
 import './DonationTrackerPanel.css'
 
 const TYPES = [
-  ['festio_pay','Festio Pay'],['cash_app','Cash App'],['zelle','Zelle'],
+  ['festio_pay','Festio Pay'],['cash_app','Cash App'],['zelle','Zelle'],['paypal','PayPal'],
   ['bank_transfer','Bank transfer'],['offline','Cash / cheque'],['pledge','Pledge now'],
 ]
 const money = (minor, currency='USD') => new Intl.NumberFormat(undefined,{style:'currency',currency,maximumFractionDigits:0}).format((minor||0)/100)

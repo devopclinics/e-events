@@ -3349,7 +3349,7 @@ GuestJourneyOut.model_rebuild()
 
 # ── Donation Tracker ─────────────────────────────────────────────────────────
 
-DonationChannel = Literal["festio_pay", "cash_app", "zelle", "bank_transfer", "offline", "pledge"]
+DonationChannel = Literal["festio_pay", "cash_app", "zelle", "paypal", "bank_transfer", "offline", "pledge"]
 DonationStatus = Literal["initiated", "pending_verification", "confirmed", "pledged", "failed", "refunded", "cancelled"]
 
 

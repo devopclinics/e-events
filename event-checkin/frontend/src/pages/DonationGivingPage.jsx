@@ -3,8 +3,8 @@ import { useParams } from 'react-router-dom'
 import { api } from '../api'
 import './DonationGivingPage.css'
 
-const LABELS = { festio_pay: 'Festio Pay', cash_app: 'Cash App', zelle: 'Zelle', bank_transfer: 'Bank transfer', offline: 'Cash / cheque', pledge: 'Pledge now' }
-const ICONS = { festio_pay: '✦', cash_app: '$', zelle: 'Z', bank_transfer: '▦', offline: '▤', pledge: '♡' }
+const LABELS = { festio_pay: 'Festio Pay', cash_app: 'Cash App', zelle: 'Zelle', paypal: 'PayPal', bank_transfer: 'Bank transfer', offline: 'Cash / cheque', pledge: 'Pledge now' }
+const ICONS = { festio_pay: '✦', cash_app: '$', zelle: 'Z', paypal: 'P', bank_transfer: '▦', offline: '▤', pledge: '♡' }
 const money = (minor, currency='USD') => new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 0 }).format((minor || 0) / 100)
 
 export default function DonationGivingPage() {
@@ -28,7 +28,7 @@ export default function DonationGivingPage() {
   const progress = campaign?.goal_minor ? Math.min(100, Math.round(campaign.confirmed_minor / campaign.goal_minor * 100)) : 0
   const pledgeChannels = campaign?.pledge_payment_channels?.length ? campaign.pledge_payment_channels : [
     { type: 'festio_pay', label: 'Festio Pay' }, { type: 'cash_app', label: 'Cash App' },
-    { type: 'zelle', label: 'Zelle' }, { type: 'bank_transfer', label: 'Bank transfer' }, { type: 'offline', label: 'Cash / cheque' },
+    { type: 'zelle', label: 'Zelle' }, { type: 'paypal', label: 'PayPal' }, { type: 'bank_transfer', label: 'Bank transfer' }, { type: 'offline', label: 'Cash / cheque' },
   ]
   async function submit(event, useChannel) {
     event.preventDefault(); setBusy(true); setError('')

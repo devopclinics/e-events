@@ -37,6 +37,7 @@ DEFAULT_CHANNELS = [
     {"type": "festio_pay", "enabled": True, "label": "Festio Pay"},
     {"type": "cash_app", "enabled": False, "label": "Cash App"},
     {"type": "zelle", "enabled": False, "label": "Zelle"},
+    {"type": "paypal", "enabled": False, "label": "PayPal"},
     {"type": "bank_transfer", "enabled": False, "label": "Bank transfer"},
     {"type": "offline", "enabled": False, "label": "Cash / cheque"},
     {"type": "pledge", "enabled": True, "label": "Pledge now"},
@@ -46,6 +47,7 @@ PLEDGE_PAYMENT_CHANNELS = [
     {"type": "festio_pay", "label": "Festio Pay"},
     {"type": "cash_app", "label": "Cash App"},
     {"type": "zelle", "label": "Zelle"},
+    {"type": "paypal", "label": "PayPal"},
     {"type": "bank_transfer", "label": "Bank transfer"},
     {"type": "offline", "label": "Cash / cheque"},
 ]

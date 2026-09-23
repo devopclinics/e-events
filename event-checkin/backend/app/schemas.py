@@ -566,6 +566,10 @@ class ActiveToggle(BaseModel):
     active: bool
 
 
+class EventCodeUpdate(BaseModel):
+    event_code: str = Field(min_length=3, max_length=32)
+
+
 RedesignCohort = Literal[
     "legacy_only", "redesign_opt_in", "redesign_internal",
     "redesign_cohort", "redesign_default", "legacy_retired",

@@ -943,6 +943,7 @@ export const api = {
   adminSetManualCheckin: (eventId, active) => req('PATCH', `/admin/events/${eventId}/manual-checkin`, { active }),
   adminSetMms: (eventId, active) => req('PATCH', `/admin/events/${eventId}/mms`, { active }),
   setSelfCheckin: (eventId, active) => req('PATCH', `/events/${eventId}/self-checkin`, { active }),
+  setEventCode: (eventId, eventCode) => req('PATCH', `/events/${eventId}/event-code`, { event_code: eventCode }),
 
   // Public self check-in
   selfCheckinInfo: (code) => fetch(`${BASE}/e/${encodeURIComponent(code)}`).then((r) => r.json()),

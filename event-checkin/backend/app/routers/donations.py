@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_paid_event_admin, require_paid_event_member
@@ -28,6 +28,7 @@ from ..schemas import (
     DonationPublicContributionOut, DonationTransitionIn,
 )
 from . import broadcast
+from .events import unique_event_code
 
 router = APIRouter()
 public_router = APIRouter()
@@ -69,7 +70,15 @@ async def _campaign_for_event(event_id: str, db: AsyncSession) -> DonationCampai
 
 
 async def _campaign_for_token(token: str, db: AsyncSession, require_enabled: bool = True) -> DonationCampaign:
-    campaign = await db.scalar(select(DonationCampaign).where(DonationCampaign.public_token == token))
+    # The public link is normally the event's short event_code (e.g. "iedpu26"); older
+    # links minted before that existed still resolve via the long public_token.
+    campaign = await db.scalar(
+        select(DonationCampaign)
+        .join(Event, Event.id == DonationCampaign.event_id)
+        .where(func.lower(Event.event_code) == token.strip().lower())
+    )
+    if not campaign:
+        campaign = await db.scalar(select(DonationCampaign).where(DonationCampaign.public_token == token))
     if not campaign or (require_enabled and not campaign.enabled):
         raise HTTPException(404, "Donation campaign not found")
     return campaign
@@ -129,11 +138,15 @@ def _public_recent(campaign: DonationCampaign, rows: list[DonationContribution])
 
 async def _campaign_out(campaign: DonationCampaign, db: AsyncSession) -> DonationCampaignOut:
     event = await db.get(Event, campaign.event_id)
+    if event is not None and not event.event_code:
+        event.event_code = await unique_event_code(db)
+        await db.commit(); await db.refresh(event)
     rows = await _rows(campaign.id, db)
     totals = _totals(rows)
+    share_token = event.event_code if event and event.event_code else campaign.public_token
     return DonationCampaignOut(
         id=campaign.id, event_id=campaign.event_id, public_token=campaign.public_token,
-        public_url=f"{_public_base()}/give/{campaign.public_token}", event_name=event.name if event else "Event",
+        public_url=f"{_public_base()}/give/{share_token}", event_name=event.name if event else "Event",
         enabled=campaign.enabled, title=campaign.title, description=campaign.description,
         goal_minor=campaign.goal_minor, currency=campaign.currency,
         public_total_mode=campaign.public_total_mode, show_donor_names=campaign.show_donor_names,

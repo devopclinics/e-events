@@ -58,6 +58,33 @@ async def test_donation_tracker_public_flow_keeps_pledges_separate_and_private(c
 
 
 @pytest.mark.asyncio
+async def test_donation_public_url_uses_short_event_code(ctx):
+    ctx.login(ctx.ids["superadmin"])
+    event_id = ctx.ids["event_a"]
+    campaign = {
+        "enabled": True, "title": "Support the mission", "description": None,
+        "goal_minor": 0, "currency": "USD", "public_total_mode": "confirmed_and_pledged_separate",
+        "show_donor_names": True, "show_donor_amounts": True, "show_pledged_total": True,
+        "celebrate_milestones": False, "milestones_minor": [],
+        "channels": [{"type": "zelle", "enabled": True, "label": "Zelle"}],
+    }
+    saved = await ctx.client.put(f"/api/events/{event_id}/donation-campaign", json=campaign)
+    assert saved.status_code == 200, saved.text
+    body = saved.json()
+    # public_url is short (event_code), not the long public_token uuid.
+    assert body["public_url"].endswith(f"/give/{body['public_token']}") is False
+    short_code = body["public_url"].rsplit("/give/", 1)[1]
+    assert len(short_code) < len(body["public_token"])
+
+    # the short code resolves the same campaign as the public_token would.
+    by_code = await ctx.client.get(f"/api/give/{short_code}")
+    assert by_code.status_code == 200
+    by_token = await ctx.client.get(f"/api/give/{body['public_token']}")
+    assert by_token.status_code == 200
+    assert by_code.json()["title"] == by_token.json()["title"] == "Support the mission"
+
+
+@pytest.mark.asyncio
 async def test_disabled_campaign_and_disabled_channel_are_not_public(ctx):
     ctx.login(ctx.ids["superadmin"])
     event_id = ctx.ids["event_a"]

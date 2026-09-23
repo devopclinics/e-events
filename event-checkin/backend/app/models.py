@@ -2691,6 +2691,10 @@ class DonationContribution(Base):
     donor_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     donor_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     donor_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Explicit opt-in to a thank-you/reminder message, separate from
+    # anonymous_publicly -- the donor's own choice to be contacted, not just
+    # whether their name shows on the public tracker.
+    contact_consent: Mapped[bool] = mapped_column(Boolean, default=False)
     anonymous_publicly: Mapped[bool] = mapped_column(Boolean, default=False)
     hide_amount_publicly: Mapped[bool] = mapped_column(Boolean, default=False)
     message: Mapped[str | None] = mapped_column(Text, nullable=True)

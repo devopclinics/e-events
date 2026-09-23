@@ -108,6 +108,52 @@ async def test_blank_donor_email_does_not_fail_validation(ctx):
 
 
 @pytest.mark.asyncio
+async def test_contact_consent_and_phone_are_captured(ctx):
+    ctx.login(ctx.ids["superadmin"])
+    event_id = ctx.ids["event_a"]
+    campaign = {
+        "enabled": True, "title": "Support the mission", "description": None,
+        "goal_minor": 0, "currency": "USD", "public_total_mode": "confirmed_and_pledged_separate",
+        "show_donor_names": True, "show_donor_amounts": True, "show_pledged_total": True,
+        "celebrate_milestones": False, "milestones_minor": [],
+        "channels": [{"type": "zelle", "enabled": True, "label": "Zelle"}, {"type": "pledge", "enabled": True, "label": "Pledge now"}],
+    }
+    saved = await ctx.client.put(f"/api/events/{event_id}/donation-campaign", json=campaign)
+    assert saved.status_code == 200, saved.text
+    token = saved.json()["public_token"]
+
+    # A donor who opts in gets both phone and consent stored (never blocks the response).
+    donate = await ctx.client.post(f"/api/give/{token}/contributions", json={
+        "channel": "zelle", "amount_minor": 3000, "donor_name": "Follow Up Donor",
+        "donor_email": "donor@example.org", "donor_phone": "+15551234567", "contact_consent": True,
+    })
+    assert donate.status_code == 201, donate.text
+
+    pledge = await ctx.client.post(f"/api/give/{token}/contributions", json={
+        "channel": "pledge", "amount_minor": 5000, "donor_name": "Pledge Follow Up",
+        "donor_phone": "+15557654321", "contact_consent": True,
+        "expected_payment_channel": "zelle", "expected_payment_date": "2026-10-01T12:00:00Z",
+    })
+    assert pledge.status_code == 201, pledge.text
+
+    rows = await ctx.client.get(f"/api/events/{event_id}/donations")
+    assert rows.status_code == 200
+    by_name = {row["donor_name"]: row for row in rows.json()}
+    assert by_name["Follow Up Donor"]["contact_consent"] is True
+    assert by_name["Follow Up Donor"]["donor_phone"] == "+15551234567"
+    assert by_name["Pledge Follow Up"]["contact_consent"] is True
+    assert by_name["Pledge Follow Up"]["donor_phone"] == "+15557654321"
+
+    # Declining consent still lets the gift through -- it's optional.
+    quiet = await ctx.client.post(f"/api/give/{token}/contributions", json={
+        "channel": "zelle", "amount_minor": 1000, "donor_name": "Quiet Donor",
+    })
+    assert quiet.status_code == 201, quiet.text
+    quiet_row = next(row for row in (await ctx.client.get(f"/api/events/{event_id}/donations")).json() if row["donor_name"] == "Quiet Donor")
+    assert quiet_row["contact_consent"] is False
+
+
+@pytest.mark.asyncio
 async def test_donation_public_url_uses_short_event_code(ctx):
     ctx.login(ctx.ids["superadmin"])
     event_id = ctx.ids["event_a"]

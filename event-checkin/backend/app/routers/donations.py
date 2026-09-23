@@ -7,12 +7,13 @@ poll, quiz, survey, or display behavior.
 from __future__ import annotations
 
 import io
+import logging
 import secrets
 
 import qrcode
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth import require_paid_event_admin, require_paid_event_member
 from ..config import settings
 from ..database import get_db
+from ..entitlements import last_credit_ledger_id, reserve_message_credit
 from ..models import DonationCampaign, DonationContribution, DonationStatusHistory, Event, User
 from ..ratelimit import rate_limit
 from ..schemas import (
@@ -29,6 +31,11 @@ from ..schemas import (
 )
 from . import broadcast
 from .events import unique_event_code
+from services import messaging
+from services.credit_ledger import send_with_credit_ledger
+from services.email_service import send_simple_email
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 public_router = APIRouter()
@@ -164,6 +171,42 @@ async def _publish(campaign: DonationCampaign, db: AsyncSession) -> None:
     await broadcast(campaign.event_id, {"type": "donation.changed", "donation": snapshot.model_dump(mode="json")})
 
 
+def _money(amount_minor: int, currency: str) -> str:
+    return f"{amount_minor / 100:,.2f} {currency}"
+
+
+async def _send_thank_you(event: Event | None, row: DonationContribution, background_tasks: BackgroundTasks, db: AsyncSession) -> None:
+    """Best-effort thank-you on contact_consent -- never raises, never blocks
+    the donor's response. Email self-meters its own credit; SMS must reserve
+    one first (see services/credit_ledger.py, entitlements.reserve_message_credit)."""
+    if not event:
+        return
+    name = row.donor_name or "there"
+    event_name = event.name
+    amount = _money(row.amount_minor, row.currency)
+    if row.status == "pledged":
+        subject = f"Thank you for your pledge to {event_name}"
+        html = f"<p>Hi {name},</p><p>Thank you for pledging <strong>{amount}</strong> to support {event_name}. Your pledge is recorded and we'll follow up as your expected date approaches.</p>"
+        sms = f"Thank you for pledging {amount} to {event_name}! We'll follow up as your date approaches."
+    else:
+        subject = f"Thank you for your gift to {event_name}"
+        html = f"<p>Hi {name},</p><p>Thank you for your gift of <strong>{amount}</strong> to support {event_name}. We'll confirm once it's received.</p>"
+        sms = f"Thank you for your gift of {amount} to {event_name}! We'll confirm once it's received."
+
+    if row.donor_email:
+        try:
+            background_tasks.add_task(send_simple_email, row.donor_email, subject, html, event.id, None, None, "donation_thank_you")
+        except Exception:
+            logger.exception("Failed to queue donation thank-you email for contribution=%s", row.id)
+
+    if row.donor_phone:
+        try:
+            if await reserve_message_credit(event, "sms", db=db, reason="donation_thank_you"):
+                background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_sms, phone=row.donor_phone, body=sms)
+        except Exception:
+            logger.exception("Failed to queue donation thank-you SMS for contribution=%s", row.id)
+
+
 @router.get("/{event_id}/donation-campaign", response_model=DonationCampaignOut)
 async def get_campaign(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_member)):
     campaign = await _campaign_for_event(event_id, db)
@@ -291,7 +334,7 @@ async def public_campaign(token: str, db: AsyncSession = Depends(get_db), _: Non
 
 
 @public_router.post("/{token}/contributions", response_model=DonationPublicContributionOut, status_code=201)
-async def create_public_contribution(token: str, body: DonationContributionCreate, db: AsyncSession = Depends(get_db), _: None = Depends(rate_limit(limit=20, window=60, scope="donation_public_submit", key="client_ip"))):
+async def create_public_contribution(token: str, body: DonationContributionCreate, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), _: None = Depends(rate_limit(limit=20, window=60, scope="donation_public_submit", key="client_ip"))):
     campaign = await _campaign_for_token(token, db)
     channel = next((item for item in (campaign.channels or []) if item.get("type") == body.channel and item.get("enabled")), None)
     if not channel:
@@ -307,7 +350,7 @@ async def create_public_contribution(token: str, body: DonationContributionCreat
         campaign_id=campaign.id, event_id=campaign.event_id, channel=body.channel,
         amount_minor=body.amount_minor, currency=campaign.currency, status=status,
         donor_name=body.donor_name, donor_email=str(body.donor_email) if body.donor_email else None,
-        donor_phone=body.donor_phone, anonymous_publicly=body.anonymous_publicly,
+        donor_phone=body.donor_phone, contact_consent=body.contact_consent, anonymous_publicly=body.anonymous_publicly,
         hide_amount_publicly=body.hide_amount_publicly, message=body.message,
         expected_payment_channel=body.expected_payment_channel,
         expected_payment_date=_database_datetime(body.expected_payment_date),
@@ -315,6 +358,9 @@ async def create_public_contribution(token: str, body: DonationContributionCreat
     )
     db.add(row); await db.flush(); await _add_history(db, row, None, status, None, "Submitted through Giving Hub")
     await db.commit(); await db.refresh(row); await _publish(campaign, db)
+    if body.contact_consent and (row.donor_email or row.donor_phone):
+        event = await db.get(Event, campaign.event_id)
+        await _send_thank_you(event, row, background_tasks, db)
     return DonationPublicContributionOut(
         id=row.id, access_token=row.access_token, reference=row.reference, status=row.status,
         channel=row.channel, amount_minor=row.amount_minor, currency=row.currency,

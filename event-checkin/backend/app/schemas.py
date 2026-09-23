@@ -3382,6 +3382,7 @@ class DonationContributionCreate(BaseModel):
     donor_name: Optional[str] = Field(default=None, max_length=255)
     donor_email: Optional[EmailStr] = None
     donor_phone: Optional[str] = Field(default=None, max_length=50)
+    contact_consent: bool = False
     anonymous_publicly: bool = False
     hide_amount_publicly: bool = False
     message: Optional[str] = Field(default=None, max_length=1000)
@@ -3414,6 +3415,7 @@ class DonationContributionOut(BaseModel):
     donor_name: Optional[str] = None
     donor_email: Optional[str] = None
     donor_phone: Optional[str] = None
+    contact_consent: bool = False
     anonymous_publicly: bool
     hide_amount_publicly: bool
     message: Optional[str] = None

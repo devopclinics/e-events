@@ -16,8 +16,14 @@ export default function DonationGivingPage() {
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  useEffect(() => { api.publicDonationCampaign(token).then((data) => { setCampaign(data); setChannel(data.channels?.[0]?.type || '') }).catch((e) => setError(e.message)) }, [token])
+  useEffect(() => { api.publicDonationCampaign(token).then((data) => {
+    setCampaign(data)
+    const direct = data.channels?.find((item) => item.type !== 'pledge')
+    setChannel((direct || data.channels?.[0])?.type || '')
+  }).catch((e) => setError(e.message)) }, [token])
   const selected = useMemo(() => campaign?.channels?.find((item) => item.type === channel), [campaign, channel])
+  const directChannels = useMemo(() => campaign?.channels?.filter((item) => item.type !== 'pledge') || [], [campaign])
+  const pledgeOption = useMemo(() => campaign?.channels?.find((item) => item.type === 'pledge'), [campaign])
   const progress = campaign?.goal_minor ? Math.min(100, Math.round(campaign.confirmed_minor / campaign.goal_minor * 100)) : 0
   const pledgeChannels = campaign?.pledge_payment_channels?.length ? campaign.pledge_payment_channels : [
     { type: 'festio_pay', label: 'Festio Pay' }, { type: 'cash_app', label: 'Cash App' },
@@ -39,8 +45,11 @@ export default function DonationGivingPage() {
   return <main className="dg-shell">
     <header className="dg-hero"><span>FESTIO GIVING HUB</span><p>{campaign.event_name}</p><h1>{campaign.title}</h1>{campaign.description && <div>{campaign.description}</div>}<section className="dg-totals"><article><small>Confirmed gifts</small><strong>{money(campaign.confirmed_minor, campaign.currency)}</strong><em>Funds received and verified</em></article><article><small>Active pledges</small><strong>{money(campaign.pledged_minor, campaign.currency)}</strong><em>{campaign.pledge_count || 0} pledge{campaign.pledge_count === 1 ? '' : 's'} awaiting fulfilment</em></article>{campaign.goal_minor > 0 ? <><i><b style={{ width: String(progress) + '%' }}/></i><label>{progress}% of {money(campaign.goal_minor, campaign.currency)} goal confirmed</label></> : <label className="dg-no-goal">Every confirmed gift and pledge moves the mission forward.</label>}</section></header>
     <div className="dg-layout">    <form className="dg-card" onSubmit={submit}>
-      <div className="dg-step"><span>01</span><div><h2>Choose how to give</h2><p>Select any option enabled by the event organizer.</p></div></div>
-      <div className="dg-channels">{campaign.channels.map((item) => <button type="button" className={channel === item.type ? 'active' : ''} onClick={() => setChannel(item.type)} key={item.type}><i>{ICONS[item.type]}</i><b>{item.label || LABELS[item.type]}</b></button>)}</div>
+      <div className="dg-step"><span>01</span><div><h2>{directChannels.length ? 'Give now' : 'Choose how to give'}</h2><p>{directChannels.length ? 'Pick a payment option enabled by the event organizer.' : 'Select any option enabled by the event organizer.'}</p></div></div>
+      {directChannels.length > 0 ? <>
+        <div className="dg-channels">{directChannels.map((item) => <button type="button" className={channel === item.type ? 'active' : ''} onClick={() => setChannel(item.type)} key={item.type}><i>{ICONS[item.type]}</i><b>{item.label || LABELS[item.type]}</b></button>)}</div>
+        {pledgeOption && <button type="button" className={'dg-pledge-toggle' + (channel === 'pledge' ? ' active' : '')} onClick={() => setChannel('pledge')}>Prefer to pledge instead? →</button>}
+      </> : pledgeOption && <div className="dg-channels">{[pledgeOption].map((item) => <button type="button" className={channel === item.type ? 'active' : ''} onClick={() => setChannel(item.type)} key={item.type}><i>{ICONS[item.type]}</i><b>{item.label || LABELS[item.type]}</b></button>)}</div>}
       <div className="dg-step"><span>02</span><div><h2>{channel === 'pledge' ? 'Record your pledge' : 'Choose an amount'}</h2><p>{channel === 'pledge' ? 'A pledge is not counted as received until payment is confirmed.' : 'Your contribution updates the tracker after confirmation.'}</p></div></div>
       <div className="dg-amounts">{[25,50,100,250].map((value) => <button type="button" className={amount === String(value) ? 'active' : ''} onClick={() => setAmount(String(value))} key={value}>{money(value * 100, campaign.currency)}</button>)}<label><span>Other</span><input required min="1" step="0.01" type="number" value={amount} onChange={(e) => setAmount(e.target.value)}/></label></div>
       {channel === 'pledge' && <div className="dg-pledge-fields"><label><span>Expected payment channel</span><select value={form.expected_payment_channel} onChange={(e) => setForm({...form, expected_payment_channel:e.target.value})}>{pledgeChannels.map((item)=><option value={item.type} key={item.type}>{item.label}</option>)}</select></label><label><span>Expected payment date</span><input required type="date" value={form.expected_payment_date} onChange={(e) => setForm({...form, expected_payment_date:e.target.value})}/></label></div>}

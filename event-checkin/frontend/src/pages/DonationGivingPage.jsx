@@ -22,8 +22,9 @@ export default function DonationGivingPage() {
     setChannel((direct || data.channels?.[0])?.type || '')
   }).catch((e) => setError(e.message)) }, [token])
   const selected = useMemo(() => campaign?.channels?.find((item) => item.type === channel), [campaign, channel])
-  const directChannels = useMemo(() => campaign?.channels?.filter((item) => item.type !== 'pledge') || [], [campaign])
+  const directChannels = useMemo(() => campaign?.channels?.filter((item) => item.type !== 'pledge' && item.type !== 'offline') || [], [campaign])
   const pledgeOption = useMemo(() => campaign?.channels?.find((item) => item.type === 'pledge'), [campaign])
+  const offlineOption = useMemo(() => campaign?.channels?.find((item) => item.type === 'offline'), [campaign])
   const progress = campaign?.goal_minor ? Math.min(100, Math.round(campaign.confirmed_minor / campaign.goal_minor * 100)) : 0
   const pledgeChannels = campaign?.pledge_payment_channels?.length ? campaign.pledge_payment_channels : [
     { type: 'festio_pay', label: 'Festio Pay' }, { type: 'cash_app', label: 'Cash App' },
@@ -73,6 +74,6 @@ export default function DonationGivingPage() {
         <button type="button" className={hasDirect ? 'dg-pledge-submit' : 'dg-submit'} disabled={busy || Number(amount) <= 0 || !pledgeFieldsValid} onClick={(e) => submit(e, 'pledge')}>{busy ? 'Saving…' : 'Record my pledge →'}</button>
         {!hasDirect && <footer>Secure event giving · Powered by Festio</footer>}
       </div>}
-    </div><aside className="dg-side"><section><span>WAYS TO SUPPORT</span><h2>Give now or make a pledge</h2><p>Choose a direct payment option when configured, or record a pledge and tell the team how you plan to fulfil it.</p><div className="dg-methods">{pledgeChannels.map((item)=><b key={item.type}><i>{ICONS[item.type]}</i>{item.label}</b>)}</div></section><section><span>TRANSPARENT TRACKING</span><h2>Confirmed and pledged totals stay separate</h2><p>The live display only counts verified payments as raised. Pledges remain visible as commitments until the finance team confirms receipt.</p></section>{campaign.recent_public?.length > 0 && <section><span>RECENT SUPPORT</span><div className="dg-supporters">{campaign.recent_public.slice(0,5).map((item)=><article key={item.id}><b>{item.name}</b><small>{item.kind === 'pledge' ? 'Pledged' : 'Gave'}{item.amount_minor != null ? ' ' + money(item.amount_minor, campaign.currency) : ''}</small></article>)}</div></section>}</aside></div>
+    </div><aside className="dg-side"><section><span>WAYS TO SUPPORT</span><h2>Give now or make a pledge</h2><p>Choose a direct payment option when configured, or record a pledge and tell the team how you plan to fulfil it.</p><div className="dg-methods">{pledgeChannels.map((item)=><b key={item.type}><i>{ICONS[item.type]}</i>{item.label}</b>)}</div>{offlineOption && <p className="dg-offline-note">{offlineOption.label || 'Cash / cheque'} also accepted — please arrange this with event staff on-site; it isn't submitted through this page.</p>}</section><section><span>TRANSPARENT TRACKING</span><h2>Confirmed and pledged totals stay separate</h2><p>The live display only counts verified payments as raised. Pledges remain visible as commitments until the finance team confirms receipt.</p></section>{campaign.recent_public?.length > 0 && <section><span>RECENT SUPPORT</span><div className="dg-supporters">{campaign.recent_public.slice(0,5).map((item)=><article key={item.id}><b>{item.name}</b><small>{item.kind === 'pledge' ? 'Pledged' : 'Gave'}{item.amount_minor != null ? ' ' + money(item.amount_minor, campaign.currency) : ''}</small></article>)}</div></section>}</aside></div>
   </main>
 }

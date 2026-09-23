@@ -324,7 +324,10 @@ async def public_campaign(token: str, db: AsyncSession = Depends(get_db), _: Non
     rows = await _rows(campaign.id, db); totals = _totals(rows)
     return DonationPublicCampaignOut(
         token=token, event_name=event.name if event else "Event", title=campaign.title,
-        description=campaign.description, goal_minor=campaign.goal_minor, currency=campaign.currency,
+        description=campaign.description,
+        logo_url=event.logo_url if event else None,
+        cover_image_url=event.invite_cover_image if event else None,
+        goal_minor=campaign.goal_minor, currency=campaign.currency,
         confirmed_minor=totals["confirmed_minor"], pledged_minor=totals["pledged_minor"],
         pledge_count=totals["pledge_count"], show_pledged_total=campaign.show_pledged_total,
         channels=[channel for channel in (campaign.channels or []) if channel.get("enabled")],

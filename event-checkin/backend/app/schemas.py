@@ -3464,6 +3464,8 @@ class DonationPublicCampaignOut(BaseModel):
     event_name: str
     title: str
     description: Optional[str] = None
+    logo_url: Optional[str] = None
+    cover_image_url: Optional[str] = None
     goal_minor: int
     currency: str
     confirmed_minor: int

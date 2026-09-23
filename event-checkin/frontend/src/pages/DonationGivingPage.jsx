@@ -3,81 +3,125 @@ import { useParams } from 'react-router-dom'
 import { api } from '../api'
 import './DonationGivingPage.css'
 
-const LABELS = { festio_pay: 'Festio Pay', cash_app: 'Cash App', zelle: 'Zelle', paypal: 'PayPal', bank_transfer: 'Bank transfer', offline: 'Cash / cheque', pledge: 'Pledge now' }
-const ICONS = { festio_pay: '✦', cash_app: '$', zelle: 'Z', paypal: 'P', bank_transfer: '▦', offline: '▤', pledge: '♡' }
+const LABELS = { festio_pay: 'Debit / Credit Card', cash_app: 'Cash App', zelle: 'Zelle', paypal: 'PayPal', bank_transfer: 'Bank Transfer', offline: 'Cash / Cheque', pledge: 'Pledge' }
+const ICONS = { festio_pay: '▣', cash_app: '$', zelle: 'Z', paypal: 'P', bank_transfer: '▥', offline: '▤', pledge: '♡' }
 const money = (minor, currency='USD') => new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 0 }).format((minor || 0) / 100)
+const relativeTime = (value) => {
+  const seconds = Math.max(1, Math.floor((Date.now() - new Date(value).getTime()) / 1000))
+  if (seconds < 60) return 'just now'
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)} hr ago`
+  return `${Math.floor(seconds / 86400)} day${seconds < 172800 ? '' : 's'} ago`
+}
+
+function StepHeading({ number, title, copy }) {
+  return <div className="dg-step"><span>{number}</span><div><h2>{title}</h2>{copy && <p>{copy}</p>}</div></div>
+}
+
+function AmountPicker({ amount, setAmount, currency }) {
+  const [custom, setCustom] = useState(!['25','50','100','250'].includes(amount))
+  const choose = (value) => { setCustom(false); setAmount(String(value)) }
+  return <div className="dg-amount-grid">
+    {[25,50,100,250].map((value) => <button aria-pressed={!custom && amount === String(value)} type="button" className={!custom && amount === String(value) ? 'selected' : ''} onClick={() => choose(value)} key={value}>{money(value * 100, currency)}</button>)}
+    <button aria-pressed={custom} type="button" className={custom ? 'selected' : ''} onClick={() => setCustom(true)}>Other</button>
+    {custom && <label className="dg-custom-amount"><span>{currency}</span><input autoFocus aria-label="Custom contribution amount" required min="1" step="0.01" type="number" value={amount} onChange={(e) => setAmount(e.target.value)}/></label>}
+  </div>
+}
+
+function PrivacyOptions({ form, setForm }) {
+  return <div className="dg-privacy">
+    <label><input type="checkbox" checked={form.anonymous_publicly} onChange={(e) => setForm({...form, anonymous_publicly:e.target.checked})}/><span><b>Give anonymously</b><small>Your name will not appear publicly.</small></span></label>
+    <label><input type="checkbox" checked={form.hide_amount_publicly} onChange={(e) => setForm({...form, hide_amount_publicly:e.target.checked})}/><span><b>Hide my amount publicly</b><small>Your contribution counts toward totals, but the amount will not be displayed publicly.</small></span></label>
+    <label className="dg-contact-consent"><input type="checkbox" checked={form.contact_consent} onChange={(e) => setForm({...form, contact_consent:e.target.checked})}/><span><b>Send me a thank-you or pledge reminder</b><small>Optional. Festio may email or text the contact details you provide.</small></span></label>
+  </div>
+}
+
+function DonorFields({ form, setForm }) {
+  return <div className="dg-details">
+    <label><span>Full name <em>*</em></span><input required autoComplete="name" value={form.donor_name} onChange={(e) => setForm({...form, donor_name:e.target.value})} placeholder="Your name"/></label>
+    <label><span>Email address</span><input type="email" autoComplete="email" value={form.donor_email} onChange={(e) => setForm({...form, donor_email:e.target.value})} placeholder="you@example.com"/></label>
+    <label><span>Phone (optional)</span><input type="tel" autoComplete="tel" value={form.donor_phone} onChange={(e) => setForm({...form, donor_phone:e.target.value})} placeholder="+1 555 123 4567"/></label>
+    <label className="wide"><span>Message (optional)</span><textarea maxLength="1000" value={form.message} onChange={(e) => setForm({...form, message:e.target.value})} placeholder="Share an encouraging message"/></label>
+  </div>
+}
 
 export default function DonationGivingPage() {
   const { token } = useParams()
   const [campaign, setCampaign] = useState(null)
   const [channel, setChannel] = useState('')
   const [amount, setAmount] = useState('50')
+  const [pledgeOpen, setPledgeOpen] = useState(false)
   const [form, setForm] = useState({ donor_name: '', donor_email: '', donor_phone: '', contact_consent: false, message: '', anonymous_publicly: false, hide_amount_publicly: false, expected_payment_channel: 'bank_transfer', expected_payment_date: '' })
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+
   useEffect(() => { api.publicDonationCampaign(token).then((data) => {
     setCampaign(data)
-    const direct = data.channels?.find((item) => item.type !== 'pledge')
-    setChannel((direct || data.channels?.[0])?.type || '')
+    const direct = data.channels?.find((item) => !['pledge','offline'].includes(item.type))
+    setChannel(direct?.type || '')
+    if (data.pledge_payment_channels?.[0]?.type) {
+      setForm((current) => ({ ...current, expected_payment_channel: data.pledge_payment_channels[0].type }))
+    }
   }).catch((e) => setError(e.message)) }, [token])
-  const selected = useMemo(() => campaign?.channels?.find((item) => item.type === channel), [campaign, channel])
-  const directChannels = useMemo(() => campaign?.channels?.filter((item) => item.type !== 'pledge' && item.type !== 'offline') || [], [campaign])
+
+  const directChannels = useMemo(() => campaign?.channels?.filter((item) => !['pledge','offline'].includes(item.type)) || [], [campaign])
+  const selected = useMemo(() => directChannels.find((item) => item.type === channel), [directChannels, channel])
   const pledgeOption = useMemo(() => campaign?.channels?.find((item) => item.type === 'pledge'), [campaign])
   const offlineOption = useMemo(() => campaign?.channels?.find((item) => item.type === 'offline'), [campaign])
+  const pledgeChannels = campaign?.pledge_payment_channels || []
   const progress = campaign?.goal_minor ? Math.min(100, Math.round(campaign.confirmed_minor / campaign.goal_minor * 100)) : 0
-  const pledgeChannels = campaign?.pledge_payment_channels?.length ? campaign.pledge_payment_channels : [
-    { type: 'festio_pay', label: 'Festio Pay' }, { type: 'cash_app', label: 'Cash App' },
-    { type: 'zelle', label: 'Zelle' }, { type: 'paypal', label: 'PayPal' }, { type: 'bank_transfer', label: 'Bank transfer' }, { type: 'offline', label: 'Cash / cheque' },
-  ]
+  const amountMinor = Math.round(Number(amount || 0) * 100)
+
   async function submit(event, useChannel) {
     event.preventDefault(); setBusy(true); setError('')
     try {
-      const body = { ...form, channel: useChannel, amount_minor: Math.round(Number(amount) * 100), donor_email: form.donor_email.trim() || null, expected_payment_date: form.expected_payment_date ? new Date(`${form.expected_payment_date}T12:00:00`).toISOString() : null }
+      const body = { ...form, channel: useChannel, amount_minor: amountMinor, donor_email: form.donor_email.trim() || null, expected_payment_date: form.expected_payment_date ? new Date(`${form.expected_payment_date}T12:00:00`).toISOString() : null }
       if (useChannel !== 'pledge') { body.expected_payment_channel = null; body.expected_payment_date = null }
-      const next = await api.createDonationContribution(token, body); setResult(next)
+      const next = await api.createDonationContribution(token, body)
+      setResult({ ...next, expected_payment_channel: body.expected_payment_channel })
       setCampaign(await api.publicDonationCampaign(token))
       if (next.checkout_url) window.location.assign(next.checkout_url)
     } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
-  if (error && !campaign) return <main className="dg-shell"><section className="dg-error"><b>Giving page unavailable</b><p>{error}</p></section></main>
+
+  if (error && !campaign) return <main className="dg-shell"><section className="dg-error" role="alert"><b>Giving page unavailable</b><p>{error}</p></section></main>
   if (!campaign) return <main className="dg-shell"><div className="dg-loading">Opening the Giving Hub…</div></main>
-  if (result) return <main className="dg-shell"><section className="dg-card dg-confirm"><span>✓</span><p>{campaign.event_name}</p><h1>{result.status === 'pledged' ? 'Your pledge is recorded' : result.status === 'pending_verification' ? 'Awaiting verification' : 'Thank you for giving'}</h1><strong>{money(result.amount_minor, result.currency)}</strong><div><small>Reference</small><b>{result.reference}</b></div>{result.instructions && <p className="dg-instructions">{result.instructions}</p>}{result.status === 'pledged' && <p>Your pledge is kept separate from confirmed funds until payment is received.</p>}<button onClick={() => setResult(null)}>Make another contribution</button></section></main>
-  const hasDirect = directChannels.length > 0
-  const amountTiles = <div className="dg-amounts">{[25,50,100,250].map((value) => <button type="button" className={amount === String(value) ? 'active' : ''} onClick={() => setAmount(String(value))} key={value}>{money(value * 100, campaign.currency)}</button>)}<label><span>Other</span><input required min="1" step="0.01" type="number" value={amount} onChange={(e) => setAmount(e.target.value)}/></label></div>
-  const contactFields = <div className="dg-contact"><label className="wide"><span>Name</span><input required value={form.donor_name} onChange={(e) => setForm({...form, donor_name:e.target.value})} placeholder="Your name"/></label><label><span>Email for confirmation</span><input type="email" value={form.donor_email} onChange={(e) => setForm({...form, donor_email:e.target.value})} placeholder="you@example.com"/></label><label><span>Phone (optional)</span><input type="tel" value={form.donor_phone} onChange={(e) => setForm({...form, donor_phone:e.target.value})} placeholder="+1 555 123 4567"/></label><label className="wide"><span>Message (optional)</span><textarea maxLength="1000" value={form.message} onChange={(e) => setForm({...form, message:e.target.value})} placeholder="Share an encouraging message"/></label></div>
-  const privacyFields = <div className="dg-privacy"><label><input type="checkbox" checked={form.anonymous_publicly} onChange={(e) => setForm({...form, anonymous_publicly:e.target.checked})}/><span><b>Donate anonymously</b><small>Your identity remains visible only to authorized finance staff.</small></span></label><label><input type="checkbox" checked={form.hide_amount_publicly} onChange={(e) => setForm({...form, hide_amount_publicly:e.target.checked})}/><span><b>Hide my amount publicly</b><small>Your contribution still counts toward authorized totals.</small></span></label><label><input type="checkbox" checked={form.contact_consent} onChange={(e) => setForm({...form, contact_consent:e.target.checked})}/><span><b>OK to email or text me about this</b><small>A thank-you now, plus a reminder if this is a pledge. Optional — never required to give.</small></span></label></div>
-  const pledgeFieldsValid = form.donor_name.trim() && form.expected_payment_channel && form.expected_payment_date
-  const donateFieldsValid = channel && Number(amount) > 0 && form.donor_name.trim()
-  return <main className="dg-shell">
-    <header className="dg-hero"><span>FESTIO GIVING HUB</span><p>{campaign.event_name}</p><h1>{campaign.title}</h1>{campaign.description && <div>{campaign.description}</div>}<section className="dg-totals"><article><small>Confirmed gifts</small><strong>{money(campaign.confirmed_minor, campaign.currency)}</strong><em>Funds received and verified</em></article><article><small>Active pledges</small><strong>{money(campaign.pledged_minor, campaign.currency)}</strong><em>{campaign.pledge_count || 0} pledge{campaign.pledge_count === 1 ? '' : 's'} awaiting fulfilment</em></article>{campaign.goal_minor > 0 ? <><i><b style={{ width: String(progress) + '%' }}/></i><label>{progress}% of {money(campaign.goal_minor, campaign.currency)} goal confirmed</label></> : <label className="dg-no-goal">Every confirmed gift and pledge moves the mission forward.</label>}</section></header>
-    <div className="dg-layout"><div className="dg-main">
-      {hasDirect && <div className="dg-card">
-        <div className="dg-step"><span>01</span><div><h2>Donate Now</h2><p>Pick an amount — the fastest way to support the event today.</p></div></div>
-        {amountTiles}
-        <div className="dg-step"><span>02</span><div><h2>Pay with</h2><p>Choose a payment option enabled by the event organizer.</p></div></div>
-        <div className="dg-channels">{directChannels.map((item) => <button type="button" className={channel === item.type ? 'active' : ''} onClick={() => setChannel(item.type)} key={item.type}><i>{ICONS[item.type]}</i><b>{item.label || LABELS[item.type]}</b>{item.type === 'festio_pay' && <small>Credit card</small>}</button>)}</div>
-        {selected?.public_instructions && channel !== 'festio_pay' && <aside className="dg-instructions"><b>{selected.label} instructions</b><p>{selected.public_instructions}</p></aside>}
-        {error && channel !== 'pledge' && <p className="dg-form-error">{error}</p>}
-        <button type="button" className="dg-submit" disabled={busy || !donateFieldsValid} onClick={(e) => submit(e, channel)}>{busy ? 'Saving…' : channel === 'festio_pay' ? 'Continue securely →' : `Donate ${money(Number(amount || 0) * 100, campaign.currency)} now →`}</button>
-      </div>}
 
-      {pledgeOption && <div className={hasDirect ? 'dg-card dg-pledge-card' : 'dg-card'}>
-        <div className="dg-pledge-head"><span>♡</span><h2>Pledge Now</h2></div>
-        <p className="dg-pledge-copy">Commit today and settle later — tell us how you plan to fulfil it. Pledges are tracked separately until payment is confirmed.</p>
-        {!hasDirect && amountTiles}
-        <div className="dg-pledge-fields"><label><span>Expected payment channel</span><select value={form.expected_payment_channel} onChange={(e) => setForm({...form, expected_payment_channel:e.target.value})}>{pledgeChannels.map((item)=><option value={item.type} key={item.type}>{item.label}</option>)}</select></label><label><span>Expected payment date</span><input required type="date" value={form.expected_payment_date} onChange={(e) => setForm({...form, expected_payment_date:e.target.value})}/></label></div>
-        {error && (!hasDirect || channel === 'pledge') && <p className="dg-form-error">{error}</p>}
-        <button type="button" className={hasDirect ? 'dg-pledge-submit' : 'dg-submit'} disabled={busy || Number(amount) <= 0 || !pledgeFieldsValid} onClick={(e) => submit(e, 'pledge')}>{busy ? 'Saving…' : 'Record my pledge →'}</button>
-      </div>}
+  if (result) {
+    const pledged = result.status === 'pledged'
+    const pending = result.status === 'pending_verification'
+    return <main className="dg-shell dg-success-shell"><section className="dg-success-card"><span className="dg-success-mark">✓</span><p>{campaign.event_name}</p><h1>{pledged ? 'Thank you for your pledge' : 'Thank you for your support'}</h1><strong>{money(result.amount_minor, result.currency)}</strong><div className="dg-success-details"><article><small>Payment method</small><b>{LABELS[pledged ? result.expected_payment_channel : result.channel] || result.expected_payment_channel || result.channel}</b></article><article><small>Status</small><b>{pledged ? 'Pledge recorded' : pending ? 'Awaiting confirmation' : 'Confirmed'}</b></article>{pledged && result.expected_payment_date && <article><small>Expected date</small><b>{new Date(result.expected_payment_date).toLocaleDateString()}</b></article>}<article><small>Reference</small><b>{result.reference}</b></article></div>{result.instructions && <aside className="dg-payment-instructions"><b>Payment instructions</b><p>{result.instructions}</p></aside>}<p>{pledged ? 'No payment was collected. Your pledge remains separate from received funds until the organizer confirms payment.' : pending ? 'Complete payment using the selected method. Festio records your contribution; the organizer confirms it after payment is received.' : 'Your contribution has been confirmed.'}</p><button onClick={() => { setResult(null); setPledgeOpen(false) }}>Return to campaign</button></section></main>
+  }
 
-      <div className="dg-card dg-contact-card">
-        <h2>Your details</h2>
-        <p>Used for both a donation and a pledge above — whichever you choose.</p>
-        {contactFields}
-        {privacyFields}
-        <footer>Secure event giving · Powered by Festio</footer>
-      </div>
-    </div><aside className="dg-side"><section><span>WAYS TO SUPPORT</span><h2>Give now or make a pledge</h2><p>Choose a direct payment option when configured, or record a pledge and tell the team how you plan to fulfil it.</p><div className="dg-methods">{pledgeChannels.map((item)=><b key={item.type}><i>{ICONS[item.type]}</i>{item.label}</b>)}</div>{offlineOption && <p className="dg-offline-note">{offlineOption.label || 'Cash / cheque'} also accepted — please arrange this with event staff on-site; it isn't submitted through this page.</p>}</section><section><span>TRANSPARENT TRACKING</span><h2>Confirmed and pledged totals stay separate</h2><p>The live display only counts verified payments as raised. Pledges remain visible as commitments until the finance team confirms receipt.</p></section>{campaign.recent_public?.length > 0 && <section><span>RECENT SUPPORT</span><div className="dg-supporters">{campaign.recent_public.slice(0,5).map((item)=><article key={item.id}><b>{item.name}</b><small>{item.kind === 'pledge' ? 'Pledged' : 'Gave'}{item.amount_minor != null ? ' ' + money(item.amount_minor, campaign.currency) : ''}</small></article>)}</div></section>}</aside></div>
+  const pledgeValid = form.donor_name.trim() && form.expected_payment_channel && form.expected_payment_date && amountMinor > 0
+  const supportMethods = [...directChannels, ...(offlineOption ? [offlineOption] : [])]
+
+  return <main className="dg-shell" style={{ '--dg-primary':'#006b4f', '--dg-accent':'#e0a928' }}>
+    <header className={`dg-campaign-hero ${campaign.cover_image_url ? 'has-image' : ''}`}>
+      {campaign.cover_image_url && <img className="dg-cover" src={campaign.cover_image_url} alt=""/>}<div className="dg-cover-shade"/>
+      <div className="dg-hero-content"><div className="dg-org-line">{campaign.logo_url ? <img src={campaign.logo_url} alt=""/> : <span>{campaign.event_name.slice(0,1)}</span>}<div><b>{campaign.event_name}</b><small>FESTIO GIVING HUB</small></div></div><h1>{campaign.title}</h1><p>{campaign.description || `Help make ${campaign.event_name} a success. Your support helps the community create a meaningful and impactful event.`}</p><div className="dg-values"><span>◉ Community</span><span>▣ Knowledge</span><span>◇ Unity</span><span>↗ Stronger future</span></div></div>
+    </header>
+
+    <div className="dg-page-grid"><div className="dg-main">
+      {directChannels.length > 0 && <form className="dg-donation-card" onSubmit={(e) => submit(e, channel)}>
+        <StepHeading number="1" title="Choose an amount" copy="Select a giving amount or enter your own."/>
+        <AmountPicker amount={amount} setAmount={setAmount} currency={campaign.currency}/>
+        <StepHeading number="2" title="Choose how you want to give" copy="Select a payment method. Instructions appear before you submit."/>
+        <div className="dg-channels">{directChannels.map((item) => <button aria-pressed={channel === item.type} type="button" className={channel === item.type ? 'selected' : ''} onClick={() => setChannel(item.type)} key={item.type}><i>{ICONS[item.type] || '•'}</i><b>{item.label || LABELS[item.type]}</b></button>)}</div>
+        {selected?.public_instructions && channel !== 'festio_pay' && <aside className="dg-payment-instructions"><b>Payment instructions</b><span>{selected.label || LABELS[selected.type]}</span><p>{selected.public_instructions}</p><small>After payment, submit this form so the organizer can confirm your contribution.</small></aside>}
+        <StepHeading number="3" title="Your details" copy="Provide your information so the organizer can acknowledge your support."/>
+        <DonorFields form={form} setForm={setForm}/><PrivacyOptions form={form} setForm={setForm}/>
+        {error && !pledgeOpen && <p className="dg-form-error" role="alert">{error}</p>}
+        <button className="dg-primary-cta" disabled={busy || !channel || amountMinor <= 0 || !form.donor_name.trim()}>{busy ? 'Saving…' : channel === 'festio_pay' ? `Continue with ${money(amountMinor, campaign.currency)}` : `Donate ${money(amountMinor, campaign.currency)} now`}</button>
+        <p className="dg-next-copy">{channel === 'festio_pay' ? 'You will be redirected to the configured payment provider to complete payment.' : 'Festio records and tracks your contribution. Payment is completed using the selected method and confirmed by the organizer.'}</p>
+      </form>}
+
+      {pledgeOption && <section className={`dg-pledge-section ${pledgeOpen ? 'open' : ''}`}><div className="dg-pledge-intro"><span>▣</span><div><h2>Not ready to give today?</h2><p>Make a pledge and fulfil it later. Pledges remain separate until payment is confirmed.</p></div><button type="button" aria-expanded={pledgeOpen} onClick={() => { setPledgeOpen(!pledgeOpen); setError('') }}>{pledgeOpen ? 'Close' : 'Make a pledge →'}</button></div>{pledgeOpen && <form className="dg-pledge-form" onSubmit={(e) => submit(e, 'pledge')}><div className="dg-pledge-banner"><b>This is a pledge</b><span>No payment is collected now.</span></div><AmountPicker amount={amount} setAmount={setAmount} currency={campaign.currency}/><div className="dg-pledge-fields"><label><span>Expected payment method</span><select value={form.expected_payment_channel} onChange={(e) => setForm({...form, expected_payment_channel:e.target.value})}>{pledgeChannels.map((item)=><option value={item.type} key={item.type}>{item.label}</option>)}</select></label><label><span>Expected payment date</span><input required type="date" value={form.expected_payment_date} onChange={(e) => setForm({...form, expected_payment_date:e.target.value})}/></label></div><DonorFields form={form} setForm={setForm}/><PrivacyOptions form={form} setForm={setForm}/>{error && <p className="dg-form-error" role="alert">{error}</p>}<button className="dg-pledge-submit" disabled={busy || !pledgeValid}>{busy ? 'Saving…' : `Record ${money(amountMinor, campaign.currency)} pledge`}</button></form>}</section>}
+    </div>
+
+    <aside className="dg-sidebar"><section className="dg-support-card"><span className="dg-support-icon">♡</span><div><h2>Your support matters</h2><p>{campaign.description || `Every contribution helps make ${campaign.event_name} possible and strengthens the community behind it.`}</p></div></section><section className="dg-status-card"><article><i>▣</i><div><small>Received</small><strong>{money(campaign.confirmed_minor, campaign.currency)}</strong><em>Funds received and verified</em></div></article><article><i>▤</i><div><small>Pledged</small><strong>{money(campaign.pledged_minor, campaign.currency)}</strong><em>{campaign.pledge_count || 0} active pledge{campaign.pledge_count === 1 ? '' : 's'}</em></div></article>{campaign.goal_minor > 0 && <div className="dg-progress"><span><b>{money(campaign.confirmed_minor, campaign.currency)}</b> of {money(campaign.goal_minor, campaign.currency)}</span><i><b style={{width:`${progress}%`}}/></i></div>}</section><section className="dg-info-card"><h2><i>▤</i> Ways to support</h2><ul><li>Make a contribution today</li>{pledgeOption && <li>Make a pledge and pay later</li>}<li>Choose from {supportMethods.map((item) => item.label || LABELS[item.type]).join(', ')}</li><li>Confirmed contributions and pledges are tracked separately</li></ul></section>{campaign.recent_public?.length > 0 && <section className="dg-info-card dg-recent"><h2><i>♟</i> Recent support</h2>{campaign.recent_public.slice(0,5).map((item)=><article key={item.id}><span>{item.name.split(/\s+/).map((part)=>part[0]).join('').slice(0,2).toUpperCase()}</span><div><b>{item.name}</b><small>{item.kind === 'pledge' ? 'Pledged' : 'Gave'}{item.amount_minor != null ? ` ${money(item.amount_minor, campaign.currency)}` : ''}</small></div><time>{relativeTime(item.created_at)}</time></article>)}</section>}<section className="dg-info-card dg-trust"><span>◆</span><div><h2>Transparent tracking</h2><p>Festio records contributions and pledges separately. External payments are confirmed by the organizer after receipt.</p></div></section></aside>
+    </div>
+    <footer className="dg-footer">Powered by Festio · Giving records are protected and visible only according to campaign privacy settings.</footer>
   </main>
 }

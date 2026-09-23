@@ -6,6 +6,7 @@ poll, quiz, survey, or display behavior.
 """
 from __future__ import annotations
 
+import csv
 import io
 import logging
 import secrets
@@ -25,9 +26,10 @@ from ..entitlements import last_credit_ledger_id, reserve_message_credit
 from ..models import DonationCampaign, DonationContribution, DonationStatusHistory, Event, User
 from ..ratelimit import rate_limit
 from ..schemas import (
+    DonationAuditEntryOut, DonationBulkVerifyIn, DonationBulkVerifyResult,
     DonationCampaignOut, DonationCampaignUpdate, DonationContributionCreate,
-    DonationContributionOut, DonationOfflineCreate, DonationPublicCampaignOut,
-    DonationPublicContributionOut, DonationTransitionIn,
+    DonationContributionOut, DonationDiscrepancyIn, DonationOfflineCreate,
+    DonationPublicCampaignOut, DonationPublicContributionOut, DonationTransitionIn,
 )
 from . import broadcast
 from .events import unique_event_code
@@ -123,6 +125,8 @@ def _totals(rows: list[DonationContribution]) -> dict:
         "refunded_minor": refunded,
         "donation_count": sum(1 for row in rows if row.status == "confirmed"),
         "pledge_count": sum(1 for row in rows if row.status == "pledged"),
+        "needs_attention_count": sum(1 for row in rows if row.reported_amount_minor is not None and row.status in ("pending_verification", "pledged")),
+        "total_potential_minor": confirmed + pending + pledged,
         "channel_totals": list(channel_totals.values()),
     }
 
@@ -287,9 +291,15 @@ async def _transition(event_id: str, contribution_id: str, target: str, body: Do
     old = row.status; row.status = target
     if body.provider_reference:
         row.provider_reference = body.provider_reference
+    note = body.note
     if target == "confirmed":
         row.verified_by = user.id; row.verified_at = datetime.utcnow()
-    await _add_history(db, row, old, target, user.id, body.note)
+        if body.reported_amount_minor:
+            reconciled = f"Reconciled from {_money(row.amount_minor, row.currency)} to {_money(body.reported_amount_minor, row.currency)} (reported amount)"
+            note = f"{note} — {reconciled}" if note else reconciled
+            row.amount_minor = body.reported_amount_minor
+            row.reported_amount_minor = None
+    await _add_history(db, row, old, target, user.id, note)
     await db.commit(); await db.refresh(row); await _publish(campaign, db)
     return row
 
@@ -307,6 +317,82 @@ async def reject_contribution(event_id: str, contribution_id: str, body: Donatio
 @router.post("/{event_id}/donations/{contribution_id}/cancel", response_model=DonationContributionOut)
 async def cancel_contribution(event_id: str, contribution_id: str, body: DonationTransitionIn, db: AsyncSession = Depends(get_db), user: User = Depends(require_paid_event_admin)):
     return await _transition(event_id, contribution_id, "cancelled", body, db, user)
+
+
+@router.post("/{event_id}/donations/{contribution_id}/discrepancy", response_model=DonationContributionOut)
+async def report_discrepancy(event_id: str, contribution_id: str, body: DonationDiscrepancyIn, db: AsyncSession = Depends(get_db), user: User = Depends(require_paid_event_admin)):
+    """Flags what actually arrived differs from what was submitted, without
+    changing status -- surfaces as "needs attention" until verify (optionally
+    passing reported_amount_minor back) reconciles or cancel/reject closes it."""
+    campaign = await _campaign_for_event(event_id, db)
+    row = await db.get(DonationContribution, contribution_id)
+    if not campaign or not row or row.campaign_id != campaign.id:
+        raise HTTPException(404, "Contribution not found")
+    if row.status not in ("pending_verification", "pledged"):
+        raise HTTPException(409, f"Cannot flag a discrepancy on a {row.status} contribution")
+    row.reported_amount_minor = body.reported_amount_minor
+    note = f"Reported amount differs: expected {_money(row.amount_minor, row.currency)}, actually {_money(body.reported_amount_minor, row.currency)}"
+    if body.note:
+        note = f"{note} — {body.note}"
+    await _add_history(db, row, row.status, row.status, user.id, note)
+    await db.commit(); await db.refresh(row); await _publish(campaign, db)
+    return row
+
+
+@router.post("/{event_id}/donations/bulk-verify", response_model=DonationBulkVerifyResult)
+async def bulk_verify_contributions(event_id: str, body: DonationBulkVerifyIn, db: AsyncSession = Depends(get_db), user: User = Depends(require_paid_event_admin)):
+    result = DonationBulkVerifyResult()
+    transition_body = DonationTransitionIn(note=body.note)
+    for contribution_id in body.contribution_ids:
+        try:
+            await _transition(event_id, contribution_id, "confirmed", transition_body, db, user)
+            result.confirmed.append(contribution_id)
+        except HTTPException as exc:
+            result.failed.append({"id": contribution_id, "error": exc.detail})
+    return result
+
+
+@router.get("/{event_id}/donations/audit", response_model=list[DonationAuditEntryOut])
+async def donation_audit_trail(event_id: str, limit: int = 30, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_member)):
+    campaign = await _campaign_for_event(event_id, db)
+    if not campaign:
+        return []
+    entries = (await db.execute(
+        select(DonationStatusHistory, DonationContribution, User)
+        .join(DonationContribution, DonationContribution.id == DonationStatusHistory.contribution_id)
+        .outerjoin(User, User.id == DonationStatusHistory.actor_id)
+        .where(DonationContribution.campaign_id == campaign.id)
+        .order_by(DonationStatusHistory.created_at.desc())
+        .limit(min(limit, 100))
+    )).all()
+    return [
+        DonationAuditEntryOut(
+            id=history.id, contribution_id=contribution.id, donor_name=contribution.donor_name,
+            reference=contribution.reference, amount_minor=contribution.amount_minor, currency=contribution.currency,
+            channel=contribution.channel, from_status=history.from_status, to_status=history.to_status,
+            actor_name=(actor.name if actor else None), note=history.note, created_at=history.created_at,
+        )
+        for history, contribution, actor in entries
+    ]
+
+
+@router.get("/{event_id}/donations/export")
+async def export_donations(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
+    campaign = await _campaign_for_event(event_id, db)
+    rows = await _rows(campaign.id, db) if campaign else []
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["Reference", "Donor", "Email", "Phone", "Amount", "Reported amount", "Currency", "Channel", "Status", "Submitted", "Verified at"])
+    for row in rows:
+        writer.writerow([
+            row.reference, row.donor_name or "", row.donor_email or "", row.donor_phone or "",
+            row.amount_minor / 100, (row.reported_amount_minor / 100) if row.reported_amount_minor else "",
+            row.currency, row.channel, row.status,
+            row.created_at.isoformat(timespec="minutes"), row.verified_at.isoformat(timespec="minutes") if row.verified_at else "",
+        ])
+    buffer.seek(0)
+    filename = f"donations-{event_id}.csv"
+    return StreamingResponse(iter([buffer.getvalue()]), media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
 @public_router.get("/{token}/qr.png")

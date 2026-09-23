@@ -154,6 +154,121 @@ async def test_contact_consent_and_phone_are_captured(ctx):
 
 
 @pytest.mark.asyncio
+async def test_discrepancy_flags_needs_attention_and_resolves_on_verify(ctx):
+    ctx.login(ctx.ids["superadmin"])
+    event_id = ctx.ids["event_a"]
+    campaign = {
+        "enabled": True, "title": "Support the mission", "description": None,
+        "goal_minor": 0, "currency": "USD", "public_total_mode": "confirmed_and_pledged_separate",
+        "show_donor_names": True, "show_donor_amounts": True, "show_pledged_total": True,
+        "celebrate_milestones": False, "milestones_minor": [],
+        "channels": [{"type": "bank_transfer", "enabled": True, "label": "Bank transfer"}],
+    }
+    saved = await ctx.client.put(f"/api/events/{event_id}/donation-campaign", json=campaign)
+    token = saved.json()["public_token"]
+
+    contribution = await ctx.client.post(f"/api/give/{token}/contributions", json={
+        "channel": "bank_transfer", "amount_minor": 10000, "donor_name": "Discrepancy Donor",
+    })
+    contribution_id = contribution.json()["id"]
+
+    snapshot = (await ctx.client.get(f"/api/events/{event_id}/donation-campaign")).json()
+    assert snapshot["needs_attention_count"] == 0
+    assert snapshot["total_potential_minor"] == 10000
+
+    flagged = await ctx.client.post(
+        f"/api/events/{event_id}/donations/{contribution_id}/discrepancy",
+        json={"reported_amount_minor": 9000, "note": "Bank shows $90"},
+    )
+    assert flagged.status_code == 200, flagged.text
+    assert flagged.json()["reported_amount_minor"] == 9000
+    assert flagged.json()["status"] == "pending_verification"  # unchanged
+
+    snapshot = (await ctx.client.get(f"/api/events/{event_id}/donation-campaign")).json()
+    assert snapshot["needs_attention_count"] == 1
+
+    resolved = await ctx.client.post(
+        f"/api/events/{event_id}/donations/{contribution_id}/verify",
+        json={"reported_amount_minor": 9000, "note": "Confirmed at bank amount"},
+    )
+    assert resolved.status_code == 200, resolved.text
+    assert resolved.json()["status"] == "confirmed"
+    assert resolved.json()["amount_minor"] == 9000
+    assert resolved.json()["reported_amount_minor"] is None
+
+    snapshot = (await ctx.client.get(f"/api/events/{event_id}/donation-campaign")).json()
+    assert snapshot["needs_attention_count"] == 0
+    assert snapshot["confirmed_minor"] == 9000
+
+
+@pytest.mark.asyncio
+async def test_bulk_verify_confirms_multiple_and_reports_failures(ctx):
+    ctx.login(ctx.ids["superadmin"])
+    event_id = ctx.ids["event_a"]
+    campaign = {
+        "enabled": True, "title": "Support the mission", "description": None,
+        "goal_minor": 0, "currency": "USD", "public_total_mode": "confirmed_and_pledged_separate",
+        "show_donor_names": True, "show_donor_amounts": True, "show_pledged_total": True,
+        "celebrate_milestones": False, "milestones_minor": [],
+        "channels": [{"type": "zelle", "enabled": True, "label": "Zelle"}],
+    }
+    saved = await ctx.client.put(f"/api/events/{event_id}/donation-campaign", json=campaign)
+    token = saved.json()["public_token"]
+
+    ids = []
+    for i in range(3):
+        r = await ctx.client.post(f"/api/give/{token}/contributions", json={
+            "channel": "zelle", "amount_minor": 1000 * (i + 1), "donor_name": f"Bulk Donor {i}",
+        })
+        ids.append(r.json()["id"])
+
+    result = await ctx.client.post(f"/api/events/{event_id}/donations/bulk-verify", json={
+        "contribution_ids": ids + ["does-not-exist"], "note": "Batch confirmed",
+    })
+    assert result.status_code == 200, result.text
+    body = result.json()
+    assert set(body["confirmed"]) == set(ids)
+    assert len(body["failed"]) == 1
+    assert body["failed"][0]["id"] == "does-not-exist"
+
+    rows = {row["id"]: row for row in (await ctx.client.get(f"/api/events/{event_id}/donations")).json()}
+    for cid in ids:
+        assert rows[cid]["status"] == "confirmed"
+
+
+@pytest.mark.asyncio
+async def test_audit_trail_and_csv_export(ctx):
+    ctx.login(ctx.ids["superadmin"])
+    event_id = ctx.ids["event_a"]
+    campaign = {
+        "enabled": True, "title": "Support the mission", "description": None,
+        "goal_minor": 0, "currency": "USD", "public_total_mode": "confirmed_and_pledged_separate",
+        "show_donor_names": True, "show_donor_amounts": True, "show_pledged_total": True,
+        "celebrate_milestones": False, "milestones_minor": [],
+        "channels": [{"type": "zelle", "enabled": True, "label": "Zelle"}],
+    }
+    saved = await ctx.client.put(f"/api/events/{event_id}/donation-campaign", json=campaign)
+    token = saved.json()["public_token"]
+    contribution = await ctx.client.post(f"/api/give/{token}/contributions", json={
+        "channel": "zelle", "amount_minor": 4200, "donor_name": "Audit Donor",
+    })
+    contribution_id = contribution.json()["id"]
+    await ctx.client.post(f"/api/events/{event_id}/donations/{contribution_id}/verify", json={"note": "Zelle received"})
+
+    audit = await ctx.client.get(f"/api/events/{event_id}/donations/audit")
+    assert audit.status_code == 200
+    entries = audit.json()
+    assert any(e["contribution_id"] == contribution_id and e["to_status"] == "confirmed" and e["note"] == "Zelle received" for e in entries)
+    assert entries[0]["donor_name"] == "Audit Donor"
+
+    export = await ctx.client.get(f"/api/events/{event_id}/donations/export")
+    assert export.status_code == 200
+    assert export.headers["content-type"].startswith("text/csv")
+    assert "Audit Donor" in export.text
+    assert "42.0" in export.text or "42" in export.text
+
+
+@pytest.mark.asyncio
 async def test_donation_public_url_uses_short_event_code(ctx):
     ctx.login(ctx.ids["superadmin"])
     event_id = ctx.ids["event_a"]

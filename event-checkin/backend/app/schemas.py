@@ -3403,6 +3403,40 @@ class DonationOfflineCreate(DonationContributionCreate):
 class DonationTransitionIn(BaseModel):
     note: Optional[str] = Field(default=None, max_length=1000)
     provider_reference: Optional[str] = Field(default=None, max_length=255)
+    # Confirming at the reported (actually-received) amount reconciles the
+    # discrepancy in the same call: amount_minor is updated to this value
+    # and reported_amount_minor is cleared.
+    reported_amount_minor: Optional[int] = Field(default=None, gt=0)
+
+
+class DonationDiscrepancyIn(BaseModel):
+    reported_amount_minor: int = Field(gt=0)
+    note: Optional[str] = Field(default=None, max_length=1000)
+
+
+class DonationBulkVerifyIn(BaseModel):
+    contribution_ids: list[str] = Field(min_length=1, max_length=200)
+    note: Optional[str] = Field(default=None, max_length=1000)
+
+
+class DonationBulkVerifyResult(BaseModel):
+    confirmed: list[str] = Field(default_factory=list)
+    failed: list[dict] = Field(default_factory=list)
+
+
+class DonationAuditEntryOut(BaseModel):
+    id: str
+    contribution_id: str
+    donor_name: Optional[str] = None
+    reference: str
+    amount_minor: int
+    currency: str
+    channel: str
+    from_status: Optional[str] = None
+    to_status: str
+    actor_name: Optional[str] = None
+    note: Optional[str] = None
+    created_at: datetime
 
 
 class DonationContributionOut(BaseModel):
@@ -3410,6 +3444,7 @@ class DonationContributionOut(BaseModel):
     id: str
     channel: str
     amount_minor: int
+    reported_amount_minor: Optional[int] = None
     currency: str
     status: str
     donor_name: Optional[str] = None
@@ -3455,6 +3490,8 @@ class DonationCampaignOut(DonationCampaignUpdate):
     refunded_minor: int = 0
     donation_count: int = 0
     pledge_count: int = 0
+    needs_attention_count: int = 0
+    total_potential_minor: int = 0
     recent_public: list[dict] = Field(default_factory=list)
     channel_totals: list[dict] = Field(default_factory=list)
 

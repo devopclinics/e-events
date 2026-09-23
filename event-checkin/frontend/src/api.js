@@ -1857,6 +1857,19 @@ export const api = {
   verifyDonation: (eventId, id, body={}) => req('POST', `/events/${eventId}/donations/${id}/verify`, body),
   rejectDonation: (eventId, id, body={}) => req('POST', `/events/${eventId}/donations/${id}/reject`, body),
   cancelDonation: (eventId, id, body={}) => req('POST', `/events/${eventId}/donations/${id}/cancel`, body),
+  reportDonationDiscrepancy: (eventId, id, body) => req('POST', `/events/${eventId}/donations/${id}/discrepancy`, body),
+  bulkVerifyDonations: (eventId, body) => req('POST', `/events/${eventId}/donations/bulk-verify`, body),
+  donationAudit: (eventId, limit=30) => req('GET', `/events/${eventId}/donations/audit?limit=${limit}`),
+  exportDonationsCsv: async (eventId) => {
+    const token = await getToken()
+    const res = await fetch(`${BASE}/events/${eventId}/donations/export`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    if (!res.ok) throw new Error('Could not export the ledger')
+    const url = URL.createObjectURL(await res.blob())
+    const anchor = document.createElement('a')
+    anchor.href = url; anchor.download = `donations-${eventId}.csv`
+    document.body.appendChild(anchor); anchor.click(); anchor.remove()
+    URL.revokeObjectURL(url)
+  },
   publicDonationCampaign: (token) => req('GET', `/give/${encodeURIComponent(token)}`),
   createDonationContribution: (token, body) => req('POST', `/give/${encodeURIComponent(token)}/contributions`, body),
   donationContributionStatus: (token, accessToken) => req('GET', `/give/${encodeURIComponent(token)}/contributions/${encodeURIComponent(accessToken)}`),

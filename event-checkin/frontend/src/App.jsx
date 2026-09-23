@@ -66,6 +66,7 @@ const EventResultsRedesignPage = lazy(() => import('./pages/EventResultsRedesign
 const FestioMeRedesignPage = lazy(() => import('./pages/FestioMeRedesignPage'))
 const PlannerRedesignPage = lazy(() => import('./pages/PlannerRedesignPage'))
 const FestioLiveRedesignPage = lazy(() => import('./pages/FestioLiveRedesignPage'))
+const FinanceReconciliationPage = lazy(() => import('./pages/FinanceReconciliationPage'))
 const LiveGuestPage = lazy(() => import('./pages/LiveGuestPage'))
 const LiveDisplayPage = lazy(() => import('./pages/LiveDisplayPage'))
 const LiveControlPage = lazy(() => import('./pages/LiveControlPage'))
@@ -473,6 +474,7 @@ function AppRoutes() {
       {/* Short authenticated event-context entry for the Festio Live workspace
           and presenter. More specific public /live/:displayCode stays above. */}
       <Route path="/live" element={<ProtectedRoute><FestioLiveRedesignPage /></ProtectedRoute>} />
+      <Route path="/finance" element={<ProtectedRoute><FinanceReconciliationPage /></ProtectedRoute>} />
       {/* Presenter/Moderator share-link console — no Festio login, capability-scoped token. */}
       <Route path="/p/:shareCode" element={<LiveControlPage />} />
       <Route path="/live-control" element={<LiveControlPage />} />

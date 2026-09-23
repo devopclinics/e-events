@@ -2702,6 +2702,11 @@ class DonationContribution(Base):
     expected_payment_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     reference: Mapped[str] = mapped_column(String(32), unique=True, index=True)
     provider_reference: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    # Set by finance when what actually arrived (bank/app statement) differs
+    # from what the donor submitted -- surfaces as a "needs attention" flag
+    # until resolved, without inventing a separate status in the state
+    # machine. Cleared (set back to NULL) once verify reconciles the amount.
+    reported_amount_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     evidence_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     refunded_minor: Mapped[int] = mapped_column(BigInteger, default=0)
     verified_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

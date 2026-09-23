@@ -33,7 +33,7 @@ export default function DonationGivingPage() {
   async function submit(event, useChannel) {
     event.preventDefault(); setBusy(true); setError('')
     try {
-      const body = { ...form, channel: useChannel, amount_minor: Math.round(Number(amount) * 100), expected_payment_date: form.expected_payment_date ? new Date(`${form.expected_payment_date}T12:00:00`).toISOString() : null }
+      const body = { ...form, channel: useChannel, amount_minor: Math.round(Number(amount) * 100), donor_email: form.donor_email.trim() || null, expected_payment_date: form.expected_payment_date ? new Date(`${form.expected_payment_date}T12:00:00`).toISOString() : null }
       if (useChannel !== 'pledge') { body.expected_payment_channel = null; body.expected_payment_date = null }
       const next = await api.createDonationContribution(token, body); setResult(next)
       setCampaign(await api.publicDonationCampaign(token))

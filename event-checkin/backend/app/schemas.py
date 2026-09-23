@@ -3389,6 +3389,11 @@ class DonationContributionCreate(BaseModel):
     expected_payment_date: Optional[datetime] = None
     provider_reference: Optional[str] = Field(default=None, max_length=255)
 
+    @field_validator("donor_email", mode="before")
+    @classmethod
+    def _blank_email_is_none(cls, value):
+        return value or None
+
 
 class DonationOfflineCreate(DonationContributionCreate):
     status: Literal["pending_verification", "confirmed", "pledged"] = "confirmed"

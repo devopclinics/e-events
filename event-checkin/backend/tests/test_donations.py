@@ -85,6 +85,29 @@ async def test_paypal_channel_accepts_public_contributions(ctx):
 
 
 @pytest.mark.asyncio
+async def test_blank_donor_email_does_not_fail_validation(ctx):
+    # The public form's email field is optional and sends "" rather than
+    # omitting the key when left blank; EmailStr must not reject that.
+    ctx.login(ctx.ids["superadmin"])
+    event_id = ctx.ids["event_a"]
+    campaign = {
+        "enabled": True, "title": "Support the mission", "description": None,
+        "goal_minor": 0, "currency": "USD", "public_total_mode": "confirmed_and_pledged_separate",
+        "show_donor_names": True, "show_donor_amounts": True, "show_pledged_total": True,
+        "celebrate_milestones": False, "milestones_minor": [],
+        "channels": [{"type": "zelle", "enabled": True, "label": "Zelle"}],
+    }
+    saved = await ctx.client.put(f"/api/events/{event_id}/donation-campaign", json=campaign)
+    assert saved.status_code == 200, saved.text
+    token = saved.json()["public_token"]
+
+    contribution = await ctx.client.post(f"/api/give/{token}/contributions", json={
+        "channel": "zelle", "amount_minor": 2000, "donor_name": "No Email Donor", "donor_email": "",
+    })
+    assert contribution.status_code == 201, contribution.text
+
+
+@pytest.mark.asyncio
 async def test_donation_public_url_uses_short_event_code(ctx):
     ctx.login(ctx.ids["superadmin"])
     event_id = ctx.ids["event_a"]

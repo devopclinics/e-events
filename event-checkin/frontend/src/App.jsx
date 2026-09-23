@@ -24,6 +24,7 @@ const PricingRedesignPage = lazy(() => import('./pages/PricingRedesignPage'))
 const InvitePage = lazy(() => import('./pages/InvitePage'))
 const VendorPage = lazy(() => import('./pages/VendorPage'))
 const RegistryPage = lazy(() => import('./pages/RegistryPage'))
+const DonationGivingPage = lazy(() => import('./pages/DonationGivingPage'))
 const SpeakersPublicPage = lazy(() => import('./pages/SpeakersPublicPage'))
 const PartnersPublicPage = lazy(() => import('./pages/PartnersPublicPage'))
 const CalendarPage = lazy(() => import('./pages/CalendarPage'))
@@ -479,6 +480,7 @@ function AppRoutes() {
       <Route path="/vendor/:token" element={<VendorPage />} />
       {/* Public gift registry — no auth required (unguessable token) */}
       <Route path="/registry/:token" element={<RegistryPage />} />
+      <Route path="/give/:token" element={<DonationGivingPage />} />
       {/* Public speaker/partner showcases — no auth required (unguessable token) */}
       <Route path="/speakers/:token" element={<SpeakersPublicPage />} />
       <Route path="/partners/:token" element={<PartnersPublicPage />} />

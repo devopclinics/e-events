@@ -1,0 +1,75 @@
+"""Donation Tracker API isolation, privacy, pledge, and verification tests."""
+import pytest
+
+
+@pytest.mark.asyncio
+async def test_donation_tracker_public_flow_keeps_pledges_separate_and_private(ctx):
+    ctx.login(ctx.ids["superadmin"])
+    event_id = ctx.ids["event_a"]
+    campaign = {
+        "enabled": True,
+        "title": "Support the mission",
+        "description": "Help us reach the goal.",
+        "goal_minor": 100000,
+        "currency": "USD",
+        "public_total_mode": "confirmed_and_pledged_separate",
+        "show_donor_names": True,
+        "show_donor_amounts": True,
+        "show_pledged_total": True,
+        "celebrate_milestones": True,
+        "milestones_minor": [25000, 50000],
+        "channels": [
+            {"type": "zelle", "enabled": True, "label": "Zelle", "public_instructions": "Send to giving@example.org"},
+            {"type": "pledge", "enabled": True, "label": "Pledge now"},
+        ],
+    }
+    saved = await ctx.client.put(f"/api/events/{event_id}/donation-campaign", json=campaign)
+    assert saved.status_code == 200, saved.text
+    token = saved.json()["public_token"]
+
+    pledge = await ctx.client.post(f"/api/give/{token}/contributions", json={
+        "channel": "pledge", "amount_minor": 30000, "donor_name": "Private Person",
+        "anonymous_publicly": True, "hide_amount_publicly": True,
+        "expected_payment_channel": "zelle", "expected_payment_date": "2026-10-01T12:00:00Z",
+    })
+    assert pledge.status_code == 201, pledge.text
+    assert pledge.json()["status"] == "pledged"
+
+    public = await ctx.client.get(f"/api/give/{token}")
+    assert public.status_code == 200
+    snapshot = public.json()
+    assert snapshot["confirmed_minor"] == 0
+    assert snapshot["pledged_minor"] == 30000
+    assert snapshot["recent_public"][0]["name"] == "Anonymous donor"
+    assert snapshot["recent_public"][0]["amount_minor"] is None
+
+    verified = await ctx.client.post(
+        f"/api/events/{event_id}/donations/{pledge.json()['id']}/verify", json={"note": "Zelle received"}
+    )
+    assert verified.status_code == 200, verified.text
+    assert verified.json()["status"] == "confirmed"
+
+    public = (await ctx.client.get(f"/api/give/{token}")).json()
+    assert public["confirmed_minor"] == 30000
+    assert public["pledged_minor"] == 0
+
+
+@pytest.mark.asyncio
+async def test_disabled_campaign_and_disabled_channel_are_not_public(ctx):
+    ctx.login(ctx.ids["superadmin"])
+    event_id = ctx.ids["event_a"]
+    draft = await ctx.client.get(f"/api/events/{event_id}/donation-campaign")
+    assert draft.status_code == 200
+    token = draft.json()["public_token"]
+    assert (await ctx.client.get(f"/api/give/{token}")).status_code == 404
+
+    payload = {key: value for key, value in draft.json().items() if key in {
+        "enabled", "title", "description", "goal_minor", "currency", "public_total_mode",
+        "show_donor_names", "show_donor_amounts", "show_pledged_total", "celebrate_milestones",
+        "milestones_minor", "channels",
+    }}
+    payload["enabled"] = True
+    payload["channels"] = [{"type": "zelle", "enabled": False, "label": "Zelle"}]
+    assert (await ctx.client.put(f"/api/events/{event_id}/donation-campaign", json=payload)).status_code == 200
+    denied = await ctx.client.post(f"/api/give/{token}/contributions", json={"channel": "zelle", "amount_minor": 1000})
+    assert denied.status_code == 422

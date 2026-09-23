@@ -631,6 +631,33 @@ function SpotlightWheelScene({ state, settings }) {
   return <><Brand state={state} settings={settings}/><div className="flb-content"><div className="flb-wheel-layout"><div><Kicker>The room decides who is next</Kicker><h1 className="flb-headline flb-small">Ready for the <span className="flb-gradient">spotlight?</span></h1><p className="flb-subhead">Selection is random, auditable and limited to opted-in participants.</p><div className="flb-wheel-notes"><span>{eligible.length} eligible</span><span>No repeat winners</span><span>Consent on</span></div></div><div><div className="flb-wheel"/><article className="flb-winner flb-glass"><small>{winner ? 'Selected' : 'Waiting for entrants'}</small><i>{winner ? winner.name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase() : '?'}</i><strong>{winner?.name || 'No eligible participant'}</strong><p>{winner?.detail || 'Opted-in names can be added in Design scene.'}</p></article></div></div></div><Footer left="Consent-gated · random selection · no repeat winners" right="Spotlight ready" live/></>
 }
 
+function DonationTrackerScene({ settings }) {
+  const [campaign, setCampaign] = useState(settings.donation_snapshot || null)
+  const token = settings.donation_token || ''
+  useEffect(() => {
+    if (!token) return undefined
+    let cancelled = false
+    const load = () => fetch(`/api/give/${encodeURIComponent(token)}`)
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('Donation tracker unavailable')))
+      .then((data) => { if (!cancelled) setCampaign(data) }).catch(() => {})
+    load(); const timer = setInterval(load, 5000)
+    return () => { cancelled = true; clearInterval(timer) }
+  }, [token])
+  if (!campaign) return <><Brand state={{ title: 'Festio Live' }} settings={settings}/><div className="flb-content flb-center"><Kicker>Live Donation Tracker</Kicker><h1 className="flb-headline flb-small">Connect this display to an enabled Giving Hub.</h1></div><Footer left="Donation totals refresh automatically" right="Standing by"/></>
+  const confirmed = campaign.confirmed_minor || 0
+  const goal = campaign.goal_minor || 0
+  const pct = goal ? Math.min(100, Math.round(confirmed / goal * 100)) : 0
+  const format = (value) => new Intl.NumberFormat(undefined, { style: 'currency', currency: campaign.currency || 'USD', maximumFractionDigits: 0 }).format((value || 0) / 100)
+  const latest = campaign.recent_public?.[0]
+  const channelNames = (campaign.channels || []).filter((item) => !['pledge','offline'].includes(item.type)).map((item) => item.label).join(' · ')
+  return <div className="flb-donation-scene">
+    <header><span>{campaign.event_name}</span><b>LIVE DONATION TRACKER</b></header>
+    <main><section><Kicker>Together, we can reach the goal</Kicker><h1>{format(confirmed)} <small>raised</small></h1><h2>of {format(goal)}</h2><div className="flb-donation-progress"><i style={{ width: `${pct}%` }}/><b>{pct}% confirmed</b></div>{campaign.show_pledged_total && campaign.pledged_minor > 0 && <mark>Plus <strong>{format(campaign.pledged_minor)}</strong> pledged <small>Not included in confirmed total</small></mark>}</section><aside><img src={`/api/give/${encodeURIComponent(token)}/qr.png`} alt="Scan to donate"/><h2>Scan to give</h2><strong>{settings.donation_url || `${window.location.origin}/give/${token}`}</strong><small>{channelNames}</small></aside></main>
+    {latest && <div className="flb-donation-celebration"><span>♥</span><div><strong>{latest.name}{latest.amount_minor != null ? ` gave ${format(latest.amount_minor)}` : ' made a contribution'}</strong><small>{latest.message || 'Thank you for making a difference!'}</small></div></div>}
+    <footer>Powered by Festio Live</footer>
+  </div>
+}
+
 function SceneContent({ scene, state, settings, currentQuestion, countdown, questionSeconds }) {
   const questionNumber = Math.max(1, (state.questions || []).findIndex((q) => q.question_id === state.current_question_id) + 1)
   const questionTotal = state.questions?.length || 1
@@ -647,6 +674,8 @@ function SceneContent({ scene, state, settings, currentQuestion, countdown, ques
   const correctLabels = (currentQuestion?.correct_option_ids || []).map((id) => currentQuestion.option_labels?.[id]).filter(Boolean)
 
   if (scene === 'welcome') return <><Brand state={state} settings={settings}/><div className="flb-content"><div className="flb-welcome"><div><Kicker>{settings.kicker || 'The room is ready'}</Kicker><h1 className="flb-headline">{title} <span className="flb-gradient">together.</span></h1><p className="flb-subhead">{subtitle}</p></div><div className="flb-date flb-glass"><span>{settings.date_label || 'Live today'}</span><strong>{state.participant_count || '—'}</strong><span>voices connected</span></div></div></div><Footer left={(settings.sponsors || []).join(' · ') || settings.venue || 'Powered by Festio'} right={settings.status_label || 'Doors open'} live/></>
+
+  if (scene === 'donation_tracker') return <DonationTrackerScene settings={settings}/>
 
   if (scene === 'join') return <><Brand state={state} settings={settings}/><div className="flb-content"><div className="flb-join"><div><Kicker>Your voice belongs here</Kicker><h1 className="flb-headline flb-small">Scan. Join. <span className="flb-gradient">Shape the room.</span></h1><p className="flb-subhead">Vote, ask questions, react and collaborate live. No app or account required.</p><div className="flb-code">{joinCode}</div></div><div className="flb-qr flb-glass"><img src={`/api/events/${encodeURIComponent(state.event_id || '')}/live/join-qr.png`} alt="QR code to join Festio Live"/><span>Scan to join</span></div></div></div><Footer left="Open your camera and point it at the QR code" right={`${state.participant_count || 0} already here`} live/></>
 

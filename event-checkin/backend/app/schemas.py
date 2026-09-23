@@ -3341,3 +3341,121 @@ class PublicCalendarOut(BaseModel):
 
 # Resolve forward refs declared before their targets (MenuCategoryOut).
 GuestJourneyOut.model_rebuild()
+
+
+# ── Donation Tracker ─────────────────────────────────────────────────────────
+
+DonationChannel = Literal["festio_pay", "cash_app", "zelle", "bank_transfer", "offline", "pledge"]
+DonationStatus = Literal["initiated", "pending_verification", "confirmed", "pledged", "failed", "refunded", "cancelled"]
+
+
+class DonationChannelConfig(BaseModel):
+    type: DonationChannel
+    enabled: bool = True
+    label: str
+    public_instructions: Optional[str] = None
+    checkout_url: Optional[str] = None
+
+
+class DonationCampaignUpdate(BaseModel):
+    enabled: bool = False
+    title: str = Field(default="Support this event", min_length=1, max_length=255)
+    description: Optional[str] = None
+    goal_minor: int = Field(default=0, ge=0)
+    currency: str = Field(default="USD", min_length=3, max_length=10)
+    public_total_mode: Literal["confirmed_only", "confirmed_and_pledged_separate"] = "confirmed_only"
+    show_donor_names: bool = True
+    show_donor_amounts: bool = True
+    show_pledged_total: bool = False
+    celebrate_milestones: bool = True
+    milestones_minor: list[int] = Field(default_factory=list)
+    channels: list[DonationChannelConfig] = Field(default_factory=list)
+
+
+class DonationContributionCreate(BaseModel):
+    channel: DonationChannel
+    amount_minor: int = Field(gt=0)
+    donor_name: Optional[str] = Field(default=None, max_length=255)
+    donor_email: Optional[EmailStr] = None
+    donor_phone: Optional[str] = Field(default=None, max_length=50)
+    anonymous_publicly: bool = False
+    hide_amount_publicly: bool = False
+    message: Optional[str] = Field(default=None, max_length=1000)
+    expected_payment_channel: Optional[DonationChannel] = None
+    expected_payment_date: Optional[datetime] = None
+    provider_reference: Optional[str] = Field(default=None, max_length=255)
+
+
+class DonationOfflineCreate(DonationContributionCreate):
+    status: Literal["pending_verification", "confirmed", "pledged"] = "confirmed"
+
+
+class DonationTransitionIn(BaseModel):
+    note: Optional[str] = Field(default=None, max_length=1000)
+    provider_reference: Optional[str] = Field(default=None, max_length=255)
+
+
+class DonationContributionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    channel: str
+    amount_minor: int
+    currency: str
+    status: str
+    donor_name: Optional[str] = None
+    donor_email: Optional[str] = None
+    donor_phone: Optional[str] = None
+    anonymous_publicly: bool
+    hide_amount_publicly: bool
+    message: Optional[str] = None
+    expected_payment_channel: Optional[str] = None
+    expected_payment_date: Optional[datetime] = None
+    reference: str
+    provider_reference: Optional[str] = None
+    evidence_url: Optional[str] = None
+    refunded_minor: int = 0
+    verified_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class DonationPublicContributionOut(BaseModel):
+    id: str
+    access_token: str
+    reference: str
+    status: str
+    channel: str
+    amount_minor: int
+    currency: str
+    expected_payment_date: Optional[datetime] = None
+    instructions: Optional[str] = None
+    checkout_url: Optional[str] = None
+
+
+class DonationCampaignOut(DonationCampaignUpdate):
+    id: str
+    event_id: str
+    public_token: str
+    public_url: str
+    event_name: str
+    confirmed_minor: int = 0
+    pending_minor: int = 0
+    pledged_minor: int = 0
+    refunded_minor: int = 0
+    donation_count: int = 0
+    recent_public: list[dict] = Field(default_factory=list)
+    channel_totals: list[dict] = Field(default_factory=list)
+
+
+class DonationPublicCampaignOut(BaseModel):
+    token: str
+    event_name: str
+    title: str
+    description: Optional[str] = None
+    goal_minor: int
+    currency: str
+    confirmed_minor: int
+    pledged_minor: int
+    show_pledged_total: bool
+    channels: list[DonationChannelConfig]
+    recent_public: list[dict] = Field(default_factory=list)

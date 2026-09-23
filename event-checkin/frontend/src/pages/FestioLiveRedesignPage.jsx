@@ -7,13 +7,15 @@ import { DonutChart, StarRating, RatingDistribution, PALETTE } from '../componen
 import './FestioLiveRedesignPage.css'
 
 const ExperienceWorkflowsPanel = lazy(() => import('../components/live/ExperienceWorkflowsPanel'))
+const DonationTrackerPanel = lazy(() => import('../components/live/DonationTrackerPanel'))
 
 // The control room is the operational home for a live event.  The remaining
 // areas are still available, but they no longer bury the multi-screen controls
 // behind an overview or a preview-only display card.
-const TABS = ['Control Room', 'Displays', 'Activities', 'Experiences', 'Live Control', 'Responses', 'Analytics', 'Question Bank', 'Settings', 'Help', 'Overview']
+const TABS = ['Control Room', 'Donations', 'Displays', 'Activities', 'Experiences', 'Live Control', 'Responses', 'Analytics', 'Question Bank', 'Settings', 'Help', 'Overview']
 const TAB_LABELS = {
   'Control Room': 'Control room',
+  Donations: 'Donation Tracker',
   Displays: 'Channels & devices',
   Activities: 'Activities',
   Experiences: 'Presenter & experiences',
@@ -71,7 +73,7 @@ function guidedActionLabel(activity) {
   return 'Restart guided show'
 }
 const DISPLAY_SCENES = [
-  ['welcome', 'Opening moment'], ['join', 'Join / QR'], ['agenda', 'Live agenda'],
+  ['welcome', 'Opening moment'], ['donation_tracker', 'Donation tracker'], ['join', 'Join / QR'], ['agenda', 'Live agenda'],
   ['question', 'Question'], ['responding', 'Voting + reactions'], ['results', 'Current result'], ['all_results', 'All results'],
   ['survey_insights', 'Survey insights wall'],
   ['correct_answer', 'Smart reveal'], ['leaderboard', 'Leaderboard'], ['team_battle', 'Team battle'],
@@ -1682,7 +1684,7 @@ function FestioLiveEventPage({ eventId }) {
         ))}
       </nav>
 
-      {enabled && tab !== 'Control Room' && <section className="fl-operator-bar" aria-label="Live operator controls">
+      {enabled && !['Control Room', 'Donations'].includes(tab) && <section className="fl-operator-bar" aria-label="Live operator controls">
         <div className="fl-operator-fields">
           <label><span>Activity controls</span><select className="rr-select" aria-label="Switch activity" disabled={busy || !activities} value={loadingActivityId || selected?.id || ''} onChange={(event) => { openActivity(event.target.value); setTab('Activities') }}><option value="">Choose an activity</option>{(activities || []).filter((activity) => activity.status !== 'archived' || activity.id === selected?.id).map((activity) => <option key={activity.id} value={activity.id}>{activity.title} · {activity.status}</option>)}</select></label>
           <label><span>Target display</span><select className="rr-select" aria-label="Target display" disabled={busy || !displays?.length} value={operatorDisplay?.id || ''} onChange={(event) => { setOperatorDisplayId(event.target.value); setOperatorReceipt('') }}>{!displays?.length && <option value="">{displays === null ? 'Loading displays…' : 'No displays yet'}</option>}{(displays || []).map((display) => <option key={display.id} value={display.id}>{display.name}</option>)}</select></label>
@@ -1734,6 +1736,12 @@ function FestioLiveEventPage({ eventId }) {
         onNewActivity={() => { setTab('Activities'); closeActivity(); setCreating(true) }}
       />}
 
+
+      {tab === 'Donations' && (
+        <Suspense fallback={<div className="fl-loading">Loading Donation Tracker…</div>}>
+          <DonationTrackerPanel eventId={eventId} displays={displays || []}/>
+        </Suspense>
+      )}
 
       {tab === 'Experiences' && (
         <Suspense fallback={<div className="fl-loading">Loading experiences…</div>}>

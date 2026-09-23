@@ -396,7 +396,7 @@ DisplayScene = Literal[
     "live_spectrum", "interactive_quadrant", "image_heatmap", "ranking_race",
     "prediction_reveal", "commitment_wall", "photo_mosaic", "location_map",
     "journey_recap", "spotlight_wheel", "announcement", "break", "countdown",
-    "celebration", "custom_message",
+    "celebration", "custom_message", "donation_tracker",
 ]
 DisplayTheme = Literal["aurora", "citrus", "ocean", "festio", "mono"]
 

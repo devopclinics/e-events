@@ -10,7 +10,7 @@ const PREVIEW_SCENES = new Set([
   'q_and_a', 'room_pulse', 'ai_insight', 'idea_galaxy', 'live_spectrum',
   'interactive_quadrant', 'image_heatmap', 'ranking_race', 'prediction_reveal',
   'commitment_wall', 'photo_mosaic', 'location_map', 'journey_recap',
-  'spotlight_wheel', 'announcement', 'break', 'countdown', 'celebration', 'custom_message',
+  'spotlight_wheel', 'donation_tracker', 'announcement', 'break', 'countdown', 'celebration', 'custom_message',
 ])
 
 function programAgenda(sessions = [], assignedSessionId = '') {

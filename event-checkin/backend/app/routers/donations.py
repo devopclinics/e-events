@@ -10,7 +10,7 @@ import io
 import secrets
 
 import qrcode
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -41,6 +41,14 @@ DEFAULT_CHANNELS = [
     {"type": "pledge", "enabled": True, "label": "Pledge now"},
 ]
 
+PLEDGE_PAYMENT_CHANNELS = [
+    {"type": "festio_pay", "label": "Festio Pay"},
+    {"type": "cash_app", "label": "Cash App"},
+    {"type": "zelle", "label": "Zelle"},
+    {"type": "bank_transfer", "label": "Bank transfer"},
+    {"type": "offline", "label": "Cash / cheque"},
+]
+
 
 def _public_base() -> str:
     return settings.frontend_url.rstrip("/")
@@ -48,6 +56,12 @@ def _public_base() -> str:
 
 def _reference() -> str:
     return f"GIVE-{secrets.token_hex(3).upper()}"
+
+
+def _database_datetime(value: datetime | None) -> datetime | None:
+    if value is not None and value.tzinfo is not None:
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value
 
 
 async def _campaign_for_event(event_id: str, db: AsyncSession) -> DonationCampaign | None:
@@ -90,6 +104,7 @@ def _totals(rows: list[DonationContribution]) -> dict:
         "pledged_minor": pledged,
         "refunded_minor": refunded,
         "donation_count": sum(1 for row in rows if row.status == "confirmed"),
+        "pledge_count": sum(1 for row in rows if row.status == "pledged"),
         "channel_totals": list(channel_totals.values()),
     }
 
@@ -189,7 +204,7 @@ async def add_offline(event_id: str, body: DonationOfflineCreate, db: AsyncSessi
         donor_phone=body.donor_phone, anonymous_publicly=body.anonymous_publicly,
         hide_amount_publicly=body.hide_amount_publicly, message=body.message,
         expected_payment_channel=body.expected_payment_channel,
-        expected_payment_date=body.expected_payment_date,
+        expected_payment_date=_database_datetime(body.expected_payment_date),
         provider_reference=body.provider_reference, reference=_reference(),
         verified_by=user.id if body.status == "confirmed" else None,
         verified_at=datetime.utcnow() if body.status == "confirmed" else None,
@@ -253,8 +268,9 @@ async def public_campaign(token: str, db: AsyncSession = Depends(get_db), _: Non
         token=token, event_name=event.name if event else "Event", title=campaign.title,
         description=campaign.description, goal_minor=campaign.goal_minor, currency=campaign.currency,
         confirmed_minor=totals["confirmed_minor"], pledged_minor=totals["pledged_minor"],
-        show_pledged_total=campaign.show_pledged_total,
+        pledge_count=totals["pledge_count"], show_pledged_total=campaign.show_pledged_total,
         channels=[channel for channel in (campaign.channels or []) if channel.get("enabled")],
+        pledge_payment_channels=PLEDGE_PAYMENT_CHANNELS,
         recent_public=_public_recent(campaign, rows),
     )
 
@@ -279,7 +295,7 @@ async def create_public_contribution(token: str, body: DonationContributionCreat
         donor_phone=body.donor_phone, anonymous_publicly=body.anonymous_publicly,
         hide_amount_publicly=body.hide_amount_publicly, message=body.message,
         expected_payment_channel=body.expected_payment_channel,
-        expected_payment_date=body.expected_payment_date,
+        expected_payment_date=_database_datetime(body.expected_payment_date),
         provider_reference=body.provider_reference, reference=_reference(),
     )
     db.add(row); await db.flush(); await _add_history(db, row, None, status, None, "Submitted through Giving Hub")

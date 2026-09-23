@@ -3443,6 +3443,7 @@ class DonationCampaignOut(DonationCampaignUpdate):
     pledged_minor: int = 0
     refunded_minor: int = 0
     donation_count: int = 0
+    pledge_count: int = 0
     recent_public: list[dict] = Field(default_factory=list)
     channel_totals: list[dict] = Field(default_factory=list)
 
@@ -3456,6 +3457,8 @@ class DonationPublicCampaignOut(BaseModel):
     currency: str
     confirmed_minor: int
     pledged_minor: int
+    pledge_count: int = 0
     show_pledged_total: bool
     channels: list[DonationChannelConfig]
+    pledge_payment_channels: list[dict] = Field(default_factory=list)
     recent_public: list[dict] = Field(default_factory=list)

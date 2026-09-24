@@ -505,6 +505,10 @@ class DisplayUpdate(BaseModel):
     scene: DisplayScene | None = None
     status: Literal["active", "disabled"] | None = None
     settings: DisplaySettingsUpdate | None = None
+    # A custom short link (e.g. "iedpu26") in place of the random one minted
+    # on creation. Validated and uniqueness-checked in the router, same as
+    # an event's custom self check-in / Giving Hub code.
+    short_code: str | None = Field(default=None, min_length=3, max_length=40)
 
 
 class BulkDisplayUpdate(BaseModel):

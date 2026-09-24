@@ -582,8 +582,12 @@ function DisplayCard({ display, draft, onDraftChange, onDraftApplied, eventId, a
   const [reportError, setReportError] = useState('')
   const [livePreviewVersion, setLivePreviewVersion] = useState(0)
   const [previewMode, setPreviewMode] = useState('')
+  const [editingCode, setEditingCode] = useState(false)
+  const [codeDraft, setCodeDraft] = useState(display.short_code || '')
+  const [codeError, setCodeError] = useState('')
   const settings = display.settings || {}
   const link = `${window.location.origin}/live/${display.display_code}?token=${encodeURIComponent(display.access_token)}`
+  const shortLink = display.short_code ? `${window.location.origin}/d/${display.short_code}` : ''
 
   // Drafts belong to the page, so leaving this tab can release its preview
   // connections without losing the operator's pending selections.
@@ -608,6 +612,7 @@ function DisplayCard({ display, draft, onDraftChange, onDraftApplied, eventId, a
     return () => document.removeEventListener('visibilitychange', stopHiddenPreview)
   }, [])
   useEffect(() => { if (!renaming) setNameDraft(display.name) }, [display.name, renaming])
+  useEffect(() => { if (!editingCode) setCodeDraft(display.short_code || '') }, [display.short_code, editingCode])
   useEffect(() => { setReportError('') }, [display.assigned_activity_id])
 
   async function saveRename() {
@@ -615,6 +620,16 @@ function DisplayCard({ display, draft, onDraftChange, onDraftApplied, eventId, a
     if (!trimmed || trimmed === display.name) { setRenaming(false); setNameDraft(display.name); return }
     const updated = await onUpdate(display.id, { name: trimmed })
     if (updated) setRenaming(false)
+  }
+
+  async function saveCode() {
+    const trimmed = codeDraft.trim().toLowerCase()
+    setCodeError('')
+    if (!trimmed || trimmed === display.short_code) { setEditingCode(false); setCodeDraft(display.short_code || ''); return }
+    if (!/^[a-z0-9-]{3,40}$/.test(trimmed)) { setCodeError('Letters, numbers, and hyphens only (3-40 characters).'); return }
+    const updated = await onUpdate(display.id, { short_code: trimmed })
+    if (updated) setEditingCode(false)
+    else setCodeError('That link is already in use by another display.')
   }
 
   async function disconnectProjector(clientId) {
@@ -776,6 +791,21 @@ function DisplayCard({ display, draft, onDraftChange, onDraftApplied, eventId, a
       <button className="rr-btn secondary" onClick={() => navigator.clipboard?.writeText(link)}>Copy link</button>
       <button className="rr-btn primary" onClick={() => setEditing((value) => !value)}>{editing ? 'Close studio' : 'Design scene'}</button>
       <button className="rr-link-btn gr-danger-link" disabled={busy} onClick={() => onDelete(display.id)}>Delete</button>
+    </div>
+    <div className="rd-hint" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: -4 }}>
+      <span>Short link:</span>
+      {editingCode
+        ? <>
+            <input className="rr-input" style={{ fontSize: 13, padding: '4px 8px', maxWidth: 220 }} aria-label={`Custom short link for ${display.name}`} autoFocus value={codeDraft} onChange={(e) => { setCodeDraft(e.target.value); setCodeError('') }} onKeyDown={(e) => { if (e.key === 'Enter') saveCode(); if (e.key === 'Escape') { setEditingCode(false); setCodeDraft(display.short_code || ''); setCodeError('') } }} placeholder="e.g. iedpu26" />
+            <button className="rr-link-btn" style={{ fontSize: 11 }} disabled={busy} onClick={saveCode}>Save</button>
+            <button className="rr-link-btn" style={{ fontSize: 11 }} onClick={() => { setEditingCode(false); setCodeDraft(display.short_code || ''); setCodeError('') }}>Cancel</button>
+          </>
+        : <>
+            {shortLink ? <a href={`/d/${display.short_code}`} target="_blank" rel="noreferrer">{shortLink}</a> : <span>Not generated yet</span>}
+            <button className="rr-link-btn" style={{ fontSize: 11 }} onClick={() => navigator.clipboard?.writeText(shortLink)}>Copy</button>
+            <button className="rr-link-btn" style={{ fontSize: 11 }} onClick={() => setEditingCode(true)}>Edit link</button>
+          </>}
+      {codeError && <span style={{ color: '#a12020' }}>{codeError}</span>}
     </div>
     {(display.devices || []).length > 0 && <details className="fl-display-devices"><summary>Connected screens ({display.devices.length})</summary><ul>{display.devices.map((device) => <li key={device.client_id}><span><strong>Screen {device.client_id.slice(-8)}</strong><small>Last seen {new Date(device.last_seen_at).toLocaleTimeString()}</small></span><button className="rr-btn secondary" disabled={disconnecting} onClick={() => disconnectProjector(device.client_id)}>Disconnect screen {device.client_id.slice(-8)}</button></li>)}</ul></details>}
     <div className="fl-results-quickbar" aria-label="Results and rehearsal controls">

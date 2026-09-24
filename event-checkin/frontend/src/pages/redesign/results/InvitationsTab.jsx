@@ -61,9 +61,9 @@ function CommHealthPanel({ comm }) {
     <div className="rd-panel">
       <div className="rd-panel-head"><h3>Communication health</h3></div>
       <div className="rd-panel-body">
-        {['email', 'sms', 'whatsapp'].map((ch) => {
+        {['email', 'sms', 'whatsapp', 'mms'].filter((ch) => comm[ch]).map((ch) => {
           const c = comm[ch]
-          const label = ch === 'email' ? 'Email' : ch === 'sms' ? 'SMS' : 'WhatsApp'
+          const label = ch === 'email' ? 'Email' : ch === 'sms' ? 'SMS' : ch === 'mms' ? 'MMS' : 'WhatsApp'
           const deliv = ch === 'email' ? c.reached : c.delivered
           return (
             <div key={ch} className="er-chan-row">
@@ -79,6 +79,7 @@ function CommHealthPanel({ comm }) {
           </p>
         )}
         {comm.sms?.sent > 0 && <p className="rd-rowlink">SMS: {comm.sms.delivered} delivered · {comm.sms.failed} failed</p>}
+        {comm.mms?.sent > 0 && <p className="rd-rowlink">MMS: {comm.mms.delivered} delivered · {comm.mms.failed} failed</p>}
         {comm.whatsapp?.sent > 0 && <p className="rd-rowlink">WhatsApp: {comm.whatsapp.delivered} delivered · {comm.whatsapp.failed} failed</p>}
         <div className="er-provider-row" style={{ marginTop: 8 }}><span>Credits remaining</span><b>{comm.credits_remaining?.toLocaleString?.() ?? comm.credits_remaining}</b></div>
       </div>

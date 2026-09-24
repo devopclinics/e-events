@@ -981,9 +981,9 @@ function MessagesTab({ notify, onPreview, eventId }) {
 
   useEffect(() => { loadTemplates(); loadDeliveryData() }, [eventId])
 
-  const CHANNEL_LABELS = { email: 'Email', sms: 'SMS', whatsapp: 'WhatsApp' }
+  const CHANNEL_LABELS = { email: 'Email', sms: 'SMS', whatsapp: 'WhatsApp', mms: 'MMS' }
   const channelStats = communication
-    ? ['email', 'sms', 'whatsapp'].map((key) => {
+    ? ['email', 'sms', 'whatsapp', 'mms'].filter((key) => communication[key]).map((key) => {
         const c = communication[key] || {}
         const delivered = c.reached ?? c.delivered ?? 0
         const sent = c.sent ?? 0
@@ -1090,7 +1090,7 @@ function MessagesTab({ notify, onPreview, eventId }) {
                 <div className="rd-chan" key={c.key}>
                   <div className="top">
                     <span className="name">{c.label.toUpperCase()}</span>
-                    <Icon name={c.key === 'sms' ? 'message' : c.key === 'email' ? 'mail' : 'whatsapp'} size={14} />
+                    <Icon name={c.key === 'sms' || c.key === 'mms' ? 'message' : c.key === 'email' ? 'mail' : 'whatsapp'} size={14} />
                   </div>
                   <div className="rate">{c.rate === null ? '—' : <>{c.rate}<small>%</small></>}</div>
                   <div className="rd-mini-bar"><i style={{ width: `${c.rate || 0}%` }} /></div>

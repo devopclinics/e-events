@@ -67,6 +67,41 @@ function BankSelector({ open, onClose, onPick, purpose }) {
     </div>
   </div>
 }
+
+// Pre-submission preview of the selected channel's real recipient details --
+// mirrors the reviewed mockup: bold recipient value, no "submit this form"
+// copy (the donor hasn't submitted anything yet at this step).
+function ChannelPreview({ item }) {
+  if (!item) return null
+  const type = item.type
+  let value = null, secondary = null, note = null
+  if (type === 'cash_app') {
+    value = (item.checkout_url || '').replace(/^https?:\/\/(www\.)?cash\.app\//i, '') || item.checkout_url || null
+    note = value && 'Opens the Cash App link once you submit below — verify the recipient before sending.'
+  } else if (type === 'zelle') {
+    value = item.recipient_email || null
+    note = value && "You'll choose your bank and send through Zelle after submitting below."
+  } else if (type === 'paypal') {
+    value = item.recipient_email || null
+    secondary = item.recipient_phone || null
+    note = value && "You'll send via PayPal to this recipient after submitting below."
+  } else if (type === 'bank_transfer') {
+    value = item.bank_name || null
+    secondary = item.account_number || null
+    const missing = [!item.routing_number && 'routing number', !item.account_type && 'account type', !item.account_holder_name && 'account holder name'].filter(Boolean)
+    note = missing.length ? `${missing.join(', ')} pending verification.` : null
+  } else {
+    value = item.public_instructions || null
+  }
+  if (!value) return null
+  return <aside className="dg-payment-instructions">
+    <b>Payment instructions</b>
+    <span>{item.label || LABELS[type]}</span>
+    <p className="dg-preview-value">{value}</p>
+    {secondary && <p className={`dg-preview-secondary${type === 'bank_transfer' ? ' mono' : ''}`}>{secondary}</p>}
+    {note && <small>{note}</small>}
+  </aside>
+}
 const relativeTime = (value) => {
   const seconds = Math.max(1, Math.floor((Date.now() - new Date(value).getTime()) / 1000))
   if (seconds < 60) return 'just now'
@@ -300,7 +335,7 @@ export default function DonationGivingPage() {
         <AmountPicker amount={amount} setAmount={setAmount} currency={campaign.currency}/>
         <StepHeading number="2" title="Choose a payment method" copy="Select a payment method. Instructions appear before you submit."/>
         <div className="dg-channels">{directChannels.map((item) => <button aria-pressed={channel === item.type} type="button" className={channel === item.type ? 'selected' : ''} onClick={() => setChannel(item.type)} key={item.type}><i>{ICONS[item.type] || '•'}</i><b>{item.label || LABELS[item.type]}</b></button>)}</div>
-        {selected?.public_instructions && channel !== 'festio_pay' && <aside className="dg-payment-instructions"><b>Payment instructions</b><span>{selected.label || LABELS[selected.type]}</span><p>{selected.public_instructions}</p><small>After payment, submit this form so the organizer can confirm your contribution.</small></aside>}
+        {channel !== 'festio_pay' && <ChannelPreview item={selected}/>}
         <StepHeading number="3" title="Your details" copy="Provide your information so the organizer can acknowledge your support."/>
         <DonorFields form={form} setForm={setForm}/><PrivacyOptions form={form} setForm={setForm}/>
         {error && !pledgeOpen && <p className="dg-form-error" role="alert">{error}</p>}

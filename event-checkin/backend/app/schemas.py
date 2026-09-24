@@ -3358,7 +3358,22 @@ class DonationChannelConfig(BaseModel):
     enabled: bool = True
     label: str
     public_instructions: Optional[str] = None
+    # Cash App: the recipient's cash.app link (e.g. https://cash.app/$handle).
+    # Festio Pay: the provider checkout URL. Nothing else uses this.
     checkout_url: Optional[str] = None
+    # PayPal / Zelle recipient contact -- never used to construct a paypal.me
+    # or any other guessed URL, only displayed for the donor to copy.
+    recipient_email: Optional[str] = None
+    recipient_phone: Optional[str] = None
+    # Bank transfer receiving-account details. routing_number, account_type
+    # and account_holder_name are frequently unverified when a campaign is
+    # first set up -- the public page shows "Pending verification" for any
+    # of these left blank rather than fabricating a value.
+    bank_name: Optional[str] = None
+    account_number: Optional[str] = None
+    routing_number: Optional[str] = None
+    account_type: Optional[str] = None
+    account_holder_name: Optional[str] = None
 
 
 class DonationCampaignUpdate(BaseModel):
@@ -3464,10 +3479,21 @@ class DonationContributionOut(BaseModel):
     reference: str
     provider_reference: Optional[str] = None
     evidence_url: Optional[str] = None
+    payment_reported_at: Optional[datetime] = None
     refunded_minor: int = 0
     verified_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+
+
+class DonationPaymentReportIn(BaseModel):
+    # Set only when converting a pledge into an actual payment attempt
+    # (donor clicks "Continue to Cash App" etc. from their pledge's status
+    # page) -- reconciles onto the SAME contribution rather than creating a
+    # duplicate. Omit for a plain "I've completed my payment" report.
+    channel: Optional[DonationChannel] = None
+    provider_reference: Optional[str] = Field(default=None, max_length=255)
+    evidence_note: Optional[str] = Field(default=None, max_length=1000)
 
 
 class DonationPublicContributionOut(BaseModel):
@@ -3477,10 +3503,18 @@ class DonationPublicContributionOut(BaseModel):
     status: str
     channel: str
     amount_minor: int
+    payment_reported_at: Optional[datetime] = None
     currency: str
     expected_payment_date: Optional[datetime] = None
     instructions: Optional[str] = None
     checkout_url: Optional[str] = None
+    recipient_email: Optional[str] = None
+    recipient_phone: Optional[str] = None
+    bank_name: Optional[str] = None
+    account_number: Optional[str] = None
+    routing_number: Optional[str] = None
+    account_type: Optional[str] = None
+    account_holder_name: Optional[str] = None
 
 
 class DonationCampaignOut(DonationCampaignUpdate):

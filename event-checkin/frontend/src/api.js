@@ -1873,6 +1873,7 @@ export const api = {
   publicDonationCampaign: (token) => req('GET', `/give/${encodeURIComponent(token)}`),
   createDonationContribution: (token, body) => req('POST', `/give/${encodeURIComponent(token)}/contributions`, body),
   donationContributionStatus: (token, accessToken) => req('GET', `/give/${encodeURIComponent(token)}/contributions/${encodeURIComponent(accessToken)}`),
+  reportDonationPayment: (token, accessToken, body) => req('POST', `/give/${encodeURIComponent(token)}/contributions/${encodeURIComponent(accessToken)}/report`, body),
   trainingMe: (orgId='') => req('GET', `/training/me${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`),
   trainingQuiz: (lessonKey, answers, orgId='') => req('POST', `/training/quiz/${lessonKey}${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`, { answers }),
   trainingPractical: (lessonKey, body, orgId='') => req('POST', `/training/practicals/${lessonKey}${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`, body),

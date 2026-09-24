@@ -2712,6 +2712,11 @@ class DonationContribution(Base):
     # machine. Cleared (set back to NULL) once verify reconciles the amount.
     reported_amount_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     evidence_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    # Donor self-reported "I've completed my payment" -- NOT proof of receipt.
+    # Only staff verifying in Finance moves status to confirmed and counts
+    # toward Received; this just distinguishes "awaiting verification, donor
+    # hasn't acted yet" from "donor says they paid" in the ledger.
+    payment_reported_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     refunded_minor: Mapped[int] = mapped_column(BigInteger, default=0)
     verified_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

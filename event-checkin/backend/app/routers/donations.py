@@ -29,7 +29,7 @@ from ..schemas import (
     DonationAuditEntryOut, DonationBulkVerifyIn, DonationBulkVerifyResult,
     DonationCampaignOut, DonationCampaignUpdate, DonationContributionCreate,
     DonationContributionOut, DonationDiscrepancyIn, DonationOfflineCreate,
-    DonationPublicCampaignOut, DonationPublicContributionOut, DonationTransitionIn,
+    DonationPaymentReportIn, DonationPublicCampaignOut, DonationPublicContributionOut, DonationTransitionIn,
 )
 from . import broadcast
 from .events import unique_event_code
@@ -423,6 +423,19 @@ async def public_campaign(token: str, db: AsyncSession = Depends(get_db), _: Non
     )
 
 
+def _public_contribution_out(row: DonationContribution, channel: dict) -> DonationPublicContributionOut:
+    return DonationPublicContributionOut(
+        id=row.id, access_token=row.access_token, reference=row.reference, status=row.status,
+        channel=row.channel, amount_minor=row.amount_minor, currency=row.currency,
+        expected_payment_date=row.expected_payment_date, payment_reported_at=row.payment_reported_at,
+        instructions=channel.get("public_instructions"), checkout_url=channel.get("checkout_url"),
+        recipient_email=channel.get("recipient_email"), recipient_phone=channel.get("recipient_phone"),
+        bank_name=channel.get("bank_name"), account_number=channel.get("account_number"),
+        routing_number=channel.get("routing_number"), account_type=channel.get("account_type"),
+        account_holder_name=channel.get("account_holder_name"),
+    )
+
+
 @public_router.post("/{token}/contributions", response_model=DonationPublicContributionOut, status_code=201)
 async def create_public_contribution(token: str, body: DonationContributionCreate, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), _: None = Depends(rate_limit(limit=20, window=60, scope="donation_public_submit", key="client_ip"))):
     campaign = await _campaign_for_token(token, db)
@@ -451,12 +464,7 @@ async def create_public_contribution(token: str, body: DonationContributionCreat
     if body.contact_consent and (row.donor_email or row.donor_phone):
         event = await db.get(Event, campaign.event_id)
         await _send_thank_you(event, row, background_tasks, db)
-    return DonationPublicContributionOut(
-        id=row.id, access_token=row.access_token, reference=row.reference, status=row.status,
-        channel=row.channel, amount_minor=row.amount_minor, currency=row.currency,
-        expected_payment_date=row.expected_payment_date,
-        instructions=channel.get("public_instructions"), checkout_url=channel.get("checkout_url"),
-    )
+    return _public_contribution_out(row, channel)
 
 
 @public_router.get("/{token}/contributions/{access_token}", response_model=DonationPublicContributionOut)
@@ -469,9 +477,41 @@ async def public_contribution_status(token: str, access_token: str, db: AsyncSes
     if not row:
         raise HTTPException(404, "Contribution not found")
     channel = next((item for item in (campaign.channels or []) if item.get("type") == row.channel), {})
-    return DonationPublicContributionOut(
-        id=row.id, access_token=row.access_token, reference=row.reference, status=row.status,
-        channel=row.channel, amount_minor=row.amount_minor, currency=row.currency,
-        expected_payment_date=row.expected_payment_date,
-        instructions=channel.get("public_instructions"), checkout_url=channel.get("checkout_url"),
-    )
+    return _public_contribution_out(row, channel)
+
+
+@public_router.post("/{token}/contributions/{access_token}/report", response_model=DonationPublicContributionOut)
+async def report_public_contribution(token: str, access_token: str, body: DonationPaymentReportIn, db: AsyncSession = Depends(get_db), _: None = Depends(rate_limit(limit=20, window=60, scope="donation_public_report", key="client_ip"))):
+    """Donor self-report: "I've completed my payment," optionally converting
+    a pledge into an actual payment attempt on THIS SAME row (never creates a
+    duplicate contribution). Never moves status to confirmed -- only staff
+    verifying in Finance does that."""
+    campaign = await _campaign_for_token(token, db)
+    row = await db.scalar(select(DonationContribution).where(
+        DonationContribution.campaign_id == campaign.id,
+        DonationContribution.access_token == access_token,
+    ))
+    if not row:
+        raise HTTPException(404, "Contribution not found")
+    if row.status not in ("pending_verification", "initiated", "pledged"):
+        raise HTTPException(409, f"Cannot report payment on a {row.status} contribution")
+    old_status = row.status
+    if body.channel and body.channel != row.channel:
+        target = next((item for item in (campaign.channels or []) if item.get("type") == body.channel and item.get("enabled")), None)
+        if not target:
+            raise HTTPException(422, "That payment method is not enabled for this campaign")
+        note = f"Pledge converted to a {target.get('label') or body.channel} payment attempt"
+        row.channel = body.channel
+        if row.status == "pledged":
+            row.status = "pending_verification"
+    else:
+        target = next((item for item in (campaign.channels or []) if item.get("type") == row.channel), {})
+        note = "Donor reported payment completed"
+    if body.provider_reference:
+        row.provider_reference = body.provider_reference
+    if body.evidence_note:
+        note = f"{note} — {body.evidence_note}"
+    row.payment_reported_at = datetime.utcnow()
+    await _add_history(db, row, old_status, row.status, None, note)
+    await db.commit(); await db.refresh(row); await _publish(campaign, db)
+    return _public_contribution_out(row, target)

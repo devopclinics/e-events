@@ -3,6 +3,119 @@ import pytest
 
 
 @pytest.mark.asyncio
+async def test_public_contribution_carries_channel_recipient_details(ctx):
+    ctx.login(ctx.ids["superadmin"])
+    event_id = ctx.ids["event_a"]
+    campaign = {
+        "enabled": True, "title": "Support the mission", "description": None,
+        "goal_minor": 0, "currency": "USD", "public_total_mode": "confirmed_and_pledged_separate",
+        "show_donor_names": True, "show_donor_amounts": True, "show_pledged_total": True,
+        "celebrate_milestones": False, "milestones_minor": [],
+        "channels": [
+            {"type": "cash_app", "enabled": True, "label": "Cash App", "checkout_url": "https://cash.app/$ilorinemirateusa"},
+            {"type": "paypal", "enabled": True, "label": "PayPal", "recipient_email": "donor@example.org", "recipient_phone": "470-406-3501"},
+            {"type": "bank_transfer", "enabled": True, "label": "Bank transfer", "bank_name": "Chase", "account_number": "601972257"},
+            {"type": "pledge", "enabled": True, "label": "Pledge now"},
+        ],
+    }
+    saved = await ctx.client.put(f"/api/events/{event_id}/donation-campaign", json=campaign)
+    assert saved.status_code == 200, saved.text
+    token = saved.json()["public_token"]
+
+    cash_app = await ctx.client.post(f"/api/give/{token}/contributions", json={"channel": "cash_app", "amount_minor": 5000, "donor_name": "Cash App Donor"})
+    assert cash_app.status_code == 201, cash_app.text
+    assert cash_app.json()["checkout_url"] == "https://cash.app/$ilorinemirateusa"
+
+    paypal = await ctx.client.post(f"/api/give/{token}/contributions", json={"channel": "paypal", "amount_minor": 5000, "donor_name": "PayPal Donor"})
+    assert paypal.status_code == 201, paypal.text
+    assert paypal.json()["recipient_email"] == "donor@example.org"
+    assert paypal.json()["recipient_phone"] == "470-406-3501"
+
+    bank = await ctx.client.post(f"/api/give/{token}/contributions", json={"channel": "bank_transfer", "amount_minor": 5000, "donor_name": "Bank Donor"})
+    assert bank.status_code == 201, bank.text
+    assert bank.json()["bank_name"] == "Chase"
+    assert bank.json()["account_number"] == "601972257"
+    # Fields not yet verified are simply absent, never fabricated.
+    assert bank.json()["routing_number"] is None
+    assert bank.json()["account_holder_name"] is None
+
+
+@pytest.mark.asyncio
+async def test_donor_reports_payment_without_changing_status(ctx):
+    ctx.login(ctx.ids["superadmin"])
+    event_id = ctx.ids["event_a"]
+    campaign = {
+        "enabled": True, "title": "Support the mission", "description": None,
+        "goal_minor": 0, "currency": "USD", "public_total_mode": "confirmed_and_pledged_separate",
+        "show_donor_names": True, "show_donor_amounts": True, "show_pledged_total": True,
+        "celebrate_milestones": False, "milestones_minor": [],
+        "channels": [{"type": "zelle", "enabled": True, "label": "Zelle", "recipient_email": "iedpu.usa@yahoo.com"}],
+    }
+    saved = await ctx.client.put(f"/api/events/{event_id}/donation-campaign", json=campaign)
+    token = saved.json()["public_token"]
+
+    created = await ctx.client.post(f"/api/give/{token}/contributions", json={"channel": "zelle", "amount_minor": 7500, "donor_name": "Zelle Donor"})
+    access_token = created.json()["access_token"]
+    assert created.json()["payment_reported_at"] is None
+
+    reported = await ctx.client.post(f"/api/give/{token}/contributions/{access_token}/report", json={"provider_reference": "ZL-998877"})
+    assert reported.status_code == 200, reported.text
+    body = reported.json()
+    assert body["status"] == "pending_verification"  # unchanged -- staff still verifies
+    assert body["payment_reported_at"] is not None
+
+    # A donor who reports payment does NOT increase Received -- only staff verifying does.
+    snapshot = (await ctx.client.get(f"/api/events/{event_id}/donation-campaign")).json()
+    assert snapshot["confirmed_minor"] == 0
+    assert snapshot["pending_minor"] == 7500
+
+
+@pytest.mark.asyncio
+async def test_reporting_payment_on_a_pledge_reconciles_same_row(ctx):
+    # A donor who pledged, then actually pays, must not create a second,
+    # duplicate contribution -- the SAME row converts from pledge to payment.
+    ctx.login(ctx.ids["superadmin"])
+    event_id = ctx.ids["event_a"]
+    campaign = {
+        "enabled": True, "title": "Support the mission", "description": None,
+        "goal_minor": 0, "currency": "USD", "public_total_mode": "confirmed_and_pledged_separate",
+        "show_donor_names": True, "show_donor_amounts": True, "show_pledged_total": True,
+        "celebrate_milestones": False, "milestones_minor": [],
+        "channels": [
+            {"type": "cash_app", "enabled": True, "label": "Cash App", "checkout_url": "https://cash.app/$ilorinemirateusa"},
+            {"type": "pledge", "enabled": True, "label": "Pledge now"},
+        ],
+    }
+    saved = await ctx.client.put(f"/api/events/{event_id}/donation-campaign", json=campaign)
+    token = saved.json()["public_token"]
+
+    pledge = await ctx.client.post(f"/api/give/{token}/contributions", json={
+        "channel": "pledge", "amount_minor": 12000, "donor_name": "Pledge Then Pay",
+        "expected_payment_channel": "cash_app", "expected_payment_date": "2026-10-01T12:00:00Z",
+    })
+    contribution_id = pledge.json()["id"]
+    access_token = pledge.json()["access_token"]
+
+    before = (await ctx.client.get(f"/api/events/{event_id}/donations")).json()
+    assert len(before) == 1
+
+    converted = await ctx.client.post(f"/api/give/{token}/contributions/{access_token}/report", json={"channel": "cash_app"})
+    assert converted.status_code == 200, converted.text
+    assert converted.json()["status"] == "pending_verification"
+    assert converted.json()["channel"] == "cash_app"
+    assert converted.json()["id"] == contribution_id  # same row, not a duplicate
+
+    after = (await ctx.client.get(f"/api/events/{event_id}/donations")).json()
+    assert len(after) == 1  # still exactly one contribution
+    assert after[0]["channel"] == "cash_app"
+    assert after[0]["status"] == "pending_verification"
+
+    snapshot = (await ctx.client.get(f"/api/events/{event_id}/donation-campaign")).json()
+    assert snapshot["pledged_minor"] == 0  # no longer counted as a pledge
+    assert snapshot["pending_minor"] == 12000
+
+
+@pytest.mark.asyncio
 async def test_unidentified_offline_donation_records_source(ctx):
     # No donor name at all (e.g. an offering-basket count) is still a valid
     # record, as long as staff note where it came from.

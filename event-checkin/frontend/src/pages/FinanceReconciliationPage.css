@@ -25,3 +25,21 @@
 .fr-modal{position:fixed;inset:0;background:#062a2466;display:grid;place-items:center;padding:20px;z-index:5}.fr-modal-card{width:min(520px,100%);padding:25px;border-radius:17px;background:#fff;box-shadow:0 30px 80px #001f1a50}.fr-modal-card h2{margin:0;font:700 26px Georgia}.fr-summary{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:17px 0}.fr-summary div{padding:12px;border-radius:9px;background:#f5f3ee}.fr-summary small,.fr-summary b{display:block}.fr-summary small{color:var(--muted);font-size:10px}.fr-modal-card textarea,.fr-modal-card input{width:100%;min-height:44px;margin:6px 0 14px;border:1px solid #ccd2cf;border-radius:9px;padding:10px;font:inherit}.fr-modal-card textarea{min-height:75px}.fr-modal-actions{display:flex;justify-content:flex-end;gap:8px}
 @media(max-width:1050px){.fr-stats{grid-template-columns:repeat(3,1fr)}.fr-work{grid-template-columns:1fr}.fr-side{grid-template-columns:repeat(2,1fr)}.fr-side .fr-notice{grid-column:1/-1}}
 @media(max-width:680px){.fr-top-inner,.fr-shell{width:calc(100% - 24px)}.fr-top-inner{height:66px}.fr-brand small,.fr-secure span{display:none}.fr-heading{align-items:flex-start;flex-direction:column}.fr-role{width:100%}.fr-stats{grid-template-columns:1fr 1fr}.fr-work{gap:12px}.fr-toolbar-top{align-items:flex-start;flex-direction:column}.fr-toolbar-actions{width:100%}.fr-toolbar-actions .fr-btn{flex:1}.fr-filters{grid-template-columns:1fr}.fr-bulk{align-items:flex-start;flex-direction:column}.fr-side{grid-template-columns:1fr}.fr-side .fr-notice{grid-column:auto}.fr-panel{border-radius:13px}}
+
+/* Ledger reflows into stacked cards below 720px instead of forcing a fixed
+   min-width and horizontal scroll -- avoids both the empty side gutter and
+   the overflow that a rigid 7-column grid causes on phone widths. */
+@media(max-width:720px){
+  .fr-table{overflow:visible;padding:12px}
+  .fr-row.head{display:none}
+  .fr-row{min-width:0;display:flex;flex-direction:column;gap:9px;padding:14px 15px;margin-bottom:10px;border:1px solid var(--line);border-radius:13px}
+  .fr-row:last-child{margin-bottom:0}
+  .fr-row .fr-check{align-self:flex-end;order:-1;margin-bottom:-30px}
+  .fr-row .fr-donor{order:0}
+  .fr-row>.fr-money:nth-of-type(2){order:1;display:flex;justify-content:space-between;align-items:baseline}
+  .fr-row .fr-channel{order:2}
+  .fr-row .fr-status{order:3;align-self:flex-start}
+  .fr-row>.fr-money:nth-of-type(4){order:4;display:flex;justify-content:space-between;align-items:baseline;padding-top:8px;border-top:1px dashed var(--line)}
+  .fr-row .fr-action{order:5}
+  .fr-row .fr-action button{flex:1;min-width:0}
+}

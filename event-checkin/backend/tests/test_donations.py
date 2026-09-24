@@ -353,6 +353,56 @@ async def test_discrepancy_flags_needs_attention_and_resolves_on_verify(ctx):
 
 
 @pytest.mark.asyncio
+async def test_deleting_a_contribution_removes_it_from_the_ledger(ctx):
+    ctx.login(ctx.ids["superadmin"])
+    event_id = ctx.ids["event_a"]
+    campaign = {
+        "enabled": True, "title": "Support the mission", "description": None,
+        "goal_minor": 0, "currency": "USD", "public_total_mode": "confirmed_and_pledged_separate",
+        "show_donor_names": True, "show_donor_amounts": True, "show_pledged_total": True,
+        "celebrate_milestones": False, "milestones_minor": [],
+        "channels": [{"type": "cash_app", "enabled": True, "label": "Cash App"}],
+    }
+    saved = await ctx.client.put(f"/api/events/{event_id}/donation-campaign", json=campaign)
+    token = saved.json()["public_token"]
+
+    junk = await ctx.client.post(f"/api/give/{token}/contributions", json={"channel": "cash_app", "amount_minor": 5000, "donor_name": "test"})
+    contribution_id = junk.json()["id"]
+
+    deleted = await ctx.client.delete(f"/api/events/{event_id}/donations/{contribution_id}")
+    assert deleted.status_code == 204, deleted.text
+
+    rows = (await ctx.client.get(f"/api/events/{event_id}/donations")).json()
+    assert contribution_id not in [row["id"] for row in rows]
+
+
+@pytest.mark.asyncio
+async def test_a_confirmed_contribution_cannot_be_deleted(ctx):
+    ctx.login(ctx.ids["superadmin"])
+    event_id = ctx.ids["event_a"]
+    campaign = {
+        "enabled": True, "title": "Support the mission", "description": None,
+        "goal_minor": 0, "currency": "USD", "public_total_mode": "confirmed_and_pledged_separate",
+        "show_donor_names": True, "show_donor_amounts": True, "show_pledged_total": True,
+        "celebrate_milestones": False, "milestones_minor": [],
+        "channels": [{"type": "cash_app", "enabled": True, "label": "Cash App"}],
+    }
+    saved = await ctx.client.put(f"/api/events/{event_id}/donation-campaign", json=campaign)
+    token = saved.json()["public_token"]
+
+    real = await ctx.client.post(f"/api/give/{token}/contributions", json={"channel": "cash_app", "amount_minor": 5000, "donor_name": "Real Donor"})
+    contribution_id = real.json()["id"]
+    verified = await ctx.client.post(f"/api/events/{event_id}/donations/{contribution_id}/verify", json={})
+    assert verified.json()["status"] == "confirmed"
+
+    blocked = await ctx.client.delete(f"/api/events/{event_id}/donations/{contribution_id}")
+    assert blocked.status_code == 409, blocked.text
+
+    rows = (await ctx.client.get(f"/api/events/{event_id}/donations")).json()
+    assert contribution_id in [row["id"] for row in rows]  # still present
+
+
+@pytest.mark.asyncio
 async def test_bulk_verify_confirms_multiple_and_reports_failures(ctx):
     ctx.login(ctx.ids["superadmin"])
     event_id = ctx.ids["event_a"]

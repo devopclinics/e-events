@@ -1857,6 +1857,7 @@ export const api = {
   verifyDonation: (eventId, id, body={}) => req('POST', `/events/${eventId}/donations/${id}/verify`, body),
   rejectDonation: (eventId, id, body={}) => req('POST', `/events/${eventId}/donations/${id}/reject`, body),
   cancelDonation: (eventId, id, body={}) => req('POST', `/events/${eventId}/donations/${id}/cancel`, body),
+  deleteDonation: (eventId, id) => req('DELETE', `/events/${eventId}/donations/${id}`),
   reportDonationDiscrepancy: (eventId, id, body) => req('POST', `/events/${eventId}/donations/${id}/discrepancy`, body),
   bulkVerifyDonations: (eventId, body) => req('POST', `/events/${eventId}/donations/bulk-verify`, body),
   donationAudit: (eventId, limit=30) => req('GET', `/events/${eventId}/donations/audit?limit=${limit}`),

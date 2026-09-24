@@ -320,6 +320,23 @@ async def cancel_contribution(event_id: str, contribution_id: str, body: Donatio
     return await _transition(event_id, contribution_id, "cancelled", body, db, user)
 
 
+@router.delete("/{event_id}/donations/{contribution_id}", status_code=204)
+async def delete_contribution(event_id: str, contribution_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(require_paid_event_admin)):
+    """Removes a contribution row entirely -- for clearing test/junk entries,
+    never for adjusting a real one. A confirmed contribution represents money
+    already verified as received, so it can never be deleted here; use the
+    existing verify/reject/cancel actions (and the audit trail) instead."""
+    campaign = await _campaign_for_event(event_id, db)
+    row = await db.get(DonationContribution, contribution_id)
+    if not campaign or not row or row.campaign_id != campaign.id:
+        raise HTTPException(404, "Contribution not found")
+    if row.status == "confirmed":
+        raise HTTPException(409, "A confirmed contribution cannot be deleted — cancel or flag it instead")
+    await db.delete(row)
+    await db.commit()
+    await _publish(campaign, db)
+
+
 @router.post("/{event_id}/donations/{contribution_id}/discrepancy", response_model=DonationContributionOut)
 async def report_discrepancy(event_id: str, contribution_id: str, body: DonationDiscrepancyIn, db: AsyncSession = Depends(get_db), user: User = Depends(require_paid_event_admin)):
     """Flags what actually arrived differs from what was submitted, without

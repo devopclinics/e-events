@@ -130,6 +130,11 @@ export default function FinanceReconciliationPage() {
     setBusy(true)
     try { await api.cancelDonation(currentEventId, row.id, {}); await load() } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
+  async function quickDelete(row) {
+    if (!window.confirm(`Delete this ${money(row.amount_minor, row.currency)} contribution from ${row.donor_name || 'Not provided'}? This cannot be undone.`)) return
+    setBusy(true)
+    try { await api.deleteDonation(currentEventId, row.id); await load() } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
 
   async function addOffline(e) {
     e.preventDefault(); setOfflineBusy(true); setError('')
@@ -234,6 +239,7 @@ export default function FinanceReconciliationPage() {
                   {hasIssue && ['pending_verification', 'initiated', 'pledged'].includes(row.status) && <button className="confirm" onClick={() => openResolve(row)}>Resolve</button>}
                   {!hasIssue && ['pending_verification', 'initiated'].includes(row.status) && <><button className="confirm" onClick={() => openConfirm(row)}>Confirm</button><button onClick={() => openFlag(row)}>Flag</button><button className="reject" onClick={() => quickReject(row)}>Reject</button></>}
                   {!hasIssue && row.status === 'pledged' && <><button className="confirm" onClick={() => openConfirm(row)}>Mark paid</button><button onClick={() => openFlag(row)}>Flag</button><button className="reject" onClick={() => quickCancel(row)}>Cancel</button></>}
+                  {row.status !== 'confirmed' && <button className="reject" onClick={() => quickDelete(row)}>Delete</button>}
                 </div>
               </div>
             })}

@@ -3505,6 +3505,7 @@ class DonationPublicContributionOut(BaseModel):
     amount_minor: int
     payment_reported_at: Optional[datetime] = None
     currency: str
+    expected_payment_channel: Optional[str] = None
     expected_payment_date: Optional[datetime] = None
     instructions: Optional[str] = None
     checkout_url: Optional[str] = None

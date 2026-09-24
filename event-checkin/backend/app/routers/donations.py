@@ -427,7 +427,8 @@ def _public_contribution_out(row: DonationContribution, channel: dict) -> Donati
     return DonationPublicContributionOut(
         id=row.id, access_token=row.access_token, reference=row.reference, status=row.status,
         channel=row.channel, amount_minor=row.amount_minor, currency=row.currency,
-        expected_payment_date=row.expected_payment_date, payment_reported_at=row.payment_reported_at,
+        expected_payment_channel=row.expected_payment_channel, expected_payment_date=row.expected_payment_date,
+        payment_reported_at=row.payment_reported_at,
         instructions=channel.get("public_instructions"), checkout_url=channel.get("checkout_url"),
         recipient_email=channel.get("recipient_email"), recipient_phone=channel.get("recipient_phone"),
         bank_name=channel.get("bank_name"), account_number=channel.get("account_number"),

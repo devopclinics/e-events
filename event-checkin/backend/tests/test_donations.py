@@ -95,6 +95,12 @@ async def test_reporting_payment_on_a_pledge_reconciles_same_row(ctx):
     })
     contribution_id = pledge.json()["id"]
     access_token = pledge.json()["access_token"]
+    assert pledge.json()["expected_payment_channel"] == "cash_app"
+
+    # A donor bookmarking their pledge and returning later must still see the
+    # payment method they promised -- not lose it off the status lookup.
+    status = await ctx.client.get(f"/api/give/{token}/contributions/{access_token}")
+    assert status.json()["expected_payment_channel"] == "cash_app"
 
     before = (await ctx.client.get(f"/api/events/{event_id}/donations")).json()
     assert len(before) == 1

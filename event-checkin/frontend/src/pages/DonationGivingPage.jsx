@@ -256,7 +256,7 @@ export default function DonationGivingPage() {
       const body = { ...form, contact_consent: Boolean((form.donor_email.trim() || form.donor_phone.trim()) && form.contact_consent), channel: useChannel, amount_minor: amountMinor, donor_email: form.donor_email.trim() || null, expected_payment_date: form.expected_payment_date ? new Date(`${form.expected_payment_date}T12:00:00`).toISOString() : null }
       if (useChannel !== 'pledge') { body.expected_payment_channel = null; body.expected_payment_date = null }
       const next = await api.createDonationContribution(token, body)
-      setResult({ ...next, expected_payment_channel: body.expected_payment_channel })
+      setResult(next)
       setSearchParams({ ref: next.access_token }, { replace: true })
       setCampaign(await api.publicDonationCampaign(token))
       // Only Festio Pay is a real hosted checkout redirect. Cash App/PayPal/

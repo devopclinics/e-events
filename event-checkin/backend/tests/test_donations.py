@@ -3,6 +3,38 @@ import pytest
 
 
 @pytest.mark.asyncio
+async def test_unidentified_offline_donation_records_source(ctx):
+    # No donor name at all (e.g. an offering-basket count) is still a valid
+    # record, as long as staff note where it came from.
+    ctx.login(ctx.ids["superadmin"])
+    event_id = ctx.ids["event_a"]
+    campaign = {
+        "enabled": True, "title": "Support the mission", "description": None,
+        "goal_minor": 0, "currency": "USD", "public_total_mode": "confirmed_and_pledged_separate",
+        "show_donor_names": True, "show_donor_amounts": True, "show_pledged_total": True,
+        "celebrate_milestones": False, "milestones_minor": [],
+        "channels": [{"type": "offline", "enabled": True, "label": "Cash / cheque"}],
+    }
+    await ctx.client.put(f"/api/events/{event_id}/donation-campaign", json=campaign)
+
+    added = await ctx.client.post(f"/api/events/{event_id}/donations/offline", json={
+        "channel": "offline", "amount_minor": 34000, "status": "confirmed",
+        "source": "Sunday morning collection basket",
+    })
+    assert added.status_code == 201, added.text
+    body = added.json()
+    assert body["donor_name"] is None
+    assert body["source"] == "Sunday morning collection basket"
+
+    rows = (await ctx.client.get(f"/api/events/{event_id}/donations")).json()
+    row = next(r for r in rows if r["id"] == body["id"])
+    assert row["source"] == "Sunday morning collection basket"
+
+    audit = (await ctx.client.get(f"/api/events/{event_id}/donations/audit")).json()
+    assert any("Sunday morning collection basket" in (e["note"] or "") for e in audit)
+
+
+@pytest.mark.asyncio
 async def test_donation_tracker_public_flow_keeps_pledges_separate_and_private(ctx):
     ctx.login(ctx.ids["superadmin"])
     event_id = ctx.ids["event_a"]

@@ -2691,6 +2691,10 @@ class DonationContribution(Base):
     donor_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     donor_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     donor_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Where an unidentified contribution physically came from (collection
+    # basket, front desk, ...) -- staff-entered context for offline records
+    # that have no donor identity at all, not shown to the public.
+    source: Mapped[str | None] = mapped_column(String(120), nullable=True)
     # Explicit opt-in to a thank-you/reminder message, separate from
     # anonymous_publicly -- the donor's own choice to be contacted, not just
     # whether their name shows on the public tracker.

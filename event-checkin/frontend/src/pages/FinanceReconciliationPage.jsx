@@ -29,9 +29,13 @@ const TABS = [
   { key: 'attention', label: 'Needs attention', match: (r) => r.reported_amount_minor != null },
 ]
 
+const SOURCE_OPTIONS = ['Collection basket', 'Front desk / registration', 'Volunteer collected', 'Mail / envelope', 'Other']
+const blankOffline = { channel: 'offline', amount: '', donor_name: '', status: 'confirmed', source: 'Collection basket', sourceOther: '' }
+
 export default function FinanceReconciliationPage() {
-  const [currentEventId] = useCurrentEvent()
+  const [currentEventId, setCurrentEventId] = useCurrentEvent()
   const { event } = useEventDetails(currentEventId)
+  const [events, setEvents] = useState([])
   const [campaign, setCampaign] = useState(null)
   const [rows, setRows] = useState([])
   const [audit, setAudit] = useState([])
@@ -45,6 +49,10 @@ export default function FinanceReconciliationPage() {
   const [modal, setModal] = useState(null)
   const [note, setNote] = useState('')
   const [flagAmount, setFlagAmount] = useState('')
+  const [offline, setOffline] = useState(blankOffline)
+  const [offlineBusy, setOfflineBusy] = useState(false)
+
+  useEffect(() => { api.listEvents().then(setEvents).catch(() => {}) }, [])
 
   async function load() {
     if (!currentEventId) return
@@ -123,7 +131,33 @@ export default function FinanceReconciliationPage() {
     try { await api.cancelDonation(currentEventId, row.id, {}); await load() } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
 
-  if (!currentEventId) return <div className="fr-page"><div className="fr-loading">Choose an event to open Finance.</div></div>
+  async function addOffline(e) {
+    e.preventDefault(); setOfflineBusy(true); setError('')
+    try {
+      const source = offline.source === 'Other' ? offline.sourceOther.trim() : offline.source
+      await api.addOfflineDonation(currentEventId, {
+        channel: offline.channel, amount_minor: Math.round(Number(offline.amount) * 100),
+        donor_name: offline.donor_name.trim() || null, status: offline.status,
+        source: source || null, message: null, donor_email: null, donor_phone: null,
+        expected_payment_channel: null, expected_payment_date: null, provider_reference: null,
+      })
+      setOffline(blankOffline)
+      await load()
+    } catch (e) { setError(e.message) } finally { setOfflineBusy(false) }
+  }
+
+  const eventSwitcher = <select className="fr-event-switcher" value={currentEventId || ''} onChange={(e) => setCurrentEventId(e.target.value)}>
+    <option value="" disabled>Choose an event…</option>
+    {events.map((e) => <option value={e.id} key={e.id}>{e.name}</option>)}
+  </select>
+
+  if (!currentEventId) return <div className="fr-page">
+    <header className="fr-top"><div className="fr-top-inner">
+      <div className="fr-brand"><div className="fr-mark">F</div><div><b>Festio Finance</b><small>No event selected</small></div></div>
+      {eventSwitcher}
+    </div></header>
+    <div className="fr-loading">Choose an event above to open its finance ledger.</div>
+  </div>
   if (!campaign) return <div className="fr-page"><div className="fr-loading">{error || 'Loading finance ledger…'}</div></div>
 
   const tabCounts = Object.fromEntries(TABS.map((t) => [t.key, rows.filter(t.match).length]))
@@ -132,7 +166,7 @@ export default function FinanceReconciliationPage() {
   return <div className="fr-page">
     <header className="fr-top"><div className="fr-top-inner">
       <div className="fr-brand"><div className="fr-mark">F</div><div><b>Festio Finance</b><small>{event?.name || campaign.event_name}</small></div></div>
-      <div className="fr-secure"><i></i><span>Restricted finance access</span></div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>{eventSwitcher}<div className="fr-secure"><i></i><span>Restricted finance access</span></div></div>
     </div></header>
     <main className="fr-shell">
       <section className="fr-heading">
@@ -182,7 +216,7 @@ export default function FinanceReconciliationPage() {
               const selectable = ['pending_verification', 'initiated', 'pledged'].includes(row.status)
               return <div className="fr-row" key={row.id}>
                 <input className="fr-check" type="checkbox" disabled={!selectable} checked={selected.has(row.id)} onChange={() => toggleSelect(row.id)} />
-                <div className="fr-donor"><span>{initials(row.donor_name)}</span><div><b>{row.donor_name || 'Not provided'}</b><small>{row.donor_email || row.donor_phone || (row.anonymous_publicly ? 'Anonymous publicly' : '—')}</small><span className="fr-ref">{row.reference}</span></div></div>
+                <div className="fr-donor"><span>{initials(row.donor_name)}</span><div><b>{row.donor_name || 'Unidentified'}</b><small>{row.donor_email || row.donor_phone || row.source || (row.anonymous_publicly ? 'Anonymous publicly' : '—')}</small><span className="fr-ref">{row.reference}</span></div></div>
                 <div className="fr-money"><b>{money(row.amount_minor, row.currency)}</b><small>{row.currency}</small></div>
                 <div className="fr-channel"><i>{ICONS[row.channel] || '•'}</i>{LABELS[row.channel] || row.channel}</div>
                 {hasIssue
@@ -205,6 +239,20 @@ export default function FinanceReconciliationPage() {
             })}
             {!filtered.length && <p className="fr-empty">No contributions match this view.</p>}
           </div>
+          <form className="fr-offline" onSubmit={addOffline}>
+            <h3>Record an unidentified or offline gift</h3>
+            <p>No name entered — a collection basket, envelope, or cash handed to a volunteer. Note where it came from so it's still traceable.</p>
+            <div className="fr-offline-grid">
+              <label>Donor name (optional)<input placeholder="Leave blank if unknown" value={offline.donor_name} onChange={(e) => setOffline({ ...offline, donor_name: e.target.value })} /></label>
+              <label>Amount<input required type="number" min="1" step="0.01" placeholder="0.00" value={offline.amount} onChange={(e) => setOffline({ ...offline, amount: e.target.value })} /></label>
+              <label>Method<select value={offline.channel} onChange={(e) => setOffline({ ...offline, channel: e.target.value })}><option value="offline">Cash / cheque</option><option value="bank_transfer">Bank transfer</option><option value="cash_app">Cash App</option><option value="zelle">Zelle</option><option value="paypal">PayPal</option></select></label>
+              <label>Source<select value={offline.source} onChange={(e) => setOffline({ ...offline, source: e.target.value })}>{SOURCE_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
+              {offline.source === 'Other'
+                ? <label>Describe source<input required placeholder="e.g. Youth group table" value={offline.sourceOther} onChange={(e) => setOffline({ ...offline, sourceOther: e.target.value })} /></label>
+                : <label>Status<select value={offline.status} onChange={(e) => setOffline({ ...offline, status: e.target.value })}><option value="confirmed">Confirmed</option><option value="pending_verification">Pending verification</option></select></label>}
+              <button className="fr-btn primary" disabled={offlineBusy}>{offlineBusy ? 'Saving…' : 'Add record'}</button>
+            </div>
+          </form>
         </div>
 
         <aside className="fr-side">

@@ -263,7 +263,7 @@ async def add_offline(event_id: str, body: DonationOfflineCreate, db: AsyncSessi
         campaign_id=campaign.id, event_id=event_id, channel=body.channel,
         amount_minor=body.amount_minor, currency=campaign.currency, status=body.status,
         donor_name=body.donor_name, donor_email=str(body.donor_email) if body.donor_email else None,
-        donor_phone=body.donor_phone, anonymous_publicly=body.anonymous_publicly,
+        donor_phone=body.donor_phone, source=body.source, anonymous_publicly=body.anonymous_publicly,
         hide_amount_publicly=body.hide_amount_publicly, message=body.message,
         expected_payment_channel=body.expected_payment_channel,
         expected_payment_date=_database_datetime(body.expected_payment_date),
@@ -271,7 +271,8 @@ async def add_offline(event_id: str, body: DonationOfflineCreate, db: AsyncSessi
         verified_by=user.id if body.status == "confirmed" else None,
         verified_at=datetime.utcnow() if body.status == "confirmed" else None,
     )
-    db.add(row); await db.flush(); await _add_history(db, row, None, row.status, user.id, "Added by organizer")
+    history_note = f"Added by organizer{f' — {body.source}' if body.source else ''}"
+    db.add(row); await db.flush(); await _add_history(db, row, None, row.status, user.id, history_note)
     await db.commit(); await db.refresh(row); await _publish(campaign, db)
     return row
 

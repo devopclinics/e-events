@@ -3398,6 +3398,10 @@ class DonationContributionCreate(BaseModel):
 
 class DonationOfflineCreate(DonationContributionCreate):
     status: Literal["pending_verification", "confirmed", "pledged"] = "confirmed"
+    # Staff-only context for a contribution with no donor identity at all
+    # (e.g. a collection basket count) -- never settable by the public donor
+    # form, so it lives here rather than on the shared base schema.
+    source: Optional[str] = Field(default=None, max_length=120)
 
 
 class DonationTransitionIn(BaseModel):
@@ -3450,6 +3454,7 @@ class DonationContributionOut(BaseModel):
     donor_name: Optional[str] = None
     donor_email: Optional[str] = None
     donor_phone: Optional[str] = None
+    source: Optional[str] = None
     contact_consent: bool = False
     anonymous_publicly: bool
     hide_amount_publicly: bool

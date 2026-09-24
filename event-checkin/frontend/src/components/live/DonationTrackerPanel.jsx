@@ -25,7 +25,14 @@ export default function DonationTrackerPanel({ eventId, displays=[] }) {
   async function transition(row,action){setBusy(true);try{await api[action](eventId,row.id,{});await load()}catch(e){setError(e.message)}finally{setBusy(false)}}
   async function addOffline(e){e.preventDefault();setBusy(true);try{const source=offline.source==='Other'?offline.sourceOther.trim():offline.source;await api.addOfflineDonation(eventId,{...offline,donor_name:offline.donor_name.trim()||null,source:source||null,amount_minor:Math.round(Number(offline.amount)*100),message:null,donor_email:null,donor_phone:null,expected_payment_channel:null,expected_payment_date:null,provider_reference:null});setOffline({...offline,amount:'',donor_name:'',source:'',sourceOther:''});await load()}catch(err){setError(err.message)}finally{setBusy(false)}}
   async function saveCode(e){e.preventDefault();if(!codeInput.trim())return;setCodeBusy(true);try{await api.setEventCode(eventId,codeInput.trim());await load();setCodeInput('')}catch(err){setError(err.message)}finally{setCodeBusy(false)}}
-  async function present(){const display=displays.find((item)=>item.id===selectedDisplay);if(!display)return;setBusy(true);try{await api.liveUpdateDisplay(eventId,display.id,{scene:'donation_tracker',settings:{...(display.settings||{}),donation_token:campaign.public_token,donation_url:campaign.public_url,follow_activity:false}});setError('');alert(`Donation Tracker sent to ${display.name}`)}catch(e){setError(e.message)}finally{setBusy(false)}}
+  async function present(){const display=displays.find((item)=>item.id===selectedDisplay);if(!display)return;setBusy(true);try{
+    // The QR code and the on-screen link text must both resolve the same
+    // way -- use the same short/custom code the public_url already prefers
+    // (event_code when set, else the long public_token), never the raw
+    // public_token alone, or the QR silently keeps encoding the long link
+    // even once the text above shows the short one.
+    const shareToken=(campaign.public_url||'').split('/give/').pop()||campaign.public_token
+    await api.liveUpdateDisplay(eventId,display.id,{scene:'donation_tracker',settings:{...(display.settings||{}),donation_token:shareToken,donation_url:campaign.public_url,follow_activity:false}});setError('');alert(`Donation Tracker sent to ${display.name}`)}catch(e){setError(e.message)}finally{setBusy(false)}}
   if(!campaign)return <div className="dt-loading">{error||'Loading Donation Tracker…'}</div>
   const pct=campaign.goal_minor?Math.min(100,Math.round(campaign.confirmed_minor/campaign.goal_minor*100)):0
   return <div className="dt-wrap">

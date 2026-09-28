@@ -3547,6 +3547,7 @@ class DonationPublicCampaignOut(BaseModel):
     currency: str
     confirmed_minor: int
     pledged_minor: int
+    donation_count: int = 0
     pledge_count: int = 0
     show_pledged_total: bool
     channels: list[DonationChannelConfig]

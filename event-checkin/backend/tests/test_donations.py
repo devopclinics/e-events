@@ -192,6 +192,7 @@ async def test_donation_tracker_public_flow_keeps_pledges_separate_and_private(c
     snapshot = public.json()
     assert snapshot["confirmed_minor"] == 0
     assert snapshot["pledged_minor"] == 30000
+    assert snapshot["donation_count"] == 0
     assert snapshot["pledge_count"] == 1
     assert {item["type"] for item in snapshot["pledge_payment_channels"]} == {"festio_pay", "cash_app", "zelle", "paypal", "bank_transfer", "offline"}
     assert snapshot["recent_public"][0]["name"] == "Anonymous donor"
@@ -206,6 +207,8 @@ async def test_donation_tracker_public_flow_keeps_pledges_separate_and_private(c
     public = (await ctx.client.get(f"/api/give/{token}")).json()
     assert public["confirmed_minor"] == 30000
     assert public["pledged_minor"] == 0
+    assert public["donation_count"] == 1
+    assert public["pledge_count"] == 0
 
 
 @pytest.mark.asyncio

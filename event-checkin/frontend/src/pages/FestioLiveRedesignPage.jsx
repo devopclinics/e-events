@@ -14,7 +14,13 @@ const DonationTrackerPanel = lazy(() => import('../components/live/DonationTrack
 // The control room is the operational home for a live event.  The remaining
 // areas are still available, but they no longer bury the multi-screen controls
 // behind an overview or a preview-only display card.
-const TABS = ['Control Room', 'Donations', 'Displays', 'Activities', 'Experiences', 'Materials', 'Certificates', 'Live Control', 'Responses', 'Analytics', 'Question Bank', 'Settings', 'Help', 'Overview']
+const LIVE_NAV_GROUPS = [
+  { label: 'Event', items: [['Overview', '⌂'], ['Settings', '⚙'], ['Help', '?']] },
+  { label: 'Prepare', items: [['Activities', '◉'], ['Experiences', '♙'], ['Materials', '▤'], ['Question Bank', '?'], ['Certificates', '◆']] },
+  { label: 'Run live', items: [['Control Room', '▶'], ['Live Control', '●'], ['Displays', '▣'], ['Donations', '♡']] },
+  { label: 'Results', items: [['Responses', '☷'], ['Analytics', '↗']] },
+]
+const TABS = LIVE_NAV_GROUPS.flatMap((group) => group.items.map(([tab]) => tab))
 const TAB_LABELS = {
   'Control Room': 'Control room',
   Donations: 'Donation Tracker',
@@ -1712,11 +1718,23 @@ function FestioLiveEventPage({ eventId }) {
 
       {error && <div style={{ background: '#fbe9e7', color: '#a3271e', padding: '10px 14px', borderRadius: 10, fontSize: 13, marginBottom: 14 }}><Icon name="info" size={14} /> {error}</div>}
 
-      <nav className="fl-tabs" aria-label="Festio Live sections">
-        {TABS.map((t) => (
-          <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{TAB_LABELS[t]}</button>
-        ))}
-      </nav>
+      <div className="fl-workspace">
+        <aside className="fl-section-nav" aria-label="Festio Live sections">
+          {LIVE_NAV_GROUPS.map((group) => (
+            <div className="fl-section-nav-group" key={group.label}>
+              <div className="fl-section-nav-label">{group.label}</div>
+              {group.items.map(([item, symbol]) => (
+                <button key={item} type="button" className={tab === item ? 'active' : ''} aria-current={tab === item ? 'page' : undefined} onClick={() => setTab(item)}>
+                  <span className="fl-section-nav-icon" aria-hidden="true">{symbol}</span>
+                  <span>{TAB_LABELS[item]}</span>
+                  {item === 'Activities' && activities?.length > 0 && <small>{activities.length}</small>}
+                  {item === 'Displays' && displays?.length > 0 && <small>{displays.length}</small>}
+                </button>
+              ))}
+            </div>
+          ))}
+        </aside>
+        <div className="fl-workspace-main">
 
       {enabled && !['Control Room', 'Donations'].includes(tab) && <section className="fl-operator-bar" aria-label="Live operator controls">
         <div className="fl-operator-fields">
@@ -2432,6 +2450,8 @@ function FestioLiveEventPage({ eventId }) {
           </div>
         </div>
       )}
+        </div>
+      </div>
       </div>
 
       {analyticsOverlayOpen && results && selected && ['survey', 'feedback'].includes(selected.type) && (

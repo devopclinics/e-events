@@ -5,8 +5,9 @@ import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
 import { api } from '../api'
 import './DesignStudioRedesignPage.css'
+import { CertificatesWorkspace } from '../components/live/LiveContentWorkspace'
 
-const TABS = ['Templates', 'GuestHub', 'Flyer', 'Event Page', 'Festio Pass', 'FestioHub', 'Email Preview', 'Publish']
+const TABS = ['Templates', 'GuestHub', 'Flyer', 'Event Page', 'Festio Pass', 'FestioHub', 'Certificates', 'Email Preview', 'Publish']
 
 // FestioHub layout + visual themes. Each entry combines a layout type
 // (tabbed vs stacked, mirrored in InvitePage.jsx's HUB_TABBED_STYLES) with
@@ -1862,6 +1863,10 @@ export default function DesignStudioRedesignPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {tab === 'Certificates' && (
+        eventId ? <CertificatesWorkspace eventId={eventId} /> : <div className="rd-panel"><div className="rd-panel-body">Select an event to design its certificates.</div></div>
       )}
 
       {tab === 'Email Preview' && (

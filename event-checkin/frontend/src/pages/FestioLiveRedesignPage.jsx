@@ -7,16 +7,20 @@ import { DonutChart, StarRating, RatingDistribution, PALETTE } from '../componen
 import './FestioLiveRedesignPage.css'
 
 const ExperienceWorkflowsPanel = lazy(() => import('../components/live/ExperienceWorkflowsPanel'))
+const LiveContentWorkspace = lazy(() => import('../components/live/LiveContentWorkspace').then((m) => ({ default: m.PresenterMaterialsWorkspace })))
+const CertificatesWorkspace = lazy(() => import('../components/live/LiveContentWorkspace').then((m) => ({ default: m.CertificatesWorkspace })))
 
 // The control room is the operational home for a live event.  The remaining
 // areas are still available, but they no longer bury the multi-screen controls
 // behind an overview or a preview-only display card.
-const TABS = ['Control Room', 'Displays', 'Activities', 'Experiences', 'Live Control', 'Responses', 'Analytics', 'Question Bank', 'Settings', 'Help', 'Overview']
+const TABS = ['Control Room', 'Displays', 'Activities', 'Experiences', 'Materials', 'Certificates', 'Live Control', 'Responses', 'Analytics', 'Question Bank', 'Settings', 'Help', 'Overview']
 const TAB_LABELS = {
   'Control Room': 'Control room',
   Displays: 'Channels & devices',
   Activities: 'Activities',
   Experiences: 'Presenter & experiences',
+  Materials: 'Presenter materials',
+  Certificates: 'Certificates',
   'Live Control': 'Live activity',
   Responses: 'Responses',
   Analytics: 'Insights',
@@ -1738,6 +1742,18 @@ function FestioLiveEventPage({ eventId }) {
       {tab === 'Experiences' && (
         <Suspense fallback={<div className="fl-loading">Loading experiences…</div>}>
           <ExperienceWorkflowsPanel eventId={eventId} activities={activities || []} displays={displays || []} presenterEntry={presenterEntry} requestedWorkflowId={liveQuery.get('workflow')} requestedRunId={liveQuery.get('run')} requestedDisplayId={liveQuery.get('display')}/>
+        </Suspense>
+      )}
+
+      {tab === 'Materials' && (
+        <Suspense fallback={<div className="fl-loading">Loading presenter materials…</div>}>
+          <LiveContentWorkspace eventId={eventId} sessions={programSessions || []} />
+        </Suspense>
+      )}
+
+      {tab === 'Certificates' && (
+        <Suspense fallback={<div className="fl-loading">Loading certificate studio…</div>}>
+          <CertificatesWorkspace eventId={eventId} />
         </Suspense>
       )}
 

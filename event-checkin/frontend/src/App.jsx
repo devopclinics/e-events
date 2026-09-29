@@ -103,6 +103,7 @@ const PublicPagesRedesignPage = lazy(() => import('./pages/PublicPagesRedesignPa
 const LayoutOptionsPage = lazy(() => import('./pages/LayoutOptionsPage'))
 const TrainingPage = lazy(() => import('./pages/TrainingPage'))
 const EventWebsitePage = lazy(() => import('./pages/EventWebsitePage'))
+const CertificateVerificationPage = lazy(() => import('./pages/CertificateVerificationPage'))
 
 // ── Preferred-view helpers ────────────────────────────────────────────────────
 
@@ -482,6 +483,7 @@ function AppRoutes() {
       {/* Public speaker/partner showcases — no auth required (unguessable token) */}
       <Route path="/speakers/:token" element={<SpeakersPublicPage />} />
       <Route path="/partners/:token" element={<PartnersPublicPage />} />
+      <Route path="/certificates/:token" element={<CertificateVerificationPage />} />
       {/* Public/private Event Calendar — no auth required; the backend
           resolves either a public share_token or a private per-contact token */}
       <Route path="/calendar/:token" element={<CalendarPage />} />

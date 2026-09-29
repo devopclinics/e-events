@@ -839,6 +839,66 @@ class ExperienceEvent(Base):
     occurred_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
 
+class EventCertificateTemplate(Base):
+    """Event-owned certificate design and eligibility policy."""
+    __tablename__ = "event_certificate_templates"
+    __table_args__ = (UniqueConstraint("event_id", "key", name="uq_event_certificate_template_key"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id", ondelete="CASCADE"), index=True)
+    key: Mapped[str] = mapped_column(String(80), default="participation")
+    name: Mapped[str] = mapped_column(String(255), default="Certificate of Participation")
+    design: Mapped[dict] = mapped_column(JSON, default=dict)
+    eligibility: Mapped[dict] = mapped_column(JSON, default=dict)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class EventCertificate(Base):
+    """Immutable participant credential with a revocable verification token."""
+    __tablename__ = "event_certificates"
+    __table_args__ = (UniqueConstraint("template_id", "guest_id", name="uq_event_certificate_template_guest"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id", ondelete="CASCADE"), index=True)
+    template_id: Mapped[str] = mapped_column(String(36), ForeignKey("event_certificate_templates.id", ondelete="CASCADE"), index=True)
+    guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id", ondelete="CASCADE"), index=True)
+    certificate_number: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    verification_token: Mapped[str] = mapped_column(String(36), unique=True, index=True, default=lambda: str(uuid.uuid4()))
+    status: Mapped[str] = mapped_column(String(20), default="issued", index=True)
+    snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    issued_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    issued_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    viewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoke_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class PresenterMaterial(Base):
+    """Session-scoped presenter content and attendee handouts."""
+    __tablename__ = "presenter_materials"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id", ondelete="CASCADE"), index=True)
+    session_step_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("experience_steps.id", ondelete="SET NULL"), nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    kind: Mapped[str] = mapped_column(String(30), default="document")
+    source_type: Mapped[str] = mapped_column(String(20), default="upload")
+    source_url: Mapped[str] = mapped_column(String(1000))
+    content_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    visibility: Mapped[str] = mapped_column(String(30), default="production")
+    availability: Mapped[str] = mapped_column(String(30), default="after_approval")
+    status: Mapped[str] = mapped_column(String(20), default="draft", index=True)
+    presenter_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_json: Mapped[dict | None] = mapped_column("metadata", JSON, nullable=True)
+    created_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    approved_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class InboundEmailAutomation(Base):
     """Event-scoped rule set that maps one opaque inbound address to one
     Experience step.  The address prefix is presentation only; routing always

@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from .database import engine
 from .config import settings
-from .routers import events, guests, scanner, dashboard, seating, menu, logistics, registry, speakers, partners, reminders, scheduled_communications, access, trials, demo, classify, messaging, meta_whatsapp, resend_webhooks, templates as templates_router, self_checkin, experience, tasks, public_sites
+from .routers import events, guests, scanner, dashboard, seating, menu, logistics, registry, speakers, partners, reminders, scheduled_communications, access, trials, demo, classify, messaging, meta_whatsapp, resend_webhooks, templates as templates_router, self_checkin, experience, tasks, public_sites, live_content
 from .routers import auth as auth_router
 from .routers import invite as invite_router
 from .routers import billing as billing_router
@@ -223,6 +223,8 @@ async def _audit_public_api_requests(request, call_next):
 app.include_router(auth_router.router, prefix="/api/auth",   tags=["auth"])
 app.include_router(events.router,      prefix="/api/events", tags=["events"])
 app.include_router(public_sites.router, prefix="/api/events", tags=["event-websites"])
+app.include_router(live_content.router, prefix="/api/events", tags=["certificates-presenter-materials"])
+app.include_router(live_content.public_router, prefix="/api/certificates", tags=["certificates-public"])
 app.include_router(experience.router,  prefix="/api/events", tags=["experience"])
 app.include_router(inbound_email_automations_router.router, prefix="/api/events", tags=["inbound-email-automations"])
 app.include_router(guests.router,      prefix="/api/events", tags=["guests"])

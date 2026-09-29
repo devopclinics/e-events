@@ -1603,6 +1603,28 @@ export const api = {
   plannerUpdateDocument: (eventId, docId, body) => plannerReq(eventId, 'PATCH', `/documents/${docId}`, body),
   plannerDeleteDocument: (eventId, docId) => plannerReq(eventId, 'DELETE', `/documents/${docId}`),
 
+  // Certificates and presenter materials — event data shared by Live and GuestHub.
+  listCertificateTemplates: (eventId) => req('GET', `/events/${eventId}/certificate-templates`),
+  saveCertificateTemplate: (eventId, templateId, body) => req('PUT', `/events/${eventId}/certificate-templates/${templateId}`, body),
+  listCertificateCandidates: (eventId, templateId) => req('GET', `/events/${eventId}/certificate-candidates?template_id=${encodeURIComponent(templateId)}`),
+  issueEventCertificates: (eventId, body) => req('POST', `/events/${eventId}/certificates/issue`, body),
+  listEventCertificates: (eventId) => req('GET', `/events/${eventId}/certificates`),
+  revokeEventCertificate: (eventId, certificateId, reason) => req('POST', `/events/${eventId}/certificates/${certificateId}/revoke`, { reason }),
+  listPresenterMaterials: (eventId) => req('GET', `/events/${eventId}/presenter-materials`),
+  addPresenterMaterialLink: (eventId, body) => req('POST', `/events/${eventId}/presenter-materials/link`, body),
+  updatePresenterMaterial: (eventId, materialId, body) => req('PATCH', `/events/${eventId}/presenter-materials/${materialId}`, body),
+  deletePresenterMaterial: (eventId, materialId) => req('DELETE', `/events/${eventId}/presenter-materials/${materialId}`),
+  uploadPresenterMaterial: (eventId, file, fields = {}) => {
+    const form = new FormData(); form.append('file', file)
+    Object.entries(fields).forEach(([key, value]) => { if (value != null && key !== 'url') form.append(key, value) })
+    return getToken().then((token) => fetch(`${BASE}/events/${eventId}/presenter-materials/upload`, {
+      method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: form,
+    }).then(async (response) => {
+      if (response.ok) return response.json()
+      const error = await response.json().catch(() => ({})); throw new Error(error.detail || 'Upload failed')
+    }))
+  },
+
   // Festio Live (standalone engagement-service) — staff/admin.
   liveActivities: (eventId) => liveReq(eventId, 'GET', '/v1/activities'),
   liveProgramSessions: (eventId) => liveReq(eventId, 'GET', '/v1/program-sessions'),

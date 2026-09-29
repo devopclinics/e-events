@@ -2340,6 +2340,85 @@ function FestioLiveEventPage({ eventId }) {
 
       {tab === 'Help' && (
         <div style={{ display: 'grid', gap: 18 }}>
+          <section className="fl-help-start">
+            <div>
+              <span className="fl-eyebrow">Festio Live guide</span>
+              <h2>From first setup to final report</h2>
+              <p>Follow the recommended path once, then use this page as the event-day operating reference. Festio keeps activities, presenters, screens, GuestHub, responses and results connected to the selected event.</p>
+            </div>
+            <div className="fl-help-start-actions">
+              <button className="rr-btn primary" onClick={() => setTab('Overview')}>Check event readiness</button>
+              <button className="rr-btn secondary" onClick={() => setTab('Control Room')}>Open control room</button>
+            </div>
+          </section>
+
+          <div className="rr-panel fl-section-panel">
+            <div className="rd-panel-head"><div><span className="fl-eyebrow">Recommended workflow</span><h3>Complete setup, step by step</h3><p>Work from top to bottom. Each step points to the exact Festio Live area where the work happens.</p></div><span className="fl-help-duration">12 steps</span></div>
+            <div className="rd-panel-body">
+              <div className="fl-help-phases">
+                <section><header><b>1</b><div><span>BEFORE THE EVENT</span><h4>Prepare everything once</h4></div></header>
+                  <ol>
+                    <li><strong>Confirm the event.</strong><span>Check the event name, dates, programme sessions and GuestHub access.</span><button onClick={() => setTab('Overview')}>Event overview →</button></li>
+                    <li><strong>Create activities.</strong><span>Add polls, quizzes, Q&amp;A, surveys, feedback or word clouds. Save every prompt and option.</span><button onClick={() => setTab('Activities')}>Activities →</button></li>
+                    <li><strong>Connect the programme.</strong><span>Assign each activity to the correct Experience session or leave it event-wide.</span><button onClick={() => setTab('Experiences')}>Presenter &amp; experiences →</button></li>
+                    <li><strong>Prepare presenters.</strong><span>Assign presenter access and upload approved slides, PDFs, videos or links.</span><button onClick={() => setTab('Materials')}>Presenter materials →</button></li>
+                    <li><strong>Connect screens.</strong><span>Create each projector or TV channel, open its display link, and confirm it reports online.</span><button onClick={() => setTab('Displays')}>Channels &amp; devices →</button></li>
+                    <li><strong>Configure special workflows.</strong><span>Set donation goals and payment channels, certificate rules, moderation and event defaults.</span><button onClick={() => setTab('Settings')}>Settings →</button></li>
+                  </ol>
+                </section>
+                <section><header><b>2</b><div><span>EVENT DAY</span><h4>Operate from one place</h4></div></header>
+                  <ol>
+                    <li><strong>Run a rehearsal.</strong><span>Test with sample participants, the real projector and every presenter device.</span><button onClick={() => setTab('Control Room')}>Control room →</button></li>
+                    <li><strong>Show the join screen.</strong><span>Display the QR and join code before the programme begins; GuestHub guests can enter directly.</span><button onClick={() => setTab('Displays')}>Channels &amp; devices →</button></li>
+                    <li><strong>Start and advance.</strong><span>Open participation, watch response counts, reveal results, then move to the next activity.</span><button onClick={() => setTab('Live Control')}>Live activity →</button></li>
+                    <li><strong>Moderate public content.</strong><span>Approve word-cloud text and Q&amp;A before showing it to the room.</span><button onClick={() => setTab('Responses')}>Responses →</button></li>
+                  </ol>
+                </section>
+                <section><header><b>3</b><div><span>AFTER THE EVENT</span><h4>Close, deliver and learn</h4></div></header>
+                  <ol>
+                    <li><strong>Review and reconcile.</strong><span>Close remaining activities, verify donation payments and review response details.</span><button onClick={() => setTab('Responses')}>Review responses →</button></li>
+                    <li><strong>Share outcomes.</strong><span>Export insights, release presenter materials and issue certificates to eligible guests.</span><button onClick={() => setTab('Analytics')}>Insights →</button></li>
+                  </ol>
+                </section>
+              </div>
+              <div className="fl-help-tip"><b>Safe first-event setting:</b> start activities manually, keep moderation enabled for public text, and operate displays from Control room. Turn on automation only after the full rehearsal passes.</div>
+            </div>
+          </div>
+
+          <div className="rr-panel fl-section-panel">
+            <div className="rd-panel-head"><div><span className="fl-eyebrow">Where to go</span><h3>Every Festio Live area explained</h3><p>Use this directory whenever you are unsure which screen owns a task.</p></div></div>
+            <div className="rd-panel-body"><div className="fl-help-directory">
+              {[
+                ['Overview','Event overview','Readiness, current status, counts and shortcuts.'],
+                ['Activities','Activities','Create questions, schedule activities and configure participation.'],
+                ['Experiences','Presenter & experiences','Connect programme sessions, presenters and live workflows.'],
+                ['Materials','Presenter materials','Upload, approve, present and release slides or resources.'],
+                ['Question Bank','Question bank','Store reusable prompts and import them into activities.'],
+                ['Certificates','Certificates','Design templates, set eligibility and issue verified copies.'],
+                ['Control Room','Control room','Operate the current activity, projector and what comes next.'],
+                ['Live Control','Live activity','Use detailed question, timing, reveal and leaderboard controls.'],
+                ['Displays','Channels & devices','Connect projectors, TVs and broadcast scenes.'],
+                ['Donations','Donation Tracker','Configure giving, pledges and the live fundraising display.'],
+                ['Responses','Responses','Review submissions, moderation decisions and participant details.'],
+                ['Analytics','Insights','Measure participation, compare activities and export results.'],
+                ['Settings','Settings','Set defaults, security, automation and role-specific share links.'],
+                ['Help','Help','Follow setup, rehearsal and troubleshooting guidance.'],
+              ].map(([destination, title, description], index) => <article key={destination}><span>{String(index + 1).padStart(2, '0')}</span><div><h4>{title}</h4><p>{description}</p></div>{destination !== 'Help' && <button onClick={() => setTab(destination)}>Open →</button>}</article>)}
+            </div></div>
+          </div>
+
+          <div className="rr-panel fl-section-panel">
+            <div className="rd-panel-head"><div><span className="fl-eyebrow">People and responsibilities</span><h3>Give each person the right screen</h3><p>Operators should not share one admin login or crowd around one laptop.</p></div></div>
+            <div className="rd-panel-body"><div className="fl-help-role-grid">
+              <article><span>ADMIN</span><h4>Event administrator</h4><p>Creates activities, assigns sessions, approves content and controls permissions.</p><b>Event overview · Prepare · Settings</b></article>
+              <article><span>OPERATOR</span><h4>Live producer</h4><p>Runs the sequence, changes projector scenes and watches participation.</p><b>Control room · Live activity</b></article>
+              <article><span>PRESENTER</span><h4>Speaker or facilitator</h4><p>Uses a secure share link to present approved material and advance assigned activities.</p><b>Presenter console</b></article>
+              <article><span>MODERATOR</span><h4>Audience moderator</h4><p>Approves public text, manages Q&amp;A and removes unsuitable submissions.</p><b>Responses · Moderator link</b></article>
+              <article><span>FINANCE</span><h4>Finance officer</h4><p>Confirms payments and pledges so donation totals remain accurate.</p><b>Donation Tracker · Finance portal</b></article>
+              <article><span>GUEST</span><h4>Participant</h4><p>Joins through GuestHub or the public code and only sees available activities.</p><b>GuestHub · Festio Live guest view</b></article>
+            </div></div>
+          </div>
+
           <div className="rr-panel fl-section-panel">
             <div className="rd-panel-head"><div><span className="fl-eyebrow">How it works</span><h3>Running one activity</h3><p>Create it, send it live, guests answer on their phone, results show up everywhere at once.</p></div></div>
             <div className="rd-panel-body">

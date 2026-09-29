@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import get_current_user, _org_role
 from ..database import get_db
-from ..models import Event, EventUser, ExperienceStep, ExperienceWorkflow, Guest, GuestExperienceProgress, LiveAccessLink, User
+from ..models import Event, EventUser, ExperienceStep, ExperienceWorkflow, Guest, GuestExperienceProgress, LiveAccessLink, PresenterMaterial, User
 from ..ratelimit import rate_limit
 from services.qr_service import generate_qr_for_url
 
@@ -311,6 +311,7 @@ class LiveShareLinkOut(BaseModel):
     url: str
     expires_in: int
     role: str
+    event_id: str
 
 
 @router.post("/{event_id}/live/share-link", response_model=LiveShareLinkOut)
@@ -350,7 +351,7 @@ async def live_share_link(event_id: str, body: LiveShareLinkIn, user: User = Dep
     ))
     await db.commit()
     url = f"{(settings.public_base_url or 'https://festio.events').rstrip('/')}/p/{code}"
-    return LiveShareLinkOut(token=token, code=code, url=url, expires_in=body.hours * 3600, role=body.role)
+    return LiveShareLinkOut(token=token, code=code, url=url, expires_in=body.hours * 3600, role=body.role, event_id=event.id)
 
 
 @router.get("/live/share/{code}", response_model=LiveShareLinkOut)
@@ -369,4 +370,38 @@ async def resolve_live_share_link(
         raise HTTPException(410, "This Festio Live link has expired")
     from ..config import settings
     url = f"{(settings.public_base_url or 'https://festio.events').rstrip('/')}/p/{link.code}"
-    return LiveShareLinkOut(token=link.access_token, code=link.code, url=url, expires_in=max(0, int((expires_at - now).total_seconds())), role=link.role)
+    return LiveShareLinkOut(token=link.access_token, code=link.code, url=url, expires_in=max(0, int((expires_at - now).total_seconds())), role=link.role, event_id=link.event_id)
+
+
+@router.get("/live/share/{code}/materials")
+async def presenter_share_materials(
+    code: str,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(rate_limit(limit=120, window=60, scope="engagement_share_materials", key="client_ip")),
+):
+    """Approved materials for one unexpired, capability-scoped presenter link."""
+    link = await db.get(LiveAccessLink, code)
+    now = datetime.now(timezone.utc)
+    if not link:
+        raise HTTPException(404, "Festio Live link not found")
+    expires_at = link.expires_at if link.expires_at.tzinfo else link.expires_at.replace(tzinfo=timezone.utc)
+    if expires_at <= now:
+        raise HTTPException(410, "This Festio Live link has expired")
+    if link.role != "presenter":
+        raise HTTPException(403, "This link does not include presenter materials")
+    rows = (await db.execute(
+        select(PresenterMaterial, ExperienceStep.title)
+        .outerjoin(ExperienceStep, ExperienceStep.id == PresenterMaterial.session_step_id)
+        .where(
+            PresenterMaterial.event_id == link.event_id,
+            PresenterMaterial.status == "approved",
+            PresenterMaterial.visibility.in_(["presenter", "production", "attendees"]),
+        )
+        .order_by(PresenterMaterial.created_at.desc())
+    )).all()
+    return [{
+        "id": row.id, "title": row.title, "kind": row.kind,
+        "session_step_id": row.session_step_id, "session_title": session_title,
+        "source_url": row.source_url, "content_type": row.content_type,
+        "presenter_notes": row.presenter_notes, "metadata": row.metadata_json or {},
+    } for row, session_title in rows]

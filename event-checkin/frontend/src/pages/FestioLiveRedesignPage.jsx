@@ -88,7 +88,7 @@ const DISPLAY_SCENES = [
   ['location_map', 'Live location map'], ['journey_recap', 'Event journey recap'],
   ['spotlight_wheel', 'Spotlight wheel'], ['announcement', 'Announcement'],
   ['break', 'Break / up next'], ['countdown', 'Countdown'], ['celebration', 'Celebration'],
-  ['custom_message', 'Custom message'],
+  ['custom_message', 'Custom message'], ['presentation', 'Presentation'],
 ]
 // Several scenes only know how to render a single "current question" (quiz-
 // style advance) or a specific activity type's own data (Q&A, word cloud) —
@@ -1747,13 +1747,13 @@ function FestioLiveEventPage({ eventId }) {
 
       {tab === 'Materials' && (
         <Suspense fallback={<div className="fl-loading">Loading presenter materials…</div>}>
-          <LiveContentWorkspace eventId={eventId} sessions={programSessions || []} />
+          <LiveContentWorkspace eventId={eventId} sessions={programSessions || []} displays={displays || []} />
         </Suspense>
       )}
 
       {tab === 'Certificates' && (
         <Suspense fallback={<div className="fl-loading">Loading certificate studio…</div>}>
-          <CertificatesWorkspace eventId={eventId} />
+          <CertificatesWorkspace eventId={eventId} sessions={programSessions || []} />
         </Suspense>
       )}
 

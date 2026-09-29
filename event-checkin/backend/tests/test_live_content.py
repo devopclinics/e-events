@@ -3,7 +3,7 @@ from datetime import datetime
 import pytest
 from sqlalchemy import select
 
-from app.models import EventCertificate, ExperienceStep, ExperienceWorkflow, Guest, GuestExperienceProgress
+from app.models import Event, EventCertificate, EventCertificateTemplate, ExperienceStep, ExperienceWorkflow, Guest, GuestExperienceProgress
 from conftest import _Session
 
 
@@ -84,3 +84,30 @@ async def test_presenter_material_link_is_session_scoped_and_requires_event_acce
     ctx.login(ctx.ids["user_b"])
     hidden = await ctx.client.get(f"/api/events/{event_id}/presenter-materials")
     assert hidden.status_code == 404
+
+@pytest.mark.asyncio
+async def test_auto_issue_honors_required_sessions_and_preserves_issued_snapshot(ctx):
+    from app.routers.live_content import auto_issue_eligible_certificates
+
+    ctx.login(ctx.ids["user_a"])
+    event_id = ctx.ids["event_a"]
+    template = (await ctx.client.get(f"/api/events/{event_id}/certificate-templates")).json()[0]
+    async with _Session() as db:
+        event = await db.get(Event, event_id)
+        guest = await db.scalar(select(Guest).where(Guest.event_id == event_id))
+        guest.admitted = True
+        workflow = ExperienceWorkflow(event_id=event_id, name="Required programme", status="published", version=1)
+        db.add(workflow); await db.flush()
+        required = ExperienceStep(workflow_id=workflow.id, key="required", type="session_attendance", title="Required session")
+        db.add(required); await db.flush()
+        db.add(GuestExperienceProgress(event_id=event_id, workflow_id=workflow.id, step_id=required.id,
+            guest_id=guest.id, status="completed", completed_at=datetime.utcnow()))
+        await db.flush()
+        template_row = await db.get(EventCertificateTemplate, template["id"])
+        template_row.eligibility = {"require_event_checkin": True, "minimum_sessions": 1,
+                                    "required_session_ids": [required.id], "auto_issue": True}
+        created = await auto_issue_eligible_certificates(event, guest, db)
+        await db.commit()
+        assert len(created) == 1
+        assert created[0].snapshot["sessions_attended"] == 1
+        assert created[0].snapshot["eligibility"]["required_session_ids"] == [required.id]

@@ -1,16 +1,18 @@
 """Certificates and presenter materials shared by Experience, Festio Live, and GuestHub."""
+import base64
+import hashlib
 import html
 import os
 import re
 import uuid
 from datetime import datetime
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .. import storage
@@ -20,6 +22,7 @@ from ..database import get_db
 from ..models import (Event, EventCertificate, EventCertificateTemplate, ExperienceStep,
                       Guest, GuestExperienceProgress, PresenterMaterial, User, ExperienceWorkflow)
 from services.email_service import send_simple_email
+from services.qr_service import generate_qr_for_url
 
 router = APIRouter()
 public_router = APIRouter()
@@ -145,6 +148,35 @@ async def templates(event_id: str, db: AsyncSession = Depends(get_db), _: User =
     return [_template_out(row) for row in rows]
 
 
+@router.post("/{event_id}/certificate-templates", status_code=201)
+async def create_template(event_id: str, body: TemplateSave, db: AsyncSession = Depends(get_db),
+                          user: User = Depends(require_event_admin)):
+    await _event(event_id, db)
+    base_key = re.sub(r"[^a-z0-9]+", "-", body.name.lower()).strip("-")[:64] or "certificate"
+    key, suffix = base_key, 1
+    while await db.scalar(select(EventCertificateTemplate.id).where(
+        EventCertificateTemplate.event_id == event_id, EventCertificateTemplate.key == key)):
+        suffix += 1; key = f"{base_key[:70]}-{suffix}"
+    row = EventCertificateTemplate(event_id=event_id, key=key, name=body.name, design=body.design,
+        eligibility=body.eligibility, active=body.active, created_by_user_id=user.id)
+    db.add(row); await db.commit(); await db.refresh(row)
+    return _template_out(row)
+
+
+@router.post("/{event_id}/certificate-assets", status_code=201)
+async def upload_certificate_asset(event_id: str, file: UploadFile = File(...),
+                                   db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+    await _event(event_id, db)
+    content_type = (file.content_type or "").lower()
+    if content_type not in {"image/jpeg", "image/png", "image/webp"}:
+        raise HTTPException(400, "Use a JPEG, PNG, or WebP image")
+    data = await file.read(8 * 1024 * 1024 + 1)
+    if len(data) > 8 * 1024 * 1024: raise HTTPException(413, "Image is larger than 8 MB")
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "-", os.path.basename(file.filename or "certificate-image"))[-140:]
+    url = storage.save(f"certificate-assets/{event_id}/{uuid.uuid4().hex}-{safe_name}", data, content_type)
+    return {"url": url, "content_type": content_type, "size_bytes": len(data)}
+
+
 @router.put("/{event_id}/certificate-templates/{template_id}")
 async def save_template(event_id: str, template_id: str, body: TemplateSave, db: AsyncSession = Depends(get_db),
                         user: User = Depends(require_event_admin)):
@@ -160,11 +192,46 @@ async def _candidate_rows(event_id, template, db):
     minimum = max(0, int((template.eligibility or {}).get("minimum_sessions") or 0))
     require_checkin = bool((template.eligibility or {}).get("require_event_checkin"))
     guests = (await db.execute(select(Guest).where(Guest.event_id == event_id).order_by(Guest.last_name, Guest.first_name))).scalars().all()
-    counts = dict((await db.execute(select(GuestExperienceProgress.guest_id, func.count(GuestExperienceProgress.id))
+    attended_rows = (await db.execute(select(GuestExperienceProgress.guest_id, GuestExperienceProgress.step_id)
         .join(ExperienceStep, ExperienceStep.id == GuestExperienceProgress.step_id)
         .where(GuestExperienceProgress.event_id == event_id, GuestExperienceProgress.status.in_(["completed", "overridden"]),
-               ExperienceStep.type == "session_attendance").group_by(GuestExperienceProgress.guest_id))).all())
-    return [(g, int(counts.get(g.id, 0)), (not require_checkin or bool(g.admitted)) and int(counts.get(g.id, 0)) >= minimum) for g in guests]
+               ExperienceStep.type == "session_attendance"))).all()
+    attended = {}
+    for guest_id, step_id in attended_rows: attended.setdefault(guest_id, set()).add(step_id)
+    required = set((template.eligibility or {}).get("required_session_ids") or [])
+    return [(g, len(attended.get(g.id, set())),
+             (not require_checkin or bool(g.admitted)) and len(attended.get(g.id, set())) >= minimum
+             and required.issubset(attended.get(g.id, set()))) for g in guests]
+
+
+async def auto_issue_eligible_certificates(event: Event, guest: Guest, db: AsyncSession, background_tasks: BackgroundTasks | None = None) -> list[EventCertificate]:
+    """Issue active auto-issue templates after a journey transition. Caller commits."""
+    templates = (await db.execute(select(EventCertificateTemplate).where(
+        EventCertificateTemplate.event_id == event.id, EventCertificateTemplate.active.is_(True)
+    ))).scalars().all()
+    created = []
+    for template in templates:
+        if not (template.eligibility or {}).get("auto_issue"): continue
+        candidates = await _candidate_rows(event.id, template, db)
+        candidate = next(((count, eligible) for row, count, eligible in candidates if row.id == guest.id), None)
+        if not candidate or not candidate[1]: continue
+        existing = await db.scalar(select(EventCertificate.id).where(
+            EventCertificate.template_id == template.id, EventCertificate.guest_id == guest.id))
+        if existing: continue
+        count = candidate[0]
+        cert = EventCertificate(event_id=event.id, template_id=template.id, guest_id=guest.id,
+            certificate_number=f"FESTIO-{datetime.utcnow():%Y%m}-{uuid.uuid4().hex[:10].upper()}",
+            snapshot={"participant_name": f"{guest.first_name} {guest.last_name}".strip(), "event_name": event.name,
+                      "event_date": event.event_date.isoformat() if event.event_date else "", "sessions_attended": count,
+                      "template_name": template.name, "design": template.design or {}, "eligibility": template.eligibility or {}})
+        db.add(cert); await db.flush(); created.append(cert)
+        if background_tasks is not None and guest.email:
+            url = _absolute_public_url(f"/certificates/{cert.verification_token}")
+            background_tasks.add_task(send_simple_email, guest.email, f"Your certificate — {event.name}",
+                f"<p>Hello {html.escape(guest.first_name)},</p><p>Your certificate is ready.</p><p><a href='{url}'>View and download certificate</a></p>",
+                event.id, None, guest.id, "event_certificate")
+            cert.sent_at = datetime.utcnow()
+    return created
 
 
 @router.get("/{event_id}/certificate-candidates")
@@ -216,6 +283,19 @@ async def list_certificates(event_id: str, db: AsyncSession = Depends(get_db), _
     return [_certificate_out(cert, guest) for cert, guest in rows]
 
 
+@router.get("/{event_id}/certificates/report")
+async def certificate_report(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_member)):
+    await _event(event_id, db)
+    rows = (await db.execute(select(EventCertificate, Guest, EventCertificateTemplate)
+        .join(Guest, Guest.id == EventCertificate.guest_id)
+        .join(EventCertificateTemplate, EventCertificateTemplate.id == EventCertificate.template_id)
+        .where(EventCertificate.event_id == event_id).order_by(EventCertificate.issued_at.desc()))).all()
+    return {"summary": {"total": len(rows), "issued": sum(c.status == "issued" for c, _, _ in rows),
+        "revoked": sum(c.status == "revoked" for c, _, _ in rows), "emailed": sum(c.sent_at is not None for c, _, _ in rows),
+        "viewed": sum(c.viewed_at is not None for c, _, _ in rows)},
+        "rows": [{**_certificate_out(cert, guest), "template_name": template.name, "email": guest.email} for cert, guest, template in rows]}
+
+
 @router.post("/{event_id}/certificates/{certificate_id}/revoke")
 async def revoke(event_id: str, certificate_id: str, body: RevokeRequest, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
     row = await db.get(EventCertificate, certificate_id)
@@ -237,9 +317,17 @@ async def add_material_link(event_id: str, body: MaterialLinkCreate, db: AsyncSe
     await _event(event_id, db); step = await _validate_session(event_id, body.session_step_id, db)
     parsed = urlparse(body.url)
     if parsed.scheme not in ("https", "http") or not parsed.netloc: raise HTTPException(400, "Enter a valid https:// link")
+    host = (parsed.hostname or "").lower()
+    provider = "google" if "google.com" in host else "microsoft" if host.endswith(("office.com", "live.com", "sharepoint.com")) else "youtube" if host.endswith(("youtube.com", "youtu.be")) else "external"
+    present_url = body.url
+    if provider == "google":
+        present_url = re.sub(r"/(edit|view)(?:[?#].*)?$", "/preview", body.url)
+    elif provider == "youtube":
+        video_id = (parsed.path.strip("/") if host.endswith("youtu.be") else parse_qs(parsed.query).get("v", [""])[0])
+        if video_id: present_url = f"https://www.youtube.com/embed/{video_id}"
     row = PresenterMaterial(event_id=event_id, session_step_id=step.id if step else None, title=body.title.strip(), kind=body.kind,
         source_type="link", source_url=body.url, visibility=body.visibility, availability=body.availability,
-        presenter_notes=body.presenter_notes, created_by_user_id=user.id)
+        presenter_notes=body.presenter_notes, metadata_json={"provider": provider, "present_url": present_url, "version": 1, "processing_status": "ready"}, created_by_user_id=user.id)
     db.add(row); await db.commit(); await db.refresh(row); return _material_out(row, step.title if step else None)
 
 
@@ -252,11 +340,35 @@ async def upload_material(event_id: str, file: UploadFile = File(...), title: st
     if content_type not in ALLOWED_MATERIAL_TYPES: raise HTTPException(400, "Use PDF, PowerPoint, Excel, JPEG, PNG, WebP, or MP4")
     data = await file.read(MAX_MATERIAL_BYTES + 1)
     if len(data) > MAX_MATERIAL_BYTES: raise HTTPException(413, "Material is larger than 100 MB")
+    signatures = {"application/pdf": data.startswith(b"%PDF"), "image/jpeg": data.startswith(b"\xff\xd8\xff"),
+                  "image/png": data.startswith(b"\x89PNG"), "video/mp4": b"ftyp" in data[:32]}
+    if content_type in signatures and not signatures[content_type]: raise HTTPException(400, "The file contents do not match its declared type")
     safe_name = re.sub(r"[^A-Za-z0-9._-]+", "-", os.path.basename(file.filename or "material"))[-180:]
-    url = storage.save(f"presenter-materials/{event_id}/{uuid.uuid4().hex}-{safe_name}", data, content_type)
+    storage_key = f"presenter-materials/{event_id}/{uuid.uuid4().hex}-{safe_name}"
+    original_url = storage.save(storage_key, data, content_type)
+    url, served_type, processing_status, pages = original_url, content_type, "ready", None
+    presentation_types = {"application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation"}
+    if content_type in presentation_types:
+        try:
+            async with httpx.AsyncClient(timeout=100) as client:
+                response = await client.post(
+                    settings.design_service_url.rstrip("/") + "/api/v1/design/convert-presentation",
+                    files={"file": (safe_name, data, content_type)},
+                    headers={"X-Internal-Token": settings.design_internal_token},
+                )
+            response.raise_for_status()
+            converted = response.content
+            url = storage.save(storage_key.rsplit(".", 1)[0] + ".pdf", converted, "application/pdf")
+            served_type, processing_status = "application/pdf", "converted"
+            pages = int(response.headers.get("X-Document-Pages") or 0) or None
+        except (httpx.HTTPError, ValueError):
+            processing_status = "conversion_failed"
+    metadata = {"sha256": hashlib.sha256(data).hexdigest(), "version": 1, "original_filename": safe_name,
+                "original_url": original_url, "processing_status": processing_status}
+    if pages: metadata["page_count"] = pages
     row = PresenterMaterial(event_id=event_id, session_step_id=step.id if step else None, title=(title.strip() or safe_name), kind=kind,
-        source_type="upload", source_url=url, content_type=content_type, size_bytes=len(data), visibility=visibility,
-        availability=availability, created_by_user_id=user.id)
+        source_type="upload", source_url=url, content_type=served_type, size_bytes=len(data), visibility=visibility,
+        availability=availability, metadata_json=metadata, created_by_user_id=user.id)
     db.add(row); await db.commit(); await db.refresh(row); return _material_out(row, step.title if step else None)
 
 
@@ -283,7 +395,37 @@ async def delete_material(event_id: str, material_id: str, db: AsyncSession = De
 def _certificate_html(cert: EventCertificate):
     snap, design = cert.snapshot or {}, (cert.snapshot or {}).get("design") or {}
     primary, accent = html.escape(design.get("primary_color", "#075845")), html.escape(design.get("accent_color", "#dba92e"))
-    return f"""<!doctype html><html><head><meta charset='utf-8'><style>@page{{size:A4 landscape;margin:0}}*{{box-sizing:border-box}}body{{margin:0;font-family:Arial;color:{primary}}}.certificate{{width:1120px;height:790px;padding:72px;text-align:center;border:18px solid {primary};box-shadow:inset 0 0 0 5px {accent};display:flex;flex-direction:column;justify-content:center}}.eyebrow{{letter-spacing:.24em;text-transform:uppercase;color:{accent};font-weight:700}}h1{{font:64px Georgia;margin:22px}}h2{{font:52px Georgia;margin:18px;border-bottom:2px solid {accent};display:inline-block;padding:0 30px 10px}}p{{font-size:21px}}footer{{margin-top:45px;display:flex;justify-content:space-around;font-size:14px}}</style></head><body><main class='certificate'><div class='eyebrow'>{html.escape(design.get('title','Certificate of Participation'))}</div><p>{html.escape(design.get('subtitle','This certificate is proudly presented to'))}</p><h2>{html.escape(snap.get('participant_name','Participant'))}</h2><h1>{html.escape(snap.get('event_name','Event'))}</h1><p>{html.escape(design.get('body','For successful participation in this event'))}</p><footer><span>{html.escape(design.get('signature_name','Event Organizer'))}<br>Authorized signature</span><span>{html.escape(cert.certificate_number)}<br>Verification number</span></footer></main></body></html>"""
+    verify_url = _absolute_public_url(f"/certificates/{cert.verification_token}")
+    qr = base64.b64encode(generate_qr_for_url(verify_url)).decode()
+    asset = lambda value: _absolute_public_url(str(value)) if str(value or "").startswith("/") else str(value or "")
+    logo = html.escape(asset(design.get("logo_url"))); background = html.escape(asset(design.get("background_url"))); signature = html.escape(asset(design.get("signature_url")))
+    bg = f"background-image:linear-gradient(#ffffffdd,#ffffffdd),url('{background}');background-size:cover;" if background else ""
+    return f"""<!doctype html><html><head><meta charset='utf-8'><style>@page{{size:A4 landscape;margin:0}}*{{box-sizing:border-box}}body{{margin:0;font-family:Arial;color:{primary}}}.certificate{{width:1120px;height:790px;padding:58px;text-align:center;border:18px solid {primary};box-shadow:inset 0 0 0 5px {accent};display:flex;flex-direction:column;justify-content:center;{bg}}}.logo{{max-width:130px;max-height:75px;margin:0 auto 10px}}.eyebrow{{letter-spacing:.24em;text-transform:uppercase;color:{accent};font-weight:700}}h1{{font:58px Georgia;margin:18px}}h2{{font:48px Georgia;margin:15px;border-bottom:2px solid {accent};display:inline-block;padding:0 30px 10px}}p{{font-size:20px}}footer{{margin-top:30px;display:flex;align-items:end;justify-content:space-around;font-size:13px}}footer img.signature{{display:block;max-width:150px;max-height:50px;margin:auto}}.qr{{width:86px;height:86px}}</style></head><body><main class='certificate'>{f'<img class="logo" src="{logo}">' if logo else ''}<div class='eyebrow'>{html.escape(design.get('title','Certificate of Participation'))}</div><p>{html.escape(design.get('subtitle','This certificate is proudly presented to'))}</p><h2>{html.escape(snap.get('participant_name','Participant'))}</h2><h1>{html.escape(snap.get('event_name','Event'))}</h1><p>{html.escape(design.get('body','For successful participation in this event'))}</p><footer><span>{f'<img class="signature" src="{signature}">' if signature else ''}{html.escape(design.get('signature_name','Event Organizer'))}<br>Authorized signature</span><span><img class='qr' src='data:image/png;base64,{qr}'><br>Scan to verify</span><span>{html.escape(cert.certificate_number)}<br>Verification number</span></footer></main></body></html>"""
+
+
+@router.get("/{event_id}/guest-content/{token}")
+async def guest_content(event_id: str, token: str, db: AsyncSession = Depends(get_db)):
+    guest = await db.scalar(select(Guest).where(Guest.event_id == event_id, or_(Guest.invite_token == token, Guest.qr_token == token)))
+    if not guest:
+        raise HTTPException(404, "Guest access not found")
+    certificates = (await db.execute(select(EventCertificate).where(
+        EventCertificate.event_id == event_id, EventCertificate.guest_id == guest.id, EventCertificate.status == "issued"
+    ).order_by(EventCertificate.issued_at.desc()))).scalars().all()
+    progress_step_ids = set((await db.execute(select(GuestExperienceProgress.step_id).where(
+        GuestExperienceProgress.event_id == event_id, GuestExperienceProgress.guest_id == guest.id,
+        GuestExperienceProgress.status.in_(["completed", "overridden"])
+    ))).scalars().all())
+    material_rows = (await db.execute(select(PresenterMaterial, ExperienceStep.title).outerjoin(
+        ExperienceStep, ExperienceStep.id == PresenterMaterial.session_step_id
+    ).where(PresenterMaterial.event_id == event_id, PresenterMaterial.status == "approved",
+            PresenterMaterial.visibility == "attendees").order_by(PresenterMaterial.created_at.desc()))).all()
+    materials = []
+    for material, session_title in material_rows:
+        if material.availability == "after_session_attendance" and material.session_step_id not in progress_step_ids:
+            continue
+        materials.append(_material_out(material, session_title))
+    return {"guest_id": guest.id, "materials": materials,
+            "certificates": [_certificate_out(cert, guest) for cert in certificates]}
 
 
 @public_router.get("/{token}")

@@ -1267,7 +1267,7 @@ const HUB_SIDECARD_STYLES = new Set([
   'sacred-pilgrimage',
 ])
 const HUB_TAB_ORDER = {
-  'story-feed': ['activity', 'messages', 'program', 'speakers', 'pass'],
+  'story-feed': ['activity', 'resources', 'messages', 'program', 'speakers', 'pass'],
 }
 const HUB_TAB_META = {
   pass: ['pass', 'Pass', '▤'],
@@ -1277,6 +1277,7 @@ const HUB_TAB_META = {
   // speaker_enabled on, same "always in the order list, conditionally
   // rendered" pattern already used for program/messages.
   speakers: ['speakers', 'Speakers', '🎤'],
+  resources: ['resources', 'Resources', '📚'],
   messages: ['messages', 'Messages', '💬'],
 }
 const PREVIEW_QR_DATA_URI = 'data:image/svg+xml;utf8,' + encodeURIComponent(
@@ -1332,6 +1333,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   // Experience journey (only populated when the event has Experience enabled).
   const [journey, setJourney] = useState(null)
   const [liveParticipation, setLiveParticipation] = useState({})
+  const [guestContent, setGuestContent] = useState({ materials: [], certificates: [] })
   const [hubMenuDay, setHubMenuDay] = useState('')
   const [signName, setSignName] = useState('')
   const [signing, setSigning] = useState(false)
@@ -1372,7 +1374,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   const tabbed = guestHubV2 && HUB_TABBED_STYLES.has(hubStyle)
   const tabActive = (key) => !tabbed || hubTab === key
   const tabsActive = (keys) => !tabbed || keys.includes(hubTab)
-  const hubTabOrder = HUB_TAB_ORDER[hubStyle] || ['pass', 'activity', 'program', 'speakers', 'messages']
+  const hubTabOrder = HUB_TAB_ORDER[hubStyle] || ['pass', 'activity', 'program', 'speakers', 'resources', 'messages']
   // Per-event, organizer-selectable — never on by default, so no existing
   // event's Hub changes shape unless someone explicitly picks it in Guests →
   // Invites & RSVP. See CompanionGuestHub below for the redesigned layout.
@@ -1448,6 +1450,10 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   }, [event?.id, accessToken, previewMock])
 
   useEffect(() => { loadJourney() }, [loadJourney])
+  useEffect(() => {
+    if (!event?.id || !accessToken || previewMock) return
+    api.guestLiveContent(event.id, accessToken).then(setGuestContent).catch(() => setGuestContent({ materials: [], certificates: [] }))
+  }, [event?.id, accessToken, previewMock])
   useEffect(() => {
     if (!event?.id || !accessToken || previewMock || !event.engagement_enabled) { setLiveParticipation({}); return }
     let cancelled = false
@@ -2114,6 +2120,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
             {hubTabOrder.map((key) => HUB_TAB_META[key])
               .filter(([key]) => key !== 'program' || (journey?.program?.enabled && hubModuleVisible('live_program')))
               .filter(([key]) => key !== 'speakers' || speakersVisible)
+              .filter(([key]) => key !== 'resources' || !!(guestContent.materials?.length || guestContent.certificates?.length))
               .filter(([key]) => key !== 'messages' || (hubModuleVisible('messages') && (hub?.capabilities?.direct_host_messages || hub?.capabilities?.guest_chat)))
               .map(([key, label, icon]) => (
                 <button key={key} type="button" role="tab" aria-selected={hubTab === key} onClick={() => setHubTab(key)}
@@ -2123,6 +2130,13 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
                   <span style={{ color: hubTab === key ? tone.accent : tone.muted }}>{label}</span>
                 </button>
               ))}
+          </div>
+        )}
+
+        {tabActive('resources') && !!(guestContent.materials?.length || guestContent.certificates?.length) && (
+          <div className="mt-6 grid gap-4">
+            {!!guestContent.certificates?.length && <div className="rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}><div className="flex items-center justify-between"><div><h3 className="text-lg font-extrabold">My Certificates</h3><p className="mt-1 text-sm" style={{ color: tone.muted }}>Verified credentials issued for your participation.</p></div><span aria-hidden="true">🏅</span></div><div className="mt-4 grid gap-2">{guestContent.certificates.map(c=><article key={c.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3" style={{ background: tone.chip, borderColor: tone.border }}><div><strong className="block">{c.guest_name}</strong><span className="text-xs" style={{ color: tone.muted }}>{c.certificate_number}</span></div><div className="flex gap-2"><a href={c.verification_url} className="rounded-lg border px-3 py-2 text-xs font-extrabold" style={{ borderColor: tone.border, color: tone.text }}>Verify</a><a href={c.document_url} target="_blank" rel="noreferrer" className="rounded-lg px-3 py-2 text-xs font-extrabold" style={{ background: tone.accent, color: tone.background }}>Download PDF</a></div></article>)}</div></div>}
+            {!!guestContent.materials?.length && <div className="rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}><div><h3 className="text-lg font-extrabold">Session Resources</h3><p className="mt-1 text-sm" style={{ color: tone.muted }}>Approved presentations and handouts from your programme.</p></div><div className="mt-4 grid gap-2">{guestContent.materials.map(m=><a key={m.id} href={m.source_url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-xl border p-3" style={{ background: tone.chip, borderColor: tone.border, color: tone.text }}><span><strong className="block">{m.title}</strong><span className="text-xs" style={{ color: tone.muted }}>{m.session_title||'Event resource'} · {m.kind}</span></span><span aria-hidden="true">Download →</span></a>)}</div></div>}
           </div>
         )}
 

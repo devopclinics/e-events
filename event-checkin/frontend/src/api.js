@@ -1604,16 +1604,29 @@ export const api = {
   plannerDeleteDocument: (eventId, docId) => plannerReq(eventId, 'DELETE', `/documents/${docId}`),
 
   // Certificates and presenter materials — event data shared by Live and GuestHub.
+  listLiveContentSessions: (eventId) => req('GET', `/events/${eventId}/live-content/sessions`),
   listCertificateTemplates: (eventId) => req('GET', `/events/${eventId}/certificate-templates`),
+  createCertificateTemplate: (eventId, body) => req('POST', `/events/${eventId}/certificate-templates`, body),
   saveCertificateTemplate: (eventId, templateId, body) => req('PUT', `/events/${eventId}/certificate-templates/${templateId}`, body),
+  certificateReport: (eventId) => req('GET', `/events/${eventId}/certificates/report`),
   listCertificateCandidates: (eventId, templateId) => req('GET', `/events/${eventId}/certificate-candidates?template_id=${encodeURIComponent(templateId)}`),
   issueEventCertificates: (eventId, body) => req('POST', `/events/${eventId}/certificates/issue`, body),
   listEventCertificates: (eventId) => req('GET', `/events/${eventId}/certificates`),
   revokeEventCertificate: (eventId, certificateId, reason) => req('POST', `/events/${eventId}/certificates/${certificateId}/revoke`, { reason }),
   listPresenterMaterials: (eventId) => req('GET', `/events/${eventId}/presenter-materials`),
+  guestLiveContent: (eventId, token) => req('GET', `/events/${eventId}/guest-content/${encodeURIComponent(token)}`),
   addPresenterMaterialLink: (eventId, body) => req('POST', `/events/${eventId}/presenter-materials/link`, body),
   updatePresenterMaterial: (eventId, materialId, body) => req('PATCH', `/events/${eventId}/presenter-materials/${materialId}`, body),
   deletePresenterMaterial: (eventId, materialId) => req('DELETE', `/events/${eventId}/presenter-materials/${materialId}`),
+  uploadCertificateAsset: (eventId, file) => {
+    const form = new FormData(); form.append('file', file)
+    return getToken().then((token) => fetch(`${BASE}/events/${eventId}/certificate-assets`, {
+      method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: form,
+    }).then(async (response) => {
+      if (response.ok) return response.json()
+      const error = await response.json().catch(() => ({})); throw new Error(error.detail || 'Image upload failed')
+    }))
+  },
   uploadPresenterMaterial: (eventId, file, fields = {}) => {
     const form = new FormData(); form.append('file', file)
     Object.entries(fields).forEach(([key, value]) => { if (value != null && key !== 'url') form.append(key, value) })
@@ -1680,6 +1693,7 @@ export const api = {
   liveModerationDecision: (eventId, itemId, status) => liveReq(eventId, 'PATCH', `/v1/moderation/${itemId}`, { status }),
   liveShareLink: (eventId, role, hours) => req('POST', `/events/${eventId}/live/share-link`, { role, hours }),
   liveResolveShareLink: (code) => req('GET', `/events/live/share/${encodeURIComponent(code)}`),
+  livePresenterMaterials: (code) => req('GET', `/events/live/share/${encodeURIComponent(code)}/materials`),
   liveJoinInfo: (eventId) => req('GET', `/events/${encodeURIComponent(eventId)}/live/join-info`),
   liveRealtimeTicket: (eventId, activityId) => liveReq(eventId, 'GET', `/v1/activities/${activityId}/realtime-ticket`),
   liveWorkflows: (eventId) => liveReq(eventId, 'GET', '/v1/workflows'),

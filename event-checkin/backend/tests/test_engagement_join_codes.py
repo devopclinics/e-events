@@ -3,7 +3,7 @@ import re
 import pytest
 
 from app.config import settings
-from app.models import Event
+from app.models import Event, PresenterMaterial
 from app.routers.engagement import _new_live_join_code
 from conftest import _Session
 
@@ -91,6 +91,17 @@ async def test_presenter_share_link_uses_short_opaque_code(ctx, monkeypatch):
     assert resolved.status_code == 200
     assert resolved.json()["token"] == payload["token"]
     assert resolved.json()["role"] == "presenter"
+    assert resolved.json()["event_id"] == event_id
+
+    async with _Session() as session:
+        session.add(PresenterMaterial(event_id=event_id, title="Approved deck", kind="slides",
+            source_type="link", source_url="https://example.com/deck", visibility="presenter", status="approved"))
+        session.add(PresenterMaterial(event_id=event_id, title="Draft deck", kind="slides",
+            source_type="link", source_url="https://example.com/draft", visibility="presenter", status="draft"))
+        await session.commit()
+    materials = await ctx.client.get(f"/api/events/live/share/{payload['code']}/materials")
+    assert materials.status_code == 200
+    assert [row["title"] for row in materials.json()] == ["Approved deck"]
 
     missing = await ctx.client.get("/api/events/live/share/not-a-real-code")
     assert missing.status_code == 404

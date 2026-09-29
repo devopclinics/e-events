@@ -78,6 +78,8 @@ export default function LiveControlPage() {
   const [workflows, setWorkflows] = useState([])
   const [workflowId, setWorkflowId] = useState(params.get('workflow') || '')
   const [catalogLoading, setCatalogLoading] = useState(false)
+  const [materials, setMaterials] = useState([])
+  const [presentingMaterial, setPresentingMaterial] = useState(null)
   const initialSelection = useRef(false)
   const selection = useRef({ activityId, workflowId, runId: null })
   selection.current.activityId = activityId
@@ -146,7 +148,10 @@ export default function LiveControlPage() {
   useEffect(() => {
     if (!shareCode || token) return
     api.liveResolveShareLink(shareCode)
-      .then((resolved) => { setToken(resolved.token); setRole(resolved.role) })
+      .then(async (resolved) => {
+        setToken(resolved.token); setRole(resolved.role)
+        if (resolved.role === 'presenter') setMaterials(await api.livePresenterMaterials(shareCode))
+      })
       .catch((e) => setError(e.message))
   }, [shareCode, token])
 
@@ -329,6 +334,30 @@ export default function LiveControlPage() {
   const resultPage = Math.min(resultPageCount - 1, Number(selectedDisplay?.settings?.results_page || 0))
 
   const secondsRemaining = questionDeadline ? Math.max(0, Math.ceil((new Date(questionDeadline).getTime() - clock) / 1000)) : null
+  const presentMaterial = async (material, patch = {}) => {
+    if (!selectedDisplay) { setError('Choose a display channel before presenting a file.'); return }
+    const previous = presentingMaterial?.material?.id === material.id ? presentingMaterial : { material, page: 1, blackout: false }
+    const next = { ...previous, ...patch, material }
+    setBusy(true); setError('')
+    try {
+      const display = await api.liveControlUpdateDisplay(token, selectedDisplay.id, {
+        scene: 'presentation', assigned_activity_id: null,
+        settings: { control_mode: 'manual', follow_activity: false, presentation: {
+          material_id: material.id, title: material.title, url: material.metadata?.present_url || material.source_url,
+          content_type: material.content_type, kind: material.kind, page: next.page,
+          blackout: next.blackout, autoplay: material.kind === 'video', total_pages: material.metadata?.page_count || null,
+        } },
+      })
+      setDisplays((rows) => rows?.map((row) => row.id === display.id ? display : row))
+      setPresentingMaterial(next)
+    } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+  const materialLibrary = role === 'presenter' && materials.length ? <section className="rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm">
+    <div className="mb-3"><div className="text-[10px] font-black uppercase tracking-[.16em] text-emerald-700">Presenter library</div><h2 className="text-lg font-black">Approved session materials</h2><p className="text-xs text-slate-500">Open your notes or send an approved deck, PDF, image, video, or cloud presentation to the selected display.</p></div>
+    <div className="grid gap-2">{materials.map((item) => <article key={item.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 p-3"><div className="min-w-0 flex-1"><b className="block truncate">{item.title}</b><span className="text-xs text-slate-500">{item.session_title || 'Event-wide'} · {item.kind}</span>{item.presenter_notes && <p className="mt-1 text-xs font-semibold text-amber-800">Presenter note: {item.presenter_notes}</p>}</div><a className="rounded-lg border px-3 py-2 text-xs font-bold" href={item.source_url} target="_blank" rel="noreferrer">Open</a><button type="button" disabled={busy || !selectedDisplay || item.metadata?.processing_status === 'conversion_failed'} title={item.metadata?.processing_status === 'conversion_failed' ? 'This presentation could not be converted. Ask the organizer to upload it again.' : undefined} onClick={() => presentMaterial(item)} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-black text-white disabled:opacity-40">Present</button></article>)}</div>
+    {presentingMaterial && <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-slate-950 p-3 text-white"><b className="mr-auto text-xs">Live: {presentingMaterial.material.title}</b><button disabled={busy || presentingMaterial.page <= 1} onClick={() => presentMaterial(presentingMaterial.material, { page: Math.max(1, presentingMaterial.page - 1) })} className="rounded border px-2 py-1 text-xs">← Previous</button><span className="text-xs">Page {presentingMaterial.page}</span><button disabled={busy} onClick={() => presentMaterial(presentingMaterial.material, { page: presentingMaterial.page + 1 })} className="rounded border px-2 py-1 text-xs">Next →</button><button disabled={busy} onClick={() => presentMaterial(presentingMaterial.material, { blackout: !presentingMaterial.blackout })} className="rounded border px-2 py-1 text-xs">{presentingMaterial.blackout ? 'Restore' : 'Blackout'}</button></div>}
+  </section> : null
+
   const previewDisplay = (display) => {
     if (!display) return
     const url = display.short_code ? `/d/${display.short_code}?observer=true` : `/live/${display.display_code}?token=${encodeURIComponent(display.access_token)}&observer=true`
@@ -350,7 +379,7 @@ export default function LiveControlPage() {
     const remaining = timerRemaining(timer, clock, serverOffset.current.value)
     const activeRun = ['live', 'paused'].includes(experienceRun.status)
     const interactive = ['poll', 'multi_select', 'rating', 'ranking'].includes(current?.step_type)
-    return <div className="min-h-screen bg-[#f5f7fa] px-4 py-7 text-slate-950"><main className="mx-auto grid max-w-2xl gap-4">{navigation}<WorkflowDisplayTargets run={experienceRun} displays={displays || []} busy={busy} onAssign={assignExperienceDisplays}/>
+    return <div className="min-h-screen bg-[#f5f7fa] px-4 py-7 text-slate-950"><main className="mx-auto grid max-w-2xl gap-4">{navigation}{materialLibrary}<WorkflowDisplayTargets run={experienceRun} displays={displays || []} busy={busy} onAssign={assignExperienceDisplays}/>
       <header className="text-center"><div className="text-[11px] font-black uppercase tracking-[.22em] text-teal-600">Festio Live · Experience Presenter</div><h1 className="mt-2 text-2xl font-black">{experienceName}</h1><div className="mt-3 flex justify-center gap-4 text-xs font-bold"><span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">● {experienceRun.status.toUpperCase()}</span><span className="px-2 py-1 text-slate-500">▣ {experienceRun.display_ids?.length || 0} display channel(s) assigned</span></div></header>
       {error && <div className="rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-700">{error}</div>}
       <section className="rounded-2xl bg-gradient-to-br from-[#070d24] via-[#201052] to-[#32116d] p-6 text-white shadow-xl"><div className="text-[10px] font-black uppercase tracking-[.2em] text-teal-300">Guided Experience</div><div className="mt-2 flex items-end justify-between gap-4"><div><h2 className="text-2xl font-black">{String((experienceRun.steps || []).findIndex((step) => step.id === current?.id) + 1).padStart(2, '0')} · {current?.title || 'Ready to begin'}</h2><p className="mt-1 text-xs font-bold text-slate-300">Scene {Math.max(1, (experienceRun.steps || []).findIndex((step) => step.id === current?.id) + 1)} of {experienceRun.steps?.length || 0}</p></div>{timer && <strong className="text-5xl tabular-nums">{String(Math.floor((remaining || 0) / 60)).padStart(2, '0')}:{String((remaining || 0) % 60).padStart(2, '0')}</strong>}</div>
@@ -369,7 +398,7 @@ export default function LiveControlPage() {
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-8 dark:bg-slate-950">
       <div className="mx-auto max-w-2xl">
-        {navigation}
+        {navigation}{materialLibrary}
         <div className="mb-6 text-xs font-extrabold uppercase tracking-[0.2em] text-teal-500">Festio Live · {role === 'moderator' ? 'Moderator' : 'Presenter'} console</div>
         {error && <div className="mb-4 rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-700 dark:bg-rose-950 dark:text-rose-200">{error}</div>}
 

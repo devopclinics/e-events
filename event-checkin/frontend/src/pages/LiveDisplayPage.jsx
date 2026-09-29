@@ -10,7 +10,7 @@ const PREVIEW_SCENES = new Set([
   'q_and_a', 'room_pulse', 'ai_insight', 'idea_galaxy', 'live_spectrum',
   'interactive_quadrant', 'image_heatmap', 'ranking_race', 'prediction_reveal',
   'commitment_wall', 'photo_mosaic', 'location_map', 'journey_recap',
-  'spotlight_wheel', 'announcement', 'break', 'countdown', 'celebration', 'custom_message',
+  'spotlight_wheel', 'announcement', 'break', 'countdown', 'celebration', 'custom_message', 'presentation',
 ])
 
 function programAgenda(sessions = [], assignedSessionId = '') {
@@ -203,6 +203,21 @@ export default function LiveDisplayPage() {
 
   if (error) return <div className="grid min-h-screen place-items-center bg-[#07070d] px-8 text-center text-2xl font-extrabold text-white"><div><div className="mb-3 text-sm uppercase tracking-[.25em] text-fuchsia-400">Festio Live</div>{error}{disconnected && <button type="button" disabled={rejoining} onClick={rejoin} className="mx-auto mt-6 block rounded-xl bg-white px-6 py-3 text-lg text-slate-950">{rejoining ? 'Reconnecting…' : 'Reconnect this screen'}</button>}</div></div>
   if (!state) return <div className="grid min-h-screen place-items-center bg-[#07070d] text-sm font-bold uppercase tracking-[.22em] text-slate-500">Connecting to Festio Broadcast…</div>
+
+  if (state.display?.scene === 'presentation' && state.display?.settings?.presentation?.url) {
+    const material = state.display.settings.presentation
+    const page = Math.max(1, Number(material.page || 1))
+    const source = material.content_type === 'application/pdf' ? `${material.url}#page=${page}&toolbar=0&navpanes=0` : material.url
+    return <main className="fixed inset-0 bg-[#050b09] text-white">
+      {material.kind === 'video' || String(material.content_type || '').startsWith('video/')
+        ? <video key={source} src={source} controls={observer} autoPlay={!!material.autoplay} className="h-full w-full object-contain" />
+        : String(material.content_type || '').startsWith('image/')
+          ? <img src={source} alt={material.title || 'Presentation'} className="h-full w-full object-contain" />
+          : <iframe key={source} src={source} title={material.title || 'Presentation'} className="h-full w-full border-0 bg-white" allow="fullscreen; autoplay" />}
+      {material.blackout && <div className="absolute inset-0 grid place-items-center bg-black"><span className="text-sm font-bold uppercase tracking-[.28em] text-slate-600">Festio Live</span></div>}
+      <div className="pointer-events-none absolute bottom-4 left-5 rounded-full bg-black/55 px-4 py-2 text-xs font-bold">{material.title}{material.total_pages ? ` · ${page} / ${material.total_pages}` : ''}</div>
+    </main>
+  }
 
   if (['ready', 'live', 'paused'].includes(state.workflow_run?.status) && state.workflow_run?.current_step) return <div className="min-h-screen w-screen overflow-hidden bg-[#070d24] p-0"><WorkflowSceneRenderer key={state.workflow_run.current_step.id} step={state.workflow_run.current_step} mode={observer ? "preview" : "display"} eventId={state.event_id} joinCode={state.live_join_code}/></div>
 

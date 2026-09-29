@@ -1159,6 +1159,8 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
     guest.admitted = True
     guest.admitted_at = datetime.utcnow()
     guest.admit_notified = True
+    from .live_content import auto_issue_eligible_certificates
+    await auto_issue_eligible_certificates(event, guest, db, background_tasks)
     try:
         await db.commit()
     except IntegrityError:
@@ -1414,6 +1416,8 @@ async def scan_qr_zone(
         if event.seating_enabled and not guest.seat_number and not await _experience_defers_seating(event, db):
             await assign_next_seat(guest, db)
         await sync_guest_progress(event.id, guest.id, db, source="staff", actor_user_id=current_user.id)
+        from .live_content import auto_issue_eligible_certificates
+        await auto_issue_eligible_certificates(event, guest, db, background_tasks)
     await db.commit()
 
     if denied:

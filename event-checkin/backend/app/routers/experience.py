@@ -1745,6 +1745,9 @@ async def update_guest_step_progress(
             source="admin" if current_user.role == "admin" else "staff",
             payload={"status": data.status, "override_reason": data.override_reason, "metadata": metadata or {}},
         ))
+    if data.status == "completed" and newly_completed:
+        from .live_content import auto_issue_eligible_certificates
+        await auto_issue_eligible_certificates(event, guest, db, background_tasks)
     await db.commit()
     await db.refresh(progress)
     if data.status == "completed" and step.type == "souvenir" and newly_completed:
@@ -2178,7 +2181,7 @@ async def my_feedback(event_id: str, token: str = Query(...), db: AsyncSession =
 
 @router.post("/{event_id}/experience/me/feedback", status_code=201)
 async def submit_my_feedback(
-    event_id: str, data: dict, token: str = Query(...), db: AsyncSession = Depends(get_db),
+    event_id: str, data: dict, background_tasks: BackgroundTasks, token: str = Query(...), db: AsyncSession = Depends(get_db),
     _: None = Depends(rate_limit(limit=12, window=60, scope="feedback_submit", key="event_id")),
 ):
     guest = await _guest_by_token(event_id, token, db)
@@ -2233,11 +2236,13 @@ async def submit_my_feedback(
         event_id=event_id, workflow_id=workflow.id, step_id=step.id, guest_id=guest.id,
         event_type="feedback_updated" if was_existing else "feedback_submitted", source="guest", payload={"anonymous": bool(feedback.get("anonymous"))},
     ))
+    event = await db.get(Event, event_id)
     if not was_existing:
-        event = await db.get(Event, event_id)
         await queue_webhook_event(db, org_id=event.org_id, event_type="experience.feedback_submitted", payload={
             "guest_id": guest.id, "event_id": event_id, "step_id": step.id, "submission_id": submission.id,
         })
+    from .live_content import auto_issue_eligible_certificates
+    await auto_issue_eligible_certificates(event, guest, db, background_tasks)
     await db.commit()
     await db.refresh(submission)
     return {"id": submission.id, "step_id": step.id, "submitted_at": submission.submitted_at}

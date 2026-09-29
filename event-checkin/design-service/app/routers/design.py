@@ -6,6 +6,10 @@ is open so guest-facing pages can read it with no auth. Every read has a safe
 default so a missing/broken design never blocks a public page.
 """
 import os
+from pathlib import Path
+import re
+import subprocess
+import tempfile
 import uuid
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile
@@ -81,6 +85,34 @@ def require_internal(x_internal_token: str | None = Header(default=None)) -> Non
 
 
 # ── Template gallery ──────────────────────────────────────────────────────────
+@router.post("/convert-presentation", dependencies=[Depends(require_internal)])
+async def convert_presentation(file: UploadFile = File(...)):
+    """Convert an uploaded PPT/PPTX to projector-safe PDF in this isolated service."""
+    content_type = (file.content_type or "").lower()
+    allowed = {"application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation"}
+    if content_type not in allowed:
+        raise HTTPException(400, "PPT or PPTX is required")
+    data = await file.read(100 * 1024 * 1024 + 1)
+    if len(data) > 100 * 1024 * 1024:
+        raise HTTPException(413, "Presentation is larger than 100 MB")
+    safe_name = os.path.basename(file.filename or "presentation.pptx")
+    try:
+        with tempfile.TemporaryDirectory() as directory:
+            source = os.path.join(directory, safe_name)
+            with open(source, "wb") as handle: handle.write(data)
+            subprocess.run(["libreoffice", "--headless", "--convert-to", "pdf", "--outdir", directory, source],
+                           check=True, capture_output=True, timeout=90)
+            pdf_path = next(Path(directory).glob("*.pdf"))
+            pdf = pdf_path.read_bytes(); pages = 0
+            try:
+                info = subprocess.run(["pdfinfo", str(pdf_path)], check=True, capture_output=True, text=True, timeout=10).stdout
+                match = re.search(r"^Pages:\s+(\d+)", info, re.MULTILINE); pages = int(match.group(1)) if match else 0
+            except Exception: pass
+            return Response(content=pdf, media_type="application/pdf", headers={"X-Document-Pages": str(pages)})
+    except (subprocess.SubprocessError, StopIteration, OSError) as exc:
+        raise HTTPException(422, "Presentation could not be converted") from exc
+
+
 @router.post("/render-pdf", dependencies=[Depends(require_internal)])
 async def render_pdf(body: dict):
     """Render self-contained HTML to a PDF. Used by the core backend for the

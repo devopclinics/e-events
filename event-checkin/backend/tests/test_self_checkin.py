@@ -50,6 +50,24 @@ async def test_admin_toggle_generates_code(ctx):
 
 
 @pytest.mark.asyncio
+async def test_admin_can_set_custom_event_code(ctx):
+    ev = ctx.ids["event_a"]
+    ctx.login(ctx.ids["user_a"])
+
+    ok = await ctx.client.patch(f"/api/events/{ev}/event-code", json={"event_code": "IEDPU26"})
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["event_code"] == "iedpu26"
+
+    invalid = await ctx.client.patch(f"/api/events/{ev}/event-code", json={"event_code": "not valid!"})
+    assert invalid.status_code == 422
+
+    other_event = ctx.ids["event_b"] if "event_b" in ctx.ids else None
+    if other_event:
+        conflict = await ctx.client.patch(f"/api/events/{other_event}/event-code", json={"event_code": "iedpu26"})
+        assert conflict.status_code == 409
+
+
+@pytest.mark.asyncio
 async def test_public_info_blocks_disabled_or_inactive(ctx):
     ev = ctx.ids["event_a"]
     await _prep(ev, enabled=False, active=True)

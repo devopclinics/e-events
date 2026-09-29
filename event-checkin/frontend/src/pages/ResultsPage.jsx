@@ -116,6 +116,7 @@ function CommHealthCard({ comm, showEntireEventBadge }) {
     { icon: '✉️', label: 'Email reached', data: comm.email },
     { icon: '💬', label: 'SMS delivered', data: comm.sms },
     { icon: '🟢', label: 'WhatsApp delivered', data: comm.whatsapp },
+    ...(comm.mms ? [{ icon: '🖼️', label: 'MMS delivered', data: comm.mms }] : []),
   ]
   return (
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
@@ -123,7 +124,7 @@ function CommHealthCard({ comm, showEntireEventBadge }) {
         <h3 className="font-semibold text-sm dark:text-white">Communication health{showEntireEventBadge && <EntireEventBadge />}</h3>
         <span className="text-xs text-slate-500 dark:text-slate-400">💳 {comm.credits_remaining?.toLocaleString()} credits</span>
       </div>
-      <div className="grid grid-cols-3 gap-3">
+      <div className={`grid gap-3 ${rows.length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
         {rows.map((r) => (
           <div key={r.label} className="text-center">
             <div className="text-xl">{r.icon}</div>

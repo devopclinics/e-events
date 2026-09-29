@@ -566,6 +566,10 @@ class ActiveToggle(BaseModel):
     active: bool
 
 
+class EventCodeUpdate(BaseModel):
+    event_code: str = Field(min_length=3, max_length=32)
+
+
 RedesignCohort = Literal[
     "legacy_only", "redesign_opt_in", "redesign_internal",
     "redesign_cohort", "redesign_default", "legacy_retired",
@@ -2734,6 +2738,9 @@ class InvitePageOut(BaseModel):
     speaker_enabled: bool = False
     speaker_token: Optional[str] = None
     speaker_show_before_rsvp: bool = False
+    # Partner/exhibitor showcase cross-link for capability-aware guest homes.
+    partner_enabled: bool = False
+    partner_token: Optional[str] = None
     seating_term: Optional[str] = None
     seat_term: Optional[str] = None
     # Invite page display toggles (all default True)
@@ -3338,3 +3345,211 @@ class PublicCalendarOut(BaseModel):
 
 # Resolve forward refs declared before their targets (MenuCategoryOut).
 GuestJourneyOut.model_rebuild()
+
+
+# ── Donation Tracker ─────────────────────────────────────────────────────────
+
+DonationChannel = Literal["festio_pay", "cash_app", "zelle", "paypal", "bank_transfer", "offline", "pledge"]
+DonationStatus = Literal["initiated", "pending_verification", "confirmed", "pledged", "failed", "refunded", "cancelled"]
+
+
+class DonationChannelConfig(BaseModel):
+    type: DonationChannel
+    enabled: bool = True
+    label: str
+    public_instructions: Optional[str] = None
+    # Cash App: the recipient's cash.app link (e.g. https://cash.app/$handle).
+    # Festio Pay: the provider checkout URL. Nothing else uses this.
+    checkout_url: Optional[str] = None
+    # PayPal / Zelle recipient contact -- never used to construct a paypal.me
+    # or any other guessed URL, only displayed for the donor to copy.
+    recipient_email: Optional[str] = None
+    recipient_phone: Optional[str] = None
+    # Bank transfer receiving-account details. routing_number, account_type
+    # and account_holder_name are frequently unverified when a campaign is
+    # first set up -- the public page shows "Pending verification" for any
+    # of these left blank rather than fabricating a value.
+    bank_name: Optional[str] = None
+    account_number: Optional[str] = None
+    routing_number: Optional[str] = None
+    account_type: Optional[str] = None
+    account_holder_name: Optional[str] = None
+
+
+class DonationCampaignUpdate(BaseModel):
+    enabled: bool = False
+    title: str = Field(default="Support this event", min_length=1, max_length=255)
+    description: Optional[str] = None
+    goal_minor: int = Field(default=0, ge=0)
+    currency: str = Field(default="USD", min_length=3, max_length=10)
+    public_total_mode: Literal["confirmed_only", "confirmed_and_pledged_separate"] = "confirmed_only"
+    show_donor_names: bool = True
+    show_donor_amounts: bool = True
+    show_pledged_total: bool = False
+    celebrate_milestones: bool = True
+    milestones_minor: list[int] = Field(default_factory=list)
+    channels: list[DonationChannelConfig] = Field(default_factory=list)
+
+
+class DonationContributionCreate(BaseModel):
+    channel: DonationChannel
+    amount_minor: int = Field(gt=0)
+    donor_name: Optional[str] = Field(default=None, max_length=255)
+    donor_email: Optional[EmailStr] = None
+    donor_phone: Optional[str] = Field(default=None, max_length=50)
+    contact_consent: bool = False
+    anonymous_publicly: bool = False
+    hide_amount_publicly: bool = False
+    message: Optional[str] = Field(default=None, max_length=1000)
+    expected_payment_channel: Optional[DonationChannel] = None
+    expected_payment_date: Optional[datetime] = None
+    provider_reference: Optional[str] = Field(default=None, max_length=255)
+
+    @field_validator("donor_email", mode="before")
+    @classmethod
+    def _blank_email_is_none(cls, value):
+        return value or None
+
+
+class DonationOfflineCreate(DonationContributionCreate):
+    status: Literal["pending_verification", "confirmed", "pledged"] = "confirmed"
+    # Staff-only context for a contribution with no donor identity at all
+    # (e.g. a collection basket count) -- never settable by the public donor
+    # form, so it lives here rather than on the shared base schema.
+    source: Optional[str] = Field(default=None, max_length=120)
+
+
+class DonationTransitionIn(BaseModel):
+    note: Optional[str] = Field(default=None, max_length=1000)
+    provider_reference: Optional[str] = Field(default=None, max_length=255)
+    # Confirming at the reported (actually-received) amount reconciles the
+    # discrepancy in the same call: amount_minor is updated to this value
+    # and reported_amount_minor is cleared.
+    reported_amount_minor: Optional[int] = Field(default=None, gt=0)
+
+
+class DonationDiscrepancyIn(BaseModel):
+    reported_amount_minor: int = Field(gt=0)
+    note: Optional[str] = Field(default=None, max_length=1000)
+
+
+class DonationBulkVerifyIn(BaseModel):
+    contribution_ids: list[str] = Field(min_length=1, max_length=200)
+    note: Optional[str] = Field(default=None, max_length=1000)
+
+
+class DonationBulkVerifyResult(BaseModel):
+    confirmed: list[str] = Field(default_factory=list)
+    failed: list[dict] = Field(default_factory=list)
+
+
+class DonationAuditEntryOut(BaseModel):
+    id: str
+    contribution_id: str
+    donor_name: Optional[str] = None
+    reference: str
+    amount_minor: int
+    currency: str
+    channel: str
+    from_status: Optional[str] = None
+    to_status: str
+    actor_name: Optional[str] = None
+    note: Optional[str] = None
+    created_at: datetime
+
+
+class DonationContributionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    channel: str
+    amount_minor: int
+    reported_amount_minor: Optional[int] = None
+    currency: str
+    status: str
+    donor_name: Optional[str] = None
+    donor_email: Optional[str] = None
+    donor_phone: Optional[str] = None
+    source: Optional[str] = None
+    contact_consent: bool = False
+    anonymous_publicly: bool
+    hide_amount_publicly: bool
+    message: Optional[str] = None
+    expected_payment_channel: Optional[str] = None
+    expected_payment_date: Optional[datetime] = None
+    reference: str
+    provider_reference: Optional[str] = None
+    evidence_url: Optional[str] = None
+    payment_reported_at: Optional[datetime] = None
+    refunded_minor: int = 0
+    verified_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class DonationPaymentReportIn(BaseModel):
+    # Set only when converting a pledge into an actual payment attempt
+    # (donor clicks "Continue to Cash App" etc. from their pledge's status
+    # page) -- reconciles onto the SAME contribution rather than creating a
+    # duplicate. Omit for a plain "I've completed my payment" report.
+    channel: Optional[DonationChannel] = None
+    provider_reference: Optional[str] = Field(default=None, max_length=255)
+    evidence_note: Optional[str] = Field(default=None, max_length=1000)
+
+
+class DonationPublicContributionOut(BaseModel):
+    id: str
+    access_token: str
+    reference: str
+    status: str
+    channel: str
+    amount_minor: int
+    payment_reported_at: Optional[datetime] = None
+    currency: str
+    expected_payment_channel: Optional[str] = None
+    expected_payment_date: Optional[datetime] = None
+    instructions: Optional[str] = None
+    checkout_url: Optional[str] = None
+    recipient_email: Optional[str] = None
+    recipient_phone: Optional[str] = None
+    bank_name: Optional[str] = None
+    account_number: Optional[str] = None
+    routing_number: Optional[str] = None
+    account_type: Optional[str] = None
+    account_holder_name: Optional[str] = None
+
+
+class DonationCampaignOut(DonationCampaignUpdate):
+    id: str
+    event_id: str
+    public_token: str
+    public_url: str
+    event_name: str
+    confirmed_minor: int = 0
+    pending_minor: int = 0
+    pledged_minor: int = 0
+    refunded_minor: int = 0
+    donation_count: int = 0
+    pledge_count: int = 0
+    needs_attention_count: int = 0
+    total_potential_minor: int = 0
+    recent_public: list[dict] = Field(default_factory=list)
+    channel_totals: list[dict] = Field(default_factory=list)
+
+
+class DonationPublicCampaignOut(BaseModel):
+    token: str
+    event_name: str
+    title: str
+    description: Optional[str] = None
+    logo_url: Optional[str] = None
+    cover_image_url: Optional[str] = None
+    goal_minor: int
+    currency: str
+    confirmed_minor: int
+    pledged_minor: int
+    donation_count: int = 0
+    pledge_count: int = 0
+    show_pledged_total: bool
+    channels: list[DonationChannelConfig]
+    pledge_payment_channels: list[dict] = Field(default_factory=list)
+    recent_public: list[dict] = Field(default_factory=list)

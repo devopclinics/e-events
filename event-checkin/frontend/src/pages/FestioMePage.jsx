@@ -1019,6 +1019,60 @@ export default function FestioMePage() {
       ["messages", "✉", "Messages"],
     ];
     const sourceBadge = (children, tone = "teal") => <span className={`rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-wide ${tone === "purple" ? "border-purple-400/30 bg-purple-500/10 text-purple-300" : "border-teal-400/30 bg-teal-500/10 text-teal-300"}`}>{children}</span>;
+
+    if (guestMode && hubStyle === "guesthub-mobile-dashboard" && homeSection === "home") {
+      const eventData = communication?.event || {};
+      const guestData = communication?.guest || {};
+      const passToken = guestPushContext?.passToken || "";
+      const eventId = guestPushContext?.eventId || eventRef || "";
+      const passUrl = passToken ? `/scan/${encodeURIComponent(passToken)}` : "";
+      const hubUrl = passToken ? `/r/${encodeURIComponent(passToken)}#guest-hub` : "";
+      const liveUrl = eventId && passToken ? `/live/guest?event=${encodeURIComponent(eventId)}&pass=${encodeURIComponent(passToken)}${currentSegment?.step_id ? `&session=${encodeURIComponent(currentSegment.step_id)}` : ""}` : "";
+      const hasProgramme = !!(currentSegment || nextSegment || journey?.program?.days?.length || sessionChannels.length);
+      const hasFeedback = !!(journey?.feedback_forms?.length || journey?.steps?.some((step) => step.type === "feedback"));
+      const dashboardActions = [
+        { key: "pass", icon: "▣", label: "My Pass", href: passUrl, enabled: !!passUrl },
+        { key: "programme", icon: "□", label: "Programme", onClick: () => setHomeSection("sessions"), enabled: hasProgramme },
+        { key: "speakers", icon: "♙", label: "Speakers", href: eventData.speaker_token ? `/speakers/${eventData.speaker_token}` : "", enabled: !!(eventData.speaker_enabled && eventData.speaker_token) },
+        { key: "exhibitors", icon: "▤", label: "Exhibitors", href: eventData.partner_token ? `/partners/${eventData.partner_token}` : "", enabled: !!(eventData.partner_enabled && eventData.partner_token) },
+        { key: "live", icon: "♧", label: "Festio Live", href: liveUrl, enabled: !!(eventData.engagement_enabled && liveUrl) },
+        { key: "activities", icon: "☆", label: "Activities", onClick: () => setHomeSection("meetups"), enabled: !!(meetups.length || groups.length) },
+        { key: "feedback", icon: "◯", label: "Feedback", href: passToken ? `/r/${encodeURIComponent(passToken)}?focus=feedback#guest-hub` : "", enabled: !!(hasFeedback && hubUrl) },
+        { key: "info", icon: "ⓘ", label: "Event Info", href: hubUrl, enabled: !!hubUrl },
+      ].filter((item) => item.enabled);
+      const upcoming = currentSegment || nextSegment;
+      const openAction = (item) => {
+        if (item.onClick) item.onClick();
+        else if (item.href) window.location.href = item.href;
+      };
+      return (
+        <div className="fm-mobile-dashboard-page">
+          <section className="fm-mobile-dashboard" aria-label="GuestHub mobile dashboard">
+            <header className="fm-mobile-dashboard-header">
+              <div><span>{eventData.name || activeGroup?.name || "Your event"}</span><small>GuestHub</small></div>
+              <b>{initials(guestData.name || me?.display_name || name(user))}</b>
+            </header>
+            <div className="fm-mobile-dashboard-welcome">
+              <span>WELCOME</span>
+              <h1>Welcome, {guestData.name || me?.display_name || name(user) || "Guest"}</h1>
+              <p>{me?.role && me.role !== "member" ? me.role : "Event guest"}</p>
+            </div>
+            {passUrl && <button type="button" className="fm-mobile-pass-card" onClick={() => { window.location.href = passUrl; }}><span>▣</span><div><strong>Your Festio Pass</strong><small>{guestData.pass_code || guestData.qr_token || "Ready for entry"}</small></div><b>View →</b></button>}
+            {upcoming && <button type="button" className="fm-mobile-next-card" onClick={() => setHomeSection("sessions")}><small>● {currentSegment ? "HAPPENING NOW" : "UP NEXT"}</small><strong>{upcoming.title}</strong><span>{upcoming.starts_at ? new Date(upcoming.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}{upcoming.location || upcoming.venue ? ` · ${upcoming.location || upcoming.venue}` : ""}</span></button>}
+            <div className="fm-mobile-action-grid">
+              {dashboardActions.map((item) => <button type="button" key={item.key} onClick={() => openAction(item)}><span>{item.icon}</span><strong>{item.label}</strong></button>)}
+            </div>
+            <nav className="fm-mobile-bottom-nav" aria-label="GuestHub navigation">
+              <button className="active" type="button" onClick={() => setHomeSection("home")}><span>⌂</span>Home</button>
+              <button type="button" disabled={!hasProgramme} onClick={() => setHomeSection("sessions")}><span>□</span>Programme</button>
+              <button type="button" disabled={!liveUrl} onClick={() => { if (liveUrl) window.location.href = liveUrl; }}><span>♧</span>Live</button>
+              <button type="button" onClick={() => setHomeSection("profile")}><span>♙</span>Me</button>
+            </nav>
+          </section>
+        </div>
+      );
+    }
+
     return (
       <div className={`festiome-unified-home${hubStyle ? ` festiome-style-${hubStyle}` : ''} mx-auto flex min-h-[calc(100dvh-5.5rem)] w-full max-w-7xl overflow-hidden border-y border-teal-400/15 bg-[#061120] text-white shadow-2xl sm:min-h-[calc(100vh-7rem)] sm:rounded-3xl sm:border`}>
         <aside className="hidden w-56 shrink-0 flex-col border-r border-white/10 bg-[#050e1e] p-4 md:flex">

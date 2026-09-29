@@ -2709,3 +2709,88 @@ class LiveAccessLink(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     created_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+# ── Donation Tracker ─────────────────────────────────────────────────────────
+
+class DonationCampaign(Base):
+    """Event-scoped Giving Hub configuration and public display policy."""
+    __tablename__ = "donation_campaigns"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id", ondelete="CASCADE"), unique=True, index=True)
+    public_token: Mapped[str] = mapped_column(String(64), unique=True, index=True, default=lambda: str(uuid.uuid4()))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    title: Mapped[str] = mapped_column(String(255), default="Support this event")
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    goal_minor: Mapped[int] = mapped_column(BigInteger, default=0)
+    currency: Mapped[str] = mapped_column(String(10), default="USD")
+    public_total_mode: Mapped[str] = mapped_column(String(30), default="confirmed_only")
+    show_donor_names: Mapped[bool] = mapped_column(Boolean, default=True)
+    show_donor_amounts: Mapped[bool] = mapped_column(Boolean, default=True)
+    show_pledged_total: Mapped[bool] = mapped_column(Boolean, default=False)
+    celebrate_milestones: Mapped[bool] = mapped_column(Boolean, default=True)
+    milestones_minor: Mapped[list] = mapped_column(JSON, default=list)
+    channels: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class DonationContribution(Base):
+    """One monetary contribution or pledge; status transitions are audited."""
+    __tablename__ = "donation_contributions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    campaign_id: Mapped[str] = mapped_column(String(36), ForeignKey("donation_campaigns.id", ondelete="CASCADE"), index=True)
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id", ondelete="CASCADE"), index=True)
+    access_token: Mapped[str] = mapped_column(String(64), unique=True, index=True, default=lambda: str(uuid.uuid4()))
+    channel: Mapped[str] = mapped_column(String(30))
+    amount_minor: Mapped[int] = mapped_column(BigInteger)
+    currency: Mapped[str] = mapped_column(String(10))
+    status: Mapped[str] = mapped_column(String(30), index=True)
+    donor_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    donor_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    donor_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Where an unidentified contribution physically came from (collection
+    # basket, front desk, ...) -- staff-entered context for offline records
+    # that have no donor identity at all, not shown to the public.
+    source: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # Explicit opt-in to a thank-you/reminder message, separate from
+    # anonymous_publicly -- the donor's own choice to be contacted, not just
+    # whether their name shows on the public tracker.
+    contact_consent: Mapped[bool] = mapped_column(Boolean, default=False)
+    anonymous_publicly: Mapped[bool] = mapped_column(Boolean, default=False)
+    hide_amount_publicly: Mapped[bool] = mapped_column(Boolean, default=False)
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    expected_payment_channel: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    expected_payment_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reference: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    provider_reference: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    # Set by finance when what actually arrived (bank/app statement) differs
+    # from what the donor submitted -- surfaces as a "needs attention" flag
+    # until resolved, without inventing a separate status in the state
+    # machine. Cleared (set back to NULL) once verify reconciles the amount.
+    reported_amount_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    evidence_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    # Donor self-reported "I've completed my payment" -- NOT proof of receipt.
+    # Only staff verifying in Finance moves status to confirmed and counts
+    # toward Received; this just distinguishes "awaiting verification, donor
+    # hasn't acted yet" from "donor says they paid" in the ledger.
+    payment_reported_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    refunded_minor: Mapped[int] = mapped_column(BigInteger, default=0)
+    verified_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class DonationStatusHistory(Base):
+    __tablename__ = "donation_status_history"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    contribution_id: Mapped[str] = mapped_column(String(36), ForeignKey("donation_contributions.id", ondelete="CASCADE"), index=True)
+    from_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    to_status: Mapped[str] = mapped_column(String(30))
+    actor_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

@@ -145,7 +145,7 @@ if $DO_BUILD; then
   docker build $NO_CACHE \
     "${BUILD_ARGS[@]}" \
     "${FIREBASE_BUILD_ARGS[@]}" \
-    --build-arg "VITE_EVENT_WEBSITES_ENABLED=${VITE_EVENT_WEBSITES_ENABLED:-false}" \
+    --build-arg "VITE_EVENT_WEBSITES_ENABLED=${VITE_EVENT_WEBSITES_ENABLED:-true}" \
     --tag "${REGISTRY}:frontend-${VERSION}" \
     --tag "${REGISTRY}:frontend-latest" \
     "${SCRIPT_DIR}/frontend"

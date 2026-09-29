@@ -299,7 +299,7 @@ def render(content, preview=False):
     e = escape
     name = e(content.get("event_name", "Event")); primary = e(content.get("primary_color", "#0d5c55")); accent = e(content.get("accent_color", "#a64f2b"))
     hero = safe_url(content.get("feature_image_url") or content.get("hero_image_url")); logo = safe_url(content.get("logo_url")); visible = set(content.get("visible_sections") or ["stats", "programme", "tracks", "connect"])
-    tagline = e(content.get("brand_tagline") or "PEOPLE · PURPOSE · A STRONGER TOMORROW")
+    tagline = e(content.get("brand_tagline") or "Event information")
     brand = f'<img src="{logo}" alt="{name}">' if logo else f'<span class="mark">✤</span><div><b>{name}</b><small>{tagline}</small></div>'
     stats_html = "".join(f'<div class="stat"><strong>{e(x.get("value", ""))}</strong><div><b>{e(x.get("label", ""))}</b><small>{e(x.get("detail", ""))}</small></div></div>' for x in content.get("stats", [])[:6])
     hero_stats = f'<div class="hero-stats">{stats_html}</div>' if "stats" in visible and stats_html else ""

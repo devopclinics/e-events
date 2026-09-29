@@ -369,6 +369,7 @@ function RealRegistryContent({ eventId, notify }) {
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(blank)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [selectedClaim, setSelectedClaim] = useState(null)
   const [busy, setBusy] = useState(false)
 
   async function load() {

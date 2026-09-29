@@ -116,6 +116,32 @@ def _resolve_navigation(content: dict, connections: dict) -> dict:
     return result
 
 
+def _absolute_site_urls(value, public_base: str):
+    """Resolve safe site-relative URLs before public-site validation.
+
+    Event-owned media and older add-ons can legitimately store paths such as
+    ``/uploads/speaker.webp``. Make those paths portable using the event's
+    public base while leaving anchors, mail links, and protocol-relative URLs
+    for their existing validators.
+    """
+    if isinstance(value, list):
+        return [_absolute_site_urls(item, public_base) for item in value]
+    if not isinstance(value, dict):
+        return value
+    result = {}
+    for key, item in value.items():
+        if (
+            isinstance(item, str)
+            and (key == "url" or key.endswith("_url"))
+            and item.startswith("/")
+            and not item.startswith("//")
+        ):
+            result[key] = f"{public_base.rstrip('/')}{item}"
+        else:
+            result[key] = _absolute_site_urls(item, public_base)
+    return result
+
+
 async def _call(method: str, path: str, *, json=None):
     if not settings.public_site_management_enabled:
         raise HTTPException(404, "Event websites are not enabled")
@@ -178,6 +204,8 @@ async def save_website(event_id: str, request: Request, db: AsyncSession = Depen
     body = await request.json()
     body["org_id"] = event.org_id
     body["content"] = _resolve_navigation(body.get("content") or {}, await _website_connections(event, db))
+    public_base = event.checkin_base_url or settings.public_base_url or settings.frontend_url
+    body["content"] = _absolute_site_urls(body["content"], public_base)
     return await _call("PUT", f"/internal/sites/{event_id}", json=body)
 
 

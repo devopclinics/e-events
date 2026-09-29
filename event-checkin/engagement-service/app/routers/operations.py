@@ -32,6 +32,18 @@ def _new_display_short_code() -> str:
     return secrets.token_urlsafe(12)
 
 
+async def _validate_short_code(raw: str, display_id: str, db: AsyncSession) -> str:
+    """Sets a custom display link (e.g. "iedpu26") in place of the random
+    one minted on creation. Same rules as an event's custom short code."""
+    code = raw.strip().lower()
+    if not re.fullmatch(r"[a-z0-9-]{3,40}", code):
+        raise HTTPException(422, "Display link may only contain letters, numbers, and hyphens (3-40 characters)")
+    existing = await db.scalar(select(LiveDisplay.id).where(LiveDisplay.short_code == code, LiveDisplay.id != display_id))
+    if existing:
+        raise HTTPException(409, "That link is already in use by another display")
+    return code
+
+
 def _take_manual_display_control(display: LiveDisplay, changed_fields: set[str]) -> None:
     """Detach a workflow when an operator explicitly chooses TV content."""
     if changed_fields & {"scene", "assigned_activity_id"}:
@@ -365,6 +377,8 @@ async def update_display(display_id: str, body: DisplayUpdate, identity: Identit
     await _validate_assigned_activity(changes.get("assigned_activity_id"), identity.event_id, identity.org_id, db)
     if "assigned_session_id" in changes:
         await _validate_assigned_session(changes.get("assigned_session_id"), identity.event_id, identity.org_id, db)
+    if "short_code" in changes:
+        changes["short_code"] = await _validate_short_code(changes["short_code"], display_id, db)
     _take_manual_display_control(display, set(changes))
     for key, value in changes.items(): setattr(display, key, value)
     _merge_display_settings(display, body.settings)

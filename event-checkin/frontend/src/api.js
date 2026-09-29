@@ -61,7 +61,7 @@ async function req(method, path, body) {
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
-    const detail = Array.isArray(err.detail) ? err.detail.map((d) => d.msg || JSON.stringify(d)).join('; ') : (err.detail?.message || err.detail || err.message)
+    const detail = Array.isArray(err.detail) ? err.detail.map((d) => `${(d.loc || []).filter((part) => part !== 'body').join('.')} ${d.msg || JSON.stringify(d)}`.trim()).join('; ') : (err.detail?.message || err.detail || err.message)
     const message = typeof detail === 'string' ? detail : detail?.message || detail?.error || res.statusText
     const e = new Error(message || res.statusText)
     e.status = res.status
@@ -943,6 +943,7 @@ export const api = {
   adminSetManualCheckin: (eventId, active) => req('PATCH', `/admin/events/${eventId}/manual-checkin`, { active }),
   adminSetMms: (eventId, active) => req('PATCH', `/admin/events/${eventId}/mms`, { active }),
   setSelfCheckin: (eventId, active) => req('PATCH', `/events/${eventId}/self-checkin`, { active }),
+  setEventCode: (eventId, eventCode) => req('PATCH', `/events/${eventId}/event-code`, { event_code: eventCode }),
 
   // Public self check-in
   selfCheckinInfo: (code) => fetch(`${BASE}/e/${encodeURIComponent(code)}`).then((r) => r.json()),
@@ -1885,6 +1886,31 @@ export const api = {
   unpublishWebsite: (eventId) => req('POST', `/events/${eventId}/website/unpublish`, {}),
   websiteReleases: (eventId) => req('GET', `/events/${eventId}/website/releases`),
   rollbackWebsite: (eventId, releaseId) => req('POST', `/events/${eventId}/website/rollback/${releaseId}`, {}),
+  donationCampaign: (eventId) => req('GET', `/events/${eventId}/donation-campaign`),
+  saveDonationCampaign: (eventId, body) => req('PUT', `/events/${eventId}/donation-campaign`, body),
+  donationContributions: (eventId, status='') => req('GET', `/events/${eventId}/donations${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+  addOfflineDonation: (eventId, body) => req('POST', `/events/${eventId}/donations/offline`, body),
+  verifyDonation: (eventId, id, body={}) => req('POST', `/events/${eventId}/donations/${id}/verify`, body),
+  rejectDonation: (eventId, id, body={}) => req('POST', `/events/${eventId}/donations/${id}/reject`, body),
+  cancelDonation: (eventId, id, body={}) => req('POST', `/events/${eventId}/donations/${id}/cancel`, body),
+  deleteDonation: (eventId, id) => req('DELETE', `/events/${eventId}/donations/${id}`),
+  reportDonationDiscrepancy: (eventId, id, body) => req('POST', `/events/${eventId}/donations/${id}/discrepancy`, body),
+  bulkVerifyDonations: (eventId, body) => req('POST', `/events/${eventId}/donations/bulk-verify`, body),
+  donationAudit: (eventId, limit=30) => req('GET', `/events/${eventId}/donations/audit?limit=${limit}`),
+  exportDonationsCsv: async (eventId) => {
+    const token = await getToken()
+    const res = await fetch(`${BASE}/events/${eventId}/donations/export`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    if (!res.ok) throw new Error('Could not export the ledger')
+    const url = URL.createObjectURL(await res.blob())
+    const anchor = document.createElement('a')
+    anchor.href = url; anchor.download = `donations-${eventId}.csv`
+    document.body.appendChild(anchor); anchor.click(); anchor.remove()
+    URL.revokeObjectURL(url)
+  },
+  publicDonationCampaign: (token) => req('GET', `/give/${encodeURIComponent(token)}`),
+  createDonationContribution: (token, body) => req('POST', `/give/${encodeURIComponent(token)}/contributions`, body),
+  donationContributionStatus: (token, accessToken) => req('GET', `/give/${encodeURIComponent(token)}/contributions/${encodeURIComponent(accessToken)}`),
+  reportDonationPayment: (token, accessToken, body) => req('POST', `/give/${encodeURIComponent(token)}/contributions/${encodeURIComponent(accessToken)}/report`, body),
   trainingMe: (orgId='') => req('GET', `/training/me${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`),
   trainingQuiz: (lessonKey, answers, orgId='') => req('POST', `/training/quiz/${lessonKey}${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`, { answers }),
   trainingPractical: (lessonKey, body, orgId='') => req('POST', `/training/practicals/${lessonKey}${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`, body),

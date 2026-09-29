@@ -92,6 +92,11 @@ SCHEMA_PATCHES: list[str] = [
     "UPDATE guests SET paid_ticket_order_id = substring(rsvp_notes from '^Paid ticket order: ([^;]+)') "
     "WHERE paid_ticket_order_id IS NULL AND rsvp_notes LIKE 'Paid ticket order: %'",
     "CREATE INDEX IF NOT EXISTS ix_guests_paid_ticket_order_id ON guests (paid_ticket_order_id)",
+    # Gift List cash funds and Donation Tracker share one contribution ledger.
+    # The ORM auto-patcher adds the nullable FK column; this index keeps
+    # per-fund progress reads fast on existing production databases.
+    "CREATE INDEX IF NOT EXISTS ix_donation_contributions_registry_item_id "
+    "ON donation_contributions (registry_item_id)",
 
     # ── Multi-tenancy backfill (idempotent) — see docs/PHASE1-MULTITENANCY-PLAN.md.
     # Runs after create_all (organizations/memberships tables) and auto-patch

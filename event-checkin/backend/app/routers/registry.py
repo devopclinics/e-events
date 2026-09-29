@@ -1,8 +1,8 @@
-"""Gift Registry add-on — mark-only (no money moves through the platform).
+"""Gift List add-on for physical gifts, external registries, and cash-fund destinations.
 
-Organizers list physical items (external buy links), cash funds (a target plus
-their own payment instructions), and links to external registries. Guests reserve
-items or pledge to funds; the actual purchase/transfer happens off-platform.
+Physical items remain mark-only reservations. Cash funds are definitions linked
+to Donation Tracker, whose DonationContribution ledger is the single financial
+record used by the Giving Hub, finance reconciliation, and public progress.
 
 Two routers:
   * `router`          — admin endpoints at /api/events, paid-gated + registry_enabled.
@@ -22,7 +22,8 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..models import Event, Organization, RegistryItem, RegistryClaim, AffiliateStore, User, Guest
+from ..config import settings
+from ..models import DonationCampaign, DonationContribution, Event, Organization, RegistryItem, RegistryClaim, AffiliateStore, User, Guest
 from ..schemas import (
     RegistryItemCreate, RegistryItemUpdate, RegistryItemOut,
     RegistrySettingsUpdate, RegistrySettingsOut,
@@ -110,12 +111,35 @@ async def _claim_totals(item_id: str, db: AsyncSession) -> tuple[int, int, int]:
     return int(row[0] or 0), int(row[1] or 0), int(row[2] or 0)
 
 
+async def _fund_ledger(item: RegistryItem, db: AsyncSession) -> tuple[int, int, int, int, str | None, str | None]:
+    """Read cash-fund progress from Donation Tracker's authoritative ledger."""
+    campaign = await db.scalar(select(DonationCampaign).where(DonationCampaign.event_id == item.event_id))
+    if not campaign or not campaign.enabled:
+        return 0, 0, 0, 0, None, "Enable the Donation Tracker to accept money for this fund"
+    if item.currency.upper() != campaign.currency.upper():
+        return 0, 0, 0, 0, None, f"Fund currency must match the Giving Hub ({campaign.currency})"
+    rows = list((await db.execute(select(DonationContribution).where(
+        DonationContribution.campaign_id == campaign.id,
+        DonationContribution.registry_item_id == item.id,
+    ))).scalars().all())
+    confirmed = sum(max(0, row.amount_minor - (row.refunded_minor or 0)) for row in rows if row.status == "confirmed")
+    pledged = sum(row.amount_minor for row in rows if row.status == "pledged")
+    event = await db.get(Event, item.event_id)
+    share_token = event.event_code or campaign.public_token
+    giving_url = f"{settings.frontend_url.rstrip('/')}/give/{share_token}?fund={item.id}"
+    return confirmed, pledged, sum(row.status == "confirmed" for row in rows), sum(row.status == "pledged" for row in rows), giving_url, None
+
+
 async def _item_out(item: RegistryItem, db: AsyncSession,
                     stores: list[AffiliateStore] | None = None) -> RegistryItemOut:
     reserved, raised, count = await _claim_totals(item.id, db)
     remaining = None
     if item.kind == "item":
         remaining = max((item.quantity_wanted or 0) - reserved, 0)
+    pledged = pledge_count = 0
+    giving_url = unavailable = None
+    if item.kind == "fund":
+        raised, pledged, count, pledge_count, giving_url, unavailable = await _fund_ledger(item, db)
     return RegistryItemOut(
         id=item.id, event_id=item.event_id, kind=item.kind, title=item.title,
         description=item.description, image_url=item.image_url, external_url=item.external_url,
@@ -124,6 +148,8 @@ async def _item_out(item: RegistryItem, db: AsyncSession,
         sort_order=item.sort_order, is_active=item.is_active,
         buy_url=apply_affiliate(item.external_url, stores or []),
         reserved_qty=reserved, remaining=remaining, raised_minor=raised, claim_count=count,
+        pledged_minor=pledged, pledge_count=pledge_count,
+        giving_url=giving_url, giving_unavailable_reason=unavailable,
     )
 
 
@@ -438,10 +464,10 @@ async def claim_item(token: str, item_id: str, data: RegistryClaimCreate,
         action = data.action if data.action in {"reserved", "purchased"} else "reserved"
         claim = RegistryClaim(**common, action=action, quantity=qty)
     elif item.kind == "fund":
-        if not data.amount_minor or data.amount_minor <= 0:
-            raise HTTPException(422, "Please enter a contribution amount")
-        action = data.action if data.action in {"contributed", "pledged"} else "contributed"
-        claim = RegistryClaim(**common, action=action, quantity=1, amount_minor=data.amount_minor)
+        # Financial gifts have one authoritative home: DonationContribution.
+        # The public Gift List receives a Giving Hub URL from _item_out and
+        # must never create a second RegistryClaim for the same money.
+        raise HTTPException(409, "Use this fund's Giving Hub link to contribute or pledge")
     else:
         claim = RegistryClaim(**common, action="used_external_registry", quantity=1)
 

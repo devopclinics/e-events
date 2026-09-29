@@ -1710,8 +1710,13 @@ class RegistryItemOut(BaseModel):
     # Computed progress
     reserved_qty: int = 0     # items: total reserved
     remaining: Optional[int] = None  # items: quantity_wanted - reserved_qty
-    raised_minor: int = 0     # funds: total pledged (minor units)
+    raised_minor: int = 0     # funds: confirmed contributions (minor units)
     claim_count: int = 0
+    pledged_minor: int = 0
+    pledge_count: int = 0
+    # Cash funds use the Donation Tracker as the single financial ledger.
+    giving_url: Optional[str] = None
+    giving_unavailable_reason: Optional[str] = None
 
 
 class RegistryUnfurlRequest(BaseModel):
@@ -3404,6 +3409,7 @@ class DonationContributionCreate(BaseModel):
     expected_payment_channel: Optional[DonationChannel] = None
     expected_payment_date: Optional[datetime] = None
     provider_reference: Optional[str] = Field(default=None, max_length=255)
+    registry_item_id: Optional[str] = Field(default=None, max_length=36)
 
     @field_validator("donor_email", mode="before")
     @classmethod
@@ -3461,6 +3467,7 @@ class DonationAuditEntryOut(BaseModel):
 class DonationContributionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
+    registry_item_id: Optional[str] = None
     channel: str
     amount_minor: int
     reported_amount_minor: Optional[int] = None
@@ -3498,6 +3505,7 @@ class DonationPaymentReportIn(BaseModel):
 
 class DonationPublicContributionOut(BaseModel):
     id: str
+    registry_item_id: Optional[str] = None
     access_token: str
     reference: str
     status: str
@@ -3534,6 +3542,7 @@ class DonationCampaignOut(DonationCampaignUpdate):
     total_potential_minor: int = 0
     recent_public: list[dict] = Field(default_factory=list)
     channel_totals: list[dict] = Field(default_factory=list)
+    funds: list[dict] = Field(default_factory=list)
 
 
 class DonationPublicCampaignOut(BaseModel):
@@ -3553,3 +3562,4 @@ class DonationPublicCampaignOut(BaseModel):
     channels: list[DonationChannelConfig]
     pledge_payment_channels: list[dict] = Field(default_factory=list)
     recent_public: list[dict] = Field(default_factory=list)
+    funds: list[dict] = Field(default_factory=list)

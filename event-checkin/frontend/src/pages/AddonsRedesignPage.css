@@ -282,3 +282,5 @@
 .ad-chart-picker-row:hover { border-color: var(--teal); }
 .ad-chart-picker-name { display: flex; flex-direction: column; gap: 1px; font-size: 12px; color: var(--ink); }
 .ad-chart-picker-name small { font-size: 10px; color: var(--faint); font-weight: 400; }
+
+.ad-fund-ledger-note{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:18px;padding:14px 16px;border:1px solid #d8c8a8;border-radius:12px;background:#fbf6ea}.ad-fund-ledger-note strong,.ad-fund-ledger-note p{display:block;margin:0}.ad-fund-ledger-note p{margin-top:3px;color:#6d6254;font-size:12px}.ad-registry-progress small{color:#9a5b24}@media(max-width:700px){.ad-fund-ledger-note{align-items:stretch;flex-direction:column}}

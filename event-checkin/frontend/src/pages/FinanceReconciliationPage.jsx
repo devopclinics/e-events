@@ -30,7 +30,7 @@ const TABS = [
 ]
 
 const SOURCE_OPTIONS = ['Collection basket', 'Front desk / registration', 'Volunteer collected', 'Mail / envelope', 'Other']
-const blankOffline = { channel: 'offline', amount: '', donor_name: '', status: 'confirmed', source: 'Collection basket', sourceOther: '' }
+const blankOffline = { channel: 'offline', amount: '', donor_name: '', status: 'confirmed', source: 'Collection basket', sourceOther: '', registry_item_id: '' }
 
 export default function FinanceReconciliationPage() {
   const [currentEventId, setCurrentEventId] = useCurrentEvent()
@@ -66,17 +66,18 @@ export default function FinanceReconciliationPage() {
   useEffect(() => { load() }, [currentEventId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const channels = useMemo(() => Array.from(new Set(rows.map((r) => r.channel))), [rows])
+  const fundMap = useMemo(() => new Map((campaign?.funds || []).map((fund) => [fund.id, fund])), [campaign])
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     let list = rows.filter((r) => TABS.find((t) => t.key === tab).match(r))
     if (channelFilter) list = list.filter((r) => r.channel === channelFilter)
-    if (q) list = list.filter((r) => [r.donor_name, r.reference, String(r.amount_minor / 100)].some((v) => (v || '').toString().toLowerCase().includes(q)))
+    if (q) list = list.filter((r) => [r.donor_name, r.reference, fundMap.get(r.registry_item_id)?.title, String(r.amount_minor / 100)].some((v) => (v || '').toString().toLowerCase().includes(q)))
     const sorted = [...list]
     if (sort === 'oldest') sorted.sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
     else if (sort === 'highest') sorted.sort((a, b) => b.amount_minor - a.amount_minor)
     else sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     return sorted
-  }, [rows, tab, channelFilter, search, sort])
+  }, [rows, tab, channelFilter, search, sort, fundMap])
 
   const channelSummary = useMemo(() => {
     const map = new Map()
@@ -143,7 +144,7 @@ export default function FinanceReconciliationPage() {
       await api.addOfflineDonation(currentEventId, {
         channel: offline.channel, amount_minor: Math.round(Number(offline.amount) * 100),
         donor_name: offline.donor_name.trim() || null, status: offline.status,
-        source: source || null, message: null, donor_email: null, donor_phone: null,
+        source: source || null, registry_item_id: offline.registry_item_id || null, message: null, donor_email: null, donor_phone: null,
         expected_payment_channel: null, expected_payment_date: null, provider_reference: null,
       })
       setOffline(blankOffline)
@@ -221,7 +222,7 @@ export default function FinanceReconciliationPage() {
               const selectable = ['pending_verification', 'initiated', 'pledged'].includes(row.status)
               return <div className="fr-row" key={row.id}>
                 <input className="fr-check" type="checkbox" disabled={!selectable} checked={selected.has(row.id)} onChange={() => toggleSelect(row.id)} />
-                <div className="fr-donor"><span>{initials(row.donor_name)}</span><div><b>{row.donor_name || 'Unidentified'}</b><small>{row.donor_email || row.donor_phone || row.source || (row.anonymous_publicly ? 'Anonymous publicly' : '—')}</small><span className="fr-ref">{row.reference}</span></div></div>
+                <div className="fr-donor"><span>{initials(row.donor_name)}</span><div><b>{row.donor_name || 'Unidentified'}</b><small>{row.donor_email || row.donor_phone || row.source || (row.anonymous_publicly ? 'Anonymous publicly' : '—')}</small>{row.registry_item_id && <small>Fund: {fundMap.get(row.registry_item_id)?.title || 'Gift List fund'}</small>}<span className="fr-ref">{row.reference}</span></div></div>
                 <div className="fr-money"><b>{money(row.amount_minor, row.currency)}</b><small>{row.currency}</small></div>
                 <div className="fr-channel"><i>{ICONS[row.channel] || '•'}</i>{LABELS[row.channel] || row.channel}</div>
                 {hasIssue
@@ -253,6 +254,7 @@ export default function FinanceReconciliationPage() {
               <label>Amount<input required type="number" min="1" step="0.01" placeholder="0.00" value={offline.amount} onChange={(e) => setOffline({ ...offline, amount: e.target.value })} /></label>
               <label>Method<select value={offline.channel} onChange={(e) => setOffline({ ...offline, channel: e.target.value })}><option value="offline">Cash / cheque</option><option value="bank_transfer">Bank transfer</option><option value="cash_app">Cash App</option><option value="zelle">Zelle</option><option value="paypal">PayPal</option></select></label>
               <label>Source<select value={offline.source} onChange={(e) => setOffline({ ...offline, source: e.target.value })}>{SOURCE_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
+              {campaign.funds?.length > 0 && <label>Gift List fund<select value={offline.registry_item_id} onChange={(e) => setOffline({ ...offline, registry_item_id: e.target.value })}><option value="">General campaign</option>{campaign.funds.map((fund) => <option key={fund.id} value={fund.id}>{fund.title}</option>)}</select></label>}
               {offline.source === 'Other'
                 ? <label>Describe source<input required placeholder="e.g. Youth group table" value={offline.sourceOther} onChange={(e) => setOffline({ ...offline, sourceOther: e.target.value })} /></label>
                 : <label>Status<select value={offline.status} onChange={(e) => setOffline({ ...offline, status: e.target.value })}><option value="confirmed">Confirmed</option><option value="pending_verification">Pending verification</option></select></label>}

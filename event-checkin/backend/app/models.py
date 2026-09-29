@@ -2743,6 +2743,12 @@ class DonationContribution(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     campaign_id: Mapped[str] = mapped_column(String(36), ForeignKey("donation_campaigns.id", ondelete="CASCADE"), index=True)
     event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id", ondelete="CASCADE"), index=True)
+    # Optional Gift List cash-fund destination. Monetary activity is stored
+    # only here; the registry renders fund progress from this ledger instead
+    # of creating a second RegistryClaim for the same gift.
+    registry_item_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("registry_items.id", ondelete="SET NULL"), nullable=True, index=True,
+    )
     access_token: Mapped[str] = mapped_column(String(64), unique=True, index=True, default=lambda: str(uuid.uuid4()))
     channel: Mapped[str] = mapped_column(String(30))
     amount_minor: Mapped[int] = mapped_column(BigInteger)

@@ -518,3 +518,108 @@ async def test_disabled_campaign_and_disabled_channel_are_not_public(ctx):
     assert (await ctx.client.put(f"/api/events/{event_id}/donation-campaign", json=payload)).status_code == 200
     denied = await ctx.client.post(f"/api/give/{token}/contributions", json={"channel": "zelle", "amount_minor": 1000})
     assert denied.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_gift_list_fund_and_donation_tracker_share_one_financial_record(ctx):
+    """A cash-fund gift is one DonationContribution, never a duplicate RegistryClaim."""
+    ctx.login(ctx.ids["superadmin"])
+    event_id = ctx.ids["event_a"]
+    from conftest import _Session
+    from app.models import Event as EventModel
+    async with _Session() as session:
+        event = await session.get(EventModel, event_id)
+        event.is_paid, event.plan_tier, event.guest_cap = True, "tier50", 50
+        await session.commit()
+
+    enabled = await ctx.client.patch(f"/api/events/{event_id}/features", json={"registry_enabled": True})
+    assert enabled.status_code == 200, enabled.text
+    settings = await ctx.client.get(f"/api/events/{event_id}/registry/settings")
+    registry_token = settings.json()["registry_token"]
+
+    fund = await ctx.client.post(f"/api/events/{event_id}/registry/items", json={
+        "kind": "fund", "title": "Youth scholarship fund", "description": "Support the next generation",
+        "amount_minor": 100000, "currency": "USD", "quantity_wanted": 1, "sort_order": 0,
+    })
+    assert fund.status_code == 201, fund.text
+    fund_id = fund.json()["id"]
+
+    campaign = {
+        "enabled": True, "title": "Support this event", "description": None,
+        "goal_minor": 100000, "currency": "USD", "public_total_mode": "confirmed_and_pledged_separate",
+        "show_donor_names": True, "show_donor_amounts": True, "show_pledged_total": True,
+        "celebrate_milestones": False, "milestones_minor": [],
+        "channels": [{"type": "zelle", "enabled": True, "label": "Zelle", "recipient_email": "giving@example.org"}],
+    }
+    saved = await ctx.client.put(f"/api/events/{event_id}/donation-campaign", json=campaign)
+    assert saved.status_code == 200, saved.text
+    giving_token = saved.json()["public_token"]
+
+    registry = await ctx.client.get(f"/api/registry/{registry_token}")
+    public_fund = next(item for item in registry.json()["items"] if item["id"] == fund_id)
+    assert public_fund["giving_url"].endswith(f"?fund={fund_id}")
+    assert public_fund["raised_minor"] == 0
+
+    duplicate_path = await ctx.client.post(
+        f"/api/registry/{registry_token}/items/{fund_id}/claim",
+        json={"claimer_name": "Duplicate Donor", "action": "contributed", "amount_minor": 25000},
+    )
+    assert duplicate_path.status_code == 409
+
+    contribution = await ctx.client.post(f"/api/give/{giving_token}/contributions", json={
+        "channel": "zelle", "amount_minor": 25000, "donor_name": "One Ledger Donor",
+        "registry_item_id": fund_id,
+    })
+    assert contribution.status_code == 201, contribution.text
+    contribution_id = contribution.json()["id"]
+    assert contribution.json()["registry_item_id"] == fund_id
+
+    donations = (await ctx.client.get(f"/api/events/{event_id}/donations")).json()
+    assert [row["id"] for row in donations].count(contribution_id) == 1
+    assert (await ctx.client.get(f"/api/events/{event_id}/registry/claims")).json() == []
+
+    verified = await ctx.client.post(f"/api/events/{event_id}/donations/{contribution_id}/verify", json={})
+    assert verified.status_code == 200, verified.text
+    registry = await ctx.client.get(f"/api/registry/{registry_token}")
+    public_fund = next(item for item in registry.json()["items"] if item["id"] == fund_id)
+    assert public_fund["raised_minor"] == 25000
+    assert public_fund["claim_count"] == 1
+
+    snapshot = (await ctx.client.get(f"/api/events/{event_id}/donation-campaign")).json()
+    linked_fund = next(item for item in snapshot["funds"] if item["id"] == fund_id)
+    assert linked_fund["confirmed_minor"] == 25000
+    assert linked_fund["donation_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_giving_hub_rejects_fund_from_another_event(ctx):
+    ctx.login(ctx.ids["superadmin"])
+    event_id = ctx.ids["event_a"]
+    from conftest import _Session
+    from app.models import Event as EventModel
+    from datetime import datetime
+    async with _Session() as session:
+        event = await session.get(EventModel, event_id)
+        event.is_paid, event.plan_tier, event.guest_cap = True, "tier50", 50
+        other = EventModel(org_id=ctx.ids["org_b"], name="Other event", couples_name="Other host", checkin_base_url="http://other", event_date=datetime(2026, 10, 1), is_paid=True, plan_tier="tier50", guest_cap=50)
+        session.add(other)
+        await session.commit()
+        await session.refresh(other)
+        other_event_id = other.id
+    await ctx.client.patch(f"/api/events/{other_event_id}/features", json={"registry_enabled": True})
+    foreign_fund = await ctx.client.post(f"/api/events/{other_event_id}/registry/items", json={
+        "kind": "fund", "title": "Other event fund", "amount_minor": 50000,
+        "currency": "USD", "quantity_wanted": 1, "sort_order": 0,
+    })
+    campaign = {
+        "enabled": True, "title": "Support this event", "description": None,
+        "goal_minor": 0, "currency": "USD", "public_total_mode": "confirmed_only",
+        "show_donor_names": True, "show_donor_amounts": True, "show_pledged_total": False,
+        "celebrate_milestones": False, "milestones_minor": [],
+        "channels": [{"type": "zelle", "enabled": True, "label": "Zelle"}],
+    }
+    saved = await ctx.client.put(f"/api/events/{event_id}/donation-campaign", json=campaign)
+    response = await ctx.client.post(f"/api/give/{saved.json()['public_token']}/contributions", json={
+        "channel": "zelle", "amount_minor": 1000, "registry_item_id": foreign_fund.json()["id"],
+    })
+    assert response.status_code == 422

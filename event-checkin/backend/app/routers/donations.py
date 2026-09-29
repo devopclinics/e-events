@@ -23,7 +23,7 @@ from ..auth import require_paid_event_admin, require_paid_event_member
 from ..config import settings
 from ..database import get_db
 from ..entitlements import last_credit_ledger_id, reserve_message_credit
-from ..models import DonationCampaign, DonationContribution, DonationStatusHistory, Event, User
+from ..models import DonationCampaign, DonationContribution, DonationStatusHistory, Event, RegistryItem, User
 from ..ratelimit import rate_limit
 from ..schemas import (
     DonationAuditEntryOut, DonationBulkVerifyIn, DonationBulkVerifyResult,
@@ -80,6 +80,17 @@ async def _campaign_for_event(event_id: str, db: AsyncSession) -> DonationCampai
     return await db.scalar(select(DonationCampaign).where(DonationCampaign.event_id == event_id))
 
 
+async def _validate_registry_fund(campaign: DonationCampaign, registry_item_id: str | None, db: AsyncSession) -> RegistryItem | None:
+    if not registry_item_id:
+        return None
+    item = await db.get(RegistryItem, registry_item_id)
+    if (not item or item.event_id != campaign.event_id or item.kind != "fund" or not item.is_active):
+        raise HTTPException(422, "This Gift List fund is not available")
+    if item.currency.upper() != campaign.currency.upper():
+        raise HTTPException(422, "This fund uses a different currency from the Giving Hub")
+    return item
+
+
 async def _campaign_for_token(token: str, db: AsyncSession, require_enabled: bool = True) -> DonationCampaign:
     # The public link is normally the event's short event_code (e.g. "iedpu26"); older
     # links minted before that existed still resolve via the long public_token.
@@ -101,6 +112,25 @@ async def _rows(campaign_id: str, db: AsyncSession) -> list[DonationContribution
         .where(DonationContribution.campaign_id == campaign_id)
         .order_by(DonationContribution.created_at.desc())
     )).scalars().all())
+
+
+async def _funds(campaign: DonationCampaign, rows: list[DonationContribution], db: AsyncSession) -> list[dict]:
+    items = list((await db.execute(
+        select(RegistryItem)
+        .where(RegistryItem.event_id == campaign.event_id, RegistryItem.kind == "fund", RegistryItem.is_active.is_(True))
+        .order_by(RegistryItem.sort_order, RegistryItem.created_at)
+    )).scalars().all())
+    result = []
+    for item in items:
+        linked = [row for row in rows if row.registry_item_id == item.id]
+        totals = _totals(linked)
+        result.append({
+            "id": item.id, "title": item.title, "description": item.description,
+            "goal_minor": item.amount_minor or 0, "currency": item.currency,
+            "confirmed_minor": totals["confirmed_minor"], "pledged_minor": totals["pledged_minor"],
+            "donation_count": totals["donation_count"], "pledge_count": totals["pledge_count"],
+        })
+    return result
 
 
 def _totals(rows: list[DonationContribution]) -> dict:
@@ -166,7 +196,7 @@ async def _campaign_out(campaign: DonationCampaign, db: AsyncSession) -> Donatio
         show_donor_amounts=campaign.show_donor_amounts, show_pledged_total=campaign.show_pledged_total,
         celebrate_milestones=campaign.celebrate_milestones,
         milestones_minor=campaign.milestones_minor or [], channels=campaign.channels or [],
-        recent_public=_public_recent(campaign, rows), **totals,
+        recent_public=_public_recent(campaign, rows), funds=await _funds(campaign, rows, db), **totals,
     )
 
 
@@ -259,11 +289,12 @@ async def add_offline(event_id: str, body: DonationOfflineCreate, db: AsyncSessi
     campaign = await _campaign_for_event(event_id, db)
     if not campaign or not campaign.enabled:
         raise HTTPException(409, "Enable the Donation Tracker first")
+    registry_item = await _validate_registry_fund(campaign, body.registry_item_id, db)
     row = DonationContribution(
         campaign_id=campaign.id, event_id=event_id, channel=body.channel,
         amount_minor=body.amount_minor, currency=campaign.currency, status=body.status,
         donor_name=body.donor_name, donor_email=str(body.donor_email) if body.donor_email else None,
-        donor_phone=body.donor_phone, source=body.source, anonymous_publicly=body.anonymous_publicly,
+        donor_phone=body.donor_phone, source=body.source, registry_item_id=registry_item.id if registry_item else None, anonymous_publicly=body.anonymous_publicly,
         hide_amount_publicly=body.hide_amount_publicly, message=body.message,
         expected_payment_channel=body.expected_payment_channel,
         expected_payment_date=_database_datetime(body.expected_payment_date),
@@ -398,12 +429,18 @@ async def donation_audit_trail(event_id: str, limit: int = 30, db: AsyncSession 
 async def export_donations(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
     campaign = await _campaign_for_event(event_id, db)
     rows = await _rows(campaign.id, db) if campaign else []
+    fund_ids = {row.registry_item_id for row in rows if row.registry_item_id}
+    fund_names = {}
+    if fund_ids:
+        fund_names = {item.id: item.title for item in (await db.execute(
+            select(RegistryItem).where(RegistryItem.id.in_(fund_ids), RegistryItem.event_id == event_id)
+        )).scalars().all()}
     buffer = io.StringIO()
     writer = csv.writer(buffer)
-    writer.writerow(["Reference", "Donor", "Email", "Phone", "Amount", "Reported amount", "Currency", "Channel", "Status", "Submitted", "Verified at"])
+    writer.writerow(["Reference", "Gift List fund", "Donor", "Email", "Phone", "Amount", "Reported amount", "Currency", "Channel", "Status", "Submitted", "Verified at"])
     for row in rows:
         writer.writerow([
-            row.reference, row.donor_name or "", row.donor_email or "", row.donor_phone or "",
+            row.reference, fund_names.get(row.registry_item_id, ""), row.donor_name or "", row.donor_email or "", row.donor_phone or "",
             row.amount_minor / 100, (row.reported_amount_minor / 100) if row.reported_amount_minor else "",
             row.currency, row.channel, row.status,
             row.created_at.isoformat(timespec="minutes"), row.verified_at.isoformat(timespec="minutes") if row.verified_at else "",
@@ -437,13 +474,13 @@ async def public_campaign(token: str, db: AsyncSession = Depends(get_db), _: Non
         show_pledged_total=campaign.show_pledged_total,
         channels=[channel for channel in (campaign.channels or []) if channel.get("enabled")],
         pledge_payment_channels=PLEDGE_PAYMENT_CHANNELS,
-        recent_public=_public_recent(campaign, rows),
+        recent_public=_public_recent(campaign, rows), funds=await _funds(campaign, rows, db),
     )
 
 
 def _public_contribution_out(row: DonationContribution, channel: dict) -> DonationPublicContributionOut:
     return DonationPublicContributionOut(
-        id=row.id, access_token=row.access_token, reference=row.reference, status=row.status,
+        id=row.id, registry_item_id=row.registry_item_id, access_token=row.access_token, reference=row.reference, status=row.status,
         channel=row.channel, amount_minor=row.amount_minor, currency=row.currency,
         expected_payment_channel=row.expected_payment_channel, expected_payment_date=row.expected_payment_date,
         payment_reported_at=row.payment_reported_at,
@@ -467,10 +504,11 @@ async def create_public_contribution(token: str, body: DonationContributionCreat
         raise HTTPException(422, "Pledges require an expected payment channel and date")
     if body.channel == "festio_pay" and not channel.get("checkout_url"):
         raise HTTPException(409, "Festio Pay is not configured for this campaign")
+    registry_item = await _validate_registry_fund(campaign, body.registry_item_id, db)
     status = "pledged" if body.channel == "pledge" else ("initiated" if body.channel == "festio_pay" else "pending_verification")
     row = DonationContribution(
         campaign_id=campaign.id, event_id=campaign.event_id, channel=body.channel,
-        amount_minor=body.amount_minor, currency=campaign.currency, status=status,
+        registry_item_id=registry_item.id if registry_item else None, amount_minor=body.amount_minor, currency=campaign.currency, status=status,
         donor_name=body.donor_name, donor_email=str(body.donor_email) if body.donor_email else None,
         donor_phone=body.donor_phone, contact_consent=body.contact_consent, anonymous_publicly=body.anonymous_publicly,
         hide_amount_publicly=body.hide_amount_publicly, message=body.message,

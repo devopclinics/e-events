@@ -48,6 +48,14 @@ def _reset_credit_rate_cache():
     entitlements._rate_cache.clear()
 
 
+@pytest.fixture(autouse=True)
+def _reset_public_rate_limits():
+    from app import ratelimit
+    ratelimit._local.clear()
+    yield
+    ratelimit._local.clear()
+
+
 # Outbox-style modules (festiome_outbox, webhook_outbox, and main.py's public-API
 # audit middleware) import AsyncSessionLocal directly rather than via the
 # get_db dependency, so app.dependency_overrides[get_db] never touches them —

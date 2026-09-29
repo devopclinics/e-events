@@ -274,6 +274,8 @@ export default function DonationGivingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaign, token])
 
+  const fundId = searchParams.get('fund') || ''
+  const selectedFund = useMemo(() => campaign?.funds?.find((item) => item.id === fundId) || null, [campaign, fundId])
   const directChannels = useMemo(() => campaign?.channels?.filter((item) => !['pledge','offline'].includes(item.type)) || [], [campaign])
   const selected = useMemo(() => directChannels.find((item) => item.type === channel), [directChannels, channel])
   const pledgeOption = useMemo(() => campaign?.channels?.find((item) => item.type === 'pledge'), [campaign])
@@ -288,11 +290,11 @@ export default function DonationGivingPage() {
   async function submit(event, useChannel) {
     event.preventDefault(); setBusy(true); setError('')
     try {
-      const body = { ...form, contact_consent: Boolean((form.donor_email.trim() || form.donor_phone.trim()) && form.contact_consent), channel: useChannel, amount_minor: amountMinor, donor_email: form.donor_email.trim() || null, expected_payment_date: form.expected_payment_date ? new Date(`${form.expected_payment_date}T12:00:00`).toISOString() : null }
+      const body = { ...form, registry_item_id: selectedFund?.id || null, contact_consent: Boolean((form.donor_email.trim() || form.donor_phone.trim()) && form.contact_consent), channel: useChannel, amount_minor: amountMinor, donor_email: form.donor_email.trim() || null, expected_payment_date: form.expected_payment_date ? new Date(`${form.expected_payment_date}T12:00:00`).toISOString() : null }
       if (useChannel !== 'pledge') { body.expected_payment_channel = null; body.expected_payment_date = null }
       const next = await api.createDonationContribution(token, body)
       setResult(next)
-      setSearchParams({ ref: next.access_token }, { replace: true })
+      setSearchParams({ ref: next.access_token, ...(selectedFund ? { fund: selectedFund.id } : {}) }, { replace: true })
       setCampaign(await api.publicDonationCampaign(token))
       // Only Festio Pay is a real hosted checkout redirect. Cash App/PayPal/
       // Zelle/Bank Transfer show the payment panel so the donor sees their
@@ -318,7 +320,7 @@ export default function DonationGivingPage() {
   if (result) {
     const pledged = result.status === 'pledged'
     const pending = result.status === 'pending_verification'
-    return <main className="dg-shell dg-success-shell"><section className="dg-success-card"><span className="dg-success-mark">✓</span><p>{campaign.event_name}</p><h1>{pledged ? 'Thank you for your pledge' : 'Thank you for your support'}</h1><strong>{money(result.amount_minor, result.currency)}</strong><div className="dg-success-details"><article><small>Payment method</small><b>{LABELS[pledged ? result.expected_payment_channel : result.channel] || result.expected_payment_channel || result.channel}</b></article><article><small>Status</small><b>{pledged ? 'Pledge recorded' : result.payment_reported_at ? 'Payment reported' : pending ? 'Awaiting confirmation' : 'Confirmed'}</b></article>{pledged && result.expected_payment_date && <article><small>Expected date</small><b>{new Date(result.expected_payment_date).toLocaleDateString()}</b></article>}<article><small>Reference</small><b>{result.reference}</b></article></div>{result.instructions && <aside className="dg-payment-instructions"><b>Payment instructions</b><p>{result.instructions}</p></aside>}<PaymentPanel result={result} onReport={reportPayment} onConvertPledge={convertPledge} directChannels={directChannels} busy={busy}/><p>{pledged ? 'No payment was collected. Your pledge remains separate from received funds until the organizer confirms payment.' : pending && !result.payment_reported_at ? 'Complete payment using the selected method. Festio records your contribution; the organizer confirms it after payment is received.' : !pledged && !result.payment_reported_at ? 'Your contribution has been confirmed.' : null}</p><p className="dg-return-note">Bookmark this page to return to your contribution any time.</p><button onClick={() => { setResult(null); setPledgeOpen(false); setSearchParams({}, { replace: true }) }}>Return to campaign</button></section></main>
+    return <main className="dg-shell dg-success-shell"><section className="dg-success-card"><span className="dg-success-mark">✓</span><p>{campaign.event_name}</p><h1>{pledged ? 'Thank you for your pledge' : 'Thank you for your support'}</h1><strong>{money(result.amount_minor, result.currency)}</strong><div className="dg-success-details"><article><small>Payment method</small><b>{LABELS[pledged ? result.expected_payment_channel : result.channel] || result.expected_payment_channel || result.channel}</b></article><article><small>Status</small><b>{pledged ? 'Pledge recorded' : result.payment_reported_at ? 'Payment reported' : pending ? 'Awaiting confirmation' : 'Confirmed'}</b></article>{pledged && result.expected_payment_date && <article><small>Expected date</small><b>{new Date(result.expected_payment_date).toLocaleDateString()}</b></article>}<article><small>Reference</small><b>{result.reference}</b></article></div>{result.instructions && <aside className="dg-payment-instructions"><b>Payment instructions</b><p>{result.instructions}</p></aside>}<PaymentPanel result={result} onReport={reportPayment} onConvertPledge={convertPledge} directChannels={directChannels} busy={busy}/><p>{pledged ? 'No payment was collected. Your pledge remains separate from received funds until the organizer confirms payment.' : pending && !result.payment_reported_at ? 'Complete payment using the selected method. Festio records your contribution; the organizer confirms it after payment is received.' : !pledged && !result.payment_reported_at ? 'Your contribution has been confirmed.' : null}</p><p className="dg-return-note">Bookmark this page to return to your contribution any time.</p><button onClick={() => { setResult(null); setPledgeOpen(false); setSearchParams(selectedFund ? { fund: selectedFund.id } : {}, { replace: true }) }}>Return to campaign</button></section></main>
   }
 
   const pledgeValid = form.donor_name.trim() && form.expected_payment_channel && form.expected_payment_date && amountMinor > 0
@@ -326,7 +328,7 @@ export default function DonationGivingPage() {
   return <main className="dg-shell" style={{ '--dg-primary':'#006b4f', '--dg-accent':'#e0a928' }}>
     <header className={`dg-campaign-hero ${campaign.cover_image_url ? 'has-image' : ''}`}>
       {campaign.cover_image_url && <img className="dg-cover" src={campaign.cover_image_url} alt=""/>}<div className="dg-cover-shade"/>
-      <div className="dg-hero-content"><div className="dg-org-line">{campaign.logo_url ? <img src={campaign.logo_url} alt=""/> : <span>{campaign.event_name.slice(0,1)}</span>}<div><b>{campaign.event_name}</b><small>FESTIO GIVING HUB</small></div></div><h1>{campaign.title}</h1><p>{donationIntro}</p><div className="dg-values"><span>◉ Community</span><span>▣ Knowledge</span><span>◇ Unity</span><span>↗ Stronger future</span></div></div>
+      <div className="dg-hero-content"><div className="dg-org-line">{campaign.logo_url ? <img src={campaign.logo_url} alt=""/> : <span>{campaign.event_name.slice(0,1)}</span>}<div><b>{campaign.event_name}</b><small>FESTIO GIVING HUB</small></div></div><h1>{selectedFund ? selectedFund.title : campaign.title}</h1><p>{selectedFund?.description || donationIntro}</p>{selectedFund && <div className="dg-fund-context">Gift List fund · {money(selectedFund.confirmed_minor, selectedFund.currency)} received{selectedFund.goal_minor > 0 ? ` of ${money(selectedFund.goal_minor, selectedFund.currency)}` : ''}</div>}<div className="dg-values"><span>◉ Community</span><span>▣ Knowledge</span><span>◇ Unity</span><span>↗ Stronger future</span></div></div>
     </header>
 
     <div className="dg-page-grid"><div className="dg-main">

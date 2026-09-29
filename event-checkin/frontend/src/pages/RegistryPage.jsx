@@ -9,8 +9,8 @@ function fmtMoney(minor, currency) {
   return `${sym}${(minor / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
 }
 
-// Public, no-auth gift registry. Guests reserve items or pledge to cash funds;
-// the actual buying/sending happens off-platform (mark-only).
+// Public, no-auth gift registry. Physical-item reservations remain registry
+// claims; cash funds open the Giving Hub so money has one authoritative ledger.
 export default function RegistryPage() {
   const { token } = useParams()
   const [data, setData] = useState(null)
@@ -92,7 +92,10 @@ export default function RegistryPage() {
                         <div className="h-full bg-rose-400" style={{ width: `${pct}%` }} />
                       </div>
                     )}
-                    <button onClick={() => setClaimFor(f)} className="mt-3 w-full bg-rose-500 text-white rounded-lg py-2 text-sm font-semibold hover:bg-rose-600">Contribute</button>
+                    {f.pledged_minor > 0 && <div className="text-xs text-amber-700 mt-1">{fmtMoney(f.pledged_minor, f.currency)} pledged · {f.pledge_count} active</div>}
+                    {f.giving_url
+                      ? <a href={f.giving_url} className="mt-3 block w-full bg-rose-500 text-white rounded-lg py-2 text-sm text-center font-semibold hover:bg-rose-600">Give or pledge</a>
+                      : <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">{f.giving_unavailable_reason || 'Giving is not available yet.'}</div>}
                   </div>
                 )
               })}

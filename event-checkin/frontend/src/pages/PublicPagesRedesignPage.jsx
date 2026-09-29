@@ -110,7 +110,9 @@ function RegistrySurface({ token }) {
         <strong className="pp-registry-name">{item.title}</strong>
         {item.description && <p>{item.description}</p>}
         {(item.buy_url || item.external_url) && <a className="pp-registry-link" href={item.buy_url || item.external_url} target="_blank" rel="noreferrer">View list →</a>}
-        {item.kind !== 'link' && <button disabled={remaining <= 0} className="pp-btn-primary" onClick={() => setClaiming(item)}>{item.kind === 'fund' ? 'Contribute' : remaining <= 0 ? 'Reserved' : 'Reserve'}</button>}
+        {item.kind === 'fund' && item.giving_url && <a className="pp-btn-primary" href={item.giving_url}>Give or pledge →</a>}
+        {item.kind === 'fund' && !item.giving_url && <p role="note">{item.giving_unavailable_reason || 'Giving is not available yet.'}</p>}
+        {item.kind === 'item' && <button disabled={remaining <= 0} className="pp-btn-primary" onClick={() => setClaiming(item)}>{remaining <= 0 ? 'Reserved' : 'Reserve'}</button>}
       </div>
     })}</div>
     {claiming && <RegistryClaim token={token} item={claiming} onClose={() => setClaiming(null)} onSaved={async () => { setClaiming(null); await load(); setNotice('Thank you! Your gift was recorded.') }} />}

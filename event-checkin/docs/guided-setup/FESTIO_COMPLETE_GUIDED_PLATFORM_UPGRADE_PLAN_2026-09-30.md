@@ -1,7 +1,7 @@
 # Festio Complete Guided Platform Upgrade Plan
 
-**Date:** September 30, 2026  
-**Status:** Design and planning only — no application implementation authorized  
+**Date:** September 30, 2026
+**Status:** Phases 1–6 implemented on the guided-setup feature branch and deployed to staging for acceptance
 **Goal:** Make every Festio capability procedural, discoverable, resumable, and understandable without requiring users to learn the product’s internal module structure.
 
 ## 1. Product model
@@ -92,14 +92,14 @@ A first-time or returning organizer can establish a valid event workspace, under
 
 Organization profile → primary contact → timezone/currency defaults → sender/provider status → billing owner → plan and credits → readiness result.
 
-**Completion evidence:** organization exists; required profile fields exist; billing and provider states are returned from their current services.  
+**Completion evidence:** organization exists; required profile fields exist; billing and provider states are returned from their current services.
 **Blockers:** missing administrative permission, suspended organization, unavailable provider, or plan restriction.
 
 ### 1.2 Event foundation recipe
 
 Event name/type → attendance model → start/end/timezone → venue/address → capacity → organizer/host → event status → save draft.
 
-**Completion evidence:** valid persisted event record.  
+**Completion evidence:** valid persisted event record.
 **Important behavior:** venue and other reusable details flow automatically into websites, passes, communications, check-in, and programme pages.
 
 ### 1.3 Team readiness recipe
@@ -160,7 +160,7 @@ Choose public or personal links → set deadline/capacity/approval → choose su
 
 Enable sales → choose currency/fees/tax → verify payment provider → create ticket products → set price/capacity/window/visibility → connect access type → configure attendee fields → discounts/add-ons → confirmation/pass delivery → refund/transfer rules → preview page/embed → test checkout → verify payment/order/guest/pass/message → publish → monitor orders and waitlist.
 
-**Completion evidence:** enabled ticket configuration, verified selected payout account, active product, valid public page, and test order result.  
+**Completion evidence:** enabled ticket configuration, verified selected payout account, active product, valid public page, and test order result.
 **Unavailable behavior:** unsupported group-ticket, widget, discount, or abandoned-registration capabilities must appear as unavailable rather than simulated.
 
 ### 2.4 Festio Pass recipe
@@ -389,7 +389,7 @@ Response completeness → moderation outcomes → activity comparison → audien
 - Certificate eligibility, verification, revocation, and delivery pass.
 - Product approval is required before Phase 6 implementation.
 
-## Phase 6 — Results, reuse, Help, integrations, administration, and rollout
+## Phase 6 — Results, reuse, Help, and integrations
 
 ### User outcome
 
@@ -417,19 +417,23 @@ Choose integration → explain data direction and ownership → authorize/config
 
 **Covered integration families:** spreadsheet imports/sync, calendars/ICS, payment providers, email/SMS/WhatsApp/MMS providers, API keys, webhooks, public API, and future verified AMS providers.
 
-### 6.6 Platform operations recipe
+## Internal platform programme — outside the organizer event flow
+
+The following controls are intentionally excluded from Guided Event Setup. They remain available only through separate, role-protected platform administration workspaces.
+
+### P.1 Platform operations
 
 Organization/account search → trials/comps/credits → pricing/plans → add-on overrides → operators → suspensions → safe support access → audit log → guarded destructive actions.
 
-### 6.7 Organization media recipe
+### P.2 Platform media administration
 
-Upload → type/size/access validation → folders/tags → usage references → replace without broken references → archive/delete safety → reuse in design, websites, speakers, partners, live, and certificates.
+Organization ownership → type/size/access validation → usage references → safe replacement → archive/delete safety. Organizer-facing event media should be exposed later through an organization-scoped workspace, without superadmin controls.
 
-### 6.8 Setup analytics recipe
+### P.3 Setup analytics
 
 Time to first event → time to test → time to publish → completion/drop-off by recipe and step → blocker frequency → support requests → test-to-live conversion → recommended content/product improvements.
 
-### 6.9 Controlled production rollout
+### P.4 Controlled production rollout
 
 Internal staging → selected staging organizations → acceptance review → production code dark launch → pilot organizations → monitored expansion → default for new events → optional migration for existing events → later navigation simplification only after evidence.
 
@@ -439,16 +443,17 @@ Internal staging → selected staging organizations → acceptance review → pr
 - Safe template/duplication flow.
 - Contextual Help drawer and Academy handoff.
 - Integration Center and connection health.
-- Platform operations procedures.
-- Media usage and safe replacement.
-- Setup analytics dashboard.
-- Production pilot controls.
 
-### Phase 6 production gate
+### Organizer Phase 6 gate
 
 - All prior staging gates still pass in full regression.
 - Existing direct routes and public links remain supported.
 - Role and cross-organization isolation pass at API and UI layers.
+- Organizer roles cannot access platform administration controls from Guided Event Setup.
+- Existing direct routes and public journeys continue to pass regression.
+
+### Separate internal platform gate
+
 - Feature flags support organization-level enable/disable without deployment.
 - Monitoring covers guide failures and all critical public journeys.
 - GitOps deployment and rollback are rehearsed.

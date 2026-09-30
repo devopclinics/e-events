@@ -1,0 +1,8 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import {phaseFiveReadiness,selectedPhaseFiveRecipes} from '../src/pages/guidedSetupPhaseFiveModel.mjs'
+test('phase five selects conference and live procedures independently',()=>{assert.deepEqual(selectedPhaseFiveRecipes(['live']).map(x=>x.id),['activities','control','materials','analytics']);assert.deepEqual(selectedPhaseFiveRecipes(['certificates']).map(x=>x.id),['certificates'])})
+test('conference foundation requires tracks and review',()=>{const r=phaseFiveReadiness({selectedOutcomes:['conference'],conference:{tracks:[{}]},progress:{phase5_conference_review:'completed'}});assert.equal(r.recipes.find(x=>x.id==='conference').complete,true)})
+test('public call requires enabled call types and test submission',()=>{const r=phaseFiveReadiness({selectedOutcomes:['conference'],conference:{profile:{public_token:'token',calls_open:true,enabled_call_types:['abstract']}},progress:{phase5_call_test:'completed'}});assert.equal(r.recipes.find(x=>x.id==='calls').complete,true)})
+test('control room requires workflow display and rehearsal',()=>{const r=phaseFiveReadiness({selectedOutcomes:['live'],displays:[{status:'connected'}],workflows:[{status:'published'}],progress:{phase5_control_rehearsal:'completed'}});assert.equal(r.recipes.find(x=>x.id==='control').complete,true)})
+test('certificate readiness requires template issued certificate and verification test',()=>{const r=phaseFiveReadiness({selectedOutcomes:['certificates'],certificateTemplates:[{}],certificates:[{status:'issued'}],progress:{phase5_certificate_test:'completed'}});assert.equal(r.recipes[0].complete,true)})

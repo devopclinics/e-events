@@ -106,6 +106,8 @@ const LayoutOptionsPage = lazy(() => import('./pages/LayoutOptionsPage'))
 const TrainingPage = lazy(() => import('./pages/TrainingPage'))
 const EventWebsitePage = lazy(() => import('./pages/EventWebsitePage'))
 const CertificateVerificationPage = lazy(() => import('./pages/CertificateVerificationPage'))
+const ConferenceCenterPage = lazy(() => import('./pages/ConferenceCenterPage'))
+const ConferenceCallPage = lazy(() => import('./pages/ConferenceCallPage'))
 
 // ── Preferred-view helpers ────────────────────────────────────────────────────
 
@@ -488,6 +490,7 @@ function AppRoutes() {
       <Route path="/speakers/:token" element={<SpeakersPublicPage />} />
       <Route path="/partners/:token" element={<PartnersPublicPage />} />
       <Route path="/certificates/:token" element={<CertificateVerificationPage />} />
+      <Route path="/conference/apply/:token" element={<ConferenceCallPage />} />
       {/* Public/private Event Calendar — no auth required; the backend
           resolves either a public share_token or a private per-contact token */}
       <Route path="/calendar/:token" element={<CalendarPage />} />
@@ -542,6 +545,7 @@ function AppRoutes() {
       <Route path="/event-results-redesign" element={<ProtectedRoute><EventResultsRedesignPage /></ProtectedRoute>} />
       <Route path="/festiome-redesign" element={<ProtectedRoute><FestioMeRedesignPage /></ProtectedRoute>} />
       <Route path="/planner-redesign" element={<ProtectedRoute><PlannerRedesignPage /></ProtectedRoute>} />
+      <Route path="/conference-center" element={<ProtectedRoute paidOnly><ConferenceCenterPage /></ProtectedRoute>} />
       <Route path="/live-redesign" element={<ProtectedRoute><FestioLiveRedesignPage /></ProtectedRoute>} />
       <Route path="/vendor-portal/:token" element={<VendorPortalPage />} />
       {(['festio.events', 'staging.festio.events', 'localhost'].includes(window.location.hostname)) &&

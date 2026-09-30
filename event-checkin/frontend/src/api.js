@@ -526,6 +526,18 @@ export const api = {
   updateSource: (id, data) => req('PUT', `/events/${id}/source`, data),
   syncNow: (id) => req('POST', `/events/${id}/sync-now`),
 
+  // Conference Center
+  getConferenceCenter: (eventId) => req('GET', `/events/${eventId}/conference-center`),
+  updateConferenceProfile: (eventId, data) => req('PUT', `/events/${eventId}/conference-center/profile`, data),
+  reviewConferenceSubmission: (eventId, id, data) => req('PATCH', `/events/${eventId}/conference-center/submissions/${id}`, data),
+  createConferenceTrack: (eventId, data) => req('POST', `/events/${eventId}/conference-center/tracks`, data),
+  updateConferenceTrack: (eventId, id, data) => req('PUT', `/events/${eventId}/conference-center/tracks/${id}`, data),
+  createConferenceOperation: (eventId, data) => req('POST', `/events/${eventId}/conference-center/operations`, data),
+  deleteConferenceOperation: (eventId, id) => req('DELETE', `/events/${eventId}/conference-center/operations/${id}`),
+  createConferenceTemplate: (eventId, data) => req('POST', `/events/${eventId}/conference-center/templates`, data),
+  getConferenceCall: (token) => req('GET', `/conference-calls/${token}`),
+  submitConferenceCall: (token, data) => req('POST', `/conference-calls/${token}`, data),
+
   // Team
   listMembers: (eventId) => req('GET', `/events/${eventId}/members`),
   assignMember: (eventId, userId) => req('POST', `/events/${eventId}/members`, { user_id: userId }),

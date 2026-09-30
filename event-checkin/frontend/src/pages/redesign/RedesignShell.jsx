@@ -371,6 +371,7 @@ const SIDEBAR_NAV = [
   ['card', 'Billing', '/billing-redesign?tab=billing', 'billing'],
   ['grp', 'Planning'],
   ['book', 'Planner', '/planner-redesign', 'planner', null, 'planner'],
+  ['layers', 'Conference Center', '/conference-center', 'conference'],
   ['mic', 'Festio Live', '/live-redesign', 'live', null, 'festioLive'],
   ['grp', 'Add-ons', null, null, null, 'anyAddon'],
   ['ticket', 'Venue Access', '/checkin-redesign?tab=zones', 'access', null, 'venueAccess'],

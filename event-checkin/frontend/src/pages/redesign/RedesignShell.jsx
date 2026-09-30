@@ -307,6 +307,9 @@ export function Icon({ name, size = 18, className }) {
   return <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
 }
 
+const GUIDED_SETUP_ENABLED = import.meta.env.VITE_GUIDED_SETUP_ENABLED === 'true' &&
+  typeof window !== 'undefined' && ['staging.festio.events', 'localhost'].includes(window.location.hostname)
+
 // Mirrors the real top nav (App.jsx Nav, :85-203). Destinations point
 // directly at each item's redesign page — Check-in and Orders used to
 // route through their legacy URLs (/scanner, /kitchen) on the theory that
@@ -320,8 +323,7 @@ const TOP_LINKS = [
   { id: 'setup', label: 'Event Setup', to: '/admin-redesign', icon: 'calendar' },
   {
     id: 'guide', label: 'Setup Guide', to: '/setup-redesign?view=guide', icon: 'grid',
-    gate: ({ user }) => ['admin', 'event_manager'].includes(user?.role) && typeof window !== 'undefined' &&
-      ['staging.festio.events', 'localhost'].includes(window.location.hostname),
+    gate: ({ user }) => GUIDED_SETUP_ENABLED && ['admin', 'event_manager'].includes(user?.role),
   },
   { id: 'events', label: 'Events', to: '/events-redesign', icon: 'calendar' },
   {
@@ -377,7 +379,7 @@ const SIDEBAR_NAV = [
   ['grp', 'Planning'],
   ['book', 'Planner', '/planner-redesign', 'planner', null, 'planner'],
   ['layers', 'Conference Center', '/conference-center', 'conference'],
-  ['mic', 'Festio Live', '/live-redesign', 'live'],
+  ['mic', 'Festio Live', '/live-redesign', 'live', null, 'festioLive', true],
   ['grp', 'Add-ons', null, null, null, 'anyAddon'],
   ['ticket', 'Venue Access', '/checkin-redesign?tab=zones', 'access', null, 'venueAccess'],
   ['chair', 'Seating', '/addons-redesign?tab=seating', 'seating', null, 'seating'],
@@ -391,7 +393,7 @@ const SIDEBAR_NAV = [
   ['grp', 'Team & Settings'],
   ['team', 'Team', '/team-redesign?tab=team', 'team'],
   ['file', 'Tasks', '/team-redesign?tab=tasks', 'tasks'],
-  ['barchart', 'Experience', '/experience-redesign', 'experience'],
+  ['barchart', 'Experience', '/experience-redesign', 'experience', null, 'experience', true],
   ['message', 'Messages', '/communications-redesign?tab=messages', 'messages'],
   ['settings', 'Features & messaging', '/communications-redesign?tab=settings', 'features'],
 ]
@@ -630,13 +632,14 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
                     </Link>
                   ))}
                 </div>
-                {SIDEBAR_NAV.map(([icon, label, to, id, count, gate], i) => {
-                  if (gate && !flags[gate]) return null
+                {SIDEBAR_NAV.map(([icon, label, to, id, count, gate, discoverable], i) => {
+                  const accessMissing = gate && !flags[gate]
+                  if (accessMissing && !discoverable) return null
                   if (icon === 'grp') return <small key={label + i}>{label.toUpperCase()}</small>
                   return (
                     <Link key={label} to={to} className={eventActive === id ? 'active' : ''}>
                       <Icon name={icon} size={15} /><span>{label}</span>
-                      {count != null && <b>{count}</b>}
+                      {accessMissing ? <b>Enable</b> : count != null && <b>{count}</b>}
                     </Link>
                   )
                 })}

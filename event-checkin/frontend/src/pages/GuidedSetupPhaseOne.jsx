@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
+import { useAuth } from '../context/AuthContext'
 import { ErrorRetryState, LoadingSkeleton } from './redesign/RedesignPrimitives'
 import { Icon } from './redesign/RedesignShell'
 import './GuidedSetupPhaseOne.css'
@@ -62,6 +63,7 @@ export function OutcomeLauncher({ eventId, onContinue, notify }) {
 }
 
 export function PhaseOneGuide({ eventId, onChooseOutcomes, onCreateEvent }) {
+  const { user } = useAuth()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -70,14 +72,14 @@ export function PhaseOneGuide({ eventId, onChooseOutcomes, onCreateEvent }) {
     if (!eventId) { setLoading(false); return }
     setLoading(true); setError('')
     try {
-      const [eventsResult, progressResult, membersResult, passResult] = await Promise.allSettled([
-        api.listEvents(), api.getSetupProgress(eventId), api.listMembers(eventId), api.getEventPass(eventId),
+      const [eventsResult, progressResult, membersResult, passResult, billingResult] = await Promise.allSettled([
+        api.listEvents(), api.getSetupProgress(eventId), api.listMembers(eventId), api.getEventPass(eventId), api.getBillingTiers(eventId),
       ])
       if (eventsResult.status === 'rejected') throw eventsResult.reason
       if (progressResult.status === 'rejected') throw progressResult.reason
       const event = eventsResult.value.find((row) => row.id === eventId)
       if (!event) { const missing = new Error("That event isn't available on this account."); missing.status = 404; throw missing }
-      setData({ event, progress: progressResult.value.steps || {}, members: membersResult.status === 'fulfilled' ? membersResult.value : [], eventPass: passResult.status === 'fulfilled' ? passResult.value : null, optionalFailures: [membersResult, passResult].filter((result) => result.status === 'rejected').length })
+      setData({ event, progress: progressResult.value.steps || {}, members: membersResult.status === 'fulfilled' ? membersResult.value : [], eventPass: passResult.status === 'fulfilled' ? passResult.value : null, billing: billingResult.status === 'fulfilled' ? billingResult.value : null, optionalFailures: [membersResult, passResult, billingResult].filter((result) => result.status === 'rejected').length })
     } catch (err) { setError(err.message || 'Setup readiness could not be loaded') }
     finally { setLoading(false) }
   }
@@ -88,9 +90,9 @@ export function PhaseOneGuide({ eventId, onChooseOutcomes, onCreateEvent }) {
   if (loading) return <div className="rr-panel"><div className="rd-panel-body"><LoadingSkeleton rows={7} /></div></div>
   if (error) return <div className="rr-panel"><div className="rd-panel-body"><ErrorRetryState message={error} onRetry={load} /></div></div>
 
-  const { event, members, eventPass, optionalFailures } = data
-  const readiness = phaseOneReadiness({ event, progress: data.progress, members, eventPass, optionalFailures })
-  const { foundationComplete, venueComplete, teamComplete, outcomesComplete, gatedSelections, entitlementBlocked, completed, total, blockers } = readiness
+  const { event, members, eventPass, billing, optionalFailures } = data
+  const readiness = phaseOneReadiness({ event, progress: data.progress, members, eventPass, billing, userRole: user?.role, optionalFailures })
+  const { foundationComplete, venueComplete, teamComplete, outcomesComplete, blockedCapabilities, entitlementBlocked, completed, total, blockers } = readiness
   const next = readiness.next === 'event' ? { label: 'Complete event details', route: '/admin-redesign' }
     : readiness.next === 'outcomes' ? { label: 'Choose event outcomes', action: onChooseOutcomes }
       : readiness.next === 'team' ? { label: 'Assign your event team', route: '/team-redesign?tab=team' }
@@ -98,12 +100,12 @@ export function PhaseOneGuide({ eventId, onChooseOutcomes, onCreateEvent }) {
           : { label: 'Open the first selected workspace', route: PHASE_ONE_OUTCOMES.find((item) => item.id === selected[0])?.route || '/admin-redesign' }
 
   const checks = [
-    { id: 'organization', title: 'Organization readiness', text: eventPass ? 'Plan and Event Pass information loaded from Billing.' : 'Open Billing to review plan, credits and provider access.', status: readiness.organizationReadable ? 'complete' : 'ready', route: '/billing-redesign?tab=org' },
+    { id: 'organization', title: 'Organization readiness', text: readiness.organizationReadable ? 'Permissions, Event Pass and billing provider readiness are verified.' : readiness.organizationReasons.join(' '), status: readiness.organizationReadable ? 'complete' : 'blocked', route: '/billing-redesign?tab=org' },
     { id: 'event', title: 'Event foundation', text: foundationComplete ? `${event.name} · ${new Date(event.event_date).toLocaleDateString()} · ${event.timezone}` : 'Name, date and timezone are required before other setup can be trusted.', status: foundationComplete ? 'complete' : 'blocked', route: '/admin-redesign' },
     { id: 'venue', title: 'Venue and location', text: venueComplete ? [event.venue_name, event.venue_address].filter(Boolean).join(' · ') : 'Add the venue now or return when it is confirmed.', status: venueComplete ? 'complete' : 'ready', route: '/admin-redesign' },
     { id: 'team', title: 'Team ownership', text: teamComplete ? `${members.length} assigned team member${members.length === 1 ? '' : 's'}.` : 'Assign owners for registration, communication, operations, finance or live delivery.', status: teamComplete ? 'complete' : 'ready', route: '/team-redesign?tab=team' },
     { id: 'outcomes', title: 'Selected outcomes', text: outcomesComplete ? `${selected.length} outcome${selected.length === 1 ? '' : 's'} selected for this event.` : 'Choose what this event needs so Festio can build the correct procedure.', status: outcomesComplete ? 'complete' : 'blocked', action: onChooseOutcomes },
-    { id: 'capabilities', title: 'Capability readiness', text: entitlementBlocked ? `${gatedSelections.length} selected outcome${gatedSelections.length === 1 ? '' : 's'} may require an Event Pass or add-on. Review access before setup.` : 'Selected outcomes can proceed to their current workspaces.', status: entitlementBlocked ? 'blocked' : 'complete', route: '/billing-redesign?tab=billing' },
+    { id: 'capabilities', title: 'Capability readiness', text: entitlementBlocked ? `${blockedCapabilities.length} selected outcome${blockedCapabilities.length === 1 ? '' : 's'} require an Event Pass or add-on that is not currently available. Review access before setup.` : 'The Event Pass and per-feature add-ons for the selected outcomes are available.', status: entitlementBlocked ? 'blocked' : 'complete', route: '/billing-redesign?tab=billing' },
   ]
 
   return <div className="gsp-guide">

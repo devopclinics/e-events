@@ -26,6 +26,27 @@ export const PHASE_ONE_OUTCOMES = [
 
 export const PAID_OUTCOME_IDS = new Set(['website', 'community', 'speakers', 'partners', 'operations', 'experience', 'logistics', 'seating', 'orders', 'checkin', 'access', 'giving', 'conference', 'live', 'certificates'])
 
+// Keep this mapping aligned with backend/app/entitlements.py FEATURE_ADDON.
+// A null value means the outcome needs an active Event Pass but no separate
+// add-on. Outcomes absent from the map are available without paid access.
+export const OUTCOME_ENTITLEMENTS = {
+  website: null,
+  community: 'addon_festiome',
+  speakers: 'addon_speakers',
+  partners: 'addon_partners',
+  operations: 'addon_planner',
+  experience: 'addon_experience',
+  logistics: 'addon_logistics',
+  seating: 'addon_seating',
+  orders: 'addon_menu',
+  checkin: null,
+  access: 'addon_venue_access',
+  giving: 'addon_registry',
+  conference: null,
+  live: 'addon_engagement',
+  certificates: 'addon_engagement',
+}
+
 export function selectedOutcomeIds(steps = {}) {
   return PHASE_ONE_OUTCOMES
     .filter((item) => steps[`${OUTCOME_PREFIX}${item.id}`] === 'completed')
@@ -34,21 +55,36 @@ export function selectedOutcomeIds(steps = {}) {
 
 const hasValue = (value) => value !== null && value !== undefined && String(value).trim() !== ''
 
-export function phaseOneReadiness({ event, progress = {}, members = [], eventPass = null, optionalFailures = 0 }) {
+export function phaseOneReadiness({ event, progress = {}, members = [], eventPass = null, billing = null, userRole = '', optionalFailures = 0 }) {
   const selected = selectedOutcomeIds(progress)
   const foundationComplete = hasValue(event?.name) && hasValue(event?.event_date) && hasValue(event?.timezone)
   const venueComplete = hasValue(event?.venue_name) || hasValue(event?.venue_address)
   const teamComplete = Array.isArray(members) && members.length > 0
   const outcomesComplete = selected.length > 0
   const gatedSelections = selected.filter((id) => PAID_OUTCOME_IDS.has(id))
-  const entitlementBlocked = gatedSelections.length > 0 && !event?.is_paid
+  const availableAddons = new Set(billing?.available_addons || [])
+  const passActive = billing?.is_paid === true && (!eventPass?.status || eventPass.status === 'active')
+  const capabilityChecks = gatedSelections.map((id) => {
+    const addon = OUTCOME_ENTITLEMENTS[id]
+    return { id, addon, allowed: passActive && (addon === null || availableAddons.has(addon)) }
+  })
+  const blockedCapabilities = capabilityChecks.filter((check) => !check.allowed)
+  const entitlementBlocked = blockedCapabilities.length > 0
+  const roleAllowed = ['admin', 'event_manager'].includes(userRole)
+  const providerReady = billing?.configured === true
+  const organizationReasons = []
+  if (!roleAllowed) organizationReasons.push('Your role cannot manage event setup.')
+  if (!eventPass || !billing) organizationReasons.push('Billing and Event Pass status could not be verified.')
+  if (blockedCapabilities.length > 0 && !providerReady) organizationReasons.push('Billing is not configured to activate missing capabilities.')
+  if (optionalFailures > 0) organizationReasons.push('One or more readiness services could not be reached.')
+  const organizationBlocked = organizationReasons.length > 0
   const facts = [foundationComplete, venueComplete, teamComplete, outcomesComplete]
   const completed = facts.filter(Boolean).length
-  const blockers = Number(!foundationComplete) + Number(!outcomesComplete) + Number(entitlementBlocked)
+  const blockers = Number(!foundationComplete) + Number(!outcomesComplete) + Number(entitlementBlocked) + Number(organizationBlocked)
   const next = !foundationComplete ? 'event'
     : !outcomesComplete ? 'outcomes'
       : !teamComplete ? 'team'
         : entitlementBlocked ? 'capabilities'
           : 'workspace'
-  return { selected, foundationComplete, venueComplete, teamComplete, outcomesComplete, gatedSelections, entitlementBlocked, completed, total: facts.length, blockers, next, organizationReadable: !!eventPass && optionalFailures === 0 }
+  return { selected, foundationComplete, venueComplete, teamComplete, outcomesComplete, gatedSelections, capabilityChecks, blockedCapabilities, entitlementBlocked, passActive, providerReady, organizationReasons, organizationBlocked, completed, total: facts.length, blockers, next, organizationReadable: !organizationBlocked }
 }

@@ -5,6 +5,7 @@ import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { api } from '../api'
 import { zonedWallTimeToUtcISOString } from '../timeutil'
 import { OutcomeLauncher, PhaseOneGuide } from './GuidedSetupPhaseOne'
+import GuidedSetupPhaseTwo from './GuidedSetupPhaseTwo'
 import './SetupRedesignPage.css'
 
 export const EVENT_TYPES = [
@@ -662,7 +663,7 @@ function GuidedSetupPhase({ eventId, notify, onEventUnavailable }) {
 
 export default function SetupRedesignPage() {
   const initialView = new URLSearchParams(window.location.search).get('view')
-  const [phase, setPhaseState] = useState(['wizard', 'outcomes', 'guide'].includes(initialView) ? initialView : 'wizard')
+  const [phase, setPhaseState] = useState(['wizard', 'outcomes', 'guide', 'audience'].includes(initialView) ? initialView : 'wizard')
   const [eventId, setCurrentEvent] = useCurrentEvent()
   const [toast, setToast] = useState(null)
 
@@ -691,13 +692,18 @@ export default function SetupRedesignPage() {
           </button>
           <div className="su-phase-divider" />
           <button className={`su-phase-btn${phase === 'guide' ? ' active' : ''}`} onClick={() => setPhase('guide')}>
-            <span className="su-phase-num">3</span> Setup guide
+            <span className="su-phase-num">3</span> Foundation
+          </button>
+          <div className="su-phase-divider" />
+          <button className={`su-phase-btn${phase === 'audience' ? ' active' : ''}`} onClick={() => setPhase('audience')}>
+            <span className="su-phase-num">4</span> Audience &amp; registration
           </button>
         </div>
 
         {phase === 'wizard' && <WizardPhase notify={notify} onComplete={(event) => { setCurrentEvent(event.id); setPhase('outcomes') }} />}
         {phase === 'outcomes' && <OutcomeLauncher eventId={eventId} notify={notify} onContinue={() => setPhase('guide')} />}
         {phase === 'guide' && <PhaseOneGuide eventId={eventId} onChooseOutcomes={() => setPhase('outcomes')} onCreateEvent={() => setPhase('wizard')} />}
+        {phase === 'audience' && <GuidedSetupPhaseTwo eventId={eventId} notify={notify} onBack={() => setPhase('guide')} />}
       </div>
       {toast && <div className="rd-toast" style={toast.error ? { background: 'var(--danger)' } : undefined}><Icon name={toast.error ? 'info' : 'check'} />{toast.message}</div>}
     </RedesignShell>

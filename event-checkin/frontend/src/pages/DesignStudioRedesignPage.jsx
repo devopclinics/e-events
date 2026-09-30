@@ -783,7 +783,10 @@ function humanizeKey(value) {
 export default function DesignStudioRedesignPage() {
   const [eventId] = useCurrentEvent()
   const { event } = useEventDetails(eventId)
-  const [tab, setTab] = useState('Templates')
+  const [tab, setTab] = useState(() => {
+    const requested = new URLSearchParams(window.location.search).get('tab')
+    return TABS.includes(requested) ? requested : 'Templates'
+  })
   const [templates, setTemplates] = useState([])
   const [tplCategory, setTplCategory] = useState('All')
   const [tplStyle, setTplStyle] = useState('All styles')

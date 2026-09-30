@@ -5,7 +5,7 @@ import { Icon } from './redesign/RedesignShell'
 import { PHASE_SIX_PROGRESS_PREFIX, phaseSixReadiness } from './guidedSetupPhaseSixModel.mjs'
 import './GuidedSetupPhaseTwo.css'
 
-const REVIEW_KEYS = { results: 'results_review', closeout: 'closeout_review', reuse: 'reuse_test', help: 'help_review', integrations: 'integration_test', platform: 'platform_review', media: 'media_review', analytics: 'analytics_review', rollout: 'rollout_review' }
+const REVIEW_KEYS = { results: 'results_review', closeout: 'closeout_review', reuse: 'reuse_test', help: 'help_review', integrations: 'integration_test' }
 const statusOf = (recipe) => recipe.complete ? 'Complete' : recipe.blocked ? 'Blocked' : 'Ready'
 
 export default function GuidedSetupPhaseSix({ eventId, onBack, notify }) {
@@ -51,11 +51,11 @@ export default function GuidedSetupPhaseSix({ eventId, onBack, notify }) {
   const percent = readiness.total ? Math.round(readiness.complete / readiness.total * 100) : 0
 
   return <div className="gst-guide">
-    <header className="gsp-guide-head"><div><span className="gsp-eyebrow">Phase 6 · results, reuse and platform</span><h2>{data.event.name}</h2><p>{readiness.complete} of {readiness.total} closeout procedures complete · {readiness.blocked} blocked</p></div><div className="gst-head-actions"><button className="rr-btn secondary" onClick={onBack}>Conference &amp; Live</button><button className="rr-btn secondary" onClick={load}>Refresh status</button></div></header>
+    <header className="gsp-guide-head"><div><span className="gsp-eyebrow">Phase 6 · results, reuse and closeout</span><h2>{data.event.name}</h2><p>{readiness.complete} of {readiness.total} closeout procedures complete · {readiness.blocked} blocked</p></div><div className="gst-head-actions"><button className="rr-btn secondary" onClick={onBack}>Conference &amp; Live</button><button className="rr-btn secondary" onClick={load}>Refresh status</button></div></header>
     <div className="gsp-progress" aria-label={`${percent} percent complete`}><span style={{ width: `${percent}%` }} /></div>
     {readiness.dataFailures.length > 0 && <div className="gst-warning"><Icon name="info" size={17} /><span>Some optional result or organization services are unavailable for your role. Their procedures remain visible and cannot be reported as complete automatically.</span></div>}
     {readiness.next && <section className={`gsp-next${readiness.next.blocked ? ' blocked' : ''}`}><div><span className="gsp-eyebrow">Next recommended action</span><h3>{readiness.next.title}</h3><p>{readiness.next.description}</p></div><a className="rr-btn primary" href={readiness.next.route}>{readiness.next.action} →</a></section>}
     <div className="gst-recipe-list">{readiness.recipes.map((recipe) => <article className={`gst-recipe ${recipe.complete ? 'complete' : recipe.blocked ? 'blocked' : 'ready'}`} key={recipe.id}><div className="gst-recipe-number">{recipe.complete ? '✓' : recipe.number}</div><div className="gst-recipe-copy"><div className="gst-recipe-title"><div><span>{recipe.number}</span><h3>{recipe.title}</h3></div><b>{statusOf(recipe)}</b></div><p>{recipe.description}</p><div className="gst-evidence"><strong>Live evidence</strong><span>{recipe.evidence}</span></div><div className="gst-recipe-actions"><a className="rr-btn secondary" href={recipe.route}>{recipe.action} →</a>{!recipe.complete && !recipe.blocked && <button className="rr-btn primary" disabled={saving === recipe.id} onClick={() => verify(recipe.id)}>{saving === recipe.id ? 'Saving…' : 'Mark review or controlled test verified'}</button>}</div></div></article>)}</div>
-    <section className="gst-safety"><Icon name="info" size={18} /><div><strong>Production remains gated</strong><p>Completing this guide records review evidence. It does not enable a tenant, promote an image, archive an event, rotate credentials or bypass GitOps approval.</p></div></section>
+    <section className="gst-safety"><Icon name="info" size={18} /><div><strong>Administrative controls stay separate</strong><p>This event guide does not expose tenant enablement, pricing, add-on overrides, support access, deployment, monitoring or rollout controls. Those remain in the separate platform administration workflow.</p></div></section>
   </div>
 }

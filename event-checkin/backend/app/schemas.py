@@ -3573,6 +3573,13 @@ class ConferenceProfileUpdate(BaseModel):
     welcome_text: Optional[str] = Field(default=None, max_length=3000)
     deadline: Optional[datetime] = None
 
+    @field_validator("deadline", mode="after")
+    @classmethod
+    def normalize_deadline(cls, value):
+        if value is not None and value.tzinfo is not None:
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
+
 class ConferenceSubmissionCreate(BaseModel):
     kind: Literal["speaker", "abstract", "exhibitor", "sponsor"]
     name: str = Field(min_length=1, max_length=255)
@@ -3605,6 +3612,13 @@ class ConferenceOperationIn(BaseModel):
     related_id: Optional[str] = None
     starts_at: Optional[datetime] = None
     data: dict = Field(default_factory=dict)
+
+class ConferenceOperationUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    status: Optional[str] = Field(default=None, max_length=30)
+    related_id: Optional[str] = None
+    starts_at: Optional[datetime] = None
+    data: Optional[dict] = None
 
 class ConferenceTemplateIn(BaseModel):
     name: str = Field(min_length=1, max_length=160)

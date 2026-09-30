@@ -37,3 +37,31 @@ async def test_exhibitor_reuses_partner_system_and_other_tenant_cannot_read(ctx)
         partner=await db.scalar(select(Partner).where(Partner.event_id==event_id)); assert partner.name=="Community Vendor"
     ctx.login(ctx.ids["user_b"])
     assert (await ctx.client.get(f"/api/events/{event_id}/conference-center")).status_code in (403,404)
+
+async def test_template_apply_is_idempotent_and_track_in_use_is_protected(ctx):
+    await _paid(ctx.ids["event_a"]); ctx.login(ctx.ids["user_a"]); event_id=ctx.ids["event_a"]
+    template = await ctx.client.post(f"/api/events/{event_id}/conference-center/templates", json={
+        "name": "Annual conference", "category": "conference",
+        "definition": {"tracks": [{"name": "Leadership", "color": "#123456", "sort_order": 0}]},
+    })
+    assert template.status_code == 201
+    tid = template.json()["id"]
+    first = await ctx.client.post(f"/api/events/{event_id}/conference-center/templates/{tid}/apply", json={})
+    second = await ctx.client.post(f"/api/events/{event_id}/conference-center/templates/{tid}/apply", json={})
+    assert first.json()["tracks_created"] == 1
+    assert second.json()["tracks_created"] == 0
+
+    overview = (await ctx.client.get(f"/api/events/{event_id}/conference-center")).json()
+    track_id = next(x["id"] for x in overview["tracks"] if x["name"] == "Leadership")
+    token = overview["profile"]["public_token"]
+    await ctx.client.put(f"/api/events/{event_id}/conference-center/profile", json={
+        "calls_open": True, "enabled_call_types": ["abstract"], "deadline": "2027-01-01T12:00:00-06:00",
+    })
+    submitted = await ctx.client.post(f"/api/conference-calls/{token}", json={
+        "kind": "abstract", "name": "Track User", "email": "track@example.com",
+        "track_id": track_id, "summary": "Tracked abstract", "details": {}, "consent_accepted": True,
+    })
+    assert submitted.status_code == 201
+    protected = await ctx.client.delete(f"/api/events/{event_id}/conference-center/tracks/{track_id}")
+    assert protected.status_code == 409
+    assert (await ctx.client.delete(f"/api/events/{event_id}/conference-center/templates/{tid}")).status_code == 204

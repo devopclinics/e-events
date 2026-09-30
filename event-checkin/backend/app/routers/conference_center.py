@@ -4,19 +4,22 @@ Adds application/review and conference operations while reusing the canonical
 GuestSpeaker and Partner records. Accepted applications are promoted exactly
 once, so public showcases and downstream modules keep one source of truth.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_paid_event_admin, require_paid_event_member
 from ..database import get_db
+from .. import storage
+from ..ratelimit import rate_limit
+from .events import ALLOWED_IMAGE_TYPES, MAX_IMAGE_SIZE, _detected_image_type
 from ..models import (ConferenceOperation, ConferenceProfile, ConferenceSubmission,
     ConferenceTrack, Event, GuestSpeaker, OrganizationConferenceTemplate, Partner,
     PartnerCategory, User)
-from ..schemas import (ConferenceOperationIn, ConferenceProfileUpdate,
+from ..schemas import (ConferenceOperationIn, ConferenceOperationUpdate, ConferenceProfileUpdate,
     ConferenceSubmissionCreate, ConferenceSubmissionReview, ConferenceTemplateIn,
     ConferenceTrackIn)
 
@@ -104,10 +107,37 @@ async def update_track(event_id: str, row_id: str, data: ConferenceTrackIn, db: 
     for k,v in data.model_dump().items(): setattr(row,k,v)
     await db.commit(); await db.refresh(row); return row_out(row)
 
+@router.delete("/{event_id}/conference-center/tracks/{row_id}", status_code=204)
+async def delete_track(event_id: str, row_id: str, db: AsyncSession = Depends(get_db), _=Depends(require_paid_event_admin)):
+    row = await db.get(ConferenceTrack, row_id)
+    if not row or row.event_id != event_id: raise HTTPException(404, "Track not found")
+    in_use = await db.scalar(select(ConferenceSubmission.id).where(ConferenceSubmission.event_id == event_id, ConferenceSubmission.track_id == row_id).limit(1))
+    if in_use: raise HTTPException(409, "This track is used by a submission. Deactivate it instead of deleting it.")
+    await db.delete(row); await db.commit()
+
+@router.post("/{event_id}/conference-center/gallery/upload")
+async def upload_gallery_image(event_id: str, file: UploadFile = File(...), db: AsyncSession = Depends(get_db), _=Depends(require_paid_event_admin)):
+    await event_or_404(event_id, db)
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(400, "Use a JPEG, PNG, WebP, or GIF image.")
+    body = await file.read()
+    if len(body) > MAX_IMAGE_SIZE: raise HTTPException(413, "Image too large — maximum 10 MB.")
+    if _detected_image_type(body) != file.content_type: raise HTTPException(400, "The selected file is not a valid image.")
+    ext = {"image/jpeg":"jpg","image/png":"png","image/webp":"webp","image/gif":"gif"}[file.content_type]
+    url = storage.save(f"conference-gallery/{event_id}-{uuid.uuid4().hex[:10]}.{ext}", body, file.content_type)
+    return {"url": url}
+
 @router.post("/{event_id}/conference-center/operations", status_code=201)
 async def create_operation(event_id: str, data: ConferenceOperationIn, db: AsyncSession = Depends(get_db), _=Depends(require_paid_event_admin)):
     await event_or_404(event_id, db)
     row = ConferenceOperation(event_id=event_id, **data.model_dump()); db.add(row)
+    await db.commit(); await db.refresh(row); return row_out(row)
+
+@router.patch("/{event_id}/conference-center/operations/{row_id}")
+async def update_operation(event_id: str, row_id: str, data: ConferenceOperationUpdate, db: AsyncSession = Depends(get_db), _=Depends(require_paid_event_admin)):
+    row = await db.get(ConferenceOperation, row_id)
+    if not row or row.event_id != event_id: raise HTTPException(404, "Operation not found")
+    for key, value in data.model_dump(exclude_unset=True).items(): setattr(row, key, value)
     await db.commit(); await db.refresh(row); return row_out(row)
 
 @router.delete("/{event_id}/conference-center/operations/{row_id}", status_code=204)
@@ -122,8 +152,30 @@ async def create_template(event_id: str, data: ConferenceTemplateIn, db: AsyncSe
     row = OrganizationConferenceTemplate(organization_id=event.org_id, **data.model_dump()); db.add(row)
     await db.commit(); await db.refresh(row); return row_out(row)
 
+@router.post("/{event_id}/conference-center/templates/{template_id}/apply")
+async def apply_template(event_id: str, template_id: str, db: AsyncSession = Depends(get_db), _=Depends(require_paid_event_admin)):
+    event = await event_or_404(event_id, db)
+    template = await db.get(OrganizationConferenceTemplate, template_id)
+    if not template or template.organization_id != event.org_id: raise HTTPException(404, "Template not found")
+    existing = set((await db.execute(select(ConferenceTrack.name).where(ConferenceTrack.event_id == event_id))).scalars().all())
+    created = 0
+    for item in (template.definition or {}).get("tracks", []):
+        name = str(item.get("name", "")).strip()
+        if not name or name in existing: continue
+        allowed = {k: item.get(k) for k in ("description", "color", "audience", "sort_order")}
+        db.add(ConferenceTrack(event_id=event_id, name=name, **allowed)); existing.add(name); created += 1
+    await db.commit()
+    return {"applied": True, "tracks_created": created}
+
+@router.delete("/{event_id}/conference-center/templates/{template_id}", status_code=204)
+async def delete_template(event_id: str, template_id: str, db: AsyncSession = Depends(get_db), _=Depends(require_paid_event_admin)):
+    event = await event_or_404(event_id, db)
+    template = await db.get(OrganizationConferenceTemplate, template_id)
+    if not template or template.organization_id != event.org_id: raise HTTPException(404, "Template not found")
+    await db.delete(template); await db.commit()
+
 @public_router.get("/{token}")
-async def public_call(token: str, db: AsyncSession = Depends(get_db)):
+async def public_call(token: str, db: AsyncSession = Depends(get_db), _=Depends(rate_limit(limit=180, window=60, scope="conference_call_read", key="token"))):
     p = await db.scalar(select(ConferenceProfile).where(ConferenceProfile.public_token == token))
     if not p or not p.calls_open: raise HTTPException(404, "Call is not open")
     event = await event_or_404(p.event_id, db)
@@ -132,11 +184,11 @@ async def public_call(token: str, db: AsyncSession = Depends(get_db)):
         "enabled_call_types": p.enabled_call_types or [], "tracks": [row_out(x) for x in tracks]}
 
 @public_router.post("/{token}", status_code=201)
-async def submit_application(token: str, data: ConferenceSubmissionCreate, db: AsyncSession = Depends(get_db)):
+async def submit_application(token: str, data: ConferenceSubmissionCreate, db: AsyncSession = Depends(get_db), _=Depends(rate_limit(limit=12, window=60, scope="conference_call_submit", key="client_ip"))):
     p = await db.scalar(select(ConferenceProfile).where(ConferenceProfile.public_token == token))
     if not p or not p.calls_open: raise HTTPException(404, "Call is not open")
     if data.kind not in (p.enabled_call_types or []): raise HTTPException(400, "This application type is not open")
-    if p.deadline and p.deadline < datetime.utcnow(): raise HTTPException(400, "The submission deadline has passed")
+    if p.deadline and p.deadline < datetime.now(timezone.utc).replace(tzinfo=None): raise HTTPException(400, "The submission deadline has passed")
     row = ConferenceSubmission(event_id=p.event_id, **data.model_dump()); db.add(row)
     await db.commit(); await db.refresh(row)
     return {"id": row.id, "status": row.status, "message": "Submission received"}

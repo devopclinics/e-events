@@ -3203,15 +3203,28 @@ export default function InvitePage() {
               <DetailRow icon="🎟️" label="Admission" value="QR pass at entry" tone={tone} />
               {page.details.showAdmission && <DetailRow icon="✓" label="Admission note" value={admissionNote} tone={tone} />}
             </div>
-            {externalUrl(dWording.hotelBookingUrl) && (
-              <a
-                href={externalUrl(dWording.hotelBookingUrl)}
-                target="_blank" rel="noopener noreferrer"
-                className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-extrabold transition hover:opacity-90"
-                style={{ background: tone.accent, color: '#0a0a0a' }}
-              >
-                🏨 {dWording.hotelBookingLabel || 'Reserve Your Hotel Room'}
-              </a>
+            {(externalUrl(dWording.hotelBookingUrl) || (event.registry_enabled && event.registry_token)) && (
+              <div className="mt-5 flex flex-wrap gap-3">
+                {externalUrl(dWording.hotelBookingUrl) && (
+                  <a
+                    href={externalUrl(dWording.hotelBookingUrl)}
+                    target="_blank" rel="noopener noreferrer"
+                    className="inline-flex min-h-11 items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-extrabold transition hover:opacity-90"
+                    style={{ background: tone.accent, color: '#0a0a0a' }}
+                  >
+                    🏨 {dWording.hotelBookingLabel || 'Reserve Your Hotel Room'}
+                  </a>
+                )}
+                {event.registry_enabled && event.registry_token && (
+                  <a
+                    href={`/registry/${event.registry_token}`}
+                    className="inline-flex min-h-11 items-center gap-2 rounded-xl border px-5 py-2.5 text-sm font-extrabold transition hover:opacity-90"
+                    style={{ background: tone.chip, borderColor: tone.border, color: tone.text }}
+                  >
+                    🎁 View gift list
+                  </a>
+                )}
+              </div>
             )}
           </div>
 
@@ -3223,11 +3236,6 @@ export default function InvitePage() {
             {aboutWebsite && (
               <a href={aboutWebsite} target="_blank" rel="noopener noreferrer" className="mt-5 inline-flex text-sm font-bold underline decoration-2 underline-offset-4 transition hover:opacity-80" style={{ color: tone.accent }}>
                 {page.about.ctaLabel || 'Learn more about this event'} ↗
-              </a>
-            )}
-            {event.registry_enabled && event.registry_token && (
-              <a href={`/registry/${event.registry_token}`} className="mt-5 inline-flex min-h-11 items-center justify-center rounded-2xl border px-4 py-2 text-sm font-bold transition" style={{ background: tone.chip, borderColor: tone.border, color: tone.text }}>
-                View gift list
               </a>
             )}
           </div>}

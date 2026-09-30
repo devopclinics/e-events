@@ -3563,3 +3563,64 @@ class DonationPublicCampaignOut(BaseModel):
     pledge_payment_channels: list[dict] = Field(default_factory=list)
     recent_public: list[dict] = Field(default_factory=list)
     funds: list[dict] = Field(default_factory=list)
+
+
+# ── Conference Center ───────────────────────────────────────────────────────
+
+class ConferenceProfileUpdate(BaseModel):
+    calls_open: bool = False
+    enabled_call_types: list[Literal["speaker", "abstract", "exhibitor", "sponsor"]] = Field(default_factory=list)
+    welcome_text: Optional[str] = Field(default=None, max_length=3000)
+    deadline: Optional[datetime] = None
+
+    @field_validator("deadline", mode="after")
+    @classmethod
+    def normalize_deadline(cls, value):
+        if value is not None and value.tzinfo is not None:
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
+
+class ConferenceSubmissionCreate(BaseModel):
+    kind: Literal["speaker", "abstract", "exhibitor", "sponsor"]
+    name: str = Field(min_length=1, max_length=255)
+    email: EmailStr
+    organization: Optional[str] = Field(default=None, max_length=255)
+    title: Optional[str] = Field(default=None, max_length=255)
+    summary: Optional[str] = Field(default=None, max_length=12000)
+    track_id: Optional[str] = None
+    website_url: Optional[str] = Field(default=None, max_length=1000)
+    details: dict = Field(default_factory=dict)
+    consent_accepted: bool = False
+
+class ConferenceSubmissionReview(BaseModel):
+    status: Literal["submitted", "under_review", "accepted", "declined", "waitlisted"]
+    review_notes: Optional[str] = Field(default=None, max_length=4000)
+    promote: bool = False
+
+class ConferenceTrackIn(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    description: Optional[str] = None
+    color: Optional[str] = Field(default=None, max_length=20)
+    audience: Optional[str] = Field(default=None, max_length=160)
+    sort_order: int = 0
+    is_active: bool = True
+
+class ConferenceOperationIn(BaseModel):
+    category: Literal["meeting", "release", "gallery", "integration"]
+    title: str = Field(min_length=1, max_length=255)
+    status: str = Field(default="draft", max_length=30)
+    related_id: Optional[str] = None
+    starts_at: Optional[datetime] = None
+    data: dict = Field(default_factory=dict)
+
+class ConferenceOperationUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    status: Optional[str] = Field(default=None, max_length=30)
+    related_id: Optional[str] = None
+    starts_at: Optional[datetime] = None
+    data: Optional[dict] = None
+
+class ConferenceTemplateIn(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    category: str = Field(default="conference", max_length=40)
+    definition: dict = Field(default_factory=dict)

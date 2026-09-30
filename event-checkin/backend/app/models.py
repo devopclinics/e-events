@@ -2105,6 +2105,81 @@ class Partner(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class ConferenceProfile(Base):
+    """Event-scoped Conference Center configuration and public call token."""
+    __tablename__ = "conference_profiles"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), unique=True, index=True)
+    public_token: Mapped[str] = mapped_column(String(36), unique=True, index=True, default=lambda: str(uuid.uuid4()))
+    calls_open: Mapped[bool] = mapped_column(Boolean, default=False)
+    enabled_call_types: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    welcome_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    deadline: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ConferenceSubmission(Base):
+    """One speaker, abstract, exhibitor, or sponsor application."""
+    __tablename__ = "conference_submissions"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(30), index=True)
+    status: Mapped[str] = mapped_column(String(30), default="submitted", index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    email: Mapped[str] = mapped_column(String(320))
+    organization: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    track_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    website_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    consent_accepted: Mapped[bool] = mapped_column(Boolean, default=False)
+    review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    promoted_record_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    promoted_record_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ConferenceTrack(Base):
+    __tablename__ = "conference_tracks"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    name: Mapped[str] = mapped_column(String(160))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    color: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    audience: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class ConferenceOperation(Base):
+    """Reusable operational item: meeting, release, gallery asset, or integration."""
+    __tablename__ = "conference_operations"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    category: Mapped[str] = mapped_column(String(30), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    status: Mapped[str] = mapped_column(String(30), default="draft")
+    related_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class OrganizationConferenceTemplate(Base):
+    """Reusable, organization-owned conference workflow template."""
+    __tablename__ = "organization_conference_templates"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    organization_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
+    name: Mapped[str] = mapped_column(String(160))
+    category: Mapped[str] = mapped_column(String(40), default="conference")
+    definition: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class GuestTag(Base):
     """Customer-defined classifier for an event (e.g. 'Speaker', 'Press', '21+',
     'Engineering'). Maps to zones via ZoneTagRule. Fully isolated from the

@@ -7,30 +7,56 @@ import { api } from '../api'
 import { auth } from '../firebase'
 import AttendanceTab from './redesign/results/AttendanceTab'
 import InvitationsTab from './redesign/results/InvitationsTab'
-import MealsTab from './redesign/results/MealsTab'
 import ProgramTab from './redesign/results/ProgramTab'
-import ExperienceTab from './redesign/results/ExperienceTab'
 import OperationsTab from './redesign/results/OperationsTab'
 import './EventResultsRedesignPage.css'
 
 // Live operations command center backed by dashboard-service's
 // /api/results/* endpoints. All seven tabs are wired to production data.
 
-const TABS = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'attendance', label: 'Attendance' },
-  { id: 'invitations', label: 'Invitations' },
-  { id: 'meals', label: 'Meals' },
-  { id: 'program', label: 'Program' },
-  { id: 'experience', label: 'Experience' },
-  { id: 'operations', label: 'Operations' },
+const RESULTS_NAV = [
+  { label: 'Event summary', items: [
+    { id: 'executive', label: 'Executive overview', icon: 'barchart' },
+    { id: 'command', label: 'Live command center', icon: 'trend' },
+    { id: 'services', label: 'All services snapshot', icon: 'grid' },
+    { id: 'exceptions', label: 'Exceptions & actions', icon: 'info', count: true },
+  ] },
+  { label: 'Audience', items: [
+    { id: 'registration', label: 'Registration & RSVP', icon: 'users' },
+    { id: 'communications', label: 'Communications', icon: 'mail' },
+  ] },
+  { label: 'Event delivery', items: [
+    { id: 'attendance', label: 'Attendance & access', icon: 'check' },
+    { id: 'programme', label: 'Programme', icon: 'calendar' },
+    { id: 'engagement', label: 'Engagement', icon: 'trend' },
+    { id: 'operations', label: 'Operations', icon: 'settings' },
+  ] },
+  { label: 'Finance', items: [
+    { id: 'revenue', label: 'Ticket revenue', icon: 'card' },
+    { id: 'giving', label: 'Giving', icon: 'card' },
+  ] },
+  { label: 'Finish', items: [
+    { id: 'feedback', label: 'Feedback', icon: 'trend' },
+    { id: 'closeout', label: 'Closeout & exports', icon: 'file' },
+  ] },
 ]
 
-const OVERVIEW_LAYOUTS = [
-  { id: 'executive', label: 'Executive overview', icon: 'barchart' },
-  { id: 'command', label: 'Live command center', icon: 'trend' },
-  { id: 'services', label: 'All services snapshot', icon: 'grid' },
-]
+const VIEW_META = {
+  executive: ['Executive overview', 'One accountable view across the entire event lifecycle.'],
+  command: ['Live command center', 'A dense, real-time operating view for the event team during event delivery.'],
+  services: ['All services snapshot', 'Every enabled event service, visible together with its headline result and source workspace.'],
+  exceptions: ['Exceptions & actions', 'Prioritized issues linked to the record and workspace where they can be resolved.'],
+  registration: ['Registration & RSVP', 'Invitations, responses, approvals, delivery, and guest conversion.'],
+  communications: ['Communications', 'Channel delivery, broadcasts, failures, and guest reach.'],
+  attendance: ['Attendance & access', 'Arrivals, zones, credentials, capacity, and attendance gaps.'],
+  programme: ['Programme', 'Session status, attendance, rooms, speakers, and schedule delivery.'],
+  engagement: ['Engagement', 'Festio Live participation, activities, responses, moderation, and insights.'],
+  operations: ['Operations', 'Meals, consent, venue occupancy, denied scans, and live service delivery.'],
+  revenue: ['Ticket revenue', 'Orders, payments, refunds, settlements, and reconciliation.'],
+  giving: ['Giving', 'Donors, pledges, confirmed contributions, channels, and finance verification.'],
+  feedback: ['Feedback', 'Response collection, ratings, themes, and follow-up actions.'],
+  closeout: ['Closeout & exports', 'Finish the event with a complete, auditable record.'],
+}
 
 function fmtDay(iso) {
   const d = new Date(`${iso}T00:00:00`)
@@ -103,11 +129,50 @@ function MetricTile({ icon, label, value, detail, values, tone = 'teal', title }
   )
 }
 
-function OverviewLayoutSwitcher({ value, onChange }) {
-  return <div className="er-overview-switcher" role="tablist" aria-label="Overview layout">
-    <div><strong>Results overview</strong><span>Choose the level of detail you need.</span></div>
-    <div className="er-overview-switcher-actions">{OVERVIEW_LAYOUTS.map(layout => <button type="button" role="tab" key={layout.id} aria-selected={value === layout.id} className={value === layout.id ? 'active' : ''} onClick={() => onChange(layout.id)}><Icon name={layout.icon} size={14}/>{layout.label}</button>)}</div>
-  </div>
+function ResultsSidebar({ event, activeView, onChange, exceptionCount }) {
+  const eventRange = event?.event_end_date
+    ? `${fmtEventDate(event)} – ${new Date(event.event_end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+    : fmtEventDate(event)
+  return <aside className="er-results-sidebar" aria-label="Results sections">
+    <div className="er-results-event-mini"><strong>{event?.name || 'Selected event'}</strong><span>{eventRange} · {event?.status || 'Draft'}</span></div>
+    {RESULTS_NAV.map(group => <div className="er-results-nav-group" key={group.label}><div className="er-results-nav-label">{group.label}</div>{group.items.map(item => <button type="button" key={item.id} className={`er-results-nav-button${activeView===item.id?' active':''}`} onClick={()=>onChange(item.id)}><Icon name={item.icon} size={15}/><span>{item.label}</span>{item.count && <small>{exceptionCount}</small>}</button>)}</div>)}
+  </aside>
+}
+
+function ResultsPageHeader({ activeView }) {
+  const [title, subtitle] = VIEW_META[activeView] || VIEW_META.executive
+  return <header className="er-results-pagehead"><div><span>Unified event intelligence</span><h1>{title}</h1><p>{subtitle}</p></div><div><button type="button" onClick={()=>window.print()}><Icon name="upload" size={14}/> Export report</button></div></header>
+}
+
+function ExceptionsResultsView({ data }) {
+  const alerts=data.alerts||[]
+  const routes={missing_meal_selection:'/event-results-redesign?view=operations',tables_over_capacity:'/event-results-redesign?view=operations',no_contact_info:'/guests-redesign?tab=guests',failed_invitations:'/event-results-redesign?view=communications',denied_scans:'/event-results-redesign?view=attendance',low_credits:'/billing-redesign?tab=billing'}
+  return <section className="er-results-record-panel"><div className="er-results-record-head"><div><h2>Exceptions requiring action</h2><p>Every unresolved item is linked to the workspace where it can be resolved.</p></div><span>{alerts.length} open</span></div>{alerts.length?<div className="er-results-record-list">{alerts.map(alert=><a key={alert.id} href={routes[alert.type]||alert.action_url||'#'}><em className={alert.severity}>{alert.severity||'review'}</em><span><strong>{alert.title}</strong><small>{alert.description}</small></span><b>{alert.count}</b><Icon name="arrow" size={13}/></a>)}</div>:<div className="er-results-all-clear"><Icon name="check" size={20}/><strong>All clear</strong><span>No unresolved exceptions were returned for this event.</span></div>}</section>
+}
+
+const WORKSPACE_VIEWS={
+  engagement:{eyebrow:'Festio Live',title:'Engagement results',body:'Review participation, responses, moderation, activity analytics, displays, and downloadable reports in the connected Festio Live workspace.',href:'/live-redesign?tab=Analytics',action:'Open engagement analytics'},
+  revenue:{eyebrow:'Ticket sales',title:'Ticket revenue and reconciliation',body:'Review orders, gross and net revenue, refunds, settlements, provider readiness, disputes, and the complete transaction ledger.',href:'/ticketing-redesign',action:'Open ticket revenue'},
+  giving:{eyebrow:'Giving Hub',title:'Giving and pledge reconciliation',body:'Review donors, pledges, confirmed contributions, payment channels, anonymous gifts, and finance verification in one contribution ledger.',href:'/live-redesign?tab=Donations',action:'Open Giving Hub'},
+  feedback:{eyebrow:'Guest feedback',title:'Feedback intelligence',body:'Review feedback activities, response details, ratings, moderation, downloadable reports, and follow-up themes.',href:'/live-redesign?tab=Activities',action:'Open feedback results'},
+}
+function ResultsWorkspaceView({ kind, enabled=true }) {
+  const item=WORKSPACE_VIEWS[kind]
+  return <section className="er-results-workspace"><span>{item.eyebrow}</span><h2>{item.title}</h2><p>{item.body}</p>{enabled?<a href={item.href}>{item.action}<Icon name="arrow" size={14}/></a>:<div className="er-results-workspace-disabled">This service is not enabled for the selected event.</div>}</section>
+}
+
+function CloseoutResultsView({ event, data }) {
+  const alerts=data.alerts||[]
+  const checks=[
+    {label:'Review registration and attendance totals',done:true,detail:`${data.attendance?.checked_in??0} checked in`},
+    {label:'Resolve operational exceptions',done:alerts.length===0,detail:alerts.length?`${alerts.length} open`:'Complete'},
+    {label:'Reconcile ticket payments, pledges and refunds',done:false,detail:'Review finance'},
+    {label:'Complete live activities and feedback review',done:false,detail:'Review engagement'},
+    {label:'Export event records and reports',done:false,detail:'Ready to export'},
+    {label:'Mark the event ended or archived',done:['ended','archived'].includes(String(event?.status||'').toLowerCase()),detail:event?.status||'Draft'},
+  ]
+  const complete=checks.filter(item=>item.done).length
+  return <section className="er-closeout-view"><article><span>Event closeout</span><h2>Finish with a complete, auditable record.</h2><p>Complete each step in order. Every action remains in the service that owns its source record.</p><div className="er-closeout-list">{checks.map(item=><div className={item.done?'done':'pending'} key={item.label}><i>{item.done?'✓':'!'}</i><strong>{item.label}</strong><small>{item.detail}</small></div>)}</div></article><aside><span>Closeout readiness</span><strong>{complete}/{checks.length}</strong><p>Required reviews completed</p><button type="button" onClick={()=>window.print()}><Icon name="download" size={14}/> Export current report</button><a href="/setup-redesign?view=closeout">Open guided closeout<Icon name="arrow" size={13}/></a></aside></section>
 }
 
 function ExecutiveResultsOverview({ event, data, attendance, setActiveTab, setOverviewLayout }) {
@@ -679,15 +744,16 @@ export default function EventResultsRedesignPage() {
   const [events, setEvents] = useState([])
   const [eventId, setEventId] = useState(currentEventId || '')
   const [searchParams, setSearchParams] = useSearchParams()
-  const requestedTab = searchParams.get('tab')
-  const [activeTab, setActiveTabState] = useState(TABS.some((t) => t.id === requestedTab) ? requestedTab : 'overview')
-  const setActiveTab = (id) => { setActiveTabState(id); setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('tab', id); return next }) }
-  const requestedLayout = searchParams.get('layout')
-  const [overviewLayout, setOverviewLayoutState] = useState(OVERVIEW_LAYOUTS.some((item) => item.id === requestedLayout) ? requestedLayout : 'executive')
-  const setOverviewLayout = (id) => {
-    setOverviewLayoutState(id)
-    setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('tab', 'overview'); next.set('layout', id); return next })
+  const requestedView = searchParams.get('view') || searchParams.get('layout') || searchParams.get('tab')
+  const allViews = RESULTS_NAV.flatMap((group) => group.items.map((item) => item.id))
+  const legacyView = { overview: 'executive', invitations: 'registration', program: 'programme', experience: 'engagement', meals: 'operations' }[requestedView] || requestedView
+  const [activeView, setActiveViewState] = useState(allViews.includes(legacyView) ? legacyView : 'executive')
+  const setActiveView = (id) => {
+    setActiveViewState(id)
+    setSearchParams((prev) => { const next = new URLSearchParams(prev); next.delete('tab'); next.delete('layout'); next.set('view', id); return next })
   }
+  const setActiveTab = (id) => setActiveView({ invitations: 'registration', program: 'programme', experience: 'engagement', meals: 'operations' }[id] || id)
+  const setOverviewLayout = setActiveView
   const [day, setDay] = useState('')
   const [venueId, setVenueId] = useState('')
   const [zones, setZones] = useState([])
@@ -767,77 +833,35 @@ export default function EventResultsRedesignPage() {
 
   return (
     <RedesignShell topActive="results" withEventSidebar={false}>
-      <ResultsHero
-        event={event}
-        events={events}
-        eventId={eventId}
-        connected={connected}
-        now={now}
-        updatedAt={updatedAt}
-        onEventChange={changeEvent}
-      />
-
       {!eventId ? <LoadingSkeleton rows={4} variant="card" /> : error ? (
         <div className="rd-panel"><div className="rd-panel-body"><p className="rd-rowlink">{error}</p></div></div>
       ) : !data ? <LoadingSkeleton rows={4} variant="card" /> : (
-      <>
-      {(days.length > 1 || zones.length > 0) && (
-        <div className="er-scope-bar">
-          {days.length > 1 && (
-            <div className="er-scope-days">
-              <button className={!day ? 'active' : ''} onClick={() => setDay('')}>Entire event</button>
-              {days.map((d, i) => (
-                <button key={d.day} className={day === d.day ? 'active' : ''} onClick={() => setDay(d.day)}>Day {i + 1} · {fmtDay(d.day)}</button>
-              ))}
-            </div>
-          )}
-          {zones.length > 0 && (
-            <select className="rr-select" style={{ marginBottom: 0 }} value={venueId} onChange={(e) => setVenueId(e.target.value)}>
-              <option value="">All venues</option>
-              {zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
-            </select>
-          )}
+        <div className="er-results-shell">
+          <ResultsSidebar event={event} activeView={activeView} onChange={setActiveView} exceptionCount={(data.alerts || []).length} />
+          <main className="er-results-content">
+            <ResultsPageHeader activeView={activeView} />
+            {(days.length > 1 || zones.length > 0) && (
+              <div className="er-scope-bar">
+                {days.length > 1 && <div className="er-scope-days"><button className={!day ? 'active' : ''} onClick={() => setDay('')}>Entire event</button>{days.map((d, i) => <button key={d.day} className={day === d.day ? 'active' : ''} onClick={() => setDay(d.day)}>Day {i + 1} · {fmtDay(d.day)}</button>)}</div>}
+                {zones.length > 0 && <select className="rr-select" style={{ marginBottom: 0 }} value={venueId} onChange={(e) => setVenueId(e.target.value)}><option value="">All venues</option>{zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}</select>}
+              </div>
+            )}
+            {activeView === 'executive' && a && <ExecutiveResultsOverview event={event} data={data} attendance={a} setActiveTab={setActiveTab} setOverviewLayout={setOverviewLayout} />}
+            {activeView === 'command' && a && <><ResultsHero event={event} events={events} eventId={eventId} connected={connected} now={now} updatedAt={updatedAt} onEventChange={changeEvent}/><OverviewDashboard event={event} eventId={eventId} data={data} attendance={a} zones={zones} venueId={venueId} hasScopeFilter={hasScopeFilter} arrivalGapLabel={arrivalGapLabel} autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh} setActiveTab={setActiveTab}/></>}
+            {activeView === 'services' && a && <AllServicesResultsSnapshot event={event} data={data} attendance={a} setActiveTab={setActiveTab} />}
+            {activeView === 'exceptions' && <ExceptionsResultsView data={data} />}
+            {activeView === 'registration' && <InvitationsTab eventId={eventId} />}
+            {activeView === 'communications' && <InvitationsTab eventId={eventId} />}
+            {activeView === 'attendance' && <AttendanceTab eventId={eventId} day={day} venueId={venueId} />}
+            {activeView === 'programme' && <ProgramTab eventId={eventId} day={day} />}
+            {activeView === 'engagement' && <ResultsWorkspaceView kind="engagement" enabled={!!event?.engagement_enabled} />}
+            {activeView === 'operations' && <OperationsTab eventId={eventId} />}
+            {activeView === 'revenue' && <ResultsWorkspaceView kind="revenue" />}
+            {activeView === 'giving' && <ResultsWorkspaceView kind="giving" enabled={!!event?.registry_enabled || !!event?.engagement_enabled} />}
+            {activeView === 'feedback' && <ResultsWorkspaceView kind="feedback" enabled={!!event?.engagement_enabled || !!event?.experience_enabled} />}
+            {activeView === 'closeout' && <CloseoutResultsView event={event} data={data} />}
+          </main>
         </div>
-      )}
-
-      <div className="er-tabs" role="tablist">
-        {TABS.map((t) => (
-          <button key={t.id} role="tab" aria-selected={activeTab === t.id} className={activeTab === t.id ? 'active' : ''} onClick={() => setActiveTab(t.id)}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {activeTab === 'overview' && a && (
-        <>
-          <OverviewLayoutSwitcher value={overviewLayout} onChange={setOverviewLayout} />
-          {overviewLayout === 'executive' && <ExecutiveResultsOverview event={event} data={data} attendance={a} setActiveTab={setActiveTab} setOverviewLayout={setOverviewLayout} />}
-          {overviewLayout === 'command' && (
-            <OverviewDashboard
-              event={event}
-              eventId={eventId}
-              data={data}
-              attendance={a}
-              zones={zones}
-              venueId={venueId}
-              hasScopeFilter={hasScopeFilter}
-              arrivalGapLabel={arrivalGapLabel}
-              autoRefresh={autoRefresh}
-              setAutoRefresh={setAutoRefresh}
-              setActiveTab={setActiveTab}
-            />
-          )}
-          {overviewLayout === 'services' && <AllServicesResultsSnapshot event={event} data={data} attendance={a} setActiveTab={setActiveTab} />}
-        </>
-      )}
-
-      {activeTab === 'attendance' && <AttendanceTab eventId={eventId} day={day} venueId={venueId} />}
-      {activeTab === 'invitations' && <InvitationsTab eventId={eventId} />}
-      {activeTab === 'meals' && <MealsTab eventId={eventId} />}
-      {activeTab === 'program' && <ProgramTab eventId={eventId} day={day} />}
-      {activeTab === 'experience' && <ExperienceTab eventId={eventId} />}
-      {activeTab === 'operations' && <OperationsTab eventId={eventId} />}
-      </>
       )}
     </RedesignShell>
   )

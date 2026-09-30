@@ -6,7 +6,7 @@ export const PHASE_TWO_RECIPES = [
   { id: 'tickets', number: '2.3', title: 'Launch ticket sales', outcome: 'tickets', route: '/ticketing-redesign', action: 'Open Ticket Sales', description: 'Connect payouts, create an active product, preview checkout and verify one controlled test order.' },
   { id: 'pass', number: '2.4', title: 'Issue Festio Passes', outcomes: ['rsvp', 'tickets'], route: '/design-studio-redesign?tab=Festio%20Pass', action: 'Design and test passes', description: 'Choose the pass design and delivery channels, then verify a named guest can open a valid QR pass.' },
   { id: 'channels', number: '2.5', title: 'Connect communication channels', outcome: 'communicate', route: '/communications-redesign?tab=settings', action: 'Review channel readiness', description: 'Enable only connected channels and send controlled tests before using them for event traffic.' },
-  { id: 'automation', number: '2.6', title: 'Communicate with guests', outcome: 'communicate', route: '/communications-redesign?tab=scheduler', action: 'Configure communication', description: 'Prepare invitations, confirmations, reminders and follow-ups with routing, consent and schedules.' },
+  { id: 'automation', number: '2.6', title: 'Communicate with guests', outcomes: ['communicate', 'reminders'], route: '/communications-redesign?tab=scheduler', action: 'Configure communication', description: 'Prepare invitations, confirmations, reminders and follow-ups with routing, consent and schedules.' },
 ]
 
 const rows = (value) => Array.isArray(value) ? value : (Array.isArray(value?.items) ? value.items : [])

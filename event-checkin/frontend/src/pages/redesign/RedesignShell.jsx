@@ -377,7 +377,7 @@ const SIDEBAR_NAV = [
   ['grp', 'Planning'],
   ['book', 'Planner', '/planner-redesign', 'planner', null, 'planner'],
   ['layers', 'Conference Center', '/conference-center', 'conference'],
-  ['mic', 'Festio Live', '/live-redesign', 'live', null, 'festioLive'],
+  ['mic', 'Festio Live', '/live-redesign', 'live'],
   ['grp', 'Add-ons', null, null, null, 'anyAddon'],
   ['ticket', 'Venue Access', '/checkin-redesign?tab=zones', 'access', null, 'venueAccess'],
   ['chair', 'Seating', '/addons-redesign?tab=seating', 'seating', null, 'seating'],
@@ -391,7 +391,7 @@ const SIDEBAR_NAV = [
   ['grp', 'Team & Settings'],
   ['team', 'Team', '/team-redesign?tab=team', 'team'],
   ['file', 'Tasks', '/team-redesign?tab=tasks', 'tasks'],
-  ['barchart', 'Experience', '/experience-redesign', 'experience', null, 'experience'],
+  ['barchart', 'Experience', '/experience-redesign', 'experience'],
   ['message', 'Messages', '/communications-redesign?tab=messages', 'messages'],
   ['settings', 'Features & messaging', '/communications-redesign?tab=settings', 'features'],
 ]

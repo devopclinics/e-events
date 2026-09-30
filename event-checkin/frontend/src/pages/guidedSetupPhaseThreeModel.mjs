@@ -7,8 +7,8 @@ export const PHASE_THREE_RECIPES = [
   { id: 'materials', number: '3.4', title: 'Create event materials', outcomes: ['website', 'rsvp', 'tickets'], route: '/design-studio-redesign?tab=Flyer', action: 'Create event materials', description: 'Generate the flyer, email presentation, Festio Pass and share assets from the same event design.' },
   { id: 'guesthub', number: '3.5', title: 'Launch GuestHub', outcome: 'guesthub', route: '/design-studio-redesign?tab=GuestHub', action: 'Configure GuestHub', description: 'Select guest modules, access rules and event information, then preview the result as a registered guest.' },
   { id: 'community', number: '3.6', title: 'Launch the guest community', outcome: 'community', route: '/festiome-redesign', action: 'Configure FestioMe', description: 'Set audience, privacy, groups, channels, moderation and notifications before opening the community.' },
-  { id: 'speakers', number: '3.7', title: 'Publish speakers', outcome: 'website', route: '/addons-redesign?tab=speakers', action: 'Manage speakers', description: 'Reuse speaker profiles, photos and session relationships across the website and GuestHub.' },
-  { id: 'partners', number: '3.8', title: 'Publish partners', outcome: 'website', route: '/addons-redesign?tab=partners', action: 'Manage partners', description: 'Reuse partner and sponsor records, categories, logos and links across public surfaces.' },
+  { id: 'speakers', number: '3.7', title: 'Publish speakers', outcomes: ['website', 'speakers'], route: '/addons-redesign?tab=speakers', action: 'Manage speakers', description: 'Reuse speaker profiles, photos and session relationships across the website and GuestHub.' },
+  { id: 'partners', number: '3.8', title: 'Publish partners', outcomes: ['website', 'partners'], route: '/addons-redesign?tab=partners', action: 'Manage partners', description: 'Reuse partner and sponsor records, categories, logos and links across public surfaces.' },
 ]
 
 const rows = (value) => Array.isArray(value) ? value : (Array.isArray(value?.items) ? value.items : [])

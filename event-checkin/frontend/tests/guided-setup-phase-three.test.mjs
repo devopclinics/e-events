@@ -30,3 +30,5 @@ test('FestioMe requires an enabled event, a group and preview evidence', () => {
   const result = phaseThreeReadiness({ selectedOutcomes: ['community'], festiomeStatus: { enabled: true }, festiomeGroups: [{}], progress: { phase3_community_test: 'completed' } })
   assert.equal(result.recipes.find((row) => row.id === 'community').complete, true)
 })
+
+test('speakers and partners can be guided without an event website',()=>{assert.deepEqual(selectedPhaseThreeRecipes(['speakers','partners']).map(x=>x.id),['speakers','partners'])})

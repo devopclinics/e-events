@@ -29,3 +29,5 @@ test('completed communication flow requires tests and live configuration', () =>
   assert.equal(result.complete, 2)
   assert.equal(result.blocked, 0)
 })
+
+test('reminders can select communication automation independently',()=>{assert.deepEqual(selectedPhaseTwoRecipes(['reminders']).map(x=>x.id),['automation'])})

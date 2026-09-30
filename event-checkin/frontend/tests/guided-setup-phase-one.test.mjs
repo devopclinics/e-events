@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { phaseOneReadiness, selectedOutcomeIds } from '../src/pages/guidedSetupPhaseOneModel.mjs'
+import { PHASE_ONE_OUTCOMES, phaseOneReadiness, selectedOutcomeIds } from '../src/pages/guidedSetupPhaseOneModel.mjs'
 
 test('selected outcomes are derived only from completed server progress', () => {
   assert.deepEqual(selectedOutcomeIds({ outcome_rsvp: 'completed', outcome_live: 'skipped', unrelated: 'completed' }), ['rsvp'])
@@ -25,4 +25,11 @@ test('ready paid event proceeds to first selected workspace', () => {
   assert.equal(result.blockers, 0)
   assert.equal(result.next, 'workspace')
   assert.equal(result.completed, 4)
+})
+
+test('standalone service outcomes are selectable and route to their owning workspaces', () => {
+  const byId = Object.fromEntries(PHASE_ONE_OUTCOMES.map((item) => [item.id, item]))
+  for (const id of ['team', 'experience', 'live', 'speakers', 'partners', 'reminders', 'logistics', 'orders', 'access']) assert.ok(byId[id], `${id} outcome missing`)
+  assert.equal(byId.experience.route, '/experience-redesign?tab=workflow')
+  assert.equal(byId.orders.route, '/kitchen-redesign')
 })

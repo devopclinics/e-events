@@ -28,7 +28,9 @@ const RESULTS_NAV = [
   { label: 'Event delivery', items: [
     { id: 'attendance', label: 'Attendance & access', icon: 'check' },
     { id: 'programme', label: 'Programme', icon: 'calendar' },
-    { id: 'engagement', label: 'Engagement', icon: 'trend' },
+    { id: 'experience', label: 'Experience', icon: 'layers' },
+    { id: 'engagement', label: 'Festio Live', icon: 'trend' },
+    { id: 'team', label: 'Team Management', icon: 'users' },
     { id: 'operations', label: 'Operations', icon: 'settings' },
   ] },
   { label: 'Finance', items: [
@@ -50,7 +52,9 @@ const VIEW_META = {
   communications: ['Communications', 'Channel delivery, broadcasts, failures, and guest reach.'],
   attendance: ['Attendance & access', 'Arrivals, zones, credentials, capacity, and attendance gaps.'],
   programme: ['Programme', 'Session status, attendance, rooms, speakers, and schedule delivery.'],
-  engagement: ['Engagement', 'Festio Live participation, activities, responses, moderation, and insights.'],
+  experience: ['Experience', 'Guest journeys, programme workflows, consent, feedback, and completion.'],
+  engagement: ['Festio Live', 'Participation, activities, responses, moderation, displays, and insights.'],
+  team: ['Team Management', 'Event access, roles, permissions, ownership, tasks, and handoff.'],
   operations: ['Operations', 'Meals, consent, venue occupancy, denied scans, and live service delivery.'],
   revenue: ['Ticket revenue', 'Orders, payments, refunds, settlements, and reconciliation.'],
   giving: ['Giving', 'Donors, pledges, confirmed contributions, channels, and finance verification.'],
@@ -151,7 +155,9 @@ function ExceptionsResultsView({ data }) {
 }
 
 const WORKSPACE_VIEWS={
+  experience:{eyebrow:'Guest experience',title:'Experience delivery and results',body:'Review programme workflows, guest progress, consent, inbound automations, feedback, messages, and experience analytics.',href:'/experience-redesign?tab=analytics',action:'Open Experience analytics'},
   engagement:{eyebrow:'Festio Live',title:'Engagement results',body:'Review participation, responses, moderation, activity analytics, displays, and downloadable reports in the connected Festio Live workspace.',href:'/live-redesign?tab=Analytics',action:'Open engagement analytics'},
+  team:{eyebrow:'Event team',title:'Team ownership and delivery',body:'Review event members, roles, access, assignments, overdue tasks, day-of work, and operational handoff.',href:'/team-redesign?tab=team',action:'Open Team Management'},
   revenue:{eyebrow:'Ticket sales',title:'Ticket revenue and reconciliation',body:'Review orders, gross and net revenue, refunds, settlements, provider readiness, disputes, and the complete transaction ledger.',href:'/ticketing-redesign',action:'Open ticket revenue'},
   giving:{eyebrow:'Giving Hub',title:'Giving and pledge reconciliation',body:'Review donors, pledges, confirmed contributions, payment channels, anonymous gifts, and finance verification in one contribution ledger.',href:'/live-redesign?tab=Donations',action:'Open Giving Hub'},
   feedback:{eyebrow:'Guest feedback',title:'Feedback intelligence',body:'Review feedback activities, response details, ratings, moderation, downloadable reports, and follow-up themes.',href:'/live-redesign?tab=Activities',action:'Open feedback results'},
@@ -854,7 +860,9 @@ export default function EventResultsRedesignPage() {
             {activeView === 'communications' && <InvitationsTab eventId={eventId} />}
             {activeView === 'attendance' && <AttendanceTab eventId={eventId} day={day} venueId={venueId} />}
             {activeView === 'programme' && <ProgramTab eventId={eventId} day={day} />}
+            {activeView === 'experience' && <ResultsWorkspaceView kind="experience" enabled={!!event?.experience_enabled} />}
             {activeView === 'engagement' && <ResultsWorkspaceView kind="engagement" enabled={!!event?.engagement_enabled} />}
+            {activeView === 'team' && <ResultsWorkspaceView kind="team" />}
             {activeView === 'operations' && <OperationsTab eventId={eventId} />}
             {activeView === 'revenue' && <ResultsWorkspaceView kind="revenue" />}
             {activeView === 'giving' && <ResultsWorkspaceView kind="giving" enabled={!!event?.registry_enabled || !!event?.engagement_enabled} />}

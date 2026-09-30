@@ -1,4 +1,5 @@
 import { Fragment, useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import RedesignShell, { Icon, Modal, ConfirmDialog, ChannelPreviewFrame } from './redesign/RedesignShell'
 import { LoadingSkeleton, PermissionDeniedState } from './redesign/RedesignPrimitives'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
@@ -350,10 +351,13 @@ function ExperienceStepEditor({ form, setForm, steps, busy, onClose, onSave, spe
 }
 
 export default function ExperienceRedesignPage() {
+  const [searchParams] = useSearchParams()
+  const requestedTab = searchParams.get('tab')
+  const initialTab = SUBTABS.find((tab) => tab.toLowerCase() === requestedTab?.trim().toLowerCase()) || 'Setup'
   const [toast, setToast] = useState(null) // { text, error }
   const [selectedId, setSelectedId] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
-  const [activeTab, setActiveTab] = useState('Setup')
+  const [activeTab, setActiveTab] = useState(initialTab)
   const [feedbackSearch, setFeedbackSearch] = useState('')
   const [feedbackAdmitted, setFeedbackAdmitted] = useState('')
   const [feedbackPreviewOpen, setFeedbackPreviewOpen] = useState(false)

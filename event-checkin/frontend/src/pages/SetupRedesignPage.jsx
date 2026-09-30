@@ -9,6 +9,7 @@ import GuidedSetupPhaseTwo from './GuidedSetupPhaseTwo'
 import GuidedSetupPhaseThree from './GuidedSetupPhaseThree'
 import GuidedSetupPhaseFour from './GuidedSetupPhaseFour'
 import GuidedSetupPhaseFive from './GuidedSetupPhaseFive'
+import GuidedSetupPhaseSix from './GuidedSetupPhaseSix'
 import './SetupRedesignPage.css'
 
 export const EVENT_TYPES = [
@@ -666,7 +667,7 @@ function GuidedSetupPhase({ eventId, notify, onEventUnavailable }) {
 
 export default function SetupRedesignPage() {
   const initialView = new URLSearchParams(window.location.search).get('view')
-  const [phase, setPhaseState] = useState(['wizard', 'outcomes', 'guide', 'audience', 'experience', 'operations', 'live'].includes(initialView) ? initialView : 'wizard')
+  const [phase, setPhaseState] = useState(['wizard', 'outcomes', 'guide', 'audience', 'experience', 'operations', 'live', 'closeout'].includes(initialView) ? initialView : 'wizard')
   const [eventId, setCurrentEvent] = useCurrentEvent()
   const [toast, setToast] = useState(null)
 
@@ -713,6 +714,10 @@ export default function SetupRedesignPage() {
           <button className={`su-phase-btn${phase === 'live' ? ' active' : ''}`} onClick={() => setPhase('live')}>
             <span className="su-phase-num">7</span> Conference &amp; Live
           </button>
+          <div className="su-phase-divider" />
+          <button className={`su-phase-btn${phase === 'closeout' ? ' active' : ''}`} onClick={() => setPhase('closeout')}>
+            <span className="su-phase-num">8</span> Results &amp; closeout
+          </button>
         </div>
 
         {phase === 'wizard' && <WizardPhase notify={notify} onComplete={(event) => { setCurrentEvent(event.id); setPhase('outcomes') }} />}
@@ -722,6 +727,7 @@ export default function SetupRedesignPage() {
         {phase === 'experience' && <GuidedSetupPhaseThree eventId={eventId} notify={notify} onBack={() => setPhase('audience')} />}
         {phase === 'operations' && <GuidedSetupPhaseFour eventId={eventId} notify={notify} onBack={() => setPhase('experience')} />}
         {phase === 'live' && <GuidedSetupPhaseFive eventId={eventId} notify={notify} onBack={() => setPhase('operations')} />}
+        {phase === 'closeout' && <GuidedSetupPhaseSix eventId={eventId} notify={notify} onBack={() => setPhase('live')} />}
       </div>
       {toast && <div className="rd-toast" style={toast.error ? { background: 'var(--danger)' } : undefined}><Icon name={toast.error ? 'info' : 'check'} />{toast.message}</div>}
     </RedesignShell>

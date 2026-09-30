@@ -1,0 +1,42 @@
+export const PHASE_FOUR_PROGRESS_PREFIX = 'phase4_'
+export const PHASE_FOUR_RECIPES = [
+  { id:'planner',number:'4.1',title:'Plan event delivery',outcome:'operations',route:'/planner-redesign',action:'Open Planner',description:'Build milestones, budget, vendors, procurement, contracts, runsheet and documents.' },
+  { id:'tasks',number:'4.2',title:'Coordinate the team',outcome:'operations',route:'/team-redesign?tab=tasks',action:'Open team tasks',description:'Assign owners, due dates and dependencies, then review overdue and day-of work.' },
+  { id:'seating',number:'4.3',title:'Plan seating and floor layout',outcome:'seating',route:'/addons-redesign?tab=seating',action:'Open seating',description:'Create tables and capacity rules, verify the floor plan and resolve assignment conflicts.' },
+  { id:'orders',number:'4.4',title:'Plan meals and orders',outcome:'seating',route:'/addons-redesign?tab=orders',action:'Open orders',description:'Configure selection rules and items, then verify kitchen and fulfillment views.' },
+  { id:'logistics',number:'4.5',title:'Plan logistics and deliveries',outcome:'operations',route:'/addons-redesign?tab=logistics',action:'Open deliveries',description:'Prepare shipment groups, vendors, packing lists, dispatch and delivery tracking.' },
+  { id:'access',number:'4.6',title:'Configure venue access',outcome:'checkin',route:'/checkin-redesign?tab=access',action:'Open venue access',description:'Create zones and gates, enforce capacity and credential rules, and test allowed and denied entry.' },
+  { id:'checkin',number:'4.7',title:'Prepare check-in',outcome:'checkin',route:'/checkin-redesign',action:'Open check-in',description:'Verify passes, devices, manual lookup, walk-ins, checkout, offline behavior and station readiness.' },
+  { id:'journey',number:'4.8',title:'Build the guest journey',outcome:'operations',route:'/experience-redesign',action:'Open guest journeys',description:'Configure workflow steps, consent, assignments, time gates and staff actions, then rehearse.' },
+  { id:'gifts',number:'4.9',title:'Publish a gift list',outcome:'giving',route:'/addons-redesign?tab=registry',action:'Open Gift List',description:'Add gifts or funds, privacy and claim rules, then verify the public claim and unclaim flow.' },
+  { id:'giving',number:'4.10',title:'Launch giving',outcome:'giving',route:'/live-redesign?tab=donations',action:'Open Donation Tracker',description:'Configure the campaign, goal, channels, pledges, donor privacy, Giving Hub, QR and projector.' },
+  { id:'finance',number:'4.11',title:'Reconcile contributions',outcome:'giving',route:'/finance',action:'Open finance reconciliation',description:'Confirm or reject payments in one contribution ledger and verify counts and projector totals.' },
+]
+const rows=value=>Array.isArray(value)?value:(Array.isArray(value?.items)?value.items:[])
+const checked=(progress,key)=>progress?.[`${PHASE_FOUR_PROGRESS_PREFIX}${key}`]==='completed'
+export function selectedPhaseFourRecipes(selected=[]){return PHASE_FOUR_RECIPES.filter(recipe=>selected.includes(recipe.outcome))}
+export function phaseFourReadiness({event={},progress={},selectedOutcomes=[],planner=null,tasks=[],tables=[],floorPlan=null,menuCategories=[],shipments=[],zones=[],gates=[],guests=[],workflows=[],registryItems=[],registrySettings=null,campaign=null,contributions=[],donationAudit=[],dataFailures=[]}){
+ const recipes=selectedPhaseFourRecipes(selectedOutcomes), taskRows=rows(tasks), tableRows=rows(tables), menus=rows(menuCategories), shipmentRows=rows(shipments), zoneRows=rows(zones), gateRows=rows(gates), guestRows=rows(guests), workflowRows=rows(workflows), gifts=rows(registryItems), donations=rows(contributions), auditRows=rows(donationAudit)
+ const plannerReady=!!planner && (Object.keys(planner).length>0), assignedTasks=taskRows.filter(row=>row.assignee_id||row.owner_id||row.assigned_to).length
+ const floorReady=!!floorPlan && Object.keys(floorPlan).length>0, menuItems=menus.reduce((n,row)=>n+rows(row.items).length,0)
+ const publishedWorkflows=workflowRows.filter(row=>row.status==='published'||row.published===true||row.is_published===true)
+ const giftPublic=!!(registrySettings?.registry_token||registrySettings?.public_token||registrySettings?.enabled)
+ const channels=rows(campaign?.payment_channels||campaign?.channels), campaignReady=!!campaign && !!(campaign.enabled||campaign.active||campaign.public_token||campaign.slug) && channels.length>0
+ const verified=donations.filter(row=>['verified','confirmed','paid','received'].includes(String(row.status||'').toLowerCase())), pending=donations.filter(row=>['pending','pledged'].includes(String(row.status||'').toLowerCase()))
+ const qrGuests=guestRows.filter(row=>row.qr_token||row.invite_token).length
+ const state={
+  planner:{complete:plannerReady&&checked(progress,'planner_review'),blocked:!plannerReady,evidence:`${plannerReady?'Planner data available':'Starter plan missing'} · ${checked(progress,'planner_review')?'readiness reviewed':'review pending'}`},
+  tasks:{complete:taskRows.length>0&&assignedTasks===taskRows.length,blocked:taskRows.length===0,evidence:`${taskRows.length} task${taskRows.length===1?'':'s'} · ${assignedTasks} assigned`},
+  seating:{complete:tableRows.length>0&&floorReady&&checked(progress,'seating_test'),blocked:tableRows.length===0,evidence:`${tableRows.length} table${tableRows.length===1?'':'s'} · ${floorReady?'floor plan ready':'floor plan missing'} · ${checked(progress,'seating_test')?'conflict check verified':'conflict check pending'}`},
+  orders:{complete:menus.length>0&&menuItems>0&&checked(progress,'orders_test'),blocked:menus.length===0,evidence:`${menus.length} categor${menus.length===1?'y':'ies'} · ${menuItems} item${menuItems===1?'':'s'} · ${checked(progress,'orders_test')?'fulfillment view verified':'fulfillment test pending'}`},
+  logistics:{complete:shipmentRows.length>0&&checked(progress,'logistics_test'),blocked:shipmentRows.length===0,evidence:`${shipmentRows.length} shipment group${shipmentRows.length===1?'':'s'} · ${checked(progress,'logistics_test')?'vendor flow verified':'vendor flow pending'}`},
+  access:{complete:zoneRows.length>0&&gateRows.length>0&&checked(progress,'access_test'),blocked:zoneRows.length===0||gateRows.length===0,evidence:`${zoneRows.length} zone${zoneRows.length===1?'':'s'} · ${gateRows.length} gate${gateRows.length===1?'':'s'} · ${checked(progress,'access_test')?'credential tests verified':'credential tests pending'}`},
+  checkin:{complete:qrGuests>0&&checked(progress,'checkin_test'),blocked:qrGuests===0,evidence:`${qrGuests} guest${qrGuests===1?'':'s'} with pass credentials · ${checked(progress,'checkin_test')?'multi-device rehearsal verified':'rehearsal pending'}`},
+  journey:{complete:publishedWorkflows.length>0&&checked(progress,'journey_test'),blocked:workflowRows.length===0,evidence:`${workflowRows.length} workflow${workflowRows.length===1?'':'s'} · ${publishedWorkflows.length} published · ${checked(progress,'journey_test')?'rehearsal verified':'rehearsal pending'}`},
+  gifts:{complete:gifts.length>0&&giftPublic&&checked(progress,'gift_test'),blocked:gifts.length===0,evidence:`${gifts.length} gift or fund item${gifts.length===1?'':'s'} · ${giftPublic?'public page ready':'public page unavailable'} · ${checked(progress,'gift_test')?'claim test verified':'claim test pending'}`},
+  giving:{complete:campaignReady&&checked(progress,'giving_test'),blocked:!campaignReady,evidence:`${campaignReady?`${channels.length} payment channel${channels.length===1?'':'s'} ready`:'Campaign or payment channels incomplete'} · ${checked(progress,'giving_test')?'test contribution verified':'test contribution pending'}`},
+  finance:{complete:donations.length>0&&checked(progress,'finance_review'),blocked:donations.length===0,evidence:`${verified.length} confirmed · ${pending.length} pending · ${auditRows.length} audit entr${auditRows.length===1?'y':'ies'} · ${checked(progress,'finance_review')?'totals reconciled':'reconciliation pending'}`},
+ }
+ const visible=recipes.map(recipe=>({...recipe,...state[recipe.id]})),complete=visible.filter(x=>x.complete).length,blocked=visible.filter(x=>x.blocked).length
+ return {recipes:visible,complete,total:visible.length,blocked,next:visible.find(x=>!x.complete)||null,dataFailures}
+}

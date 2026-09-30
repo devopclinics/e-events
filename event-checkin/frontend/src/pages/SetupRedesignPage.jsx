@@ -4,6 +4,7 @@ import { ErrorRetryState, LoadingSkeleton } from './redesign/RedesignPrimitives'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { api } from '../api'
 import { zonedWallTimeToUtcISOString } from '../timeutil'
+import { OutcomeLauncher, PhaseOneGuide } from './GuidedSetupPhaseOne'
 import './SetupRedesignPage.css'
 
 export const EVENT_TYPES = [
@@ -660,9 +661,17 @@ function GuidedSetupPhase({ eventId, notify, onEventUnavailable }) {
 }
 
 export default function SetupRedesignPage() {
-  const [phase, setPhase] = useState('wizard')
+  const initialView = new URLSearchParams(window.location.search).get('view')
+  const [phase, setPhaseState] = useState(['wizard', 'outcomes', 'guide'].includes(initialView) ? initialView : 'wizard')
   const [eventId, setCurrentEvent] = useCurrentEvent()
   const [toast, setToast] = useState(null)
+
+  function setPhase(next) {
+    setPhaseState(next)
+    const url = new URL(window.location.href)
+    url.searchParams.set('view', next)
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+  }
 
   function notify(message, error = false) {
     setToast({ message, error })
@@ -670,31 +679,25 @@ export default function SetupRedesignPage() {
   }
 
   return (
-    <RedesignShell topActive="setup">
+    <RedesignShell topActive="guide">
       <div className="su-page">
-        {/* Phase indicator */}
-        <div className="su-phase-bar">
+        <div className="su-phase-bar" aria-label="Event setup stages">
           <button className={`su-phase-btn${phase === 'wizard' ? ' active' : ''}`} onClick={() => setPhase('wizard')}>
             <span className="su-phase-num">1</span> Create event
           </button>
           <div className="su-phase-divider" />
-          <button className={`su-phase-btn${phase === 'guided' ? ' active' : ''}`} onClick={() => setPhase('guided')}>
-            <span className="su-phase-num">2</span> Guided setup
+          <button className={`su-phase-btn${phase === 'outcomes' ? ' active' : ''}`} onClick={() => setPhase('outcomes')}>
+            <span className="su-phase-num">2</span> Choose outcomes
+          </button>
+          <div className="su-phase-divider" />
+          <button className={`su-phase-btn${phase === 'guide' ? ' active' : ''}`} onClick={() => setPhase('guide')}>
+            <span className="su-phase-num">3</span> Setup guide
           </button>
         </div>
 
-        {phase === 'wizard' && <WizardPhase notify={notify} onComplete={(event) => { setCurrentEvent(event.id); setPhase('guided') }} />}
-        {phase === 'guided' && (
-          <GuidedSetupPhase
-            eventId={eventId}
-            notify={notify}
-            onEventUnavailable={() => {
-              setCurrentEvent('')
-              setPhase('wizard')
-              notify("That event isn't available on this account — create a new one to continue.", true)
-            }}
-          />
-        )}
+        {phase === 'wizard' && <WizardPhase notify={notify} onComplete={(event) => { setCurrentEvent(event.id); setPhase('outcomes') }} />}
+        {phase === 'outcomes' && <OutcomeLauncher eventId={eventId} notify={notify} onContinue={() => setPhase('guide')} />}
+        {phase === 'guide' && <PhaseOneGuide eventId={eventId} onChooseOutcomes={() => setPhase('outcomes')} onCreateEvent={() => setPhase('wizard')} />}
       </div>
       {toast && <div className="rd-toast" style={toast.error ? { background: 'var(--danger)' } : undefined}><Icon name={toast.error ? 'info' : 'check'} />{toast.message}</div>}
     </RedesignShell>

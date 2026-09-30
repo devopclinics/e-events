@@ -318,6 +318,11 @@ export function Icon({ name, size = 18, className }) {
 // (App.jsx :104-136) — ctx is { user, event }. No gate = always shown.
 const TOP_LINKS = [
   { id: 'setup', label: 'Event Setup', to: '/admin-redesign', icon: 'calendar' },
+  {
+    id: 'guide', label: 'Setup Guide', to: '/setup-redesign?view=guide', icon: 'grid',
+    gate: ({ user }) => ['admin', 'event_manager'].includes(user?.role) && typeof window !== 'undefined' &&
+      ['staging.festio.events', 'localhost'].includes(window.location.hostname),
+  },
   { id: 'events', label: 'Events', to: '/events-redesign', icon: 'calendar' },
   {
     id: 'design', label: 'Design Studio', to: '/design-studio-redesign', icon: 'palette',

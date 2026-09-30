@@ -26,6 +26,12 @@ const TABS = [
   { id: 'operations', label: 'Operations' },
 ]
 
+const OVERVIEW_LAYOUTS = [
+  { id: 'executive', label: 'Executive overview', icon: 'barchart' },
+  { id: 'command', label: 'Live command center', icon: 'trend' },
+  { id: 'services', label: 'All services snapshot', icon: 'grid' },
+]
+
 function fmtDay(iso) {
   const d = new Date(`${iso}T00:00:00`)
   return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
@@ -95,6 +101,71 @@ function MetricTile({ icon, label, value, detail, values, tone = 'teal', title }
       </div>
     </article>
   )
+}
+
+function OverviewLayoutSwitcher({ value, onChange }) {
+  return <div className="er-overview-switcher" role="tablist" aria-label="Overview layout">
+    <div><strong>Results overview</strong><span>Choose the level of detail you need.</span></div>
+    <div className="er-overview-switcher-actions">{OVERVIEW_LAYOUTS.map(layout => <button type="button" role="tab" key={layout.id} aria-selected={value === layout.id} className={value === layout.id ? 'active' : ''} onClick={() => onChange(layout.id)}><Icon name={layout.icon} size={14}/>{layout.label}</button>)}</div>
+  </div>
+}
+
+function ExecutiveResultsOverview({ event, data, attendance, setActiveTab, setOverviewLayout }) {
+  const alerts = data.alerts || [], funnel = data.rsvp_funnel || {}, communication = data.communication || {}
+  const onSite = attendance.on_site ?? Math.max(Number(attendance.checked_in || 0) - Number(attendance.checked_out || 0), 0)
+  const arrivalRate = pct(attendance.checked_in, attendance.expected), responseRate = pct(funnel.responded, funnel.guests)
+  const criticalCount = alerts.filter(alert => alert.severity === 'critical').length, warningCount = alerts.length - criticalCount
+  const rates = ['email','sms','whatsapp','mms'].map(channel => communication[channel]).filter(item => Number(item?.sent || 0) > 0 && Number.isFinite(Number(item?.rate))).map(item => Number(item.rate))
+  const deliveryRate = rates.length ? Math.round(rates.reduce((sum, value) => sum + value, 0) / rates.length) : null
+  const currentProgram = data.program?.in_progress?.[0], nextProgram = data.program?.up_next
+  const healthLabel = criticalCount ? 'Needs attention' : warningCount ? 'Watch items' : 'On track'
+  const healthTone = criticalCount ? 'danger' : warningCount ? 'warning' : 'success'
+  return <section className="er-executive">
+    <div className="er-executive-lead"><div><span className="er-section-eyebrow">Event performance</span><h2>{event?.name || 'Event'} at a glance</h2><p>One decision-ready view of guest response, arrivals, communication reach, programme status, and items that need action.</p></div><div className={`er-health-badge ${healthTone}`}><span>Overall status</span><strong>{healthLabel}</strong><small>{alerts.length ? `${alerts.length} open action${alerts.length === 1 ? '' : 's'}` : 'No open actions'}</small></div></div>
+    <div className="er-executive-kpis">
+      <MetricTile icon="users" label="Expected guests" value={attendance.expected ?? 0} detail={`${funnel.confirmed ?? 0} confirmed`} tone="neutral"/>
+      <MetricTile icon="check" label="Checked in" value={attendance.checked_in ?? 0} detail={`${arrivalRate}% arrival rate`} tone="green"/>
+      <MetricTile icon="users" label="On site now" value={onSite} detail={`${attendance.checked_out ?? 0} checked out`} tone="teal"/>
+      <MetricTile icon="send" label="RSVP response" value={`${responseRate}%`} detail={`${funnel.responded ?? 0} of ${funnel.guests ?? 0}`} tone="blue"/>
+      <MetricTile icon="mail" label="Delivery health" value={deliveryRate == null ? '—' : `${deliveryRate}%`} detail={deliveryRate == null ? 'No sends recorded' : 'Average active channels'} tone="teal"/>
+      <MetricTile icon="info" label="Action queue" value={alerts.length} detail={`${criticalCount} critical · ${warningCount} other`} tone={criticalCount ? 'red' : warningCount ? 'amber' : 'green'}/>
+    </div>
+    <div className="er-executive-grid">
+      <article className="er-summary-card"><div className="er-summary-card-head"><div><span>Guest journey</span><h3>Invitation to arrival</h3></div><button onClick={() => setActiveTab('invitations')}>Details <Icon name="arrow" size={12}/></button></div>
+        {[['Invited',funnel.invited,funnel.guests],['Responded',funnel.responded,funnel.guests],['Confirmed',funnel.confirmed,funnel.guests],['Checked in',funnel.checked_in,funnel.confirmed || funnel.guests]].map(([label,value,total]) => <div className="er-summary-progress-row" key={label}><div><span>{label}</span><b>{value ?? 0}</b></div><div className="er-summary-track"><i style={{width:`${pct(value,total)}%`}}/></div><small>{pct(value,total)}%</small></div>)}
+      </article>
+      <article className="er-summary-card"><div className="er-summary-card-head"><div><span>Programme now</span><h3>Current and next</h3></div><button onClick={() => setActiveTab('program')}>Programme <Icon name="arrow" size={12}/></button></div>
+        {currentProgram ? <div className="er-now-card"><span>Live now · {currentProgram.start_time || 'Time not set'}</span><strong>{currentProgram.topic}</strong><small>{currentProgram.room || 'Room not specified'}{currentProgram.speaker ? ` · ${currentProgram.speaker}` : ''}</small></div> : <div className="er-summary-empty">No programme item is currently in progress.</div>}
+        {nextProgram && <div className="er-next-card"><span>Next up · {nextProgram.start_time || 'Time not set'}</span><strong>{nextProgram.topic}</strong></div>}
+      </article>
+      <article className="er-summary-card"><div className="er-summary-card-head"><div><span>Attention required</span><h3>Priority action queue</h3></div><button onClick={() => setOverviewLayout('command')}>Command center <Icon name="arrow" size={12}/></button></div>
+        {alerts.length ? alerts.slice(0,4).map(alert => <div className={`er-summary-alert er-severity-${alert.severity}`} key={alert.id}><span><Icon name="info" size={13}/></span><div><strong>{alert.title}</strong><small>{alert.description}</small></div><b>{alert.count}</b></div>) : <div className="er-summary-clear"><Icon name="check" size={18}/><strong>All clear</strong><span>No operational exceptions need attention.</span></div>}
+      </article>
+    </div>
+  </section>
+}
+
+function ServiceResultCard({ icon, title, state='Available', metric, detail, action, onOpen, tone='teal' }) {
+  return <article className={`er-service-card er-service-${tone}`}><div className="er-service-card-head"><span><Icon name={icon} size={17}/></span><em>{state}</em></div><h3>{title}</h3><strong>{metric}</strong><p>{detail}</p><button type="button" onClick={onOpen}>{action}<Icon name="arrow" size={12}/></button></article>
+}
+
+function AllServicesResultsSnapshot({ event, data, attendance, setActiveTab }) {
+  const funnel=data.rsvp_funnel||{}, communication=data.communication||{}
+  const cards=[
+    {key:'registration',icon:'users',title:'Registration & RSVP',metric:`${funnel.confirmed??0} confirmed`,detail:`${funnel.responded??0} responses from ${funnel.guests??0} guests`,action:'Open invitations',tab:'invitations',enabled:true},
+    {key:'attendance',icon:'check',title:'Attendance & access',metric:`${attendance.checked_in??0} checked in`,detail:`${attendance.on_site??Math.max(Number(attendance.checked_in||0)-Number(attendance.checked_out||0),0)} currently on site`,action:'Open attendance',tab:'attendance',enabled:true,tone:'green'},
+    {key:'communications',icon:'send',title:'Guest communications',metric:`${communication.credits_remaining??0} credits`,detail:`${communication.email?.sent??0} email · ${communication.sms?.sent??0} SMS · ${communication.whatsapp?.sent??0} WhatsApp`,action:'Open invitations',tab:'invitations',enabled:true,tone:'blue'},
+    {key:'program',icon:'calendar',title:'Programme & sessions',metric:`${data.program?.in_progress?.length??0} live now`,detail:data.program?.up_next?.topic?`Next: ${data.program.up_next.topic}`:'No next session scheduled',action:'Open programme',tab:'program',enabled:event?.experience_enabled!==false},
+    {key:'experience',icon:'layers',title:'Guest experience',metric:data.consent?`${data.consent.rate??pct(data.consent.signed,data.consent.eligible)}% consent`:'Workflow results',detail:data.consent?`${data.consent.signed} of ${data.consent.eligible} signed`:'Review journey completion and blockers',action:'Open experience',tab:'experience',enabled:!!event?.experience_enabled,tone:'purple'},
+    {key:'meals',icon:'card',title:'Meals & orders',metric:data.meals?`${data.meals.served_total??0} served`:'Service results',detail:data.meals?`${data.meals.eligible_total??0} eligible guests`:'Review selections and fulfilment',action:'Open meals',tab:'meals',enabled:!!event?.menu_enabled,tone:'amber'},
+    {key:'seating',icon:'chair',title:'Seating & venue',metric:`${data.table_group_capacity?.length??0} groups`,detail:'Capacity, assignment, and venue readiness',action:'Open operations',tab:'operations',enabled:!!(event?.seating_enabled||event?.venue_access_enabled),tone:'amber'},
+    {key:'live',icon:'trend',title:'Festio Live',metric:'Live participation',detail:'Activities, participants, responses, and displays',action:'Open operations',tab:'operations',enabled:!!event?.engagement_enabled,tone:'green'},
+    {key:'gifts',icon:'card',title:'Gifts & giving',metric:'Giving workspace',detail:'Registry, pledges, confirmed gifts, and reconciliation',action:'Open gift list',href:'/addons-redesign?tab=registry',enabled:!!event?.registry_enabled,tone:'purple'},
+    {key:'speakers',icon:'users',title:'Speakers',metric:'Speaker workspace',detail:'Profiles, programme assignments, and presenter materials',action:'Open speakers',href:'/addons-redesign?tab=speakers',enabled:!!event?.speaker_enabled,tone:'blue'},
+    {key:'partners',icon:'grid',title:'Partners & exhibitors',metric:'Partner workspace',detail:'Profiles, participation, and event presence',action:'Open partners',href:'/addons-redesign?tab=partners',enabled:!!event?.partner_enabled,tone:'blue'},
+    {key:'planner',icon:'check',title:'Planner & tasks',metric:'Planning workspace',detail:'Tasks, owners, milestones, and event readiness',action:'Open planner',href:'/planner-redesign',enabled:!!event?.planner_enabled,tone:'neutral'},
+  ].filter(card=>card.enabled)
+  return <section className="er-services-overview"><div className="er-services-intro"><div><span className="er-section-eyebrow">Configured for this event</span><h2>All service results</h2><p>Only services enabled for this event appear here. Open a card for its complete report or operating workspace.</p></div><span>{cards.length} active service{cards.length===1?'':'s'}</span></div><div className="er-service-grid">{cards.map(card=><ServiceResultCard key={card.key} {...card} onOpen={()=>card.tab?setActiveTab(card.tab):window.location.assign(card.href)}/>)}</div></section>
 }
 
 function ArrivalPulse({ hourly = [], expected = 0 }) {
@@ -611,6 +682,12 @@ export default function EventResultsRedesignPage() {
   const requestedTab = searchParams.get('tab')
   const [activeTab, setActiveTabState] = useState(TABS.some((t) => t.id === requestedTab) ? requestedTab : 'overview')
   const setActiveTab = (id) => { setActiveTabState(id); setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('tab', id); return next }) }
+  const requestedLayout = searchParams.get('layout')
+  const [overviewLayout, setOverviewLayoutState] = useState(OVERVIEW_LAYOUTS.some((item) => item.id === requestedLayout) ? requestedLayout : 'executive')
+  const setOverviewLayout = (id) => {
+    setOverviewLayoutState(id)
+    setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('tab', 'overview'); next.set('layout', id); return next })
+  }
   const [day, setDay] = useState('')
   const [venueId, setVenueId] = useState('')
   const [zones, setZones] = useState([])
@@ -732,19 +809,26 @@ export default function EventResultsRedesignPage() {
       </div>
 
       {activeTab === 'overview' && a && (
-        <OverviewDashboard
-          event={event}
-          eventId={eventId}
-          data={data}
-          attendance={a}
-          zones={zones}
-          venueId={venueId}
-          hasScopeFilter={hasScopeFilter}
-          arrivalGapLabel={arrivalGapLabel}
-          autoRefresh={autoRefresh}
-          setAutoRefresh={setAutoRefresh}
-          setActiveTab={setActiveTab}
-        />
+        <>
+          <OverviewLayoutSwitcher value={overviewLayout} onChange={setOverviewLayout} />
+          {overviewLayout === 'executive' && <ExecutiveResultsOverview event={event} data={data} attendance={a} setActiveTab={setActiveTab} setOverviewLayout={setOverviewLayout} />}
+          {overviewLayout === 'command' && (
+            <OverviewDashboard
+              event={event}
+              eventId={eventId}
+              data={data}
+              attendance={a}
+              zones={zones}
+              venueId={venueId}
+              hasScopeFilter={hasScopeFilter}
+              arrivalGapLabel={arrivalGapLabel}
+              autoRefresh={autoRefresh}
+              setAutoRefresh={setAutoRefresh}
+              setActiveTab={setActiveTab}
+            />
+          )}
+          {overviewLayout === 'services' && <AllServicesResultsSnapshot event={event} data={data} attendance={a} setActiveTab={setActiveTab} />}
+        </>
       )}
 
       {activeTab === 'attendance' && <AttendanceTab eventId={eventId} day={day} venueId={venueId} />}

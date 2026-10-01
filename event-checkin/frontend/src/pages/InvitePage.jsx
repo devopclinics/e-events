@@ -1372,7 +1372,7 @@ function FlowPass({ event, hub, previewMock, onHome }) {
 
 function FlowBottom({ screen, go }) { return <nav className="flow-bottom"><button className={screen === 'home' ? 'active' : ''} onClick={() => go('home')}>⌂<span>Home</span></button><button className={screen === 'program' ? 'active' : ''} onClick={() => go('program')}>▦<span>Programme</span></button><button onClick={() => go('day')}>◉<span>Live</span></button><button onClick={() => go('pass')}>♙<span>Me</span></button></nav> }
 
-function FlowTools({ event, hub, journey, go, designTheme }) {
+function FlowTools({ event, hub, journey, go, designTheme, guestContent, onOpenServices, moduleVisible = () => true }) {
   const guest = hub?.guest || {}
   const venue = [event?.venue_name, event?.venue_address].filter(Boolean).join(', ')
   const hotelBookingUrl = externalUrl(designTheme?.wording?.hotelBookingUrl)
@@ -1380,13 +1380,18 @@ function FlowTools({ event, hub, journey, go, designTheme }) {
   const helpEmail = event?.contact_email || event?.support_email || event?.host_email
   const tools = [
     guest.qr_token && ['▦', 'My Pass', () => go('pass')],
-    journey?.program?.enabled !== false && (journey?.program?.days?.length || journey?.program?.current_segments?.length || journey?.program?.next_segments?.length) && ['▣', 'Programme', () => go('program')],
+    moduleVisible('live_program') && journey?.program?.enabled !== false && (journey?.program?.days?.length || journey?.program?.current_segments?.length || journey?.program?.next_segments?.length) && ['▣', 'Programme', () => go('program')],
     event?.speaker_enabled && event?.speaker_token && ['♟', 'Speakers', () => window.location.assign(`/speakers/${event.speaker_token}`)],
     venue && ['●', 'Venue Info', () => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue)}`, '_blank', 'noopener,noreferrer')],
     hotelBookingUrl && ['🏨', hotelBookingLabel, () => window.open(hotelBookingUrl, '_blank', 'noopener,noreferrer')],
     (journey?.menu_enabled || journey?.menu_selectable) && guest.qr_token && ['♨', 'Meals', () => window.location.assign(`/scan/${guest.qr_token}#orders`)],
-    event?.engagement_enabled && guest.qr_token && ['◉', 'Festio Live', () => window.location.assign(`/live/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(guest.qr_token)}`)],
+    moduleVisible('live') && event?.engagement_enabled && guest.qr_token && ['◉', 'Festio Live', () => window.location.assign(`/live/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(guest.qr_token)}`)],
     event?.registry_enabled && event?.registry_token && ['♥', 'Give / Support', () => window.location.assign(`/registry/${event.registry_token}`)],
+    moduleVisible('festiome') && hub?.capabilities?.festiome && guest.qr_token && ['💬', 'FestioMe', () => window.location.assign(`/festiome/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(guest.qr_token)}`)],
+    moduleVisible('messages') && (hub?.capabilities?.direct_host_messages || hub?.capabilities?.guest_chat) && ['✉', 'Communications', () => onOpenServices?.('communications')],
+    hub?.announcements?.length > 0 && ['●', 'Event Updates', () => onOpenServices?.('updates')],
+    (guestContent?.materials?.length || guestContent?.certificates?.length) && ['□', 'Resources', () => onOpenServices?.('resources')],
+    moduleVisible('activity_progress') && (journey?.steps?.length || journey?.consent?.required || journey?.menu_selectable) && ['✓', 'My Experience', () => onOpenServices?.('experience')],
     ['?', 'Help & FAQ', () => helpEmail ? window.location.assign(`mailto:${helpEmail}`) : document.getElementById('flow-help')?.scrollIntoView({ behavior: 'smooth' })],
   ].filter(Boolean)
   return <section className="flow-section"><div className="flow-tool-grid">{tools.map(([ic, label, action]) => <button key={label} onClick={action}><i>{ic}</i>{label}</button>)}</div></section>
@@ -1411,16 +1416,16 @@ function EventDayView({ event, hub, journey, previewMock, onHome }) {
   return <div className="flow-phone flow-event-day"><FlowTopBar event={event} onHome={onHome} /><section className="flow-checkin-head"><i>✓</i><h1>Checked In</h1><p>Welcome, {guest.name || 'Guest'}!</p><small>{fmtDate(event.event_date, event.timezone)}</small></section><section className="flow-day-pass">{guest.qr_token && <img className="flow-qr" src={previewMock ? PREVIEW_QR_DATA_URI : `/api/scan/${guest.qr_token}/qr.png`} alt="Your QR pass code" />}<div><h2>{guest.name || 'Guest'}</h2><span>Checked In</span><p>Pass ID<br /><b>{guest.qr_token?.slice(0, 18).toUpperCase() || 'FESTIO-PASS'}</b><br /><br />{hub?.party?.length || 1} Attendee{(hub?.party?.length || 1) > 1 ? 's' : ''}</p></div></section><section className="flow-section"><div className="flow-section-heading"><h3>Today at a Glance</h3><span>Full Programme →</span></div><div className="flow-day-list">{(segments.length ? segments : [{ title: 'Opening Reception', starts_at: event.event_date, location: event.venue_name }]).map((s, i) => <div key={s.step_id || i}><time>{fmtTime(s.starts_at, event.timezone)}</time><b>{s.title}</b><span>{s.location || event.venue_name || 'Main Hall'}</span></div>)}</div></section><section className="flow-section"><div className="flow-section-heading"><h3>Your Access</h3><span>View Details →</span></div><div className="flow-access"><p><b>✓ Day 1 — Checked In</b><span>{fmtDate(event.event_date, event.timezone)}</span></p><p><b>○ Next event day — Ready for Entry</b><span>Active pass</span></p></div></section><section className="flow-section flow-additional"><h3>Additional Items</h3><p>📋 Consent Form <span>Not Completed</span></p><p>🎁 Welcome Pack <span>Pending</span></p><p>🍴 Meals <span>Available</span></p></section></div>
 }
 
-function JourneyGuestHubView({ event, hub, journey, previewMock, designTheme }) {
+function JourneyGuestHubView({ event, hub, journey, previewMock, designTheme, guestContent, onOpenServices, moduleVisible }) {
   const [screen, setScreen] = useState(hub?.guest?.admitted ? 'day' : 'home'); const guest = hub?.guest || {}; const days = journey?.program?.days || []; const segments = days.flatMap(day => day.segments || []).slice(0, 8)
   const go = (value) => { setScreen(value); window.scrollTo({ top: 0, behavior: 'smooth' }) }
   if (screen === 'pass') return <div className="flow-phone flow-option-three"><FlowPass event={event} hub={hub} previewMock={previewMock} onHome={() => go('home')} /></div>
   if (screen === 'day') return <EventDayView event={event} hub={hub} journey={journey} previewMock={previewMock} onHome={() => go('home')} />
   if (screen === 'program') return <FlowProgramView event={event} journey={journey} go={go} className="flow-option-three" />
-  return <div className="flow-phone flow-option-three"><FlowTopBar event={event} onHome={() => go('home')} /><div className="flow-home-banner"><span>{event?.organization_name || 'WELCOME'}</span><h1>{event?.name}</h1><p>{fmtDate(event.event_date, event.timezone)} · {event.venue_name || 'Event venue'}</p></div><section className="flow-welcome"><div className="flow-name-row"><span>{(guest.name || 'G').split(/\s+/).map(x => x[0]).slice(0, 2).join('')}</span><div><small>Welcome</small><h2>{guest.name || 'Guest'}</h2><em>Registered guest</em></div></div><h3>Your Convention Progress</h3><ul className="flow-progress-list"><li className="done">✓ Registration Confirmed</li><li>○ Ready for Check-in</li><li>○ Consent Form</li><li>○ Event Activities</li></ul></section><FlowTools event={event} hub={hub} journey={journey} go={go} designTheme={designTheme} /><FlowNext event={event} segments={segments} onProgramme={() => go('program')} /><FlowBottom screen="home" go={go} /></div>
+  return <div className="flow-phone flow-option-three"><FlowTopBar event={event} onHome={() => go('home')} /><div className="flow-home-banner"><span>{event?.organization_name || 'WELCOME'}</span><h1>{event?.name}</h1><p>{fmtDate(event.event_date, event.timezone)} · {event.venue_name || 'Event venue'}</p></div><section className="flow-welcome"><div className="flow-name-row"><span>{(guest.name || 'G').split(/\s+/).map(x => x[0]).slice(0, 2).join('')}</span><div><small>Welcome</small><h2>{guest.name || 'Guest'}</h2><em>Registered guest</em></div></div><h3>Your Convention Progress</h3><ul className="flow-progress-list"><li className="done">✓ Registration Confirmed</li><li>○ Ready for Check-in</li><li>○ Consent Form</li><li>○ Event Activities</li></ul></section><FlowTools event={event} hub={hub} journey={journey} go={go} designTheme={designTheme} guestContent={guestContent} onOpenServices={onOpenServices} moduleVisible={moduleVisible} /><FlowNext event={event} segments={segments} onProgramme={() => go('program')} /><FlowBottom screen="home" go={go} /></div>
 }
 
-function CompleteGuestHubView({ event, hub, journey, previewMock, designTheme }) {
+function CompleteGuestHubView({ event, hub, journey, previewMock, designTheme, guestContent, onOpenServices, moduleVisible }) {
   const [screen, setScreen] = useState(hub?.guest?.admitted ? 'day' : 'home')
   const guest = hub?.guest || {}
   const segments = [...(journey?.program?.current_segments || []), ...(journey?.program?.next_segments || []), ...(journey?.program?.days || []).flatMap(d => d.segments || [])]
@@ -1429,7 +1434,7 @@ function CompleteGuestHubView({ event, hub, journey, previewMock, designTheme })
   if (screen === 'pass') return <div className="flow-phone flow-option-four"><FlowPass event={event} hub={hub} previewMock={previewMock} onHome={() => go('home')} /></div>
   if (screen === 'program') return <FlowProgramView event={event} journey={journey} go={go} className="flow-option-four" />
   const consentDone = !journey?.consent?.required || journey?.consent?.signed
-  return <div className="flow-phone flow-option-four"><FlowTopBar event={event} /><div className="flow-home-banner"><span>{event?.organization_name || 'FESTIO EVENT'}</span><h1>{event.name}</h1><p>{fmtDate(event.event_date, event.timezone)} · {event.venue_name || 'Event venue'}</p></div><section className="flow-welcome"><h2>Welcome, {guest.name?.split(' ')[0] || 'Guest'}! 👋</h2><p>You're registered for the event.</p><div className="flow-two-actions"><button className="flow-primary" onClick={() => go('pass')}>▦ View My Pass</button><button className="flow-secondary" onClick={() => document.getElementById('flow-party')?.scrollIntoView({ behavior: 'smooth' })}>♟ View My Party</button></div></section><section className="flow-section"><div className="flow-section-heading"><h3>Your Event Journey</h3><button onClick={() => go(guest.admitted ? 'day' : 'pass')}>View Details →</button></div><div className="flow-journey-grid"><button className="done" onClick={() => go('pass')}>✓<b>Registration</b><small>Complete</small></button>{journey?.consent?.required && <button className={consentDone ? 'done' : ''} onClick={() => document.getElementById('flow-help')?.scrollIntoView({ behavior: 'smooth' })}>◉<b>Consent Form</b><small>{consentDone ? 'Complete' : 'Action required'}</small></button>}<button className={guest.admitted ? 'done' : 'pending'} onClick={() => go(guest.admitted ? 'day' : 'pass')}>○<b>Check-in</b><small>{guest.admitted ? 'Checked in' : 'Event day'}</small></button>{journey?.menu_enabled && <button className="pending" onClick={() => guest.qr_token && window.location.assign(`/scan/${guest.qr_token}#orders`)}>♨<b>Meals</b><small>{journey?.menu_has_choices ? 'Selected' : 'Choose meal'}</small></button>}</div></section><FlowTools event={event} hub={hub} journey={journey} go={go} designTheme={designTheme} /><FlowNext event={event} segments={segments} onProgramme={() => go('program')} /><section id="flow-party" className="flow-section flow-party"><div className="flow-section-heading"><h3>My Party ({hub?.party?.length || 1})</h3></div>{(hub?.party?.length ? hub.party : [{ name: guest.name || 'Guest', relationship: 'You' }]).map((p, i) => <div className="flow-person" key={p.id || i}><i>{(p.name || 'G').slice(0, 1)}</i><b>{p.name || 'Guest'}</b><small>{p.relationship || (i ? 'Guest' : 'You')}</small><span>✓ Registered</span></div>)}</section><section id="flow-help" className="flow-section flow-help"><h3>Need help?</h3><p>Use your invitation contact details or speak with the event organizer.</p></section></div>
+  return <div className="flow-phone flow-option-four"><FlowTopBar event={event} /><div className="flow-home-banner"><span>{event?.organization_name || 'FESTIO EVENT'}</span><h1>{event.name}</h1><p>{fmtDate(event.event_date, event.timezone)} · {event.venue_name || 'Event venue'}</p></div><section className="flow-welcome"><h2>Welcome, {guest.name?.split(' ')[0] || 'Guest'}! 👋</h2><p>You're registered for the event.</p><div className="flow-two-actions"><button className="flow-primary" onClick={() => go('pass')}>▦ View My Pass</button><button className="flow-secondary" onClick={() => document.getElementById('flow-party')?.scrollIntoView({ behavior: 'smooth' })}>♟ View My Party</button></div></section><section className="flow-section"><div className="flow-section-heading"><h3>Your Event Journey</h3><button onClick={() => go(guest.admitted ? 'day' : 'pass')}>View Details →</button></div><div className="flow-journey-grid"><button className="done" onClick={() => go('pass')}>✓<b>Registration</b><small>Complete</small></button>{journey?.consent?.required && <button className={consentDone ? 'done' : ''} onClick={() => document.getElementById('flow-help')?.scrollIntoView({ behavior: 'smooth' })}>◉<b>Consent Form</b><small>{consentDone ? 'Complete' : 'Action required'}</small></button>}<button className={guest.admitted ? 'done' : 'pending'} onClick={() => go(guest.admitted ? 'day' : 'pass')}>○<b>Check-in</b><small>{guest.admitted ? 'Checked in' : 'Event day'}</small></button>{journey?.menu_enabled && <button className="pending" onClick={() => guest.qr_token && window.location.assign(`/scan/${guest.qr_token}#orders`)}>♨<b>Meals</b><small>{journey?.menu_has_choices ? 'Selected' : 'Choose meal'}</small></button>}</div></section><FlowTools event={event} hub={hub} journey={journey} go={go} designTheme={designTheme} guestContent={guestContent} onOpenServices={onOpenServices} moduleVisible={moduleVisible} /><FlowNext event={event} segments={segments} onProgramme={() => go('program')} /><section id="flow-party" className="flow-section flow-party"><div className="flow-section-heading"><h3>My Party ({hub?.party?.length || 1})</h3></div>{(hub?.party?.length ? hub.party : [{ name: guest.name || 'Guest', relationship: 'You' }]).map((p, i) => <div className="flow-person" key={p.id || i}><i>{(p.name || 'G').slice(0, 1)}</i><b>{p.name || 'Guest'}</b><small>{p.relationship || (i ? 'Guest' : 'You')}</small><span>✓ Registered</span></div>)}</section><section id="flow-help" className="flow-section flow-help"><h3>Need help?</h3><p>Use your invitation contact details or speak with the event organizer.</p></section></div>
 }
 
 function GuestHub({ event, accessToken, designTheme, previewMock = false, confirmed = true }) {
@@ -1462,6 +1467,13 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   const [installPrompt, setInstallPrompt] = useState(null)
   const [installState, setInstallState] = useState('')
   const [showInstallDialog, setShowInstallDialog] = useState(false)
+  const [flowServicesOpen, setFlowServicesOpen] = useState('')
+  useEffect(() => {
+    if (!flowServicesOpen) return undefined
+    const targets = { communications: 'journey-help', updates: 'journey-updates', resources: 'journey-resources', experience: 'journey-experience' }
+    const id = requestAnimationFrame(() => document.getElementById(targets[flowServicesOpen])?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    return () => cancelAnimationFrame(id)
+  }, [flowServicesOpen])
   const { pushConfig, pushState, pushBusy, pushError, enablePush, disablePush } =
     useGuestPush(event?.id, accessToken, { skip: previewMock })
   const hubLayout = designTheme?.hub_layout || {}
@@ -1496,7 +1508,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   const companionLayout = event?.guest_hub_layout === 'companion'
   const journeyLayout = event?.guest_hub_layout === 'journey'
   const completeLayout = event?.guest_hub_layout === 'complete'
-  const guidedLayout = companionLayout
+  const guidedLayout = companionLayout || journeyLayout || completeLayout
 
   // Design Studio's preview iframe loads with #guest-hub in the URL, but this
   // section doesn't exist in the DOM until the async event/theme fetch above
@@ -1760,8 +1772,8 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
     || programDays.find((day) => day.segments?.some((segment) => new Date(segment.ends_at) > new Date()))
     || programDays[0]
 
-  if (journeyLayout && hub) return <JourneyGuestHubView event={event} hub={hub} journey={journey} previewMock={previewMock} designTheme={designTheme} />
-  if (completeLayout && hub) return <CompleteGuestHubView event={event} hub={hub} journey={journey} previewMock={previewMock} designTheme={designTheme} />
+  if (journeyLayout && hub && !flowServicesOpen) return <JourneyGuestHubView event={event} hub={hub} journey={journey} previewMock={previewMock} designTheme={designTheme} guestContent={guestContent} onOpenServices={setFlowServicesOpen} moduleVisible={hubModuleVisible} />
+  if (completeLayout && hub && !flowServicesOpen) return <CompleteGuestHubView event={event} hub={hub} journey={journey} previewMock={previewMock} designTheme={designTheme} guestContent={guestContent} onOpenServices={setFlowServicesOpen} moduleVisible={hubModuleVisible} />
 
   if (guidedLayout) {
     const isConfirmed = !hasRsvp || hub?.guest?.rsvp_status === 'confirmed'
@@ -1866,6 +1878,11 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
 
     return (
       <section className="py-2">
+        {(journeyLayout || completeLayout) && flowServicesOpen && (
+          <div className="mx-auto mb-3 w-full max-w-[560px]">
+            <button type="button" onClick={() => setFlowServicesOpen('')} className="min-h-11 rounded-xl border px-4 py-2 text-sm font-extrabold" style={{ background: tone.panelStrong, borderColor: tone.border, color: tone.text }}>← Back to GuestHub home</button>
+          </div>
+        )}
         <div className={`mx-auto w-full max-w-[560px] rounded-[1.65rem] border p-5 shadow-2xl backdrop-blur sm:p-6 fh-hub-style-${hubStyle} ${completeLayout ? 'fh-complete-layout' : journeyLayout ? 'fh-journey-layout' : 'fh-companion-layout'}`}
           style={{ background: `linear-gradient(145deg, ${tone.background}, ${tone.surface})`, borderColor: tone.border, color: tone.text, boxShadow: `0 22px 48px ${tone.shadow}` }}>
           {(journeyLayout || completeLayout) && (
@@ -2023,7 +2040,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
 
           {/* Your Experience — only the modules this event actually uses */}
           {hasExperienceModules && (
-            <div className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+            <div id="journey-experience" className="mt-3 scroll-mt-4 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
               <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Your Experience</div>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 {passCells.filter((c) => c.l !== 'Status' && c.l !== 'Venue').map((cell) => (
@@ -2135,6 +2152,14 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
                   <i>{member.admitted ? 'Checked in' : member.rsvp_status === 'confirmed' ? 'Registered' : member.rsvp_status}</i>
                 </div>
               ))}
+            </div>
+          )}
+
+          {!!(guestContent.materials?.length || guestContent.certificates?.length) && (
+            <div id="journey-resources" className="mt-3 scroll-mt-4 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+              <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Resources & Certificates</div>
+              {!!guestContent.certificates?.length && <div className="mt-3 grid gap-2">{guestContent.certificates.map((certificate) => <article key={certificate.id} className="rounded-xl border p-3" style={{ background: tone.chip, borderColor: tone.border }}><strong className="block">{certificate.guest_name || 'My certificate'}</strong><small style={{ color: tone.muted }}>{certificate.certificate_number}</small><div className="mt-2 flex flex-wrap gap-2"><a href={certificate.verification_url} className="rounded-lg border px-3 py-2 text-xs font-extrabold" style={{ borderColor: tone.border, color: tone.text }}>Verify</a><a href={certificate.document_url} target="_blank" rel="noreferrer" className="rounded-lg px-3 py-2 text-xs font-extrabold" style={{ background: tone.accent, color: tone.background }}>Download PDF</a></div></article>)}</div>}
+              {!!guestContent.materials?.length && <div className="mt-3 grid gap-2">{guestContent.materials.map((material) => <a key={material.id} href={material.source_url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-xl border p-3" style={{ background: tone.chip, borderColor: tone.border, color: tone.text }}><span><strong className="block">{material.title}</strong><small style={{ color: tone.muted }}>{material.session_title || 'Event resource'} · {material.kind}</small></span><span>Download →</span></a>)}</div>}
             </div>
           )}
 
@@ -2917,7 +2942,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-function JourneyInviteShell({ event, tone, designTheme, title, dateLabel, timeLabel, venue, host, rsvpPanel, paidTicketsAvailable, setPaidTicketsAvailable, hasGuestHub, guestHubToken, confirmed, freshConfirmation, completeFlow = false }) {
+function JourneyInviteShell({ event, tone, designTheme, title, dateLabel, timeLabel, venue, host, hostWebsite, rsvpPanel, paidTicketsAvailable, setPaidTicketsAvailable, hasGuestHub, guestHubToken, confirmed, freshConfirmation, completeFlow = false }) {
   const [completeScreen, setCompleteScreen] = useState(hasGuestHub && !freshConfirmation ? 'hub' : freshConfirmation ? 'confirmed' : 'event')
   useEffect(() => { if (freshConfirmation) setCompleteScreen('confirmed') }, [freshConfirmation])
   const eventState = hasGuestHub ? 'Your event home' : 'Registration'
@@ -2961,7 +2986,7 @@ function JourneyInviteShell({ event, tone, designTheme, title, dateLabel, timeLa
               <div className="complete-rsvp-brand">{event.logo_url && <img src={event.logo_url} alt="" />}<div><span>{host || 'Festio Event'}</span><h1>{title}</h1><em>Unity · Heritage · Progress</em></div></div>
               <div className="complete-rsvp-meta"><span>▣ {[dateLabel, timeLabel].filter(Boolean).join(' · ')}</span>{venue ? <a href={mapUrl(event.venue_address || venue)} target="_blank" rel="noopener noreferrer">● {venue} ↗</a> : <span>● Venue to be announced</span>}</div>
             </div>
-            <section className="complete-rsvp-card"><span className="complete-section-label">ABOUT THIS EVENT</span><h2>Be Part of a Meaningful Gathering</h2><p>{event.description || event.invite_message || 'Join us for a meaningful gathering of connection, learning and community.'}</p><div className="complete-benefits"><span><i>✦</i>Inspiring talks and programme</span><span><i>●</i>Community connection</span><span><i>♟</i>Family and guests</span><span><i>♨</i>Meals and event experiences</span></div><button type="button" className="complete-primary" onClick={() => setCompleteScreen('register')}>Register / RSVP Now →</button></section>
+            <section className="complete-rsvp-card"><span className="complete-section-label">ABOUT THIS EVENT</span><h2>Be Part of a Meaningful Gathering</h2><p>{event.description || event.invite_message || 'Join us for a meaningful gathering of connection, learning and community.'}</p>{hostWebsite && <a href={hostWebsite} target="_blank" rel="noopener noreferrer" className="complete-about-link">Learn more about this event ↗</a>}<div className="complete-benefits"><span><i>✦</i>Inspiring talks and programme</span><span><i>●</i>Community connection</span><span><i>♟</i>Family and guests</span><span><i>♨</i>Meals and event experiences</span></div><button type="button" className="complete-primary" onClick={() => setCompleteScreen('register')}>Register / RSVP Now →</button></section>
             <section id="complete-event-details" className="complete-event-details"><span className="complete-section-label">EVENT DETAILS</span><h2>Everything You Need to Know</h2><div className="complete-detail-list"><div><i>▣</i><span><small>Date and time</small><b>{[dateLabel, timeLabel].filter(Boolean).join(' · ')}</b></span></div><div><i>●</i><span><small>Venue</small>{venue ? <a href={mapUrl(event.venue_address || venue)} target="_blank" rel="noopener noreferrer">{venue} ↗</a> : <b>Venue to be announced</b>}</span></div>{host && <div><i>♟</i><span><small>Hosted by</small><b>{host}</b></span></div>}<div><i>♙</i><span><small>Who can attend</small><b>Invited guests and families</b></span></div><div><i>◇</i><span><small>Event type</small><b>{event.event_type || 'Event'}</b></span></div>{event.rsvp_deadline && <div><i>⌛</i><span><small>RSVP deadline</small><b>{fmtDate(event.rsvp_deadline, event.timezone)}</b></span></div>}</div></section>
             {journeyEventActions}
             {event.live_program_enabled && <section className="complete-programme-preview"><span className="complete-section-label">PROGRAMME PREVIEW</span><h2>Plan Your Convention</h2><p>The published programme, session times and live updates will be available in your personal GuestHub after registration.</p><div><span><i>▤</i><b>Day-by-day programme</b><small>Sessions, locations and timing</small></span><span><i>◉</i><b>Live event updates</b><small>What is happening now and next</small></span></div></section>}
@@ -2975,7 +3000,7 @@ function JourneyInviteShell({ event, tone, designTheme, title, dateLabel, timeLa
         ) : (
           <div className={`journey-registration-stage ${completeFlow ? 'complete-registration-stage' : ''}`}>
             {completeFlow && <FlowTopBar event={event} onHome={() => setCompleteScreen('event')} />}
-            <header>{completeFlow && <button type="button" className="complete-back" onClick={() => setCompleteScreen('event')}>← Event details</button>}<span>{completeFlow ? 'REGISTRATION' : 'STEP 1 OF 4'}</span><h2>{completeFlow ? 'Complete your registration' : 'Let’s get you ready'}</h2><p>Confirm your attendance. Your personal GuestHub and Festio Pass will be created after registration.</p></header>
+            <header>{completeFlow && <button type="button" className="complete-back" onClick={() => setCompleteScreen('event')}>← Event details</button>}<span>{completeFlow ? 'REGISTRATION' : 'STEP 1 OF 4'}</span><h2>{completeFlow ? 'Complete your registration' : 'Let’s get you ready'}</h2><p>Confirm your attendance. Your personal GuestHub and Festio Pass will be created after registration.</p>{!completeFlow && hostWebsite && <a href={hostWebsite} target="_blank" rel="noopener noreferrer" className="journey-about-link">Learn more about this event ↗</a>}</header>
             {!completeFlow && journeyEventActions}
             <div className={completeFlow ? 'complete-ticket-checkout' : ''}><PublicTicketCheckout eventId={event.id} tone={tone} onAvailabilityChange={setPaidTicketsAvailable} /></div>
             {rsvpPanel && paidTicketsAvailable === false && <section id="rsvp" className={`journey-rsvp-panel ${completeFlow ? 'complete-rsvp-panel' : ''}`}>{rsvpPanel}</section>}
@@ -3255,6 +3280,7 @@ export default function InvitePage() {
         timeLabel={timeLabel}
         venue={venue}
         host={host}
+        hostWebsite={hostWebsite}
         rsvpPanel={rsvpPanel}
         paidTicketsAvailable={paidTicketsAvailable}
         setPaidTicketsAvailable={setPaidTicketsAvailable}

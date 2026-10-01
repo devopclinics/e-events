@@ -1330,7 +1330,7 @@ export interface InvitePageOut {
 
 export interface InviteSettingsUpdate {
   event_time_tbd?: (boolean) | null
-  guest_hub_layout?: ('classic' | 'companion' | 'journey') | null
+  guest_hub_layout?: ('classic' | 'companion' | 'journey' | 'complete') | null
   invite_add_to_calendar_enabled?: (boolean) | null
   invite_capacity_bar_enabled?: (boolean) | null
   invite_countdown_enabled?: (boolean) | null

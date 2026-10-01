@@ -1380,7 +1380,8 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   // Invites & RSVP. See CompanionGuestHub below for the redesigned layout.
   const companionLayout = event?.guest_hub_layout === 'companion'
   const journeyLayout = event?.guest_hub_layout === 'journey'
-  const guidedLayout = companionLayout || journeyLayout
+  const completeLayout = event?.guest_hub_layout === 'complete'
+  const guidedLayout = companionLayout || journeyLayout || completeLayout
 
   // Design Studio's preview iframe loads with #guest-hub in the URL, but this
   // section doesn't exist in the DOM until the async event/theme fetch above
@@ -1747,10 +1748,10 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
 
     return (
       <section className="py-2">
-        <div className={`mx-auto w-full max-w-[560px] rounded-[1.65rem] border p-5 shadow-2xl backdrop-blur sm:p-6 fh-hub-style-${hubStyle} ${journeyLayout ? 'fh-journey-layout' : 'fh-companion-layout'}`}
+        <div className={`mx-auto w-full max-w-[560px] rounded-[1.65rem] border p-5 shadow-2xl backdrop-blur sm:p-6 fh-hub-style-${hubStyle} ${completeLayout ? 'fh-complete-layout' : journeyLayout ? 'fh-journey-layout' : 'fh-companion-layout'}`}
           style={{ background: `linear-gradient(145deg, ${tone.background}, ${tone.surface})`, borderColor: tone.border, color: tone.text, boxShadow: `0 22px 48px ${tone.shadow}` }}>
-          {journeyLayout && (
-            <header className="fh-journey-hero">
+          {(journeyLayout || completeLayout) && (
+            <header className={completeLayout ? 'fh-complete-banner' : 'fh-journey-hero'}>
               <div className="fh-journey-brand-row">
                 <div className="fh-journey-mark">{event?.logo_url ? <img src={event.logo_url} alt="" /> : (event?.name || 'F').trim().slice(0, 1).toUpperCase()}</div>
                 <div>
@@ -1763,8 +1764,8 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
               <div className="fh-journey-meta">{[dateLabel, event?.venue_name].filter(Boolean).join(' · ')}</div>
             </header>
           )}
-          {journeyLayout && (
-            <div className="fh-journey-home">
+          {(journeyLayout || completeLayout) && (
+            <div className={completeLayout ? 'fh-complete-home' : 'fh-journey-home'}>
               <div className="fh-journey-readiness">
                 <div>
                   <div className="fh-journey-section-label">Your event progress</div>
@@ -1787,7 +1788,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
           )}
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-2xl font-extrabold">{journeyLayout ? 'Your journey' : 'FestioHub'}</h2>
+              <h2 className="text-2xl font-extrabold">{completeLayout ? 'Your event home' : journeyLayout ? 'Your journey' : 'FestioHub'}</h2>
               {hasRsvp && hub?.guest?.rsvp_status && (
                 <span className="mt-1 inline-block rounded-full px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wide" style={{ background: `${tone.accent}22`, color: tone.text }}>
                   {hub.guest.rsvp_status === 'confirmed' ? 'Attending' : hub.guest.rsvp_status}
@@ -1805,7 +1806,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
               not a new pattern. Accent color still shows through on the
               buttons and border glow, just not the whole card body. */}
           {isConfirmed ? (
-            <div id={journeyLayout ? 'journey-pass' : undefined} className={`fh-pass-tier fh-hub-style-${hubStyle} mt-5 overflow-hidden rounded-[1.4rem] border border-slate-200 bg-white text-center shadow-2xl dark:border-slate-800 dark:bg-slate-900`}
+            <div id={(journeyLayout || completeLayout) ? 'journey-pass' : undefined} className={`fh-pass-tier fh-hub-style-${hubStyle} mt-5 overflow-hidden rounded-[1.4rem] border border-slate-200 bg-white text-center shadow-2xl dark:border-slate-800 dark:bg-slate-900`}
               style={{ boxShadow: `0 0 40px -14px ${colors.accent || tone.accent}70` }}>
               <div className="p-5">
                 <span className="fh-pass-status-chip inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-extrabold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
@@ -1893,7 +1894,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
           )}
 
           {/* Event Details — one consolidated block; hotel folds in here too */}
-          <div id={journeyLayout ? 'journey-details' : undefined} className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+          <div id={(journeyLayout || completeLayout) ? 'journey-details' : undefined} className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
             <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Event Details</div>
             <div className="mt-3 space-y-2.5 text-sm">
               {dateLabel && <div className="flex items-center gap-2.5"><span aria-hidden="true">📅</span><span className="font-bold">{dateLabel}</span></div>}
@@ -1948,7 +1949,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
               timed is_segment ones. Gate on real content, not just the flag,
               same fix as the journey card above. */}
           {hubModuleVisible('live_program') && journey?.program?.enabled && programDays.length > 0 && (
-            <div id={journeyLayout ? 'journey-program' : undefined} className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+            <div id={(journeyLayout || completeLayout) ? 'journey-program' : undefined} className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
               <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Your Schedule</div>
               {!!programDays.length && (
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -1980,7 +1981,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
 
           {/* Speakers — horizontal strip, not one card per person */}
           {speakersVisible && speakers?.length > 0 && (
-            <div id={journeyLayout ? 'journey-speakers' : undefined} className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+            <div id={(journeyLayout || completeLayout) ? 'journey-speakers' : undefined} className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
               <div className="flex items-center justify-between">
                 <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Featured Speakers</div>
                 {speakers.length > 6 && (
@@ -2008,7 +2009,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
 
           {/* Event Updates — only when there's something real to show */}
           {!!hub?.announcements?.length && (
-            <div id={journeyLayout ? 'journey-updates' : undefined} className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+            <div id={(journeyLayout || completeLayout) ? 'journey-updates' : undefined} className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
               <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Event Updates</div>
               <div className="mt-3 space-y-2.5">
                 {hub.announcements.slice(0, 3).map((a) => (
@@ -2022,7 +2023,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
           )}
 
           {/* Need Help — Message Host + Guest Chat folded under one card */}
-          <div id={journeyLayout ? 'journey-help' : undefined} className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+          <div id={(journeyLayout || completeLayout) ? 'journey-help' : undefined} className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
             <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Need Help?</div>
             {hub?.capabilities?.direct_host_messages ? (
               <>
@@ -2785,11 +2786,13 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-function JourneyInviteShell({ event, tone, designTheme, title, dateLabel, timeLabel, venue, host, rsvpPanel, paidTicketsAvailable, setPaidTicketsAvailable, hasGuestHub, guestHubToken, confirmed }) {
+function JourneyInviteShell({ event, tone, designTheme, title, dateLabel, timeLabel, venue, host, rsvpPanel, paidTicketsAvailable, setPaidTicketsAvailable, hasGuestHub, guestHubToken, confirmed, freshConfirmation, completeFlow = false }) {
+  const [completeScreen, setCompleteScreen] = useState(hasGuestHub && !freshConfirmation ? 'hub' : freshConfirmation ? 'confirmed' : 'event')
+  useEffect(() => { if (freshConfirmation) setCompleteScreen('confirmed') }, [freshConfirmation])
   const eventState = hasGuestHub ? 'Your event home' : 'Registration'
   const cover = designCover(designTheme, event)
   return (
-    <div className="journey-public-shell" style={{ '--journey-accent': tone.accent, '--journey-ink': tone.text, fontFamily: designFontFamily(designTheme) }}>
+    <div className={`${completeFlow ? 'complete-public-shell' : 'journey-public-shell'}`} style={{ '--journey-accent': tone.accent, '--journey-ink': tone.text, fontFamily: designFontFamily(designTheme) }}>
       <aside className="journey-public-story" style={cover ? { backgroundImage: `linear-gradient(180deg, rgba(2,31,31,.18), rgba(2,31,31,.94)), url(${cover})` } : undefined}>
         <div className="journey-public-brand">
           {event.logo_url ? <img src={event.logo_url} alt="" /> : <span>{(event.name || 'F').trim().slice(0, 1)}</span>}
@@ -2810,15 +2813,22 @@ function JourneyInviteShell({ event, tone, designTheme, title, dateLabel, timeLa
         <div className="journey-public-powered">Powered by Festio</div>
       </aside>
       <main className="journey-public-workspace">
-        {hasGuestHub ? (
+        {completeFlow && completeScreen === 'event' ? (
+          <div className="complete-event-screen">
+            <span className="complete-eyebrow">YOU'RE INVITED</span><h2>{title}</h2>
+            <p>{event.description || event.invite_message || 'Join us for a meaningful gathering of connection, learning and community.'}</p>
+            <div className="complete-benefits"><span>✦ Inspiring programme</span><span>● Community connection</span><span>♟ Family and guests</span><span>♨ Event experiences</span></div>
+            <button type="button" className="complete-primary" onClick={() => setCompleteScreen('register')}>Register Now →</button>
+            {hasGuestHub && <button type="button" className="complete-link" onClick={() => setCompleteScreen('hub')}>Already registered? Open My GuestHub →</button>}
+            <div className="complete-info-grid"><div><b>Dates</b>{dateLabel}</div><div><b>Venue</b>{event.venue_name || 'To be announced'}</div><div><b>Who can attend</b>Invited guests and families</div><div><b>Event type</b>{event.event_type || 'Event'}</div></div>
+          </div>
+        ) : completeFlow && completeScreen === 'confirmed' ? (
+          <div className="complete-confirmation"><i>✓</i><h2>You’re Registered!</h2><p>Your registration for {title} is confirmed.</p><div className="complete-confirm-details"><span><b>Name</b>{freshConfirmation?.first_name || 'Guest'}</span><span><b>Registration status</b>Confirmed</span><span><b>Date</b>{dateLabel}</span><span><b>Venue</b>{event.venue_name || 'To be announced'}</span></div><button type="button" className="complete-primary" onClick={() => setCompleteScreen('hub')}>Open My GuestHub →</button></div>
+        ) : hasGuestHub && (!completeFlow || completeScreen === 'hub') ? (
           <GuestHub event={event} accessToken={guestHubToken} designTheme={designTheme} confirmed={confirmed} />
         ) : (
           <div className="journey-registration-stage">
-            <header>
-              <span>STEP 1 OF 4</span>
-              <h2>Let’s get you ready</h2>
-              <p>Confirm your attendance. Your personal event home and Festio Pass will be created next.</p>
-            </header>
+            <header><span>{completeFlow ? 'DETAILS · GUESTS · REVIEW' : 'STEP 1 OF 4'}</span><h2>{completeFlow ? 'Complete your registration' : 'Let’s get you ready'}</h2><p>Confirm your attendance. Your personal event home and Festio Pass will be created next.</p></header>
             <PublicTicketCheckout eventId={event.id} tone={tone} onAvailabilityChange={setPaidTicketsAvailable} />
             {rsvpPanel && paidTicketsAvailable === false && <section id="rsvp" className="journey-rsvp-panel">{rsvpPanel}</section>}
           </div>
@@ -3086,7 +3096,7 @@ export default function InvitePage() {
     )
   }
 
-  if (event.guest_hub_layout === 'journey') {
+  if (['journey', 'complete'].includes(event.guest_hub_layout)) {
     return (
       <JourneyInviteShell
         event={event}
@@ -3103,6 +3113,8 @@ export default function InvitePage() {
         hasGuestHub={hasGuestHub}
         guestHubToken={guestHubToken}
         confirmed={!!confirmed || tokenMeta.already_responded}
+        freshConfirmation={confirmed}
+        completeFlow={event.guest_hub_layout === 'complete'}
       />
     )
   }

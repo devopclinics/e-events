@@ -2919,6 +2919,16 @@ function JourneyInviteShell({ event, tone, designTheme, title, dateLabel, timeLa
   useEffect(() => { if (freshConfirmation) setCompleteScreen('confirmed') }, [freshConfirmation])
   const eventState = hasGuestHub ? 'Your event home' : 'Registration'
   const cover = designCover(designTheme, event)
+  const journeyWording = designTheme?.wording || {}
+  const hotelBookingUrl = externalUrl(journeyWording.hotelBookingUrl)
+  const hotelActionUrl = hotelBookingUrl || (event.hotel_address ? mapUrl(event.hotel_address) : '')
+  const showGiftAction = event.registry_enabled && event.registry_token
+  const journeyEventActions = (hotelActionUrl || showGiftAction) ? (
+    <section className="journey-event-actions" aria-label="Event links">
+      {hotelActionUrl && <a href={hotelActionUrl} target="_blank" rel="noopener noreferrer"><i>🏨</i><span><b>{hotelBookingUrl ? (journeyWording.hotelBookingLabel || 'Reserve Your Hotel Room') : 'View Hotel Information'}</b><small>{event.hotel_name || (hotelBookingUrl ? 'Open the event booking page' : event.hotel_address)}</small></span><strong>↗</strong></a>}
+      {showGiftAction && <a href={`/registry/${event.registry_token}`}><i>🎁</i><span><b>View Gift List</b><small>Gifts and ways to support the event</small></span><strong>→</strong></a>}
+    </section>
+  ) : null
   return (
     <div className={`${completeFlow ? 'complete-public-shell' : 'journey-public-shell'}`} style={{ '--journey-accent': tone.accent, '--journey-ink': tone.text, fontFamily: designFontFamily(designTheme) }}>
       <aside className="journey-public-story" style={cover ? { backgroundImage: `linear-gradient(180deg, rgba(2,31,31,.18), rgba(2,31,31,.94)), url(${cover})` } : undefined}>
@@ -2950,6 +2960,7 @@ function JourneyInviteShell({ event, tone, designTheme, title, dateLabel, timeLa
             </div>
             <section className="complete-rsvp-card"><span className="complete-section-label">ABOUT THIS EVENT</span><h2>Be Part of a Meaningful Gathering</h2><p>{event.description || event.invite_message || 'Join us for a meaningful gathering of connection, learning and community.'}</p><div className="complete-benefits"><span><i>✦</i>Inspiring talks and programme</span><span><i>●</i>Community connection</span><span><i>♟</i>Family and guests</span><span><i>♨</i>Meals and event experiences</span></div><button type="button" className="complete-primary" onClick={() => setCompleteScreen('register')}>Register / RSVP Now →</button></section>
             <section id="complete-event-details" className="complete-event-details"><span className="complete-section-label">EVENT DETAILS</span><h2>Everything You Need to Know</h2><div className="complete-detail-list"><div><i>▣</i><span><small>Date and time</small><b>{[dateLabel, timeLabel].filter(Boolean).join(' · ')}</b></span></div><div><i>●</i><span><small>Venue</small>{venue ? <a href={mapUrl(event.venue_address || venue)} target="_blank" rel="noopener noreferrer">{venue} ↗</a> : <b>Venue to be announced</b>}</span></div>{host && <div><i>♟</i><span><small>Hosted by</small><b>{host}</b></span></div>}<div><i>♙</i><span><small>Who can attend</small><b>Invited guests and families</b></span></div><div><i>◇</i><span><small>Event type</small><b>{event.event_type || 'Event'}</b></span></div>{event.rsvp_deadline && <div><i>⌛</i><span><small>RSVP deadline</small><b>{fmtDate(event.rsvp_deadline, event.timezone)}</b></span></div>}</div></section>
+            {journeyEventActions}
             {event.live_program_enabled && <section className="complete-programme-preview"><span className="complete-section-label">PROGRAMME PREVIEW</span><h2>Plan Your Convention</h2><p>The published programme, session times and live updates will be available in your personal GuestHub after registration.</p><div><span><i>▤</i><b>Day-by-day programme</b><small>Sessions, locations and timing</small></span><span><i>◉</i><b>Live event updates</b><small>What is happening now and next</small></span></div></section>}
             <section className="complete-important"><span className="complete-section-label">IMPORTANT INFORMATION</span><h2>Before You Register</h2><p>{event.admission_note || (event.rsvp_deadline ? `Please complete your RSVP before ${fmtDate(event.rsvp_deadline, event.timezone)}. Your personal Festio Pass will be created after confirmation.` : 'Complete one registration for yourself and add every family member or guest attending with you. Your personal Festio Pass will be created after confirmation.')}</p></section>
             <section className="complete-final-cta"><h2>Ready to join us?</h2><p>Confirm your place and create your personal event home.</p><button type="button" className="complete-primary" onClick={() => setCompleteScreen('register')}>Register / RSVP Now →</button>{hasGuestHub ? <button type="button" className="complete-link" onClick={() => setCompleteScreen('hub')}>Already registered? Open My GuestHub →</button> : <p className="complete-returning-note">Already registered on another device? Use the personal GuestHub link in your confirmation email.</p>}</section>
@@ -2962,6 +2973,7 @@ function JourneyInviteShell({ event, tone, designTheme, title, dateLabel, timeLa
           <div className={`journey-registration-stage ${completeFlow ? 'complete-registration-stage' : ''}`}>
             {completeFlow && <FlowTopBar event={event} onHome={() => setCompleteScreen('event')} />}
             <header>{completeFlow && <button type="button" className="complete-back" onClick={() => setCompleteScreen('event')}>← Event details</button>}<span>{completeFlow ? 'REGISTRATION' : 'STEP 1 OF 4'}</span><h2>{completeFlow ? 'Complete your registration' : 'Let’s get you ready'}</h2><p>Confirm your attendance. Your personal GuestHub and Festio Pass will be created after registration.</p></header>
+            {!completeFlow && journeyEventActions}
             <div className={completeFlow ? 'complete-ticket-checkout' : ''}><PublicTicketCheckout eventId={event.id} tone={tone} onAvailabilityChange={setPaidTicketsAvailable} /></div>
             {rsvpPanel && paidTicketsAvailable === false && <section id="rsvp" className={`journey-rsvp-panel ${completeFlow ? 'complete-rsvp-panel' : ''}`}>{rsvpPanel}</section>}
           </div>

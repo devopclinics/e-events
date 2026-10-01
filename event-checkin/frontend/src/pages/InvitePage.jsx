@@ -2899,22 +2899,24 @@ function JourneyInviteShell({ event, tone, designTheme, title, dateLabel, timeLa
       <main className="journey-public-workspace">
         {completeFlow && completeScreen === 'event' ? (
           <div className="complete-event-screen">
-            <span className="complete-eyebrow">YOU'RE INVITED</span><h2>{title}</h2>
-            <p>{event.description || event.invite_message || 'Join us for a meaningful gathering of connection, learning and community.'}</p>
-            <div className="complete-benefits"><span>✦ Inspiring programme</span><span>● Community connection</span><span>♟ Family and guests</span><span>♨ Event experiences</span></div>
-            <button type="button" className="complete-primary" onClick={() => setCompleteScreen('register')}>Register Now →</button>
-            {hasGuestHub && <button type="button" className="complete-link" onClick={() => setCompleteScreen('hub')}>Already registered? Open My GuestHub →</button>}
-            <div className="complete-info-grid"><div><b>Dates</b>{dateLabel}</div><div><b>Venue</b>{event.venue_name || 'To be announced'}</div><div><b>Who can attend</b>Invited guests and families</div><div><b>Event type</b>{event.event_type || 'Event'}</div></div>
+            <FlowTopBar event={event} />
+            <div className="complete-rsvp-hero" style={cover ? { backgroundImage: `linear-gradient(150deg, rgba(255,249,233,.96), rgba(247,201,108,.78)), url(${cover})` } : undefined}>
+              <div className="complete-rsvp-brand">{event.logo_url && <img src={event.logo_url} alt="" />}<div><span>{host || 'Festio Event'}</span><h1>{title}</h1><em>Unity · Heritage · Progress</em></div></div>
+              <div className="complete-rsvp-meta"><span>▣ {[dateLabel, timeLabel].filter(Boolean).join(' · ')}</span><span>● {venue || 'Venue to be announced'}</span></div>
+            </div>
+            <section className="complete-rsvp-card"><h2>Be Part of a Meaningful Gathering</h2><p>{event.description || event.invite_message || 'Join us for a meaningful gathering of connection, learning and community.'}</p><div className="complete-benefits"><span><i>✦</i>Inspiring talks and programme</span><span><i>●</i>Community connection</span><span><i>♟</i>Family and guests</span><span><i>♨</i>Meals and event experiences</span></div><button type="button" className="complete-primary" onClick={() => setCompleteScreen('register')}>Register Now →</button>{hasGuestHub && <button type="button" className="complete-link" onClick={() => setCompleteScreen('hub')}>Already registered? Open My GuestHub →</button>}</section>
+            <section className="complete-key-info"><h2>Key Information</h2><div className="complete-info-grid"><div><b>Dates</b>{[dateLabel, timeLabel].filter(Boolean).join(' · ')}</div><div><b>Venue</b>{event.venue_name || 'To be announced'}</div><div><b>Who can attend</b>Invited guests and families</div><div><b>Event type</b>{event.event_type || 'Event'}</div></div></section>
           </div>
         ) : completeFlow && completeScreen === 'confirmed' ? (
-          <div className="complete-confirmation"><i>✓</i><h2>You’re Registered!</h2><p>Your registration for {title} is confirmed.</p><div className="complete-confirm-details"><span><b>Name</b>{freshConfirmation?.first_name || 'Guest'}</span><span><b>Registration status</b>Confirmed</span><span><b>Date</b>{dateLabel}</span><span><b>Venue</b>{event.venue_name || 'To be announced'}</span></div><button type="button" className="complete-primary" onClick={() => setCompleteScreen('hub')}>Open My GuestHub →</button></div>
+          <div className="complete-confirmation"><FlowTopBar event={event} /><div className="complete-confirmation-body"><i>✓</i><h2>You’re Registered!</h2><p>Your registration for {title} is confirmed.</p><div className="complete-confirm-details"><span><b>Name</b>{freshConfirmation?.first_name || 'Guest'}</span><span><b>Registration status</b>Confirmed</span><span><b>Date</b>{dateLabel}</span><span><b>Venue</b>{event.venue_name || 'To be announced'}</span></div><button type="button" className="complete-primary" onClick={() => setCompleteScreen('hub')}>Open My GuestHub →</button>{freshConfirmation?.qr_token && <a className="complete-secondary-link" href={`/scan/${freshConfirmation.qr_token}`}>▦ View My Pass</a>}</div></div>
         ) : hasGuestHub && (!completeFlow || completeScreen === 'hub') ? (
           <GuestHub event={event} accessToken={guestHubToken} designTheme={designTheme} confirmed={confirmed} />
         ) : (
-          <div className="journey-registration-stage">
-            <header><span>{completeFlow ? 'DETAILS · GUESTS · REVIEW' : 'STEP 1 OF 4'}</span><h2>{completeFlow ? 'Complete your registration' : 'Let’s get you ready'}</h2><p>Confirm your attendance. Your personal event home and Festio Pass will be created next.</p></header>
-            <PublicTicketCheckout eventId={event.id} tone={tone} onAvailabilityChange={setPaidTicketsAvailable} />
-            {rsvpPanel && paidTicketsAvailable === false && <section id="rsvp" className="journey-rsvp-panel">{rsvpPanel}</section>}
+          <div className={`journey-registration-stage ${completeFlow ? 'complete-registration-stage' : ''}`}>
+            {completeFlow && <FlowTopBar event={event} onHome={() => setCompleteScreen('event')} />}
+            <header>{completeFlow && <button type="button" className="complete-back" onClick={() => setCompleteScreen('event')}>← Event details</button>}<span>{completeFlow ? 'REGISTRATION' : 'STEP 1 OF 4'}</span><h2>{completeFlow ? 'Complete your registration' : 'Let’s get you ready'}</h2><p>Confirm your attendance. Your personal GuestHub and Festio Pass will be created next.</p>{completeFlow && <div className="complete-form-steps"><b><i>1</i>Details</b><span><i>2</i>Guests</span><span><i>3</i>Review</span></div>}</header>
+            <div className={completeFlow ? 'complete-ticket-checkout' : ''}><PublicTicketCheckout eventId={event.id} tone={tone} onAvailabilityChange={setPaidTicketsAvailable} /></div>
+            {rsvpPanel && paidTicketsAvailable === false && <section id="rsvp" className={`journey-rsvp-panel ${completeFlow ? 'complete-rsvp-panel' : ''}`}>{rsvpPanel}</section>}
           </div>
         )}
       </main>

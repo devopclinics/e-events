@@ -1763,6 +1763,28 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
               <div className="fh-journey-meta">{[dateLabel, event?.venue_name].filter(Boolean).join(' · ')}</div>
             </header>
           )}
+          {journeyLayout && (
+            <div className="fh-journey-home">
+              <div className="fh-journey-readiness">
+                <div>
+                  <div className="fh-journey-section-label">Your event progress</div>
+                  <strong>{journeyRows.length ? `${journeyDone} of ${journeyRows.length} items complete` : isConfirmed ? 'Registration confirmed' : 'Registration in progress'}</strong>
+                </div>
+                <span>{journeyRows.length ? `${Math.round(100 * journeyDone / journeyRows.length)}%` : isConfirmed ? '100%' : '0%'}</span>
+              </div>
+              <div className="fh-journey-progress"><i style={{ width: `${journeyRows.length ? Math.round(100 * journeyDone / journeyRows.length) : isConfirmed ? 100 : 0}%`, background: tone.accent }} /></div>
+              <nav className="fh-journey-grid" aria-label="GuestHub sections">
+                <a href="#journey-pass"><span>▦</span><b>My Pass</b><small>Entry QR and access</small></a>
+                {hubModuleVisible('live_program') && programDays.length > 0 && <a href="#journey-program"><span>□</span><b>Programme</b><small>Schedule and next session</small></a>}
+                {speakersVisible && speakers?.length > 0 && <a href="#journey-speakers"><span>♟</span><b>Speakers</b><small>People and sessions</small></a>}
+                {consolidatedVenue && <a href="#journey-details"><span>⌖</span><b>Venue</b><small>Location and directions</small></a>}
+                {event?.registry_enabled && event?.registry_token && <a href={`/registry/${event.registry_token}`}><span>♡</span><b>Giving</b><small>Gift list and support</small></a>}
+                {hubModuleVisible('live') && event?.engagement_enabled && hub?.guest?.qr_token && <a href={`/live/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}`}><span>◉</span><b>Festio Live</b><small>Polls, Q&amp;A and activities</small></a>}
+                {!!hub?.announcements?.length && <a href="#journey-updates"><span>●</span><b>Updates</b><small>Organizer announcements</small></a>}
+                <a href="#journey-help"><span>?</span><b>Help</b><small>Contact the event team</small></a>
+              </nav>
+            </div>
+          )}
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-2xl font-extrabold">{journeyLayout ? 'Your journey' : 'FestioHub'}</h2>
@@ -1783,7 +1805,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
               not a new pattern. Accent color still shows through on the
               buttons and border glow, just not the whole card body. */}
           {isConfirmed ? (
-            <div className={`fh-pass-tier fh-hub-style-${hubStyle} mt-5 overflow-hidden rounded-[1.4rem] border border-slate-200 bg-white text-center shadow-2xl dark:border-slate-800 dark:bg-slate-900`}
+            <div id={journeyLayout ? 'journey-pass' : undefined} className={`fh-pass-tier fh-hub-style-${hubStyle} mt-5 overflow-hidden rounded-[1.4rem] border border-slate-200 bg-white text-center shadow-2xl dark:border-slate-800 dark:bg-slate-900`}
               style={{ boxShadow: `0 0 40px -14px ${colors.accent || tone.accent}70` }}>
               <div className="p-5">
                 <span className="fh-pass-status-chip inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-extrabold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
@@ -1871,7 +1893,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
           )}
 
           {/* Event Details — one consolidated block; hotel folds in here too */}
-          <div className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+          <div id={journeyLayout ? 'journey-details' : undefined} className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
             <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Event Details</div>
             <div className="mt-3 space-y-2.5 text-sm">
               {dateLabel && <div className="flex items-center gap-2.5"><span aria-hidden="true">📅</span><span className="font-bold">{dateLabel}</span></div>}
@@ -1926,7 +1948,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
               timed is_segment ones. Gate on real content, not just the flag,
               same fix as the journey card above. */}
           {hubModuleVisible('live_program') && journey?.program?.enabled && programDays.length > 0 && (
-            <div className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+            <div id={journeyLayout ? 'journey-program' : undefined} className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
               <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Your Schedule</div>
               {!!programDays.length && (
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -1958,7 +1980,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
 
           {/* Speakers — horizontal strip, not one card per person */}
           {speakersVisible && speakers?.length > 0 && (
-            <div className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+            <div id={journeyLayout ? 'journey-speakers' : undefined} className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
               <div className="flex items-center justify-between">
                 <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Featured Speakers</div>
                 {speakers.length > 6 && (
@@ -1986,7 +2008,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
 
           {/* Event Updates — only when there's something real to show */}
           {!!hub?.announcements?.length && (
-            <div className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+            <div id={journeyLayout ? 'journey-updates' : undefined} className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
               <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Event Updates</div>
               <div className="mt-3 space-y-2.5">
                 {hub.announcements.slice(0, 3).map((a) => (
@@ -2000,7 +2022,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
           )}
 
           {/* Need Help — Message Host + Guest Chat folded under one card */}
-          <div className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+          <div id={journeyLayout ? 'journey-help' : undefined} className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
             <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Need Help?</div>
             {hub?.capabilities?.direct_host_messages ? (
               <>

@@ -1752,7 +1752,17 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
 
   if ((!accessToken && !speakersVisible) || hidden) return null
   const colors = designColors(designTheme, event)
-  const tone = readableTone(colors)
+  // The detailed-service view for the two mobile-first layouts is a reading
+  // surface. It must stay legible even when an event uses a mixed light/dark
+  // brand palette, where a generic theme gradient can put pale text on a pale card.
+  const serviceWorkspaceTone = {
+    background: '#f4f7f5', surface: '#ffffff', accent: '#08745c', primary: '#092f35',
+    text: '#102f34', muted: '#476167', label: '#526c71', panel: '#ffffff',
+    panelStrong: '#ffffff', chip: '#f3f8f5', border: '#c9d9d3', shadow: 'rgba(15,47,44,.14)',
+  }
+  const tone = flowServicesOpen && (journeyLayout || completeLayout)
+    ? serviceWorkspaceTone
+    : readableTone(colors)
   const hasRsvp = event?.rsvp_enabled !== false
   const passStatus = hub?.guest?.checked_out
     ? { label: 'Checked out', icon: '↩' }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import confetti from 'canvas-confetti'
 import { useParams } from 'react-router-dom'
 import { api } from '../api'
@@ -559,7 +559,7 @@ function SmsConsentCheckbox({ checked, onChange, disabled = false }) {
   )
 }
 
-function RSVPForm({ event, theme, onConfirmed, tone, dWording = {} }) {
+function RSVPForm({ event, theme, onConfirmed, tone, dWording = {}, guidedFlow = false }) {
   const t = THEMES[theme] || THEMES.default
   // Pre-fill from ?first_name=&last_name=&email= when present — used by a
   // private Calendar link for a contact who hasn't registered for this event
@@ -583,6 +583,8 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {} }) {
   const [sizes, setSizes] = useState({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [registrationStep, setRegistrationStep] = useState('details')
+  const formRef = useRef(null)
 
   const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }))
   const multiInvitee = !!event.rsvp_multi_invitee_enabled
@@ -614,6 +616,17 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {} }) {
   const inviteeTypes = event.rsvp_invitee_type_options?.length
     ? event.rsvp_invitee_type_options
     : DEFAULT_INVITEE_TYPES
+
+  function advanceRegistration(nextStep) {
+    const activeSection = formRef.current?.querySelector(`[data-registration-step="${registrationStep}"]`)
+    const invalid = activeSection?.querySelector(':invalid')
+    if (invalid) {
+      invalid.reportValidity()
+      return
+    }
+    setRegistrationStep(nextStep)
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   useEffect(() => {
     if (additionalInviteeLimit <= 0) {
@@ -729,7 +742,18 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {} }) {
       )}
 
       {choice === 'yes' && (
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form ref={formRef} onSubmit={handleSubmit} className={`space-y-5 ${guidedFlow ? 'guided-rsvp-form' : ''}`}>
+          {guidedFlow && (
+            <nav className="guided-registration-steps" aria-label="Registration progress">
+              {['details', 'guests', 'review'].map((step, index) => (
+                <button key={step} type="button" className={registrationStep === step ? 'current' : ['details', 'guests', 'review'].indexOf(registrationStep) > index ? 'done' : ''} onClick={() => index < ['details', 'guests', 'review'].indexOf(registrationStep) && setRegistrationStep(step)}>
+                  <i>{['details', 'guests', 'review'].indexOf(registrationStep) > index ? '✓' : index + 1}</i>{step === 'details' ? 'Your details' : step === 'guests' ? 'Family / Guests' : 'Review'}
+                </button>
+              ))}
+            </nav>
+          )}
+          <fieldset data-registration-step="details" disabled={guidedFlow && registrationStep !== 'details'} hidden={guidedFlow && registrationStep !== 'details'} className="space-y-5">
+          {guidedFlow && <div className="guided-step-heading"><span>Step 1</span><h3>Your Details</h3><p>Tell us who is registering for this event.</p></div>}
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-2 block text-sm font-bold text-slate-700">{dWording.firstNameLabel || (multiInvitee ? 'Submitter first name' : 'First name')} <span className="text-red-500">*</span></label>
@@ -759,7 +783,11 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {} }) {
           {event.rsvp_collect_phone && form.phone.trim() && (
             <SmsConsentCheckbox checked={smsConsent} onChange={setSmsConsent} disabled={loading} />
           )}
+          {guidedFlow && <button type="button" className="guided-next" onClick={() => advanceRegistration('guests')}>Continue to Family / Guests →</button>}
+          </fieldset>
 
+          <fieldset data-registration-step="guests" disabled={guidedFlow && registrationStep !== 'guests'} hidden={guidedFlow && registrationStep !== 'guests'} className="space-y-5">
+          {guidedFlow && <div className="guided-step-heading"><span>Step 2</span><h3>Family / Guests</h3><p>Add anyone attending with you, then answer the event questions.</p></div>}
           {multiInvitee && (
             <div className="space-y-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
               <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-800">
@@ -905,6 +933,20 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {} }) {
 
           <ShippingSection shipping={event.shipping} addr={shipAddr} setAddr={setShipAddr}
             sizes={sizes} setSizes={setSizes} inputCls={inputCls} accent={t.accent} />
+          {guidedFlow && <div className="guided-step-actions"><button type="button" onClick={() => setRegistrationStep('details')}>← Back</button><button type="button" className="guided-next" onClick={() => advanceRegistration('review')}>Review registration →</button></div>}
+          </fieldset>
+
+          {guidedFlow && (
+            <fieldset data-registration-step="review" hidden={registrationStep !== 'review'} className="space-y-5">
+              <div className="guided-step-heading"><span>Step 3</span><h3>Review Registration</h3><p>Check these details before confirming your place.</p></div>
+              <div className="guided-review-card">
+                <div><small>Primary guest</small><b>{[form.first_name, form.last_name].filter(Boolean).join(' ') || 'Name not entered'}</b><span>{form.email || form.phone || 'Contact not entered'}</span></div>
+                <div><small>Family / guests</small><b>{invitees.filter((row) => row.first_name.trim() || row.last_name.trim()).length} additional</b><span>{invitees.filter((row) => row.first_name.trim() || row.last_name.trim()).map((row) => [row.first_name, row.last_name].filter(Boolean).join(' ')).join(', ') || 'No additional guests'}</span></div>
+                <div><small>Event</small><b>{eventTitle(event)}</b><span>{event.venue_name || 'Venue to be announced'}</span></div>
+              </div>
+              <button type="button" className="guided-back" onClick={() => setRegistrationStep('guests')}>← Edit family / guests</button>
+            </fieldset>
+          )}
 
           {error && (
             <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
@@ -912,9 +954,11 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {} }) {
             </div>
           )}
 
-          <PrimaryButton type="submit" disabled={loading} className="gh-cta w-full" style={tone?.accent ? { background: tone.accent } : undefined}>
-            {loading ? 'Submitting...' : multiInvitee ? (dWording.submitButtonLabel || 'Complete Registration') : 'Confirm My RSVP'}
-          </PrimaryButton>
+          {(!guidedFlow || registrationStep === 'review') && (
+            <PrimaryButton type="submit" disabled={loading} className="gh-cta w-full" style={tone?.accent ? { background: tone.accent } : undefined}>
+              {loading ? 'Submitting...' : guidedFlow ? 'Confirm Registration →' : multiInvitee ? (dWording.submitButtonLabel || 'Complete Registration') : 'Confirm My RSVP'}
+            </PrimaryButton>
+          )}
         </form>
       )}
     </div>
@@ -2904,8 +2948,11 @@ function JourneyInviteShell({ event, tone, designTheme, title, dateLabel, timeLa
               <div className="complete-rsvp-brand">{event.logo_url && <img src={event.logo_url} alt="" />}<div><span>{host || 'Festio Event'}</span><h1>{title}</h1><em>Unity · Heritage · Progress</em></div></div>
               <div className="complete-rsvp-meta"><span>▣ {[dateLabel, timeLabel].filter(Boolean).join(' · ')}</span><span>● {venue || 'Venue to be announced'}</span></div>
             </div>
-            <section className="complete-rsvp-card"><h2>Be Part of a Meaningful Gathering</h2><p>{event.description || event.invite_message || 'Join us for a meaningful gathering of connection, learning and community.'}</p><div className="complete-benefits"><span><i>✦</i>Inspiring talks and programme</span><span><i>●</i>Community connection</span><span><i>♟</i>Family and guests</span><span><i>♨</i>Meals and event experiences</span></div><button type="button" className="complete-primary" onClick={() => setCompleteScreen('register')}>Register Now →</button>{hasGuestHub && <button type="button" className="complete-link" onClick={() => setCompleteScreen('hub')}>Already registered? Open My GuestHub →</button>}</section>
-            <section className="complete-key-info"><h2>Key Information</h2><div className="complete-info-grid"><div><b>Dates</b>{[dateLabel, timeLabel].filter(Boolean).join(' · ')}</div><div><b>Venue</b>{event.venue_name || 'To be announced'}</div><div><b>Who can attend</b>Invited guests and families</div><div><b>Event type</b>{event.event_type || 'Event'}</div></div></section>
+            <section className="complete-rsvp-card"><span className="complete-section-label">ABOUT THIS EVENT</span><h2>Be Part of a Meaningful Gathering</h2><p>{event.description || event.invite_message || 'Join us for a meaningful gathering of connection, learning and community.'}</p><div className="complete-benefits"><span><i>✦</i>Inspiring talks and programme</span><span><i>●</i>Community connection</span><span><i>♟</i>Family and guests</span><span><i>♨</i>Meals and event experiences</span></div><button type="button" className="complete-primary" onClick={() => setCompleteScreen('register')}>Register / RSVP Now →</button></section>
+            <section className="complete-key-info"><span className="complete-section-label">ESSENTIAL DETAILS</span><h2>Key Event Information</h2><div className="complete-info-grid"><div><b>Dates</b>{[dateLabel, timeLabel].filter(Boolean).join(' · ')}</div><div><b>Venue</b>{event.venue_name || 'To be announced'}</div><div><b>Who can attend</b>Invited guests and families</div><div><b>Event type</b>{event.event_type || 'Event'}</div></div></section>
+            {event.live_program_enabled && <section className="complete-programme-preview"><span className="complete-section-label">PROGRAMME PREVIEW</span><h2>Plan Your Convention</h2><p>The published programme, session times and live updates will be available in your personal GuestHub after registration.</p><div><span><i>▤</i><b>Day-by-day programme</b><small>Sessions, locations and timing</small></span><span><i>◉</i><b>Live event updates</b><small>What is happening now and next</small></span></div></section>}
+            <section className="complete-important"><span className="complete-section-label">IMPORTANT INFORMATION</span><h2>Before You Register</h2><p>{event.admission_note || (event.rsvp_deadline ? `Please complete your RSVP before ${fmtDate(event.rsvp_deadline, event.timezone)}. Your personal Festio Pass will be created after confirmation.` : 'Complete one registration for yourself and add every family member or guest attending with you. Your personal Festio Pass will be created after confirmation.')}</p></section>
+            <section className="complete-final-cta"><h2>Ready to join us?</h2><p>Confirm your place and create your personal event home.</p><button type="button" className="complete-primary" onClick={() => setCompleteScreen('register')}>Register / RSVP Now →</button>{hasGuestHub ? <button type="button" className="complete-link" onClick={() => setCompleteScreen('hub')}>Already registered? Open My GuestHub →</button> : <p className="complete-returning-note">Already registered on another device? Use the personal GuestHub link in your confirmation email.</p>}</section>
           </div>
         ) : completeFlow && completeScreen === 'confirmed' ? (
           <div className="complete-confirmation"><FlowTopBar event={event} /><div className="complete-confirmation-body"><i>✓</i><h2>You’re Registered!</h2><p>Your registration for {title} is confirmed.</p><div className="complete-confirm-details"><span><b>Name</b>{freshConfirmation?.first_name || 'Guest'}</span><span><b>Registration status</b>Confirmed</span><span><b>Date</b>{dateLabel}</span><span><b>Venue</b>{event.venue_name || 'To be announced'}</span></div><button type="button" className="complete-primary" onClick={() => setCompleteScreen('hub')}>Open My GuestHub →</button>{freshConfirmation?.qr_token && <a className="complete-secondary-link" href={`/scan/${freshConfirmation.qr_token}`}>▦ View My Pass</a>}</div></div>
@@ -2914,7 +2961,7 @@ function JourneyInviteShell({ event, tone, designTheme, title, dateLabel, timeLa
         ) : (
           <div className={`journey-registration-stage ${completeFlow ? 'complete-registration-stage' : ''}`}>
             {completeFlow && <FlowTopBar event={event} onHome={() => setCompleteScreen('event')} />}
-            <header>{completeFlow && <button type="button" className="complete-back" onClick={() => setCompleteScreen('event')}>← Event details</button>}<span>{completeFlow ? 'REGISTRATION' : 'STEP 1 OF 4'}</span><h2>{completeFlow ? 'Complete your registration' : 'Let’s get you ready'}</h2><p>Confirm your attendance. Your personal GuestHub and Festio Pass will be created next.</p>{completeFlow && <div className="complete-form-steps"><b><i>1</i>Details</b><span><i>2</i>Guests</span><span><i>3</i>Review</span></div>}</header>
+            <header>{completeFlow && <button type="button" className="complete-back" onClick={() => setCompleteScreen('event')}>← Event details</button>}<span>{completeFlow ? 'REGISTRATION' : 'STEP 1 OF 4'}</span><h2>{completeFlow ? 'Complete your registration' : 'Let’s get you ready'}</h2><p>Confirm your attendance. Your personal GuestHub and Festio Pass will be created after registration.</p></header>
             <div className={completeFlow ? 'complete-ticket-checkout' : ''}><PublicTicketCheckout eventId={event.id} tone={tone} onAvailabilityChange={setPaidTicketsAvailable} /></div>
             {rsvpPanel && paidTicketsAvailable === false && <section id="rsvp" className={`journey-rsvp-panel ${completeFlow ? 'complete-rsvp-panel' : ''}`}>{rsvpPanel}</section>}
           </div>
@@ -3177,7 +3224,7 @@ export default function InvitePage() {
             This event is at capacity — RSVPs below join the waitlist and we'll notify you if a spot opens up.
           </div>
         )}
-        <RSVPForm event={event} theme={theme} onConfirmed={handleConfirmed} tone={tone} dWording={dWording} />
+        <RSVPForm event={event} theme={theme} onConfirmed={handleConfirmed} tone={tone} dWording={dWording} guidedFlow={event.guest_hub_layout === 'complete'} />
       </div>
     )
   }

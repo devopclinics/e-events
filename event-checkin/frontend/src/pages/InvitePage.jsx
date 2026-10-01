@@ -2785,6 +2785,49 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+function JourneyInviteShell({ event, tone, designTheme, title, dateLabel, timeLabel, venue, host, rsvpPanel, paidTicketsAvailable, setPaidTicketsAvailable, hasGuestHub, guestHubToken, confirmed }) {
+  const eventState = hasGuestHub ? 'Your event home' : 'Registration'
+  const cover = designCover(designTheme, event)
+  return (
+    <div className="journey-public-shell" style={{ '--journey-accent': tone.accent, '--journey-ink': tone.text, fontFamily: designFontFamily(designTheme) }}>
+      <aside className="journey-public-story" style={cover ? { backgroundImage: `linear-gradient(180deg, rgba(2,31,31,.18), rgba(2,31,31,.94)), url(${cover})` } : undefined}>
+        <div className="journey-public-brand">
+          {event.logo_url ? <img src={event.logo_url} alt="" /> : <span>{(event.name || 'F').trim().slice(0, 1)}</span>}
+          <div><b>{host || 'Festio event'}</b><small>Guest journey</small></div>
+        </div>
+        <div className="journey-public-story-copy">
+          <span className="journey-public-eyebrow">{eventState}</span>
+          <h1>{title}</h1>
+          <p>{[dateLabel, timeLabel].filter(Boolean).join(' · ')}</p>
+          {venue && <p>⌖ {venue}</p>}
+        </div>
+        <ol className="journey-public-steps" aria-label="Guest journey stages">
+          <li className={!hasGuestHub ? 'current' : 'done'}><i>{hasGuestHub ? '✓' : '1'}</i><span><b>Respond</b><small>Confirm attendance</small></span></li>
+          <li className={hasGuestHub ? 'current' : ''}><i>2</i><span><b>Prepare</b><small>Pass and event details</small></span></li>
+          <li><i>3</i><span><b>Attend</b><small>Check in and participate</small></span></li>
+          <li><i>4</i><span><b>Complete</b><small>Feedback and certificate</small></span></li>
+        </ol>
+        <div className="journey-public-powered">Powered by Festio</div>
+      </aside>
+      <main className="journey-public-workspace">
+        {hasGuestHub ? (
+          <GuestHub event={event} accessToken={guestHubToken} designTheme={designTheme} confirmed={confirmed} />
+        ) : (
+          <div className="journey-registration-stage">
+            <header>
+              <span>STEP 1 OF 4</span>
+              <h2>Let’s get you ready</h2>
+              <p>Confirm your attendance. Your personal event home and Festio Pass will be created next.</p>
+            </header>
+            <PublicTicketCheckout eventId={event.id} tone={tone} onAvailabilityChange={setPaidTicketsAvailable} />
+            {rsvpPanel && paidTicketsAvailable === false && <section id="rsvp" className="journey-rsvp-panel">{rsvpPanel}</section>}
+          </div>
+        )}
+      </main>
+    </div>
+  )
+}
+
 export default function InvitePage() {
   const { eventId, token, rsvpToken } = useParams()
   const tokenMode = !!token
@@ -3040,6 +3083,27 @@ export default function InvitePage() {
         )}
         <RSVPForm event={event} theme={theme} onConfirmed={handleConfirmed} tone={tone} dWording={dWording} />
       </div>
+    )
+  }
+
+  if (event.guest_hub_layout === 'journey') {
+    return (
+      <JourneyInviteShell
+        event={event}
+        tone={tone}
+        designTheme={designTheme}
+        title={title}
+        dateLabel={dateLabel}
+        timeLabel={timeLabel}
+        venue={venue}
+        host={host}
+        rsvpPanel={rsvpPanel}
+        paidTicketsAvailable={paidTicketsAvailable}
+        setPaidTicketsAvailable={setPaidTicketsAvailable}
+        hasGuestHub={hasGuestHub}
+        guestHubToken={guestHubToken}
+        confirmed={!!confirmed || tokenMeta.already_responded}
+      />
     )
   }
 

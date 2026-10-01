@@ -68,7 +68,7 @@ const DEFAULT_PUBLIC_PAGE = {
   hero: { showWelcomeLabel: true, showTitle: true, showHost: true },
   organizer: { show: true, label: 'Organized by' },
   details: { showVenue: true, showHotel: true, showHost: true, showAdmission: true },
-  about: { show: true, ctaLabel: '', ctaUrl: '' },
+  about: { show: true, ctaLabel: '', ctaUrl: '', highlights: '' },
 }
 
 function publicPageSettings(config = {}) {
@@ -1504,6 +1504,10 @@ export default function DesignStudioPage() {
                   </label>
                   <label className="text-xs font-bold text-slate-500 dark:text-slate-400">About CTA website
                     <input className={`${input} mt-1`} value={publicPage.about.ctaUrl || ''} onChange={(e) => setPublicPage('about', 'ctaUrl', e.target.value)} placeholder="https://example.org" />
+                  </label>
+                  <label className="text-xs font-bold text-slate-500 dark:text-slate-400">Event highlights for Option 4
+                    <textarea rows={4} className={`${input} mt-1`} value={publicPage.about.highlights || ''} onChange={(e) => setPublicPage('about', 'highlights', e.target.value)} placeholder={'One highlight per line'} />
+                    <span className="mt-1 block font-normal">Optional. Up to four highlights are shown; leave empty to hide the list.</span>
                   </label>
                 </div>
               </div>

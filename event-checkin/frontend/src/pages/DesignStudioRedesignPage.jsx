@@ -750,7 +750,7 @@ const DEFAULT_PAGE_SECTIONS = {
   hero: { showWelcomeLabel: true, showTitle: true, showHost: true, overlayOpacity: 55, focusX: 50, focusY: 20, imageSize: 480, imageFit: 'cover' },
   organizer: { show: true, label: 'Organized by' },
   details: { showVenue: true, showHotel: true, showHost: true, showAdmission: true },
-  about: { show: true, ctaLabel: '', ctaUrl: '' },
+  about: { show: true, ctaLabel: '', ctaUrl: '', highlights: '' },
 }
 
 const EMAIL_TYPES = ['Invitation', 'RSVP confirmation', 'Festio Pass email', 'Reminder', 'Broadcast', 'Check-in confirmation']
@@ -1659,6 +1659,9 @@ export default function DesignStudioRedesignPage() {
               <div className="rd-toggle-row"><span style={{ fontSize: 12, fontWeight: 600 }}>Show About section</span><label className="rd-switch"><input type="checkbox" checked={pageSections.about.show} onChange={(e) => setPageSection('about', 'show', e.target.checked)} /><span className="track" /><span className="knob" /></label></div>
               <input className="rd-field" placeholder="CTA label, e.g. Learn more" value={pageSections.about.ctaLabel} onChange={(e) => setPageSection('about', 'ctaLabel', e.target.value)} />
               <input className="rd-field" placeholder="CTA URL" value={pageSections.about.ctaUrl} onChange={(e) => setPageSection('about', 'ctaUrl', e.target.value)} />
+              <label className="rd-field-label" style={{ marginTop: 10 }}>Event highlights for Option 4</label>
+              <textarea className="rd-field" rows={4} placeholder={'One highlight per line, for example:\nInspiring talks and programmes\nCommunity connection'} value={pageSections.about.highlights || ''} onChange={(e) => setPageSection('about', 'highlights', e.target.value)} />
+              <p className="rd-hint" style={{ marginTop: 4 }}>Optional. Up to four lines appear beneath the About section. Leave empty to hide this list.</p>
 
               <div className="rd-hint" style={{ marginTop: 10 }}>Seating preview and FestioHub live feed are not part of the live guest page yet — no controls here affect them.</div>
 

@@ -2007,6 +2007,19 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
             </div>
           )}
 
+          {completeLayout && hub?.party?.length > 0 && (
+            <div className="complete-party-card">
+              <div className="complete-section-head"><h3>My Party ({hub.party.length})</h3></div>
+              {hub.party.map((member) => (
+                <div key={member.id} className="complete-party-person">
+                  <span>{member.name?.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase()}</span>
+                  <div><b>{member.name}</b><small>{member.is_primary ? 'You' : member.relationship || member.guest_type || 'Guest'}</small></div>
+                  <i>{member.admitted ? 'Checked in' : member.rsvp_status === 'confirmed' ? 'Registered' : member.rsvp_status}</i>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Event Updates — only when there's something real to show */}
           {!!hub?.announcements?.length && (
             <div id={(journeyLayout || completeLayout) ? 'journey-updates' : undefined} className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>

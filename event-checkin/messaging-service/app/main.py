@@ -180,6 +180,9 @@ class Guest(Base):
     admitted: Mapped[bool] = mapped_column(Boolean, default=False)
     table_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("seating_tables.id"))
     seat_number: Mapped[str | None] = mapped_column(String(20))
+    rsvp_submitter_guest_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("guests.id"))
+    rsvp_relationship: Mapped[str | None] = mapped_column(String(120))
+    rsvp_guest_type: Mapped[str | None] = mapped_column(String(120))
 
 
 class GuestTagLink(Base):
@@ -1353,6 +1356,15 @@ async def guest_hub(
     if not cfg.guest_hub_enabled or _comm_blocked(event, "guest_hub"):
         raise HTTPException(403, "FestioHub is disabled for this event.")
     table = await db.get(SeatingTable, guest.table_id) if guest.table_id else None
+    party_root_id = guest.rsvp_submitter_guest_id or guest.id
+    party = (await db.execute(
+        select(Guest)
+        .where(
+            Guest.event_id == event_id,
+            or_(Guest.id == party_root_id, Guest.rsvp_submitter_guest_id == party_root_id),
+        )
+        .order_by(Guest.first_name, Guest.last_name)
+    )).scalars().all()
     anns = []
     if cfg.announcements_enabled and not _comm_blocked(event, "announcements"):
         rows = (await db.execute(
@@ -1398,6 +1410,18 @@ async def guest_hub(
             "table_name": table.name if table else None,
             "seat_number": guest.seat_number,
         },
+        "party": [
+            {
+                "id": member.id,
+                "name": _display_name(member),
+                "relationship": member.rsvp_relationship,
+                "guest_type": member.rsvp_guest_type,
+                "rsvp_status": member.rsvp_status,
+                "admitted": member.admitted,
+                "is_primary": member.id == party_root_id,
+            }
+            for member in party
+        ],
         "event": {
             "id": event.id if event else event_id,
             "name": event.name if event else "",

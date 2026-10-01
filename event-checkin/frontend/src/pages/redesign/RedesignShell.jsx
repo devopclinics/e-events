@@ -307,8 +307,7 @@ export function Icon({ name, size = 18, className }) {
   return <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
 }
 
-const GUIDED_SETUP_ENABLED = import.meta.env.VITE_GUIDED_SETUP_ENABLED === 'true' &&
-  typeof window !== 'undefined' && ['staging.festio.events', 'localhost'].includes(window.location.hostname)
+const GUIDED_SETUP_ENABLED = import.meta.env.VITE_GUIDED_SETUP_ENABLED === 'true'
 
 // Mirrors the real top nav (App.jsx Nav, :85-203). Destinations point
 // directly at each item's redesign page — Check-in and Orders used to

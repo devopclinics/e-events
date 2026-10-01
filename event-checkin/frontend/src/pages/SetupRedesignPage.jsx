@@ -12,8 +12,7 @@ import GuidedSetupPhaseFive from './GuidedSetupPhaseFive'
 import GuidedSetupPhaseSix from './GuidedSetupPhaseSix'
 import './SetupRedesignPage.css'
 
-const GUIDED_SETUP_ENABLED = import.meta.env.VITE_GUIDED_SETUP_ENABLED === 'true' &&
-  typeof window !== 'undefined' && ['staging.festio.events', 'localhost'].includes(window.location.hostname)
+const GUIDED_SETUP_ENABLED = import.meta.env.VITE_GUIDED_SETUP_ENABLED === 'true'
 
 export const EVENT_TYPES = [
   'Wedding', 'Nikkah / Aqd', 'Graduation ceremony', 'Birthday party',

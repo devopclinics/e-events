@@ -1317,6 +1317,42 @@ const PREVIEW_JOURNEY = {
   },
 }
 
+function FlowTopBar({ event, onHome }) {
+  return <header className="flow-topbar"><button type="button" onClick={onHome} className="flow-wordmark">Fest<span>io</span></button><div className="flow-event-mini">{event?.logo_url && <img src={event.logo_url} alt="" />}<b>{event?.name}</b></div><span className="flow-avatar">{(event?.name || 'F').slice(0, 1)}</span></header>
+}
+
+function FlowPass({ event, hub, previewMock, onHome }) {
+  const guest = hub?.guest || {}
+  return <div className="flow-pass-screen"><FlowTopBar event={event} onHome={onHome} /><div className="flow-pass-hero">{event?.logo_url && <img src={event.logo_url} alt="" />}<div><span>{event?.organization_name || 'FESTIO EVENT'}</span><h1>{event?.name}</h1><p>Unity · Heritage · Progress</p></div></div><section className="flow-pass-card"><h2>{guest.name || 'Guest'}</h2><p>Guest · {event?.organization_name || 'Registered attendee'}</p>{guest.qr_token && <img className="flow-qr" src={previewMock ? PREVIEW_QR_DATA_URI : `/api/scan/${guest.qr_token}/qr.png`} alt="Your QR pass code" />}<div className="flow-ready">✓ <b>{guest.admitted ? 'CHECKED IN' : 'READY FOR ENTRY'}</b><small>Present this QR at check-in</small></div><div className="flow-pass-facts"><span><b>▣</b>{fmtDate(event.event_date, event.timezone)}</span><span><b>●</b>{event.venue_name || 'Venue details'}</span><span><b>♟</b>Guests included</span></div><button type="button" className="flow-primary" onClick={onHome}>Open GuestHub →</button></section></div>
+}
+
+function FlowBottom({ screen, go }) { return <nav className="flow-bottom"><button className={screen === 'home' ? 'active' : ''} onClick={() => go('home')}>⌂<span>Home</span></button><button className={screen === 'program' ? 'active' : ''} onClick={() => go('program')}>▦<span>Programme</span></button><button onClick={() => go('day')}>◉<span>Live</span></button><button onClick={() => go('pass')}>♙<span>Me</span></button></nav> }
+
+function FlowTools({ event, go }) { const tools = [['▦', 'My Pass', () => go('pass')], ['▣', 'Programme', () => go('program')], ['♟', 'Speakers'], ['●', 'Venue Info'], ['♨', 'Meals'], ['◉', 'Festio Live'], ['♥', 'Give / Support', event?.registry_token ? () => window.location.assign(`/registry/${event.registry_token}`) : null], ['?', 'Help & FAQ']]; return <section className="flow-section"><div className="flow-tool-grid">{tools.map(([ic, label, action]) => <button key={label} onClick={action}><i>{ic}</i>{label}</button>)}</div></section> }
+
+function FlowNext({ event, segments }) { const item = segments?.[0]; return <section className="flow-section"><div className="flow-section-heading"><h3>Coming Up Next</h3><span>View Full Programme →</span></div><article className="flow-next"><i>✨</i><div><b>{item?.title || 'Opening Reception'}</b><small>{item?.starts_at ? fmtTime(item.starts_at, event.timezone) : '6:00 PM'} · {item?.location || event.venue_name || 'Main Hall'}</small></div><span>›</span></article></section> }
+
+function EventDayView({ event, hub, journey, previewMock, onHome }) {
+  const guest = hub?.guest || {}; const segments = (journey?.program?.days || []).flatMap(d => d.segments || []).slice(0, 4)
+  return <div className="flow-phone flow-event-day"><FlowTopBar event={event} onHome={onHome} /><section className="flow-checkin-head"><i>✓</i><h1>Checked In</h1><p>Welcome, {guest.name || 'Guest'}!</p><small>{fmtDate(event.event_date, event.timezone)}</small></section><section className="flow-day-pass">{guest.qr_token && <img className="flow-qr" src={previewMock ? PREVIEW_QR_DATA_URI : `/api/scan/${guest.qr_token}/qr.png`} alt="Your QR pass code" />}<div><h2>{guest.name || 'Guest'}</h2><span>Checked In</span><p>Pass ID<br /><b>{guest.qr_token?.slice(0, 18).toUpperCase() || 'FESTIO-PASS'}</b><br /><br />{hub?.party?.length || 1} Attendee{(hub?.party?.length || 1) > 1 ? 's' : ''}</p></div></section><section className="flow-section"><div className="flow-section-heading"><h3>Today at a Glance</h3><span>Full Programme →</span></div><div className="flow-day-list">{(segments.length ? segments : [{ title: 'Opening Reception', starts_at: event.event_date, location: event.venue_name }]).map((s, i) => <div key={s.step_id || i}><time>{fmtTime(s.starts_at, event.timezone)}</time><b>{s.title}</b><span>{s.location || event.venue_name || 'Main Hall'}</span></div>)}</div></section><section className="flow-section"><div className="flow-section-heading"><h3>Your Access</h3><span>View Details →</span></div><div className="flow-access"><p><b>✓ Day 1 — Checked In</b><span>{fmtDate(event.event_date, event.timezone)}</span></p><p><b>○ Next event day — Ready for Entry</b><span>Active pass</span></p></div></section><section className="flow-section flow-additional"><h3>Additional Items</h3><p>📋 Consent Form <span>Not Completed</span></p><p>🎁 Welcome Pack <span>Pending</span></p><p>🍴 Meals <span>Available</span></p></section></div>
+}
+
+function JourneyGuestHubView({ event, hub, journey, previewMock }) {
+  const [screen, setScreen] = useState(hub?.guest?.admitted ? 'day' : 'home'); const guest = hub?.guest || {}; const days = journey?.program?.days || []; const segments = days.flatMap(day => day.segments || []).slice(0, 8)
+  const go = (value) => { setScreen(value); window.scrollTo({ top: 0, behavior: 'smooth' }) }
+  if (screen === 'pass') return <div className="flow-phone flow-option-three"><FlowPass event={event} hub={hub} previewMock={previewMock} onHome={() => go('home')} /></div>
+  if (screen === 'day') return <EventDayView event={event} hub={hub} journey={journey} previewMock={previewMock} onHome={() => go('home')} />
+  if (screen === 'program') return <div className="flow-phone flow-option-three"><FlowTopBar event={event} onHome={() => go('home')} /><main className="flow-program"><div className="flow-screen-title"><button onClick={() => go('home')}>←</button><h1>Programme</h1><span>⌕</span></div><div className="flow-day-tabs">{(days.length ? days : [{ date: event.event_date }]).slice(0, 3).map((d, i) => <button key={d.date || i} className={i === 0 ? 'active' : ''}>{fmtDate(d.date || event.event_date, event.timezone)}</button>)}</div><div className="flow-timeline">{(segments.length ? segments : [{ title: 'Opening Reception', starts_at: event.event_date, location: event.venue_name }, { title: 'Welcome & Opening Remarks', starts_at: event.event_date, location: 'Main Hall' }]).map((s, i) => <article key={s.step_id || i}><time>{fmtTime(s.starts_at, event.timezone)}</time><i>{['🕌', '☕', '📖', '🎙️', '✨'][i % 5]}</i><div><b>{s.title}</b><small>● {s.location || s.venue || event.venue_name || 'Main Hall'}</small></div><span>›</span></article>)}</div></main><FlowBottom screen="program" go={go} /></div>
+  return <div className="flow-phone flow-option-three"><FlowTopBar event={event} onHome={() => go('home')} /><div className="flow-home-banner"><span>{event?.organization_name || 'WELCOME'}</span><h1>{event?.name}</h1><p>{fmtDate(event.event_date, event.timezone)} · {event.venue_name || 'Event venue'}</p></div><section className="flow-welcome"><div className="flow-name-row"><span>{(guest.name || 'G').split(/\s+/).map(x => x[0]).slice(0, 2).join('')}</span><div><small>Welcome</small><h2>{guest.name || 'Guest'}</h2><em>Registered guest</em></div></div><h3>Your Convention Progress</h3><ul className="flow-progress-list"><li className="done">✓ Registration Confirmed</li><li>○ Ready for Check-in</li><li>○ Consent Form</li><li>○ Event Activities</li></ul></section><FlowTools event={event} go={go} /><FlowNext event={event} segments={segments} /><FlowBottom screen="home" go={go} /></div>
+}
+
+function CompleteGuestHubView({ event, hub, journey, previewMock }) {
+  const [screen, setScreen] = useState(hub?.guest?.admitted ? 'day' : 'home'); const guest = hub?.guest || {}; const segments = (journey?.program?.days || []).flatMap(d => d.segments || [])
+  if (screen === 'day') return <EventDayView event={event} hub={hub} journey={journey} previewMock={previewMock} onHome={() => setScreen('home')} />
+  if (screen === 'pass') return <div className="flow-phone flow-option-four"><FlowPass event={event} hub={hub} previewMock={previewMock} onHome={() => setScreen('home')} /></div>
+  return <div className="flow-phone flow-option-four"><FlowTopBar event={event} /><div className="flow-home-banner"><span>{event?.organization_name || 'FESTIO EVENT'}</span><h1>{event.name}</h1><p>{fmtDate(event.event_date, event.timezone)} · {event.venue_name || 'Event venue'}</p></div><section className="flow-welcome"><h2>Welcome, {guest.name?.split(' ')[0] || 'Guest'}! 👋</h2><p>You're registered for the event.</p><div className="flow-two-actions"><button className="flow-primary" onClick={() => setScreen('pass')}>▦ View My Pass</button><button className="flow-secondary">♟ Add Family / Guest</button></div></section><section className="flow-section"><div className="flow-section-heading"><h3>Your Event Journey</h3><button onClick={() => setScreen('day')}>View Details →</button></div><div className="flow-journey-grid"><div className="done">✓<b>Registration</b><small>Complete</small></div><div>◉<b>Consent Form</b><small>Complete form</small></div><div className="pending">○<b>Check-in</b><small>Event day</small></div><div className="pending">▣<b>Welcome Pack</b><small>Collect onsite</small></div></div></section><FlowTools event={event} go={(s) => s === 'pass' ? setScreen('pass') : s === 'day' ? setScreen('day') : null} /><FlowNext event={event} segments={segments} /><section className="flow-section flow-party"><div className="flow-section-heading"><h3>My Party ({hub?.party?.length || 1})</h3><span>Manage Party →</span></div>{(hub?.party?.length ? hub.party : [{ name: guest.name || 'Guest', relationship: 'You' }]).map((p, i) => <div className="flow-person" key={p.id || i}><i>{(p.name || 'G').slice(0, 1)}</i><b>{p.name || 'Guest'}</b><small>{p.relationship || (i ? 'Guest' : 'You')}</small><span>✓ Registered</span></div>)}</section></div>
+}
+
 function GuestHub({ event, accessToken, designTheme, previewMock = false, confirmed = true }) {
   const [hub, setHub] = useState(null)
   const [error, setError] = useState('')
@@ -1381,7 +1417,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   const companionLayout = event?.guest_hub_layout === 'companion'
   const journeyLayout = event?.guest_hub_layout === 'journey'
   const completeLayout = event?.guest_hub_layout === 'complete'
-  const guidedLayout = companionLayout || journeyLayout || completeLayout
+  const guidedLayout = companionLayout
 
   // Design Studio's preview iframe loads with #guest-hub in the URL, but this
   // section doesn't exist in the DOM until the async event/theme fetch above
@@ -1644,6 +1680,9 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
     || programDays.find((day) => day.segments?.some((segment) => segment.active))
     || programDays.find((day) => day.segments?.some((segment) => new Date(segment.ends_at) > new Date()))
     || programDays[0]
+
+  if (journeyLayout && hub) return <JourneyGuestHubView event={event} hub={hub} journey={journey} previewMock={previewMock} />
+  if (completeLayout && hub) return <CompleteGuestHubView event={event} hub={hub} journey={journey} previewMock={previewMock} />
 
   if (guidedLayout) {
     const isConfirmed = !hasRsvp || hub?.guest?.rsvp_status === 'confirmed'

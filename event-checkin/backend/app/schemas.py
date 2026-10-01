@@ -2649,7 +2649,7 @@ class InviteSettingsUpdate(BaseModel):
     rsvp_capacity: Optional[int] = None
     invite_cover_image: Optional[str] = None
     logo_url: Optional[str] = None
-    guest_hub_layout: Optional[Literal["classic", "companion"]] = None
+    guest_hub_layout: Optional[Literal["classic", "companion", "journey"]] = None
     invite_mode: Optional[Literal["open", "closed"]] = None
     rsvp_deadline: Optional[datetime] = None
     event_time_tbd: Optional[bool] = None

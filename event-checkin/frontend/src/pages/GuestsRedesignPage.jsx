@@ -881,7 +881,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
     setShowShare(event.invite_share_enabled !== false)
     setShowCalendar(event.invite_add_to_calendar_enabled !== false)
     setShowConfetti(event.rsvp_confetti_enabled !== false)
-    setHubLayout(event.guest_hub_layout === 'companion' ? 'companion' : 'classic')
+    setHubLayout(['companion', 'journey'].includes(event.guest_hub_layout) ? event.guest_hub_layout : 'classic')
   }, [event])
 
   function copyLink() {
@@ -1116,10 +1116,11 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
             <div className="rr-section-title" style={{ margin: '18px 0 8px' }}>
               <div><h2 style={{ fontSize: 12 }}>Guest Hub layout</h2><p>Which FestioHub your guests see after they RSVP</p></div>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 8 }}>
               {[
                 ['classic', 'Classic', 'The tabbed FestioHub — unchanged, and still the default.'],
                 ['companion', 'Companion', 'Redesigned single-scroll layout: Pass and next step first, one Event Details block, only the modules this event uses.'],
+                ['journey', 'Journey', 'Guided lifecycle layout that adapts from RSVP and readiness through check-in, live participation, feedback and certificates.'],
               ].map(([val, label, desc]) => (
                 <button key={val} type="button" onClick={() => setHubLayout(val)}
                   className="rr-btn secondary"

@@ -1379,6 +1379,8 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   // event's Hub changes shape unless someone explicitly picks it in Guests →
   // Invites & RSVP. See CompanionGuestHub below for the redesigned layout.
   const companionLayout = event?.guest_hub_layout === 'companion'
+  const journeyLayout = event?.guest_hub_layout === 'journey'
+  const guidedLayout = companionLayout || journeyLayout
 
   // Design Studio's preview iframe loads with #guest-hub in the URL, but this
   // section doesn't exist in the DOM until the async event/theme fetch above
@@ -1642,7 +1644,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
     || programDays.find((day) => day.segments?.some((segment) => new Date(segment.ends_at) > new Date()))
     || programDays[0]
 
-  if (companionLayout) {
+  if (guidedLayout) {
     const isConfirmed = !hasRsvp || hub?.guest?.rsvp_status === 'confirmed'
     const consent = journey?.consent
     const needsConsent = !!(consent?.required && !consent.signed)
@@ -1733,15 +1735,37 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
         + (event?.event_time_tbd ? '' : ` · ${fmtTime(event.event_date, event.timezone)}`)
       : ''
     const consolidatedVenue = [event?.venue_name, event?.venue_address].filter(Boolean).join(' · ')
+    const eventEnd = event?.event_end_date || event?.event_date
+    const journeyPhase = eventEnd && parseUtc(eventEnd) < new Date()
+      ? 'Event complete'
+      : hub?.guest?.admitted
+        ? 'Checked in'
+        : isConfirmed
+          ? 'Preparing for event'
+          : 'Registration in progress'
     const hasExperienceModules = !!(passCells.some((c) => c.l === seatingTerm(event) || c.l === seatTerm(event)) || consent?.required || journey?.menu_enabled)
 
     return (
       <section className="py-2">
-        <div className={`mx-auto w-full max-w-[560px] rounded-[1.65rem] border p-5 shadow-2xl backdrop-blur sm:p-6 fh-hub-style-${hubStyle}`}
+        <div className={`mx-auto w-full max-w-[560px] rounded-[1.65rem] border p-5 shadow-2xl backdrop-blur sm:p-6 fh-hub-style-${hubStyle} ${journeyLayout ? 'fh-journey-layout' : 'fh-companion-layout'}`}
           style={{ background: `linear-gradient(145deg, ${tone.background}, ${tone.surface})`, borderColor: tone.border, color: tone.text, boxShadow: `0 22px 48px ${tone.shadow}` }}>
+          {journeyLayout && (
+            <header className="fh-journey-hero">
+              <div className="fh-journey-brand-row">
+                <div className="fh-journey-mark">{event?.logo_url ? <img src={event.logo_url} alt="" /> : (event?.name || 'F').trim().slice(0, 1).toUpperCase()}</div>
+                <div>
+                  <div className="fh-journey-kicker">YOUR EVENT COMPANION</div>
+                  <div className="fh-journey-event-name">{event?.name || 'Event'}</div>
+                </div>
+              </div>
+              <div className="fh-journey-phase">{journeyPhase}</div>
+              <div className="fh-journey-welcome">Welcome, <strong>{hub?.guest?.name || 'Guest'}</strong></div>
+              <div className="fh-journey-meta">{[dateLabel, event?.venue_name].filter(Boolean).join(' · ')}</div>
+            </header>
+          )}
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-2xl font-extrabold">FestioHub</h2>
+              <h2 className="text-2xl font-extrabold">{journeyLayout ? 'Your journey' : 'FestioHub'}</h2>
               {hasRsvp && hub?.guest?.rsvp_status && (
                 <span className="mt-1 inline-block rounded-full px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wide" style={{ background: `${tone.accent}22`, color: tone.text }}>
                   {hub.guest.rsvp_status === 'confirmed' ? 'Attending' : hub.guest.rsvp_status}

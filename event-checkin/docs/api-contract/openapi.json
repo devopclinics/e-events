@@ -8281,7 +8281,8 @@
               {
                 "enum": [
                   "classic",
-                  "companion"
+                  "companion",
+                  "journey"
                 ],
                 "type": "string"
               },

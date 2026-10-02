@@ -31,7 +31,7 @@ function dirClass(direction) {
 export default function CheckinRedesignPage() {
   const [eventId] = useCurrentEvent()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { event } = useEventDetails(eventId)
+  const { event, setEvent } = useEventDetails(eventId)
   const [toast, setToast] = useState('')
   const requestedView = searchParams.get('tab')
   const [view, setView] = useState(() => TABS.some((tab) => tab.id === requestedView) ? requestedView : 'zones')
@@ -209,6 +209,15 @@ export default function CheckinRedesignPage() {
   function notify(message) {
     setToast(message)
     window.setTimeout(() => setToast(''), 2600)
+  }
+
+  async function toggleDailyAttendance() {
+    if (!eventId || !event) return
+    try {
+      const updated = await api.toggleFeatures(eventId, { daily_checkin_enabled: !event.daily_checkin_enabled })
+      setEvent(updated)
+      notify(`Daily attendance ${updated.daily_checkin_enabled ? 'enabled' : 'disabled'}`)
+    } catch (error) { notify(error.message || 'Daily attendance could not be updated') }
   }
 
   async function createTag() {
@@ -606,6 +615,17 @@ export default function CheckinRedesignPage() {
 
           {view === 'operations' && (
             <>
+              <div className="rr-panel">
+                <div className="rd-panel-head ci-journey-head">
+                  <div>
+                    <h3>Daily attendance</h3>
+                    <p>For multi-day events. Adds a Daily attendance tab to the live Scanner and records one validated mark per admitted guest each event day. It never changes event check-in or check-out.</p>
+                  </div>
+                  <button className={`rr-btn ${event?.daily_checkin_enabled ? 'primary' : 'secondary'}`} onClick={toggleDailyAttendance} disabled={!event}>
+                    Daily attendance: {event?.daily_checkin_enabled ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+              </div>
               <div className="rr-panel">
                 <div className="rd-panel-head"><h3>Guardian handoff rules</h3><p>Require a second, authorized guardian credential when a configured junior enters or exits a zone (and at check-out).</p></div>
                 <div className="rd-panel-body">

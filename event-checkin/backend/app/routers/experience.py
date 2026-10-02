@@ -24,6 +24,7 @@ from ..schemas import (
     ExperienceEventOut,
     ExperienceNextStepOut,
     ExperienceProgressUpdate,
+    SessionEntryOverride,
     ExperienceStepCreate,
     ExperienceStepOut,
     ExperienceStepReorder,
@@ -59,6 +60,7 @@ from ..services.experience import (
     next_guest_steps,
     publish_workflow,
     sync_guest_progress,
+    guest_age_group,
     unarchive_workflow,
     unpublish_workflow,
 )
@@ -567,7 +569,14 @@ def _assert_session_check_in_open(session: dict, timezone_name=None) -> None:
         raise HTTPException(409, "Session check-in is closed for this session.")
 
 
-def _session_check_in_metadata(step: ExperienceStep, metadata: dict | None, timezone_name=None) -> dict:
+async def _session_check_in_metadata(
+    step: ExperienceStep, metadata: dict | None, timezone_name=None, *, db: AsyncSession, guest: Guest,
+) -> dict:
+    """Validate a session entry before the progress row is completed.
+
+    The caller locks the session step first, so the capacity count and completion
+    write cannot race another scanner for the same session.
+    """
     session = _session_config(step)
     if not any(str(value or "").strip() for value in session.values()):
         raise HTTPException(409, "Session attendance steps need session details before guests can be checked in")
@@ -575,7 +584,31 @@ def _session_check_in_metadata(step: ExperienceStep, metadata: dict | None, time
     action = (metadata or {}).get("action")
     if action != "session_check_in":
         raise HTTPException(409, "Session attendance must be recorded as a session check-in")
+    if not guest.admitted:
+        raise HTTPException(409, "Guest must complete event check-in before session attendance")
+    allowed_groups = (step.conditions or {}).get("age_groups_include")
+    if allowed_groups:
+        allowed_groups = allowed_groups if isinstance(allowed_groups, list) else [allowed_groups]
+        allowed_labels = [str(group).strip() for group in allowed_groups if str(group).strip()]
+        guest_group = await guest_age_group(guest, db)
+        if not guest_group or guest_group.lower() not in {group.lower() for group in allowed_labels}:
+            required = ", ".join(allowed_labels)
+            actual = guest_group or "no age group on the registration"
+            raise HTTPException(409, f"Not eligible for this session. This session is for {required}. Guest is registered as {actual}.")
     _assert_session_check_in_open(session, timezone_name)
+    try:
+        capacity = int(session.get("capacity")) if session.get("capacity") not in (None, "") else None
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Session capacity must be a whole number")
+    if capacity is not None and capacity >= 0:
+        attended = await db.scalar(
+            select(func.count(GuestExperienceProgress.id)).where(
+                GuestExperienceProgress.step_id == step.id,
+                GuestExperienceProgress.status.in_(("completed", "overridden")),
+            )
+        ) or 0
+        if attended >= capacity:
+            raise HTTPException(409, "Session capacity has been reached")
 
     return {
         **(metadata or {}),
@@ -1700,7 +1733,10 @@ async def update_guest_step_progress(
         room_assignment = await _assign_room_for_step(event, guest, step, db, existing_metadata)
         metadata = {**(metadata or {}), "room_assignment": room_assignment}
     if data.status == "completed" and step.type == "session_attendance":
-        metadata = _session_check_in_metadata(step, metadata, event.timezone)
+        # Serialize capacity decisions for this session; guest progress itself
+        # is also locked by complete_guest_step below.
+        step = await db.scalar(select(ExperienceStep).where(ExperienceStep.id == step.id).with_for_update())
+        metadata = await _session_check_in_metadata(step, metadata, event.timezone, db=db, guest=guest)
 
     newly_completed = False
     if data.status == "completed":
@@ -1756,6 +1792,91 @@ async def update_guest_step_progress(
         await _queue_room_assignment_email(background_tasks, event, guest, step, (metadata or {}).get("room_assignment"), db)
     if data.status == "completed" and step.type == "session_attendance" and newly_completed:
         await _queue_session_attendance_email(background_tasks, event, guest, step, db)
+    return _progress_out(progress)
+
+
+@router.post("/{event_id}/experience/guests/{guest_id}/steps/{step_id}/override-session-entry", response_model=GuestExperienceProgressOut)
+async def override_session_entry(
+    event_id: str,
+    guest_id: str,
+    step_id: str,
+    data: SessionEntryOverride,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_event_admin),
+):
+    """Supervisor-only, auditable override for a session age-group refusal.
+
+    An override never bypasses normal event admission, the session time window,
+    or capacity. It is intentionally limited to the age eligibility rule.
+    """
+    event = await _experience_enabled_event(event_id, db)
+    workflow = await active_workflow(event_id, db)
+    if not workflow:
+        raise HTTPException(404, "Workflow not found")
+    step = next((item for item in workflow.steps if item.id == step_id), None)
+    if not step or step.type != "session_attendance" or not step.enabled:
+        raise HTTPException(404, "Active session attendance step not found")
+    guest = await db.get(Guest, guest_id)
+    if not guest or guest.event_id != event_id:
+        raise HTTPException(404, "Guest not found")
+    if not guest.admitted:
+        raise HTTPException(409, "Guest must complete event check-in before session attendance")
+    step = await db.scalar(select(ExperienceStep).where(ExperienceStep.id == step.id).with_for_update())
+    session = _session_config(step)
+    if not any(str(value or "").strip() for value in session.values()):
+        raise HTTPException(409, "Session attendance steps need session details before guests can be checked in")
+    _assert_session_check_in_open(session, event.timezone)
+    try:
+        capacity = int(session.get("capacity")) if session.get("capacity") not in (None, "") else None
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Session capacity must be a whole number")
+    if capacity is not None and capacity >= 0:
+        attended = await db.scalar(select(func.count(GuestExperienceProgress.id)).where(
+            GuestExperienceProgress.step_id == step.id,
+            GuestExperienceProgress.status.in_(("completed", "overridden")),
+        )) or 0
+        if attended >= capacity:
+            raise HTTPException(409, "Session capacity has been reached")
+    await sync_guest_progress(event_id, guest_id, db)
+    progress = await db.scalar(select(GuestExperienceProgress).where(
+        GuestExperienceProgress.workflow_id == workflow.id,
+        GuestExperienceProgress.step_id == step.id,
+        GuestExperienceProgress.guest_id == guest_id,
+    ).with_for_update())
+    if not progress:
+        raise HTTPException(409, "Guest progress could not be initialized")
+    progress_rows = (await db.execute(select(GuestExperienceProgress).where(
+        GuestExperienceProgress.workflow_id == workflow.id,
+        GuestExperienceProgress.guest_id == guest_id,
+    ))).scalars().all()
+    progress_by_step_id = {row.step_id: row for row in progress_rows}
+    if not dependencies_satisfied(step, {value: item for item in workflow.steps for value in (item.id, item.key)}, progress_by_step_id, event=event):
+        raise HTTPException(409, "This session is blocked until its required prior steps are complete")
+    if progress.status in {"completed", "overridden"}:
+        return _progress_out(progress)
+    now = datetime.utcnow()
+    age_group = await guest_age_group(guest, db)
+    allowed_groups = (step.conditions or {}).get("age_groups_include") or []
+    allowed_groups = allowed_groups if isinstance(allowed_groups, list) else [allowed_groups]
+    progress.status = "overridden"
+    progress.completed_at = now
+    progress.completed_by_user_id = current_user.id
+    progress.completed_by_source = "session_entry_override"
+    progress.override_reason = data.reason.strip()
+    progress.progress_metadata = {
+        "action": "session_entry_override",
+        "session_checked_in_at": now.isoformat(),
+        "guest_age_group": age_group,
+        "eligible_age_groups": allowed_groups,
+        "session": {key: value for key, value in session.items() if value not in (None, "")},
+    }
+    db.add(ExperienceEvent(
+        event_id=event_id, workflow_id=workflow.id, step_id=step.id, guest_id=guest.id,
+        actor_user_id=current_user.id, event_type="session_entry_overridden",
+        source="admin", payload={"reason": data.reason.strip(), "guest_age_group": age_group, "eligible_age_groups": allowed_groups},
+    ))
+    await db.commit()
+    await db.refresh(progress)
     return _progress_out(progress)
 
 

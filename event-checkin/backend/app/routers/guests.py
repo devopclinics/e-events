@@ -50,7 +50,7 @@ from ..models import (
     InboundEmail,
     PushOutbox,
 )
-from ..schemas import GuestOut, GuestCreate, GuestUpdate, BulkAssignGroupRequest, ScanResult, WalkInRegister, HouseholdOut, HouseholdCreate, BulkAssignHouseholdRequest, GuestDuplicateGroup, MergeDuplicatesRequest
+from ..schemas import GuestOut, GuestCreate, GuestUpdate, BulkAssignGroupRequest, ScanResult, ScanCheckoutRequest, WalkInRegister, HouseholdOut, HouseholdCreate, BulkAssignHouseholdRequest, GuestDuplicateGroup, MergeDuplicatesRequest
 from ..auth import require_guest_manage_access, require_guest_view_access, require_official
 from ..entitlements import assert_within_guest_cap, guest_limit, can_use_paid_channels, last_credit_ledger_id, reserve_message_credit
 from ..channels import channels_for_flow
@@ -2116,6 +2116,7 @@ async def manual_checkin(
 async def manual_checkout(
     event_id: str,
     guest_id: str,
+    body: ScanCheckoutRequest | None = Body(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_official),
 ):
@@ -2126,7 +2127,7 @@ async def manual_checkout(
     guest = await db.get(Guest, guest_id)
     if not guest or guest.event_id != event_id:
         return ScanResult(status="invalid", message="Guest not found for this event.")
-    return await perform_checkout(guest, event, current_user, db)
+    return await perform_checkout(guest, event, current_user, db, guardian_token=(body.guardian_token if body else None))
 
 
 async def _notify_unadmit(event: Event, guest: Guest, db: AsyncSession, background_tasks: BackgroundTasks) -> None:

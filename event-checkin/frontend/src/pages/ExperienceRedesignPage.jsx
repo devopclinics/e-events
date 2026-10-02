@@ -62,7 +62,7 @@ function blankStepForm() {
   return {
     id: null, key: '', type: 'custom', title: '', description: '', sort_order: 0, required: true, enabled: true, blocks_checkin: false, depends_on: '',
     guest_message: '', staff_prompt: '', completion_message: '', external_link: '',
-    session_topic: '', session_date: '', session_start_time: '', session_end_time: '', session_room: '', session_speaker: '', session_speaker_id: '', session_capacity: '', session_checkin_window_minutes: '',
+    session_topic: '', session_date: '', session_start_time: '', session_end_time: '', session_room: '', session_speaker: '', session_speaker_id: '', session_capacity: '', session_checkin_window_minutes: '', session_age_groups: '',
     room_assignment_mode: 'global', room_assignment_scope: '', room_assignment_room: '', room_assignment_table_group: '',
     feedback_audience: 'all', feedback_session_step_id: '', feedback_anonymous: false, feedback_status: 'open',
     feedback_opens_at: '', feedback_closes_at: '', feedback_allow_edit: true, feedback_questions: [],
@@ -281,6 +281,7 @@ function ExperienceStepEditor({ form, setForm, steps, busy, onClose, onSave, spe
             <StepField label="End time"><input className="rr-input" type="time" value={form.session_end_time} onChange={(event) => patch({ session_end_time: event.target.value })}/></StepField>
             <StepField label="Room / location"><input className="rr-input" value={form.session_room} onChange={(event) => patch({ session_room: event.target.value })}/></StepField>
             <StepField label="Check-in opens (minutes before)" hint="Leave blank for no time gate."><input className="rr-input" type="number" min="0" value={form.session_checkin_window_minutes} onChange={(event) => patch({ session_checkin_window_minutes: event.target.value })}/></StepField>
+            <StepField label="Eligible age groups" wide hint="Optional. Comma-separated RSVP age groups; guests outside these groups are denied unless a supervisor records an override."><input className="rr-input" value={form.session_age_groups} onChange={(event) => patch({ session_age_groups: event.target.value })} placeholder="For example: Youth 13–17, Young Adults"/></StepField>
             {speakerEnabled && eventSpeakers.length > 0 ? (
               <StepField label="Speaker / host" wide hint="From your Speaker Showcase — manage the full list from Add-ons.">
                 <select className="rr-select" value={form.session_speaker_id} onChange={(event) => {
@@ -832,7 +833,7 @@ export default function ExperienceRedesignPage() {
       session_topic: session.topic || '', session_date: session.date || '', session_start_time: session.start_time || '',
       session_end_time: session.end_time || '', session_room: session.room || '', session_speaker: session.speaker || '',
       session_speaker_id: session.speaker_id || '',
-      session_capacity: session.capacity ?? '', session_checkin_window_minutes: session.checkin_window_minutes ?? '',
+      session_capacity: session.capacity ?? '', session_checkin_window_minutes: session.checkin_window_minutes ?? '', session_age_groups: Array.isArray(step.conditions?.age_groups_include) ? step.conditions.age_groups_include.join(', ') : (step.conditions?.age_groups_include || ''),
       room_assignment_mode: assignment.mode === 'scoped' ? 'scoped' : 'global',
       room_assignment_scope: assignment.scope || '', room_assignment_room: assignment.room || '',
       room_assignment_table_group: assignment.table_group || '',
@@ -1024,7 +1025,7 @@ export default function ExperienceRedesignPage() {
       is_segment: !!stepForm.program_is_segment,
       starts_offset_seconds: stepForm.program_is_segment ? Number(stepForm.program_start_offset_seconds) : null,
       duration_seconds: stepForm.program_is_segment ? Number(stepForm.program_duration_seconds) : null,
-      conditions: parseJsonMaybe(stepForm.conditions, 'Conditions'),
+      conditions: (() => { const conditions = parseJsonMaybe(stepForm.conditions, 'Conditions') || {}; if (stepForm.type === 'session_attendance') { const groups = stepForm.session_age_groups.split(',').map((value) => value.trim()).filter(Boolean); if (groups.length) conditions.age_groups_include = groups; else delete conditions.age_groups_include } return Object.keys(conditions).length ? conditions : null })(),
       config: Object.keys(config).length ? config : null,
     }
   }

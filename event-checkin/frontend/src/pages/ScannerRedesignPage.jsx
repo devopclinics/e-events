@@ -21,6 +21,7 @@ const MODES = [
   { id: 'camera', label: 'Convention check-in' },
   { id: 'access', label: 'Zone access' },
   { id: 'checkout', label: 'Check-out' },
+  { id: 'daily', label: 'Daily attendance' },
   { id: 'manual', label: 'Manual search' },
   { id: 'eventqr', label: 'Event QR' },
 ]
@@ -51,7 +52,7 @@ function extractScanPayload(raw) {
 function resultTone(result) {
   if (!result) return ''
   if (result.denied || result.status === 'denied' || result.status === 'invalid') return 'red'
-  if (result.status === 'pending_required_step') return 'amber'
+  if (result.status === 'pending_required_step' || result.status === 'guardian_required') return 'amber'
   if (/already/.test(result.status || '')) return 'amber'
   if (result.status === 'offline_queued') return 'blue'
   return 'green'
@@ -109,16 +110,41 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
   const [zoneId, setZoneId] = useState('')
   const [direction, setDirection] = useState('in')
   const [guardianToken, setGuardianToken] = useState('')
+  const [guardianStep, setGuardianStep] = useState(null)
+  const [guardianSearch, setGuardianSearch] = useState('')
   const [sectionId, setSectionId] = useState(sections.length === 1 ? sections[0].id : '')
   const accessMode = !!event?.venue_access_enabled && (!event?.separate_admission_access_enabled || mode === 'access')
+  const guardianChildName = guardianStep?.guest
+    ? [guardianStep.guest.first_name, guardianStep.guest.last_name].filter(Boolean).join(' ')
+    : 'this junior'
+  const guardianCandidates = (guardianStep?.candidates || []).filter((candidate) =>
+    !guardianSearch.trim() || `${candidate.name} ${candidate.relationship || ''}`.toLowerCase().includes(guardianSearch.trim().toLowerCase())
+  )
 
   useEffect(() => {
     if (sections.length === 1) setSectionId(sections[0].id)
     else if (!sections.some((section) => section.id === sectionId)) setSectionId('')
   }, [sections])
 
-  async function recordScan(rawValue) {
-    const { token: value, action } = extractScanPayload(rawValue)
+  function startGuardianStep(value, action, response, manifestGuest) {
+    setGuardianStep({
+      childToken: value,
+      action,
+      guest: response.guest || manifestGuest,
+      candidates: response.guardian_candidates || [],
+    })
+    setGuardianToken('')
+    setGuardianSearch('')
+  }
+
+  function cancelGuardianStep() {
+    setGuardianStep(null)
+    setGuardianToken('')
+    setGuardianSearch('')
+    setError('')
+  }
+
+  async function recordGuestScan(value, action, guardianPass = null) {
     if (!value || busy) return
     setBusy(true); setError(''); onResult(null)
     try {
@@ -126,11 +152,11 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
       const scanAction = action || (mode === 'checkout' ? 'checkout' : 'checkin')
       if (scanAction === 'checkout') {
         if (!navigator.onLine) throw new Error('Check-out needs a network connection so the exit scan can be recorded.')
-        response = await api.scanCheckout(value)
+        response = await api.scanCheckout(value, guardianPass)
       }
       else if (accessMode && gateId && event.junior_guardian_handoff_enabled) throw new Error('Select a zone for guardian handoff scanning.')
       else if (accessMode && gateId) response = await api.scanGate(event.id, gateId, value)
-      else if (accessMode && zoneId) response = await api.scanZone(value, { zone_id: zoneId, direction, guardian_token: extractToken(guardianToken) || null })
+      else if (accessMode && zoneId) response = await api.scanZone(value, { zone_id: zoneId, direction, guardian_token: guardianPass })
       else if (accessMode) throw new Error('Select a gate or zone before scanning.')
       else {
         const section = sections.find((item) => item.id === sectionId)
@@ -138,46 +164,56 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
       }
       await onRefreshManifest()
       const manifestGuest = ((offlineManifest || loadOfflineManifest(event.id))?.guests || []).find((item) => item.qr_token === value)
-      onResult({
+      const result = {
         ...response,
         guest: response.guest || manifestGuest,
         denied: response.denied ?? response.allowed === false,
         guest_name: response.guest_name,
         deny_reason: response.deny_reason || (response.allowed === false ? response.message : undefined),
-      })
+      }
+      onResult(response.status === 'guardian_required' ? {
+        ...result, denied: false, message: 'Guardian verification required. Scan the authorized guardian’s pass next.',
+      } : result)
+      if (response.status === 'guardian_required') {
+        startGuardianStep(value, action, response, manifestGuest)
+      } else {
+        cancelGuardianStep()
+      }
       setToken('')
     } catch (err) {
       const networkFailure = !navigator.onLine || /failed to fetch|network|load failed/i.test(err.message || '')
-      if (networkFailure && accessMode && event.junior_guardian_handoff_enabled) {
+      if (networkFailure && (accessMode || mode === 'checkout') && event.junior_guardian_handoff_enabled) {
         throw new Error('Guardian handoffs require an online connection for authorization checks.')
       }
       if (networkFailure && mode !== 'checkout' && action !== 'checkout') {
         const offline = recordOfflineScan({
-          eventId: event.id,
-          token: value,
+          eventId: event.id, token: value,
           manifest: offlineManifest || loadOfflineManifest(event.id),
-          mode: accessMode ? (gateId ? 'gate' : 'zone') : 'admission',
-          gateId: gateId || null,
-          zoneId: zoneId || null,
-          direction,
+          mode: accessMode ? (gateId ? 'gate' : 'zone') : 'admission', gateId: gateId || null,
+          zoneId: zoneId || null, direction,
         })
         if (offline.manifest) onManifestChange(offline.manifest)
-        onQueueChange()
-        onResult(offline.result)
-        setToken('')
+        onQueueChange(); onResult(offline.result); setToken('')
         return
       }
       const failed = { status: 'invalid', message: err.message || 'Scan failed' }
-      setError(failed.message)
-      onResult(failed)
+      setError(failed.message); onResult(failed)
     } finally {
       setBusy(false)
     }
   }
 
+  async function recordScan(rawValue) {
+    const { token: value, action } = extractScanPayload(rawValue)
+    if (!value || busy) return
+    if (guardianStep) return recordGuestScan(guardianStep.childToken, guardianStep.action, value)
+    return recordGuestScan(value, action)
+  }
+
   async function submit(e) {
     e.preventDefault()
-    await recordScan(token)
+    if (guardianStep) await recordScan(guardianToken)
+    else await recordScan(token)
   }
 
   return (
@@ -185,46 +221,33 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
       <div className="sc-camera-frame">
         <div className="sc-camera-corners"><span/><span/><span/><span/></div>
         <div className="sc-camera-placeholder">
-          <p>{mode === 'checkout' ? 'Convention check-out scan' : mode === 'access' ? 'Zone access scan' : 'Convention check-in scan'}</p>
-          <QrCameraScanner onScan={recordScan} disabled={busy || (accessMode && !gateId && !zoneId && mode !== 'checkout')} />
-          <small>You can also paste a pass URL or token below.</small>
+          <p>{guardianStep ? `Scan guardian QR for ${guardianChildName}` : mode === 'checkout' ? 'Convention check-out scan' : mode === 'access' ? 'Zone access scan' : 'Convention check-in scan'}</p>
+          <QrCameraScanner onScan={recordScan} disabled={busy || (!guardianStep && accessMode && !gateId && !zoneId && mode !== 'checkout')} />
+          <small>{guardianStep ? 'Ask the guardian to present their own Festio Pass.' : 'Scan a guest pass, or paste a pass URL or token below.'}</small>
         </div>
       </div>
-      {accessMode && mode !== 'checkout' && (
+      {!guardianStep && accessMode && mode !== 'checkout' && (
         <div className="sc-search-row sc-access-row">
-          {gates.length > 0 && (
-            <select className="sc-selector" aria-label="Gate" value={gateId} onChange={(e) => { setGateId(e.target.value); if (e.target.value) setZoneId('') }}>
-              <option value="">Select gate</option>
-              {gates.filter((gate) => gate.is_active !== false).map((gate) => <option key={gate.id} value={gate.id}>{gate.name}</option>)}
-            </select>
-          )}
-          <select className="sc-selector" aria-label="Zone" value={zoneId} onChange={(e) => { setZoneId(e.target.value); if (e.target.value) setGateId('') }}>
-            <option value="">Select zone</option>
-            {zones.filter((zone) => zone.is_active !== false).map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}
-          </select>
+          {gates.length > 0 && <select className="sc-selector" aria-label="Gate" value={gateId} onChange={(e) => { setGateId(e.target.value); if (e.target.value) setZoneId('') }}><option value="">Select gate</option>{gates.filter((gate) => gate.is_active !== false).map((gate) => <option key={gate.id} value={gate.id}>{gate.name}</option>)}</select>}
+          <select className="sc-selector" aria-label="Zone" value={zoneId} onChange={(e) => { setZoneId(e.target.value); if (e.target.value) setGateId('') }}><option value="">Select zone</option>{zones.filter((zone) => zone.is_active !== false).map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}</select>
           {zoneId && <select className="sc-selector" aria-label="Direction" value={direction} onChange={(e) => setDirection(e.target.value)}><option value="in">In</option><option value="out">Out</option></select>}
         </div>
       )}
-      {event.section_mode_enabled && sections.length > 1 && mode !== 'checkout' && (
-        <select className="sc-selector" aria-label="Active section" value={sectionId} onChange={(e) => setSectionId(e.target.value)}>
-          <option value="">Select section</option>
-          {sections.map((section) => <option key={section.id} value={section.id}>{section.name}</option>)}
-        </select>
-      )}
-      {accessMode && event.junior_guardian_handoff_enabled && mode !== 'checkout' && (
-        <div className="sc-search-row sc-token-row">
-          <input className="sc-search-input" aria-label="Guardian pass token" value={guardianToken} onChange={(e) => setGuardianToken(e.target.value)} placeholder="Authorized guardian pass URL or QR token"/>
-        </div>
-      )}
-      <div className="sc-search-row sc-token-row">
-        <input className="sc-search-input" aria-label="Pass token" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Guest pass URL or QR token"/>
-        <button className="rr-btn primary" disabled={!token.trim() || busy}>{busy ? 'Recording…' : mode === 'checkout' ? 'Check out' : 'Record scan'}</button>
-      </div>
+      {!guardianStep && event.section_mode_enabled && sections.length > 1 && mode !== 'checkout' && <select className="sc-selector" aria-label="Active section" value={sectionId} onChange={(e) => setSectionId(e.target.value)}><option value="">Select section</option>{sections.map((section) => <option key={section.id} value={section.id}>{section.name}</option>)}</select>}
+      {guardianStep ? (
+        <section className="sc-guardian-handoff" aria-live="polite">
+          <strong>Guardian required for {guardianChildName}</strong>
+          <p>Find the authorized guardian below, then scan or paste that guardian’s pass. A name alone cannot approve the handoff.</p>
+          {guardianStep.candidates.length > 0 ? <><input className="sc-search-input" aria-label="Search authorized guardians" value={guardianSearch} onChange={(e) => setGuardianSearch(e.target.value)} placeholder="Search authorized guardians"/>
+            <div className="sc-guardian-candidates">{guardianCandidates.map((candidate) => <div key={candidate.guardian_guest_id}><b>{candidate.name}</b><small>{candidate.relationship}</small></div>)}{guardianCandidates.length === 0 && <p className="sc-empty">No confirmed guardian matches that search.</p>}</div></> : <p className="sc-empty">No confirmed guardian is available for this junior. Ask an event administrator to review the authorization.</p>}
+          <div className="sc-search-row sc-token-row"><input className="sc-search-input" aria-label="Guardian pass token" value={guardianToken} onChange={(e) => setGuardianToken(e.target.value)} placeholder="Guardian pass URL or QR token"/><button className="rr-btn primary" disabled={!guardianToken.trim() || busy}>{busy ? 'Verifying…' : 'Verify guardian QR'}</button></div>
+          <button type="button" className="rr-btn secondary" onClick={cancelGuardianStep} disabled={busy}>Cancel and scan another guest</button>
+        </section>
+      ) : <div className="sc-search-row sc-token-row"><input className="sc-search-input" aria-label="Pass token" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Guest pass URL or QR token"/><button className="rr-btn primary" disabled={!token.trim() || busy}>{busy ? 'Recording…' : mode === 'checkout' ? 'Check out' : 'Record scan'}</button></div>}
       {error && <p className="sc-empty">{error}</p>}
     </form>
   )
 }
-
 function ManualMode({ event, sections, zones, onResult }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
@@ -239,10 +262,27 @@ function ManualMode({ event, sections, zones, onResult }) {
   const [zoneId, setZoneId] = useState('')
   const [direction, setDirection] = useState('in')
   const [guardianToken, setGuardianToken] = useState('')
+  const [guardianStep, setGuardianStep] = useState(null)
+  const [guardianSearch, setGuardianSearch] = useState('')
   const [operation, setOperation] = useState('admission')
   const separatedAccess = !!event?.venue_access_enabled && !!event?.separate_admission_access_enabled
   const zoneOperation = !!event?.venue_access_enabled && (!separatedAccess || operation === 'access')
   const groupChoiceEnabled = !!event?.walk_in_group_choice_enabled && !event?.section_mode_enabled
+  const guardianCandidates = (guardianStep?.candidates || []).filter((candidate) =>
+    !guardianSearch.trim() || `${candidate.name} ${candidate.relationship || ''}`.toLowerCase().includes(guardianSearch.trim().toLowerCase())
+  )
+
+  function beginGuardianStep(guest, response) {
+    setGuardianStep({ guest, candidates: response.guardian_candidates || [] })
+    setGuardianToken('')
+    setGuardianSearch('')
+  }
+
+  function cancelGuardianStep() {
+    setGuardianStep(null)
+    setGuardianToken('')
+    setGuardianSearch('')
+  }
 
   useEffect(() => {
     if (!event?.id || !groupChoiceEnabled) { setTableGroups([]); return }
@@ -264,30 +304,49 @@ function ManualMode({ event, sections, zones, onResult }) {
     return () => { active = false; window.clearTimeout(timer) }
   }, [event?.id, event?.manual_checkin_enabled, event?.checkout_enabled, query])
 
-  async function checkin(guest) {
+  async function checkin(guest, guardianPass = null) {
     setBusyId(`${guest.id}:checkin`); setError('')
     try {
       const response = zoneOperation
-        ? await api.scanZone(guest.qr_token, { zone_id: zoneId, direction, guardian_token: extractToken(guardianToken) || null })
+        ? await api.scanZone(guest.qr_token, { zone_id: zoneId, direction, guardian_token: guardianPass })
         : operation === 'checkout'
-          ? await api.manualCheckout(event.id, guest.id)
+          ? await api.manualCheckout(event.id, guest.id, guardianPass)
           : await api.manualCheckin(event.id, guest.id, event.section_mode_enabled ? sectionId || null : null)
-      onResult(response)
-      if (!zoneOperation) setResults((items) => items.map((item) => item.id === guest.id ? { ...item, admitted: operation !== 'checkout', checked_out: operation === 'checkout' } : item))
+      onResult(response.status === 'guardian_required' ? {
+        ...response, denied: false, message: 'Guardian verification required. Scan the authorized guardian’s pass next.',
+      } : response)
+      if (response.status === 'guardian_required') beginGuardianStep(guest, response)
+      else {
+        cancelGuardianStep()
+        if (!zoneOperation && (response.status === 'checked_out' || response.status === 'already_checked_out' || response.status === 'admitted' || response.status === 'already_admitted')) {
+          setResults((items) => items.map((item) => item.id === guest.id ? { ...item, admitted: operation !== 'checkout', checked_out: operation === 'checkout' } : item))
+        }
+      }
     } catch (err) { setError(err.message); onResult({ status: 'invalid', message: err.message }) }
     finally { setBusyId('') }
   }
 
-  async function checkout(guest) {
+  async function checkout(guest, guardianPass = null) {
     setBusyId(`${guest.id}:checkout`); setError('')
     try {
-      const response = await api.manualCheckout(event.id, guest.id)
-      onResult(response)
-      if (response.status === 'checked_out' || response.status === 'already_checked_out') {
-        setResults((items) => items.map((item) => item.id === guest.id ? { ...item, checked_out: true } : item))
+      const response = await api.manualCheckout(event.id, guest.id, guardianPass)
+      onResult(response.status === 'guardian_required' ? {
+        ...response, denied: false, message: 'Guardian verification required. Scan the authorized guardian’s pass next.',
+      } : response)
+      if (response.status === 'guardian_required') beginGuardianStep(guest, response)
+      else {
+        cancelGuardianStep()
+        if (response.status === 'checked_out' || response.status === 'already_checked_out') setResults((items) => items.map((item) => item.id === guest.id ? { ...item, checked_out: true } : item))
       }
     } catch (err) { setError(err.message); onResult({ status: 'invalid', message: err.message }) }
     finally { setBusyId('') }
+  }
+
+  async function confirmGuardian() {
+    const guardianPass = extractToken(guardianToken)
+    if (!guardianStep || !guardianPass) return
+    if (zoneOperation || operation === 'checkout') await checkin(guardianStep.guest, guardianPass)
+    else await checkout(guardianStep.guest, guardianPass)
   }
 
   async function register(e) {
@@ -335,10 +394,15 @@ function ManualMode({ event, sections, zones, onResult }) {
             </select>
           </div>
         )}
-        {zoneOperation && event.junior_guardian_handoff_enabled && (
-          <div className="sc-search-row">
-            <input className="sc-search-input" aria-label="Manual guardian pass token" value={guardianToken} onChange={(e) => setGuardianToken(e.target.value)} placeholder="Scan or paste authorized guardian pass"/>
-          </div>
+        {guardianStep && (
+          <section className="sc-guardian-handoff" aria-live="polite">
+            <strong>Guardian required for {guardianStep.guest.full_name}</strong>
+            <p>Find the authorized guardian below, then scan or paste that guardian’s pass. A name alone cannot approve the handoff.</p>
+            {guardianStep.candidates.length > 0 ? <><input className="sc-search-input" aria-label="Search authorized guardians" value={guardianSearch} onChange={(e) => setGuardianSearch(e.target.value)} placeholder="Search authorized guardians"/>
+              <div className="sc-guardian-candidates">{guardianCandidates.map((candidate) => <div key={candidate.guardian_guest_id}><b>{candidate.name}</b><small>{candidate.relationship}</small></div>)}{guardianCandidates.length === 0 && <p className="sc-empty">No confirmed guardian matches that search.</p>}</div></> : <p className="sc-empty">No confirmed guardian is available for this junior. Ask an event administrator to review the authorization.</p>}
+            <div className="sc-search-row sc-token-row"><input className="sc-search-input" aria-label="Manual guardian pass token" value={guardianToken} onChange={(e) => setGuardianToken(e.target.value)} placeholder="Guardian pass URL or QR token"/><button className="rr-btn primary" disabled={!guardianToken.trim() || !!busyId} onClick={confirmGuardian}>{busyId ? 'Verifying…' : 'Verify guardian QR'}</button></div>
+            <button type="button" className="rr-btn secondary" onClick={cancelGuardianStep} disabled={!!busyId}>Cancel and choose another guest</button>
+          </section>
         )}
         <div className="sc-search-row">
           <input className="sc-search-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by name or phone…"/>
@@ -399,6 +463,155 @@ function ManualMode({ event, sections, zones, onResult }) {
       )}
     </div>
   )
+}
+
+function DailyGuestLookup({ event, onSelect, actionLabel, busyId, emptyMessage }) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState([])
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!event?.id || query.trim().length < 2) { setResults([]); return }
+    let active = true
+    const timer = window.setTimeout(() => {
+      api.searchGuests(event.id, query.trim())
+        .then((items) => { if (active) { setResults(items); setError('') } })
+        .catch((err) => { if (active) setError(err.message || 'Guests could not be searched') })
+    }, 250)
+    return () => { active = false; window.clearTimeout(timer) }
+  }, [event?.id, query])
+
+  return <div className="sc-daily-lookup">
+    <label className="rd-field-label" htmlFor="daily-guest-search">Find an admitted guest</label>
+    <input id="daily-guest-search" className="sc-search-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by name or phone…" autoComplete="off"/>
+    {query.trim().length > 0 && query.trim().length < 2 && <p className="sc-daily-hint">Enter at least two characters to search.</p>}
+    {error && <p className="sc-empty">{error}</p>}
+    {results.length > 0 && <div className="sc-guest-list">{results.map((guest) => <div key={guest.id} className="sc-guest-row">
+      <div className="sc-guest-avatar">{guest.full_name?.[0] || '?'}</div>
+      <div className="sc-guest-info"><strong>{guest.full_name}</strong><small>{guest.admitted ? 'Event checked in' : 'Event check-in required'}</small></div>
+      <div className="sc-guest-actions">
+        <button className="rr-btn primary" disabled={!guest.admitted || !!busyId} onClick={() => onSelect(guest)}>
+          {busyId === guest.id ? 'Recording…' : guest.admitted ? actionLabel : 'Check in first'}
+        </button>
+      </div>
+    </div>)}</div>}
+    {!results.length && query.trim().length >= 2 && !error && <p className="sc-daily-hint">No matching guest found.</p>}
+    {emptyMessage && <p className="sc-daily-hint">{emptyMessage}</p>}
+  </div>
+}
+
+function DailyAttendanceMode({ event, onResult }) {
+  const [tool, setTool] = useState('scan')
+  const [token, setToken] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [busyGuestId, setBusyGuestId] = useState('')
+  const [error, setError] = useState('')
+  const [sessions, setSessions] = useState([])
+  const [sessionId, setSessionId] = useState('')
+  const [sessionsLoading, setSessionsLoading] = useState(false)
+  const [overrideGuest, setOverrideGuest] = useState(null)
+  const [overrideReason, setOverrideReason] = useState('')
+  const [overrideBusy, setOverrideBusy] = useState(false)
+
+  useEffect(() => {
+    if (tool !== 'session' || !event?.id) return
+    setSessionsLoading(true)
+    api.listExperienceWorkflows(event.id)
+      .then((workflows) => {
+        const published = workflows.find((workflow) => workflow.status === 'published')
+        const items = (published?.steps || []).filter((step) => step.enabled && step.type === 'session_attendance')
+        setSessions(items)
+        setSessionId((current) => items.some((step) => step.id === current) ? current : (items[0]?.id || ''))
+      })
+      .catch((err) => { setError(err.message || 'Session attendance could not be loaded'); setSessions([]) })
+      .finally(() => setSessionsLoading(false))
+  }, [tool, event?.id])
+
+  async function record(raw) {
+    const pass = extractToken(raw)
+    if (!pass || busy) return
+    setBusy(true); setError(''); onResult(null)
+    try {
+      const response = await api.recordDailyAttendance(pass)
+      onResult(response)
+      if (response.status === 'daily_recorded' || response.status === 'already_recorded') setToken('')
+    } catch (err) {
+      const message = err.message || 'Daily attendance could not be recorded.'
+      setError(message); onResult({ status: 'invalid', message })
+    } finally { setBusy(false) }
+  }
+
+  async function recordGuest(guest) {
+    setBusyGuestId(guest.id); setError(''); onResult(null)
+    try {
+      const response = await api.recordDailyAttendance(guest.qr_token)
+      onResult(response)
+    } catch (err) {
+      const message = err.message || 'Daily attendance could not be recorded.'
+      setError(message); onResult({ status: 'invalid', message, guest })
+    } finally { setBusyGuestId('') }
+  }
+
+  async function recordSession(guest) {
+    if (!sessionId) return
+    setBusyGuestId(guest.id); setError(''); onResult(null)
+    try {
+      const progress = await api.updateGuestExperienceStep(event.id, guest.id, sessionId, {
+        status: 'completed', metadata: { source: 'scanner', action: 'session_check_in' },
+      })
+      onResult({ status: 'session_checked_in', message: 'Session attendance recorded.', guest, progress })
+    } catch (err) {
+      const message = err.message || 'Session attendance could not be recorded.'
+      if (message.includes('Not eligible for this session')) { setOverrideGuest(guest); setOverrideReason('') }
+      setError(message); onResult({ status: 'invalid', message, guest })
+    } finally { setBusyGuestId('') }
+  }
+
+  async function overrideSessionEntry() {
+    if (!overrideGuest || !sessionId || overrideReason.trim().length < 3 || overrideBusy) return
+    setOverrideBusy(true); setError('')
+    try {
+      const progress = await api.overrideSessionEntry(event.id, overrideGuest.id, sessionId, overrideReason.trim())
+      onResult({ status: 'session_overridden', message: 'Supervisor override recorded for this session.', guest: overrideGuest, progress })
+      setOverrideGuest(null); setOverrideReason('')
+    } catch (err) {
+      const message = err.message || 'The session override could not be recorded.'
+      setError(message); onResult({ status: 'invalid', message, guest: overrideGuest })
+    } finally { setOverrideBusy(false) }
+  }
+
+  if (!event?.daily_checkin_enabled) return <div className="sc-empty">Daily attendance is disabled for this event.</div>
+  return <div className="sc-daily-attendance">
+    <p className="sc-daily-intro">Use one station for daily presence and scheduled sessions. Both require the guest to complete normal event check-in first.</p>
+    <div className="sc-daily-tools" role="tablist" aria-label="Attendance tools">
+      <button type="button" className={tool === 'scan' ? 'active' : ''} aria-selected={tool === 'scan'} onClick={() => setTool('scan')}>Scan QR</button>
+      <button type="button" className={tool === 'manual' ? 'active' : ''} aria-selected={tool === 'manual'} onClick={() => setTool('manual')}>Manual lookup</button>
+      <button type="button" className={tool === 'session' ? 'active' : ''} aria-selected={tool === 'session'} onClick={() => setTool('session')}>Session attendance</button>
+    </div>
+    {tool === 'scan' && <>
+      <div className="sc-daily-camera">
+        <strong>Scan a guest’s Festio Pass</strong>
+        <span>Use the camera for the fastest daily attendance mark.</span>
+        <QrCameraScanner onScan={record} disabled={busy}/>
+      </div>
+      <form className="sc-search-row sc-token-row" onSubmit={(e) => { e.preventDefault(); record(token) }}>
+        <input className="sc-search-input" aria-label="Daily attendance pass token" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Or paste a guest pass URL or QR token"/>
+        <button className="rr-btn primary" disabled={!token.trim() || busy}>{busy ? 'Recording…' : 'Record daily attendance'}</button>
+      </form>
+    </>}
+    {tool === 'manual' && <DailyGuestLookup event={event} onSelect={recordGuest} busyId={busyGuestId} actionLabel="Record daily attendance"/>}
+    {tool === 'session' && <div className="sc-daily-session">
+      <label className="rd-field-label" htmlFor="daily-session">Session</label>
+      <select id="daily-session" className="sc-selector" value={sessionId} onChange={(e) => setSessionId(e.target.value)} disabled={sessionsLoading || !sessions.length}>
+        {!sessions.length && <option value="">{sessionsLoading ? 'Loading sessions…' : 'No published sessions available'}</option>}
+        {sessions.map((step) => { const groups = step.conditions?.age_groups_include; const label = Array.isArray(groups) ? groups.join(', ') : groups; return <option key={step.id} value={step.id}>{step.title}{label ? ` — ${label}` : ''}</option> })}
+      </select>
+      {sessions.length > 0 && <DailyGuestLookup event={event} onSelect={recordSession} busyId={busyGuestId} actionLabel="Check in to session" emptyMessage="Session age group, time, capacity, and event check-in are validated before attendance is recorded."/>}
+      {overrideGuest && <section className="sc-session-override"><strong>Supervisor override required</strong><p>{overrideGuest.name || 'This guest'} is outside this session’s age eligibility. The override records who authorized entry and why. It does not bypass admission, session timing, or capacity.</p><label className="rd-field-label" htmlFor="session-override-reason">Override reason</label><textarea id="session-override-reason" className="sc-search-input" rows={2} value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} placeholder="Required: explain why entry is being authorized"/><div className="sc-session-override-actions"><button type="button" className="rr-btn primary" disabled={overrideReason.trim().length < 3 || overrideBusy} onClick={overrideSessionEntry}>{overrideBusy ? 'Recording…' : 'Override and record entry'}</button><button type="button" className="rr-btn secondary" disabled={overrideBusy} onClick={() => { setOverrideGuest(null); setOverrideReason('') }}>Cancel</button></div></section>}
+      {!sessionsLoading && !sessions.length && <p className="sc-empty">Publish an Experience workflow with a Session attendance step to use this station.</p>}
+    </div>}
+    {error && <p className="sc-empty">{error}</p>}
+  </div>
 }
 
 function EventQRMode({ event }) {
@@ -613,6 +826,7 @@ function LiveScannerCommandCenter({
     camera: ['Convention entrance', 'Ready to check in'],
     access: ['Zone station', 'Ready for zone movement'],
     checkout: ['Exit station', 'Ready to check out'],
+    daily: ['Daily attendance', 'Ready to record today'],
     manual: ['Guest lookup', 'Manual check-in'],
     eventqr: ['Self check-in', 'Event QR'],
   }[mode]
@@ -642,7 +856,7 @@ function LiveScannerCommandCenter({
       </div>
 
       <div className="sc-command-tabs" aria-label="Scanner modes">
-        {MODES.filter((item) => item.id !== 'access' || (event?.venue_access_enabled && event?.separate_admission_access_enabled)).map((item) => (
+        {MODES.filter((item) => (item.id !== 'access' || (event?.venue_access_enabled && event?.separate_admission_access_enabled)) && (item.id !== 'daily' || event?.daily_checkin_enabled)).map((item) => (
           <button key={item.id} type="button" aria-pressed={mode === item.id} aria-label={item.label} className={mode === item.id ? 'active' : ''} onClick={() => { setMode(item.id); onResult(null) }}>
             <Icon name={item.id === 'manual' ? 'search' : item.id === 'checkout' ? 'external' : 'ticket'} size={14}/>
             {item.label}
@@ -658,6 +872,7 @@ function LiveScannerCommandCenter({
           </div>
           <div className="sc-command-mode-body">
             {(mode === 'camera' || mode === 'access' || mode === 'checkout') && <TokenScanner event={event} zones={zones} gates={gates} sections={sections} mode={mode} offlineManifest={offlineManifest} onManifestChange={onManifestChange} onQueueChange={onQueueChange} onRefreshManifest={onRefreshManifest} onResult={onResult}/>}
+            {mode === 'daily' && <DailyAttendanceMode event={event} onResult={onResult}/>}
             {mode === 'manual' && <ManualMode event={event} sections={sections} zones={zones} onResult={onResult}/>}
             {mode === 'eventqr' && <EventQRMode event={event}/>}
           </div>

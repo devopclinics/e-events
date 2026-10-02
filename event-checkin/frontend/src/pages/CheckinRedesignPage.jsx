@@ -31,7 +31,7 @@ function dirClass(direction) {
 export default function CheckinRedesignPage() {
   const [eventId] = useCurrentEvent()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { event } = useEventDetails(eventId)
+  const { event, setEvent } = useEventDetails(eventId)
   const [toast, setToast] = useState('')
   const requestedView = searchParams.get('tab')
   const [view, setView] = useState(() => TABS.some((tab) => tab.id === requestedView) ? requestedView : 'zones')
@@ -67,7 +67,7 @@ export default function CheckinRedesignPage() {
   const [journey, setJourney] = useState([])
   const [rulesLoading, setRulesLoading] = useState(false)
   const [analyticsLoading, setAnalyticsLoading] = useState(false)
-  const [guardianConfig, setGuardianConfig] = useState({ enabled: false, authorizations: [] })
+  const [guardianConfig, setGuardianConfig] = useState({ enabled: false, authorizations: [], designation_scope: 'party' })
   const [movements, setMovements] = useState([])
   const [guardianForm, setGuardianForm] = useState({ child_guest_id: '', guardian_guest_id: '', relationship: 'Parent / guardian' })
 
@@ -211,6 +211,15 @@ export default function CheckinRedesignPage() {
     window.setTimeout(() => setToast(''), 2600)
   }
 
+  async function toggleDailyAttendance() {
+    if (!eventId || !event) return
+    try {
+      const updated = await api.toggleFeatures(eventId, { daily_checkin_enabled: !event.daily_checkin_enabled })
+      setEvent(updated)
+      notify(`Daily attendance ${updated.daily_checkin_enabled ? 'enabled' : 'disabled'}`)
+    } catch (error) { notify(error.message || 'Daily attendance could not be updated') }
+  }
+
   async function createTag() {
     try {
       await api.createTag(eventId, {
@@ -275,9 +284,22 @@ export default function CheckinRedesignPage() {
     } catch (error) { notify(error.message || 'Ticket type could not be assigned') }
   }
 
-  async function saveGuardianConfig(next) {
+  // Always echoes source/confirmed_at back unchanged for rows already loaded
+  // from GET — a save must never silently un-confirm a pending RSVP/GuestHub-
+  // designated guardian by dropping these fields.
+  function toGuardianEntryPayload({ child_guest_id, guardian_guest_id, relationship, source, confirmed_at }) {
+    return { child_guest_id, guardian_guest_id, relationship, source, confirmed_at }
+  }
+
+  async function saveGuardianConfig(overrides) {
+    const body = {
+      enabled: guardianConfig.enabled,
+      designation_scope: guardianConfig.designation_scope || 'party',
+      authorizations: guardianConfig.authorizations.map(toGuardianEntryPayload),
+      ...overrides,
+    }
     try {
-      const saved = await api.updateGuardianAuthorizations(eventId, next)
+      const saved = await api.updateGuardianAuthorizations(eventId, body)
       setGuardianConfig(saved)
       notify('Guardian rules saved')
     } catch (error) { notify(error.message || 'Guardian rules could not be saved') }
@@ -288,7 +310,7 @@ export default function CheckinRedesignPage() {
     if (guardianForm.child_guest_id === guardianForm.guardian_guest_id) { notify('Choose a different guardian'); return }
     const exists = guardianConfig.authorizations.some((row) => row.child_guest_id === guardianForm.child_guest_id && row.guardian_guest_id === guardianForm.guardian_guest_id)
     if (exists) { notify('That guardian is already authorized'); return }
-    saveGuardianConfig({ enabled: guardianConfig.enabled, authorizations: [...guardianConfig.authorizations, guardianForm].map(({ child_guest_id, guardian_guest_id, relationship }) => ({ child_guest_id, guardian_guest_id, relationship })) })
+    saveGuardianConfig({ authorizations: [...guardianConfig.authorizations, guardianForm].map(toGuardianEntryPayload) })
   }
 
   function exportMovements() {
@@ -594,11 +616,29 @@ export default function CheckinRedesignPage() {
           {view === 'operations' && (
             <>
               <div className="rr-panel">
-                <div className="rd-panel-head"><h3>Guardian handoff rules</h3><p>Require a second, authorized guardian credential when a configured junior enters or exits a zone.</p></div>
+                <div className="rd-panel-head ci-journey-head">
+                  <div>
+                    <h3>Daily attendance</h3>
+                    <p>For multi-day events. Adds a Daily attendance tab to the live Scanner and records one validated mark per admitted guest each event day. It never changes event check-in or check-out.</p>
+                  </div>
+                  <button className={`rr-btn ${event?.daily_checkin_enabled ? 'primary' : 'secondary'}`} onClick={toggleDailyAttendance} disabled={!event}>
+                    Daily attendance: {event?.daily_checkin_enabled ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+              </div>
+              <div className="rr-panel">
+                <div className="rd-panel-head"><h3>Guardian handoff rules</h3><p>Require a second, authorized guardian credential when a configured junior enters or exits a zone (and at check-out).</p></div>
                 <div className="rd-panel-body">
                   <label className="gr-required-check">
-                    <input type="checkbox" checked={guardianConfig.enabled} onChange={(e) => saveGuardianConfig({ enabled: e.target.checked, authorizations: guardianConfig.authorizations.map(({ child_guest_id, guardian_guest_id, relationship }) => ({ child_guest_id, guardian_guest_id, relationship })) })}/>
+                    <input type="checkbox" checked={guardianConfig.enabled} onChange={(e) => saveGuardianConfig({ enabled: e.target.checked })}/>
                     Require guardian verification for configured juniors
+                  </label>
+                  <label className="gr-required-check" style={{ marginTop: 8 }}>
+                    Guardians can be designated (via GuestHub, after check-in) from:{' '}
+                    <select className="rr-select" value={guardianConfig.designation_scope || 'party'} onChange={(e) => saveGuardianConfig({ designation_scope: e.target.value })}>
+                      <option value="party">Only the parent's own RSVP party</option>
+                      <option value="any_guest">Any checked-in guest at this event</option>
+                    </select>
                   </label>
                   <div className="rd-row2" style={{ marginTop: 14 }}>
                     <select className="rr-select" value={guardianForm.child_guest_id} onChange={(e) => setGuardianForm({ ...guardianForm, child_guest_id: e.target.value })}>
@@ -611,8 +651,8 @@ export default function CheckinRedesignPage() {
                     <button className="rr-btn primary" onClick={addGuardianAuthorization}>Authorize</button>
                   </div>
                   <table className="rr-table" style={{ marginTop: 14 }}>
-                    <thead><tr><th>Junior</th><th>Authorized guardian</th><th>Relationship</th><th/></tr></thead>
-                    <tbody>{guardianConfig.authorizations.map((row) => <tr key={row.child_guest_id + row.guardian_guest_id}><td>{row.child_name}</td><td>{row.guardian_name}</td><td>{row.relationship}</td><td><button className="rr-link-btn gr-danger-link" onClick={() => saveGuardianConfig({ enabled: guardianConfig.enabled, authorizations: guardianConfig.authorizations.filter((item) => item !== row).map(({ child_guest_id, guardian_guest_id, relationship }) => ({ child_guest_id, guardian_guest_id, relationship })) })}>Remove</button></td></tr>)}</tbody>
+                    <thead><tr><th>Junior</th><th>Authorized guardian</th><th>Relationship</th><th>Status</th><th/></tr></thead>
+                    <tbody>{guardianConfig.authorizations.map((row) => <tr key={row.child_guest_id + row.guardian_guest_id}><td>{row.child_name}</td><td>{row.guardian_name}</td><td>{row.relationship}</td><td><span className={`rd-status-chip ${row.status === 'pending' ? 'fail' : 'ok'}`}>{row.status === 'pending' ? 'Pending guardian confirmation' : row.status === 'confirmed' ? 'Confirmed' : 'Admin-authorized'}</span></td><td><button className="rr-link-btn gr-danger-link" onClick={() => saveGuardianConfig({ authorizations: guardianConfig.authorizations.filter((item) => item !== row).map(toGuardianEntryPayload) })}>Remove</button></td></tr>)}</tbody>
                   </table>
                 </div>
               </div>

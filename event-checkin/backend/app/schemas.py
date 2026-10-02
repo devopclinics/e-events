@@ -243,11 +243,13 @@ class EventOut(BaseModel):
     seat_assignment_order: str = "sequential"
     section_mode_enabled: bool = False
     manual_checkin_enabled: bool = False
+    daily_checkin_enabled: bool = False
     self_checkin_enabled: bool = False
     checkout_enabled: bool = False
     junior_guardian_handoff_enabled: bool = False
     separate_admission_access_enabled: bool = False
     guardian_authorizations: Optional[dict] = None
+    guardian_designation_scope: str = "party"
     event_code: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -703,6 +705,10 @@ class ExperienceProgressUpdate(BaseModel):
     status: Literal["available", "blocked", "completed", "skipped", "failed", "overridden"]
     override_reason: Optional[str] = None
     metadata: Optional[dict] = None
+
+
+class SessionEntryOverride(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
 
 
 class InboundSenderRule(BaseModel):
@@ -2156,6 +2162,10 @@ class ScanZoneRequest(BaseModel):
     guardian_token: Optional[str] = None
 
 
+class ScanCheckoutRequest(BaseModel):
+    guardian_token: Optional[str] = None
+
+
 class ScanZoneResult(BaseModel):
     status: str               # "ok" | "denied"
     denied: bool = False
@@ -2170,6 +2180,7 @@ class ScanZoneResult(BaseModel):
     table_name: Optional[str] = None
     guardian_name: Optional[str] = None
     guardian_verification_method: Optional[str] = None
+    guardian_candidates: list[dict[str, str]] = Field(default_factory=list)
 
 
 class PeakBucket(BaseModel):
@@ -2203,11 +2214,18 @@ class GuardianAuthorizationEntry(BaseModel):
     child_guest_id: str
     guardian_guest_id: str
     relationship: str = "Authorized guardian"
+    # Passthrough-only: the admin UI echoes these back unchanged for rows it
+    # already loaded (see get_guardian_authorizations), so re-saving the panel
+    # never silently un-confirms a pending RSVP/GuestHub-designated guardian.
+    # Omitted entirely = a genuinely new admin-added row (legacy 2-key shape).
+    source: Optional[str] = None
+    confirmed_at: Optional[str] = None
 
 
 class GuardianAuthorizationUpdate(BaseModel):
     enabled: bool
     authorizations: list[GuardianAuthorizationEntry] = Field(default_factory=list)
+    designation_scope: Literal["party", "any_guest"] = "party"
 
 
 # ── Menu ─────────────────────────────────────────────────────────────────────
@@ -2384,6 +2402,14 @@ class MergeDuplicatesRequest(BaseModel):
 
 # ── Scanner ──────────────────────────────────────────────────────────────────
 
+class DailyAttendanceResult(BaseModel):
+    status: str  # daily_recorded | already_recorded | invalid | not_active
+    message: str
+    guest: Optional[GuestOut] = None
+    attendance_date: Optional[str] = None
+    recorded_at: Optional[datetime] = None
+
+
 class ScanResult(BaseModel):
     status: str  # admitted | already_admitted | invalid | not_active | not_assigned | pending_required_step | denied
     message: str
@@ -2397,6 +2423,11 @@ class ScanResult(BaseModel):
     eligibilities: list[dict[str, str]] = Field(default_factory=list)
     station_action: Optional[dict] = None
     remaining_action_count: int = 0
+    # Additive — only populated for guardian-gated checkouts; every other
+    # ScanResult caller (perform_admission, etc.) omits them as before.
+    guardian_name: Optional[str] = None
+    guardian_verification_method: Optional[str] = None
+    guardian_candidates: list[dict[str, str]] = Field(default_factory=list)
 
 
 class EventBrief(BaseModel):
@@ -2738,6 +2769,11 @@ class InvitePageOut(BaseModel):
     shipping: Optional[InviteShippingOut] = None
     registry_enabled: bool = False
     registry_token: Optional[str] = None
+    # Guardian pickup authorization: lets the RSVP form show the junior
+    # toggle/pickup picker, and GuestHub know whether to check for pending
+    # guardian confirmations.
+    junior_guardian_handoff_enabled: bool = False
+    guardian_designation_scope: str = "party"
     # Speaker Showcase cross-link — lets FestioHub decide whether to include
     # a Speakers tab, and the ticketing/standalone pages fetch the same list.
     speaker_enabled: bool = False
@@ -2766,6 +2802,15 @@ class RSVPInviteeSubmit(BaseModel):
     guest_type: Optional[str] = None
     age_group: Optional[str] = None
     notes: Optional[str] = None
+    # Opt-in junior safeguarding, only meaningful when the event has
+    # junior_guardian_handoff_enabled. The submitter is always auto-authorized
+    # for their own junior invitees; these indices additionally name OTHER
+    # invitees in THIS SAME submission (never an external/unregistered person,
+    # never an admin-only guest) as also authorized to pick this one up —
+    # pending that named person's own confirmation (see guardian-authorizations
+    # /confirm). Non-junior invitees get no guardian tracking at all.
+    is_junior: bool = False
+    pickup_authorized_by_invitee_indices: list[int] = Field(default_factory=list)
 
 
 class RSVPSubmit(BaseModel):
@@ -2813,6 +2858,60 @@ class InviteGuestPrefill(BaseModel):
     phone_locked: bool = False
 
 
+class MyJuniorGuardian(BaseModel):
+    guardian_guest_id: str
+    name: str
+    relationship: str
+    status: Literal["admin", "confirmed", "pending"]
+
+
+class MyJunior(BaseModel):
+    """One of the requesting guest's own RSVP-submitted children that's
+    marked as needing pickup authorization, with their current guardians."""
+    child_guest_id: str
+    child_name: str
+    checked_in: bool = False
+    guardians: list[MyJuniorGuardian] = Field(default_factory=list)
+
+
+class MyPartyMember(BaseModel):
+    guest_id: str
+    name: str
+
+
+class MyJuniorsOut(BaseModel):
+    juniors: list[MyJunior] = Field(default_factory=list)
+    # Other guests from the SAME RSVP submission (siblings, the submitter
+    # themself) — always offerable as a pickup guardian regardless of the
+    # event's designation_scope setting.
+    party: list[MyPartyMember] = Field(default_factory=list)
+    parent_checked_in: bool = False
+    designation_scope: Literal["party", "any_guest"] = "party"
+
+
+class GuardianSearchResult(BaseModel):
+    guest_id: str
+    name: str
+
+
+class GuardianAddRequest(BaseModel):
+    child_guest_id: str
+    guardian_guest_id: str
+    relationship: str = "Authorized guardian"
+
+
+class PendingGuardianConfirmation(BaseModel):
+    """A pickup-authorization naming this guest as guardian, awaiting their
+    own confirmation before it's usable at checkout/zone-scan."""
+    child_guest_id: str
+    child_name: str
+    relationship: str
+
+
+class GuardianConfirmRequest(BaseModel):
+    child_guest_ids: list[str] = Field(default_factory=list)  # empty = confirm all pending
+
+
 class InviteTokenPageOut(BaseModel):
     """Payload for a personalised /r/{invite_token} link: the event page plus
     the specific guest's prefill + response state."""
@@ -2820,6 +2919,7 @@ class InviteTokenPageOut(BaseModel):
     guest: InviteGuestPrefill
     deadline_passed: bool = False
     already_responded: bool = False
+    pending_guardian_confirmations: list[PendingGuardianConfirmation] = Field(default_factory=list)
 
 
 class RSVPTokenSubmit(BaseModel):

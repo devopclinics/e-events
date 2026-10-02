@@ -479,6 +479,10 @@ class Event(Base):
     junior_guardian_handoff_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     separate_admission_access_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     guardian_authorizations: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Who a parent/guardian may designate as a pickup guardian post-check-in via
+    # GuestHub: "party" (their own RSVP party only, default) or "any_guest" (can
+    # also search and pick any other checked-in guest at the event).
+    guardian_designation_scope: Mapped[str] = mapped_column(String(20), default="party")
     festiome_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     festiome_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     festiome_open_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -585,6 +589,9 @@ class Event(Base):
     # Manual check-in: when on, staff can admit a guest by searching name/phone
     # (no QR). Superadmin-toggled per event; off by default.
     manual_checkin_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Optional daily attendance ledger. Off by default and distinct from the
+    # one-time Guest.admitted event-entry state used by the existing scanner.
+    daily_checkin_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     # Self check-in: guests admit themselves via a public page found by a short
     # event_code (no login). Off by default; code generated on enable/create.
     self_checkin_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -2320,6 +2327,30 @@ class ScanEvent(Base):
     guardian_guest_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("guests.id"), nullable=True, index=True)
     guardian_relationship: Mapped[str | None] = mapped_column(String(120), nullable=True)
     guardian_verification_method: Mapped[str | None] = mapped_column(String(30), nullable=True)
+
+
+class AttendanceRecord(Base):
+    """Immutable, opt-in attendance ledger for daily entry and session reporting.
+
+    It deliberately does not change ``Guest.admitted``.  Existing check-in and
+    checkout keep their established behaviour; an organizer can later enable
+    daily attendance and receive one idempotent record per guest per event day.
+    """
+    __tablename__ = "attendance_records"
+    __table_args__ = (
+        UniqueConstraint("event_id", "guest_id", "scope", "scope_key", name="uq_attendance_record_scope"),
+        Index("ix_attendance_records_event_scope_key", "event_id", "scope", "scope_key"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"), index=True)
+    # ``daily`` uses an ISO local date (YYYY-MM-DD); session use is reserved for
+    # the canonical Experience progress path instead of duplicating its record.
+    scope: Mapped[str] = mapped_column(String(20), index=True)
+    scope_key: Mapped[str] = mapped_column(String(80), index=True)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    recorded_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
 
 
 # ── Customizable message templates ─────────────────────────────────────────────

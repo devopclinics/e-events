@@ -413,3 +413,27 @@
   .sc-header-right { grid-template-columns: 1fr; }
   .sc-header-right > .rr-btn { grid-column: auto; }
 }
+
+/* Daily attendance is a complete operator station: camera, manual fallback,
+   and session check-in sit behind explicit tools rather than a hidden token field. */
+.sc-command-mode-daily .sc-command-mode-body { padding: 14px; }
+.sc-daily-attendance { display: grid; gap: 13px; }
+.sc-daily-intro { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.sc-daily-tools { display: flex; flex-wrap: wrap; gap: 7px; }
+.sc-daily-tools button { min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--muted); font-size: 11px; font-weight: 800; }
+.sc-daily-tools button.active { border-color: var(--teal); background: var(--teal-soft); color: var(--teal); }
+.sc-daily-camera { min-height: 210px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 20px; border: 1px solid #29334a; border-radius: 12px; background: radial-gradient(circle at 50% 32%, #28314a 0, #161b2d 64%, #101426 100%); color: #f7f9fa; text-align: center; }
+.sc-daily-camera > strong { font-size: 14px; }
+.sc-daily-camera > span { color: #b4bdd0; font-size: 11px; }
+.sc-daily-camera .sc-camera-live { width: min(100%, 330px); }
+.sc-daily-camera .sc-camera-live > .rr-btn { min-height: 42px; border: 0; background: var(--accent); color: #fff; }
+.sc-daily-camera .sc-camera-error { text-align: left; }
+.sc-daily-lookup, .sc-daily-session { display: grid; gap: 10px; }
+.sc-daily-lookup .sc-search-input { padding-left: 12px; }
+.sc-daily-hint { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.4; }
+@media (max-width: 600px) {
+  .sc-command-mode-daily .sc-command-mode-body { padding: 10px; }
+  .sc-daily-tools { display: grid; grid-template-columns: 1fr; }
+  .sc-daily-tools button { min-height: 42px; font-size: 12px; }
+  .sc-daily-camera { min-height: 250px; padding: 18px; }
+}

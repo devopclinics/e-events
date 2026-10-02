@@ -465,10 +465,64 @@ function ManualMode({ event, sections, zones, onResult }) {
   )
 }
 
+function DailyGuestLookup({ event, onSelect, actionLabel, busyId, emptyMessage }) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState([])
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!event?.id || query.trim().length < 2) { setResults([]); return }
+    let active = true
+    const timer = window.setTimeout(() => {
+      api.searchGuests(event.id, query.trim())
+        .then((items) => { if (active) { setResults(items); setError('') } })
+        .catch((err) => { if (active) setError(err.message || 'Guests could not be searched') })
+    }, 250)
+    return () => { active = false; window.clearTimeout(timer) }
+  }, [event?.id, query])
+
+  return <div className="sc-daily-lookup">
+    <label className="rd-field-label" htmlFor="daily-guest-search">Find an admitted guest</label>
+    <input id="daily-guest-search" className="sc-search-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by name or phone…" autoComplete="off"/>
+    {query.trim().length > 0 && query.trim().length < 2 && <p className="sc-daily-hint">Enter at least two characters to search.</p>}
+    {error && <p className="sc-empty">{error}</p>}
+    {results.length > 0 && <div className="sc-guest-list">{results.map((guest) => <div key={guest.id} className="sc-guest-row">
+      <div className="sc-guest-avatar">{guest.full_name?.[0] || '?'}</div>
+      <div className="sc-guest-info"><strong>{guest.full_name}</strong><small>{guest.admitted ? 'Event checked in' : 'Event check-in required'}</small></div>
+      <div className="sc-guest-actions">
+        <button className="rr-btn primary" disabled={!guest.admitted || !!busyId} onClick={() => onSelect(guest)}>
+          {busyId === guest.id ? 'Recording…' : guest.admitted ? actionLabel : 'Check in first'}
+        </button>
+      </div>
+    </div>)}</div>}
+    {!results.length && query.trim().length >= 2 && !error && <p className="sc-daily-hint">No matching guest found.</p>}
+    {emptyMessage && <p className="sc-daily-hint">{emptyMessage}</p>}
+  </div>
+}
+
 function DailyAttendanceMode({ event, onResult }) {
+  const [tool, setTool] = useState('scan')
   const [token, setToken] = useState('')
   const [busy, setBusy] = useState(false)
+  const [busyGuestId, setBusyGuestId] = useState('')
   const [error, setError] = useState('')
+  const [sessions, setSessions] = useState([])
+  const [sessionId, setSessionId] = useState('')
+  const [sessionsLoading, setSessionsLoading] = useState(false)
+
+  useEffect(() => {
+    if (tool !== 'session' || !event?.id) return
+    setSessionsLoading(true)
+    api.listExperienceWorkflows(event.id)
+      .then((workflows) => {
+        const published = workflows.find((workflow) => workflow.status === 'published')
+        const items = (published?.steps || []).filter((step) => step.enabled && step.type === 'session_attendance')
+        setSessions(items)
+        setSessionId((current) => items.some((step) => step.id === current) ? current : (items[0]?.id || ''))
+      })
+      .catch((err) => { setError(err.message || 'Session attendance could not be loaded'); setSessions([]) })
+      .finally(() => setSessionsLoading(false))
+  }, [tool, event?.id])
 
   async function record(raw) {
     const pass = extractToken(raw)
@@ -484,14 +538,60 @@ function DailyAttendanceMode({ event, onResult }) {
     } finally { setBusy(false) }
   }
 
+  async function recordGuest(guest) {
+    setBusyGuestId(guest.id); setError(''); onResult(null)
+    try {
+      const response = await api.recordDailyAttendance(guest.qr_token)
+      onResult(response)
+    } catch (err) {
+      const message = err.message || 'Daily attendance could not be recorded.'
+      setError(message); onResult({ status: 'invalid', message, guest })
+    } finally { setBusyGuestId('') }
+  }
+
+  async function recordSession(guest) {
+    if (!sessionId) return
+    setBusyGuestId(guest.id); setError(''); onResult(null)
+    try {
+      const progress = await api.updateGuestExperienceStep(event.id, guest.id, sessionId, {
+        status: 'completed', metadata: { source: 'scanner', action: 'session_check_in' },
+      })
+      onResult({ status: 'session_checked_in', message: 'Session attendance recorded.', guest, progress })
+    } catch (err) {
+      const message = err.message || 'Session attendance could not be recorded.'
+      setError(message); onResult({ status: 'invalid', message, guest })
+    } finally { setBusyGuestId('') }
+  }
+
   if (!event?.daily_checkin_enabled) return <div className="sc-empty">Daily attendance is disabled for this event.</div>
-  return <div className="sc-token-scanner">
-    <p>Record one attendance mark per admitted guest for today. This does not check anyone into the event.</p>
-    <QrCameraScanner onScan={record} disabled={busy}/>
-    <form className="sc-search-row sc-token-row" onSubmit={(e) => { e.preventDefault(); record(token) }}>
-      <input className="sc-search-input" aria-label="Daily attendance pass token" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Guest pass URL or QR token"/>
-      <button className="rr-btn primary" disabled={!token.trim() || busy}>{busy ? 'Recording…' : 'Record daily attendance'}</button>
-    </form>
+  return <div className="sc-daily-attendance">
+    <p className="sc-daily-intro">Use one station for daily presence and scheduled sessions. Both require the guest to complete normal event check-in first.</p>
+    <div className="sc-daily-tools" role="tablist" aria-label="Attendance tools">
+      <button type="button" className={tool === 'scan' ? 'active' : ''} aria-selected={tool === 'scan'} onClick={() => setTool('scan')}>Scan QR</button>
+      <button type="button" className={tool === 'manual' ? 'active' : ''} aria-selected={tool === 'manual'} onClick={() => setTool('manual')}>Manual lookup</button>
+      <button type="button" className={tool === 'session' ? 'active' : ''} aria-selected={tool === 'session'} onClick={() => setTool('session')}>Session attendance</button>
+    </div>
+    {tool === 'scan' && <>
+      <div className="sc-daily-camera">
+        <strong>Scan a guest’s Festio Pass</strong>
+        <span>Use the camera for the fastest daily attendance mark.</span>
+        <QrCameraScanner onScan={record} disabled={busy}/>
+      </div>
+      <form className="sc-search-row sc-token-row" onSubmit={(e) => { e.preventDefault(); record(token) }}>
+        <input className="sc-search-input" aria-label="Daily attendance pass token" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Or paste a guest pass URL or QR token"/>
+        <button className="rr-btn primary" disabled={!token.trim() || busy}>{busy ? 'Recording…' : 'Record daily attendance'}</button>
+      </form>
+    </>}
+    {tool === 'manual' && <DailyGuestLookup event={event} onSelect={recordGuest} busyId={busyGuestId} actionLabel="Record daily attendance"/>}
+    {tool === 'session' && <div className="sc-daily-session">
+      <label className="rd-field-label" htmlFor="daily-session">Session</label>
+      <select id="daily-session" className="sc-selector" value={sessionId} onChange={(e) => setSessionId(e.target.value)} disabled={sessionsLoading || !sessions.length}>
+        {!sessions.length && <option value="">{sessionsLoading ? 'Loading sessions…' : 'No published sessions available'}</option>}
+        {sessions.map((step) => <option key={step.id} value={step.id}>{step.title}</option>)}
+      </select>
+      {sessions.length > 0 && <DailyGuestLookup event={event} onSelect={recordSession} busyId={busyGuestId} actionLabel="Check in to session" emptyMessage="Session time, capacity, and event check-in are validated before attendance is recorded."/>}
+      {!sessionsLoading && !sessions.length && <p className="sc-empty">Publish an Experience workflow with a Session attendance step to use this station.</p>}
+    </div>}
     {error && <p className="sc-empty">{error}</p>}
   </div>
 }

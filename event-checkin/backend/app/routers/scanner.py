@@ -8,8 +8,8 @@ from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from ..config import settings
 from ..database import get_db
-from ..models import ConsentForm, ConsentSignature, Guest, Event, EventUser, User, SeatingTable, MenuCategory, MenuItem, GuestMenuChoice, MenuCombination, MenuCombinationItem, Zone, TicketType, ScanEvent, TableGroup, Gate, GuestTag, GuestTagLink, ZoneTagRule, RSVPAnswer, RSVPQuestion
-from ..schemas import ConsentSignatureCreate, ExperienceNextStepOut, ExperienceStepOut, GuestExperienceProgressOut, PublicConsentOut, SendConsentCopyOut, ScanResult, GuestOut, TicketView, EventBrief, MenuCategoryOut, MenuItemOut, MenuCombinationOut, MenuCombinationItemOut, GuestMenuSubmit, PartnerInfo, PairRequest, ScanZoneRequest, ScanZoneResult, ScanCheckoutRequest
+from ..models import ConsentForm, ConsentSignature, Guest, Event, EventUser, User, SeatingTable, MenuCategory, MenuItem, GuestMenuChoice, MenuCombination, MenuCombinationItem, Zone, TicketType, ScanEvent, AttendanceRecord, TableGroup, Gate, GuestTag, GuestTagLink, ZoneTagRule, RSVPAnswer, RSVPQuestion
+from ..schemas import ConsentSignatureCreate, ExperienceNextStepOut, ExperienceStepOut, GuestExperienceProgressOut, PublicConsentOut, SendConsentCopyOut, ScanResult, GuestOut, TicketView, EventBrief, MenuCategoryOut, MenuItemOut, MenuCombinationOut, MenuCombinationItemOut, GuestMenuSubmit, PartnerInfo, PairRequest, ScanZoneRequest, ScanZoneResult, ScanCheckoutRequest, DailyAttendanceResult
 from ..auth import require_official, _org_role
 from .access import zone_occupancy, ticket_allows, verify_guardian_handoff, usable_guardian_candidates
 from ..entitlements import can_use_paid_channels, last_credit_ledger_id, reserve_message_credit
@@ -23,7 +23,7 @@ from ..services.festiome_outbox import queue_points_award
 from services.qr_service import generate_qr_bytes, generate_qr_for_url
 from . import broadcast
 from .seating import assign_next_seat
-from ..timeutil import event_tz, local_hhmm
+from ..timeutil import event_tz, local_hhmm, to_event_local
 from ..template_resolve import load_overrides, channel_text as template_channel_text, channel_text_or_default as template_channel_or_default, email_override as template_email_override, email_or_default as template_email_or_default
 from services.templates import build_context as build_template_context
 from ..services.experience import active_workflow, next_guest_steps, sync_guest_progress
@@ -951,6 +951,89 @@ async def scan_qr(
         result.station_action = context["station_action"]
         result.remaining_action_count = context["remaining_action_count"]
     return result
+
+
+@router.post("/{qr_token}/daily-attendance", response_model=DailyAttendanceResult)
+async def record_daily_attendance(
+    qr_token: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_official),
+):
+    """Record an opt-in, per-day attendance mark without changing event entry.
+
+    A daily mark deliberately requires ordinary event admission first. This
+    keeps the entrance decision in the existing flow, makes the operator's
+    actions explicit on day one, and prevents a daily scan from silently
+    granting access to an unadmitted pass.
+    """
+    guest = await db.scalar(select(Guest).where(Guest.qr_token == qr_token))
+    if not guest:
+        return DailyAttendanceResult(status="invalid", message="Invalid QR code. This ticket was not found.")
+    event = await db.get(Event, guest.event_id)
+    if not event:
+        return DailyAttendanceResult(status="invalid", message="Event not found for this ticket.")
+    blocked = await checkin_guard(event, current_user, db)
+    if blocked:
+        return DailyAttendanceResult(status=blocked.status, message=blocked.message, guest=GuestOut.model_validate(guest))
+    if not event.daily_checkin_enabled:
+        return DailyAttendanceResult(status="daily_attendance_disabled", message="Daily attendance is not enabled for this event.", guest=GuestOut.model_validate(guest))
+    if not guest.admitted:
+        return DailyAttendanceResult(
+            status="event_checkin_required",
+            message="Complete normal event check-in before recording daily attendance.",
+            guest=GuestOut.model_validate(guest),
+        )
+
+    now = datetime.utcnow()
+    local_now = to_event_local(now, event.timezone)
+    start = to_event_local(event.event_date, event.timezone)
+    end = to_event_local(event.event_end_date or event.event_date, event.timezone)
+    if not local_now or not start or not end or local_now.date() < start.date() or local_now.date() > end.date():
+        return DailyAttendanceResult(
+            status="outside_event_dates",
+            message="Daily attendance can only be recorded on an event date.",
+            guest=GuestOut.model_validate(guest),
+        )
+    attendance_date = local_now.date().isoformat()
+    # Keep scalar identifiers before the write: a duplicate-key rollback expires
+    # ORM instances, and the recovery lookup must not trigger lazy database IO.
+    event_id = event.id
+    guest_id = guest.id
+    guest_out = GuestOut.model_validate(guest)
+    guest_name = f"{guest.first_name} {guest.last_name}".strip()
+    record = AttendanceRecord(
+        event_id=event_id,
+        guest_id=guest_id,
+        scope="daily",
+        scope_key=attendance_date,
+        recorded_at=now,
+        recorded_by=current_user.id,
+    )
+    db.add(record)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        existing = await db.scalar(select(AttendanceRecord).where(
+            AttendanceRecord.event_id == event_id,
+            AttendanceRecord.guest_id == guest_id,
+            AttendanceRecord.scope == "daily",
+            AttendanceRecord.scope_key == attendance_date,
+        ))
+        return DailyAttendanceResult(
+            status="already_recorded",
+            message=f"{guest_name} is already marked present for today.",
+            guest=guest_out,
+            attendance_date=attendance_date,
+            recorded_at=existing.recorded_at if existing else None,
+        )
+    return DailyAttendanceResult(
+        status="daily_recorded",
+        message=f"Daily attendance recorded for {guest.first_name} {guest.last_name}.",
+        guest=GuestOut.model_validate(guest),
+        attendance_date=attendance_date,
+        recorded_at=record.recorded_at,
+    )
 
 
 @router.post("/{qr_token}/checkout", response_model=ScanResult)

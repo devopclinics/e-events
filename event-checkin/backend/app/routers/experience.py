@@ -567,7 +567,14 @@ def _assert_session_check_in_open(session: dict, timezone_name=None) -> None:
         raise HTTPException(409, "Session check-in is closed for this session.")
 
 
-def _session_check_in_metadata(step: ExperienceStep, metadata: dict | None, timezone_name=None) -> dict:
+async def _session_check_in_metadata(
+    step: ExperienceStep, metadata: dict | None, timezone_name=None, *, db: AsyncSession, guest: Guest,
+) -> dict:
+    """Validate a session entry before the progress row is completed.
+
+    The caller locks the session step first, so the capacity count and completion
+    write cannot race another scanner for the same session.
+    """
     session = _session_config(step)
     if not any(str(value or "").strip() for value in session.values()):
         raise HTTPException(409, "Session attendance steps need session details before guests can be checked in")
@@ -575,7 +582,22 @@ def _session_check_in_metadata(step: ExperienceStep, metadata: dict | None, time
     action = (metadata or {}).get("action")
     if action != "session_check_in":
         raise HTTPException(409, "Session attendance must be recorded as a session check-in")
+    if not guest.admitted:
+        raise HTTPException(409, "Guest must complete event check-in before session attendance")
     _assert_session_check_in_open(session, timezone_name)
+    try:
+        capacity = int(session.get("capacity")) if session.get("capacity") not in (None, "") else None
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Session capacity must be a whole number")
+    if capacity is not None and capacity >= 0:
+        attended = await db.scalar(
+            select(func.count(GuestExperienceProgress.id)).where(
+                GuestExperienceProgress.step_id == step.id,
+                GuestExperienceProgress.status.in_(("completed", "overridden")),
+            )
+        ) or 0
+        if attended >= capacity:
+            raise HTTPException(409, "Session capacity has been reached")
 
     return {
         **(metadata or {}),
@@ -1700,7 +1722,10 @@ async def update_guest_step_progress(
         room_assignment = await _assign_room_for_step(event, guest, step, db, existing_metadata)
         metadata = {**(metadata or {}), "room_assignment": room_assignment}
     if data.status == "completed" and step.type == "session_attendance":
-        metadata = _session_check_in_metadata(step, metadata, event.timezone)
+        # Serialize capacity decisions for this session; guest progress itself
+        # is also locked by complete_guest_step below.
+        step = await db.scalar(select(ExperienceStep).where(ExperienceStep.id == step.id).with_for_update())
+        metadata = await _session_check_in_metadata(step, metadata, event.timezone, db=db, guest=guest)
 
     newly_completed = False
     if data.status == "completed":

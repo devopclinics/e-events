@@ -243,6 +243,7 @@ class EventOut(BaseModel):
     seat_assignment_order: str = "sequential"
     section_mode_enabled: bool = False
     manual_checkin_enabled: bool = False
+    daily_checkin_enabled: bool = False
     self_checkin_enabled: bool = False
     checkout_enabled: bool = False
     junior_guardian_handoff_enabled: bool = False
@@ -2396,6 +2397,14 @@ class MergeDuplicatesRequest(BaseModel):
 
 
 # ── Scanner ──────────────────────────────────────────────────────────────────
+
+class DailyAttendanceResult(BaseModel):
+    status: str  # daily_recorded | already_recorded | invalid | not_active
+    message: str
+    guest: Optional[GuestOut] = None
+    attendance_date: Optional[str] = None
+    recorded_at: Optional[datetime] = None
+
 
 class ScanResult(BaseModel):
     status: str  # admitted | already_admitted | invalid | not_active | not_assigned | pending_required_step | denied

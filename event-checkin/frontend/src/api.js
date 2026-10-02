@@ -940,6 +940,7 @@ export const api = {
   // Scanner
   scan: (token, body) => req('POST', `/scan/${token}`, body),
   scanCheckout: (token, guardianToken) => req('POST', `/scan/${token}/checkout`, guardianToken ? { guardian_token: guardianToken } : undefined),
+  recordDailyAttendance: (token) => req('POST', `/scan/${token}/daily-attendance`, {}),
   offlineManifest: (eventId) => req('GET', `/scan/offline-manifest/${eventId}`),
   // Manual check-in (no QR)
   searchGuests: (eventId, q) => req('GET', `/events/${eventId}/guests/search?q=${encodeURIComponent(q)}`),

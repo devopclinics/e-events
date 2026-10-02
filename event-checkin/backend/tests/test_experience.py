@@ -343,7 +343,9 @@ async def test_session_attendance_requires_session_check_in_action(ctx):
     async with _Session() as s:
         ev = await s.get(Event, event_id)
         ev.experience_enabled = True
-        guest_id = (await s.execute(select(Guest.id).where(Guest.event_id == event_id))).scalar_one()
+        guest = (await s.execute(select(Guest).where(Guest.event_id == event_id))).scalar_one()
+        guest.admitted = True
+        guest_id = guest.id
         await s.commit()
 
     workflow = await ctx.client.post(
@@ -397,7 +399,9 @@ async def test_session_attendance_respects_check_in_window(ctx, monkeypatch):
     async with _Session() as s:
         ev = await s.get(Event, event_id)
         ev.experience_enabled = True
-        guest_id = (await s.execute(select(Guest.id).where(Guest.event_id == event_id))).scalar_one()
+        guest = (await s.execute(select(Guest).where(Guest.event_id == event_id))).scalar_one()
+        guest.admitted = True
+        guest_id = guest.id
         await s.commit()
 
     workflow = await ctx.client.post(
@@ -457,7 +461,9 @@ async def test_session_attendance_accepts_sessions_json_shape(ctx):
     async with _Session() as s:
         ev = await s.get(Event, event_id)
         ev.experience_enabled = True
-        guest_id = (await s.execute(select(Guest.id).where(Guest.event_id == event_id))).scalar_one()
+        guest = (await s.execute(select(Guest).where(Guest.event_id == event_id))).scalar_one()
+        guest.admitted = True
+        guest_id = guest.id
         await s.commit()
 
     workflow = await ctx.client.post(
@@ -1907,3 +1913,38 @@ async def test_scan_operational_context_omitted_when_staff_checkin_v2_disabled(c
     assert body["remaining_action_count"] == 0
     # Underlying Experience data is untouched — only the staff-context surface is gated.
     assert [item["step"]["key"] for item in body["experience_next_steps"]] == ["welcome"]
+
+@pytest.mark.asyncio
+async def test_session_attendance_enforces_capacity_after_event_check_in(ctx):
+    ctx.login(ctx.ids["user_a"])
+    event_id = ctx.ids["event_a"]
+    async with _Session() as s:
+        event = await s.get(Event, event_id)
+        event.experience_enabled = True
+        first = await s.scalar(select(Guest).where(Guest.event_id == event_id))
+        first.admitted = True
+        first_id = first.id
+        await s.commit()
+
+    added = await ctx.client.post(f"/api/events/{event_id}/guests", json={"first_name": "Second", "last_name": "Guest"})
+    assert added.status_code == 201
+    second_id = added.json()["id"]
+    async with _Session() as s:
+        second = await s.get(Guest, second_id)
+        second.admitted = True
+        await s.commit()
+
+    workflow = await ctx.client.post(f"/api/events/{event_id}/experience/workflows", json={
+        "name": "Capacity check", "steps": [{
+            "key": "single-seat", "type": "session_attendance", "title": "Single-seat session",
+            "config": {"session": {"topic": "Workshop", "capacity": 1}},
+        }],
+    })
+    assert workflow.status_code == 201
+    step_id = workflow.json()["steps"][0]["id"]
+    assert (await ctx.client.post(f"/api/events/{event_id}/experience/workflows/{workflow.json()['id']}/publish")).status_code == 200
+    payload = {"status": "completed", "metadata": {"source": "scanner", "action": "session_check_in"}}
+    assert (await ctx.client.put(f"/api/events/{event_id}/experience/guests/{first_id}/steps/{step_id}", json=payload)).status_code == 200
+    full = await ctx.client.put(f"/api/events/{event_id}/experience/guests/{second_id}/steps/{step_id}", json=payload)
+    assert full.status_code == 409
+    assert "capacity" in full.json()["detail"].lower()

@@ -1602,6 +1602,40 @@ function CheckoutToggle({ event, onChanged, onFlash }) {
   )
 }
 
+// ── Daily attendance toggle ──────────────────────────────────────────────────
+// Kept separate from event admission. It only adds one per-day attendance mark
+// for guests who have already completed the normal event check-in.
+function DailyAttendanceToggle({ event, onChanged, onFlash }) {
+  const [loading, setLoading] = useState(false)
+  async function toggle() {
+    setLoading(true)
+    try {
+      const updated = await api.toggleFeatures(event.id, { daily_checkin_enabled: !event.daily_checkin_enabled })
+      onChanged(updated)
+      onFlash?.(`Daily attendance ${updated.daily_checkin_enabled ? 'enabled' : 'disabled'}.`)
+    } catch (e) { onFlash?.(e.message, true) }
+    finally { setLoading(false) }
+  }
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 mt-6">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="font-semibold text-base dark:text-white">Daily attendance</h2>
+          <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">For multi-day events. Adds a Daily attendance tab to the Scanner and records one validated mark per admitted guest per event day. It never changes event check-in or check-out.</p>
+        </div>
+        <button onClick={toggle} disabled={loading}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors disabled:opacity-50 ${
+            event.daily_checkin_enabled
+              ? 'bg-teal-600 text-white border-teal-600 hover:bg-teal-700'
+              : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-200 border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'
+          }`}>
+          Daily attendance: {event.daily_checkin_enabled ? 'ON' : 'OFF'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Walk-in toggle (ported from prod) ───────────────────────────────────────────
 // Lets staff register walk-in guests at the door (Scanner -> Manual / Walk-in). New walk-ins
 // are auto-assigned to a chosen table group.
@@ -10713,6 +10747,7 @@ export default function AdminPage() {
             <TableGroupsPanel eventId={selectedId} seatingLabel={seatingTerm(event)} />
             <WalkInToggle event={event} onChanged={updateEvent} onFlash={flash} />
             <CheckoutToggle event={event} onChanged={updateEvent} onFlash={flash} />
+            <DailyAttendanceToggle event={event} onChanged={updateEvent} onFlash={flash} />
           </>}
 
           {activeTab === 'messages' && <>

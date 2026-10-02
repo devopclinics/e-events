@@ -1222,6 +1222,8 @@ async def toggle_features(
         event.checkout_enabled = bool(body["checkout_enabled"])
     if "manual_checkin_enabled" in body:
         event.manual_checkin_enabled = bool(body["manual_checkin_enabled"])
+    if "daily_checkin_enabled" in body:
+        event.daily_checkin_enabled = bool(body["daily_checkin_enabled"])
     for k in ("notify_email", "notify_sms", "notify_whatsapp", "notify_rsvp_responses",
               "post_event_thankyou_enabled", "notify_consent_prompt_enabled"):
         if k in body:

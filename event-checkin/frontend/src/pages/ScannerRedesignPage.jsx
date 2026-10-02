@@ -21,6 +21,7 @@ const MODES = [
   { id: 'camera', label: 'Convention check-in' },
   { id: 'access', label: 'Zone access' },
   { id: 'checkout', label: 'Check-out' },
+  { id: 'daily', label: 'Daily attendance' },
   { id: 'manual', label: 'Manual search' },
   { id: 'eventqr', label: 'Event QR' },
 ]
@@ -464,6 +465,37 @@ function ManualMode({ event, sections, zones, onResult }) {
   )
 }
 
+function DailyAttendanceMode({ event, onResult }) {
+  const [token, setToken] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function record(raw) {
+    const pass = extractToken(raw)
+    if (!pass || busy) return
+    setBusy(true); setError(''); onResult(null)
+    try {
+      const response = await api.recordDailyAttendance(pass)
+      onResult(response)
+      if (response.status === 'daily_recorded' || response.status === 'already_recorded') setToken('')
+    } catch (err) {
+      const message = err.message || 'Daily attendance could not be recorded.'
+      setError(message); onResult({ status: 'invalid', message })
+    } finally { setBusy(false) }
+  }
+
+  if (!event?.daily_checkin_enabled) return <div className="sc-empty">Daily attendance is disabled for this event.</div>
+  return <div className="sc-token-scanner">
+    <p>Record one attendance mark per admitted guest for today. This does not check anyone into the event.</p>
+    <QrCameraScanner onScan={record} disabled={busy}/>
+    <form className="sc-search-row sc-token-row" onSubmit={(e) => { e.preventDefault(); record(token) }}>
+      <input className="sc-search-input" aria-label="Daily attendance pass token" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Guest pass URL or QR token"/>
+      <button className="rr-btn primary" disabled={!token.trim() || busy}>{busy ? 'Recording…' : 'Record daily attendance'}</button>
+    </form>
+    {error && <p className="sc-empty">{error}</p>}
+  </div>
+}
+
 function EventQRMode({ event }) {
   if (!event?.event_code) return <div className="sc-empty">Enable self check-in to generate an event QR code.</div>
   return <div className="sc-eventqr"><div className="sc-qr-placeholder">
@@ -676,6 +708,7 @@ function LiveScannerCommandCenter({
     camera: ['Convention entrance', 'Ready to check in'],
     access: ['Zone station', 'Ready for zone movement'],
     checkout: ['Exit station', 'Ready to check out'],
+    daily: ['Daily attendance', 'Ready to record today'],
     manual: ['Guest lookup', 'Manual check-in'],
     eventqr: ['Self check-in', 'Event QR'],
   }[mode]
@@ -705,7 +738,7 @@ function LiveScannerCommandCenter({
       </div>
 
       <div className="sc-command-tabs" aria-label="Scanner modes">
-        {MODES.filter((item) => item.id !== 'access' || (event?.venue_access_enabled && event?.separate_admission_access_enabled)).map((item) => (
+        {MODES.filter((item) => (item.id !== 'access' || (event?.venue_access_enabled && event?.separate_admission_access_enabled)) && (item.id !== 'daily' || event?.daily_checkin_enabled)).map((item) => (
           <button key={item.id} type="button" aria-pressed={mode === item.id} aria-label={item.label} className={mode === item.id ? 'active' : ''} onClick={() => { setMode(item.id); onResult(null) }}>
             <Icon name={item.id === 'manual' ? 'search' : item.id === 'checkout' ? 'external' : 'ticket'} size={14}/>
             {item.label}
@@ -721,6 +754,7 @@ function LiveScannerCommandCenter({
           </div>
           <div className="sc-command-mode-body">
             {(mode === 'camera' || mode === 'access' || mode === 'checkout') && <TokenScanner event={event} zones={zones} gates={gates} sections={sections} mode={mode} offlineManifest={offlineManifest} onManifestChange={onManifestChange} onQueueChange={onQueueChange} onRefreshManifest={onRefreshManifest} onResult={onResult}/>}
+            {mode === 'daily' && <DailyAttendanceMode event={event} onResult={onResult}/>}
             {mode === 'manual' && <ManualMode event={event} sections={sections} zones={zones} onResult={onResult}/>}
             {mode === 'eventqr' && <EventQRMode event={event}/>}
           </div>

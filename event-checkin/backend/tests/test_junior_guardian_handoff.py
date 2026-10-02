@@ -355,7 +355,8 @@ async def _rsvp_junior_party(ctx, ev, token, parent_name, child_name):
     by_name = await _rsvp_guests_by_name(ev)
     parent, child = by_name[f"{parent_name} Hub"], by_name[f"{child_name} Hub"]
     async with _Session() as s:
-        child_row = await s.get(Guest, child.id)
+        parent_row, child_row = await s.get(Guest, parent.id), await s.get(Guest, child.id)
+        parent_row.admitted = True
         child_row.admitted = True
         await s.commit()
     return parent, child
@@ -401,7 +402,7 @@ async def test_guesthub_party_scope_add_succeeds_without_search(ctx):
     assert cross.status_code == 400
 
     # Search is unavailable in party scope.
-    search = await ctx.client.get(f"/api/invite/token/{parent_a.invite_token}/guardian-search?q=Pa")
+    search = await ctx.client.get(f"/api/invite/token/{parent_a.invite_token}/guardian-search?child_guest_id={child_a.id}&q=Pa")
     assert search.status_code == 400
 
 
@@ -433,8 +434,23 @@ async def test_guesthub_any_guest_scope_search_and_add(ctx):
     by_name = await _rsvp_guests_by_name(ev)
     stranger = by_name["Unrelated Hub"]
 
+    # Guardian changes are event-day operations: the parent and junior must
+    # both be checked in before the search can expose a candidate name.
+    async with _Session() as s:
+        parent_row = await s.get(Guest, parent_a.id)
+        parent_row.admitted = False
+        await s.commit()
+    before_parent_checkin = await ctx.client.get(
+        f"/api/invite/token/{parent_a.invite_token}/guardian-search?child_guest_id={child_a.id}&q=Unre"
+    )
+    assert before_parent_checkin.status_code == 400
+    async with _Session() as s:
+        parent_row = await s.get(Guest, parent_a.id)
+        parent_row.admitted = True
+        await s.commit()
+
     # Not checked in yet — not searchable.
-    not_found = await ctx.client.get(f"/api/invite/token/{parent_a.invite_token}/guardian-search?q=Unre")
+    not_found = await ctx.client.get(f"/api/invite/token/{parent_a.invite_token}/guardian-search?child_guest_id={child_a.id}&q=Unre")
     assert not_found.json() == []
 
     async with _Session() as s:
@@ -442,7 +458,7 @@ async def test_guesthub_any_guest_scope_search_and_add(ctx):
         row.admitted = True
         await s.commit()
 
-    found = await ctx.client.get(f"/api/invite/token/{parent_a.invite_token}/guardian-search?q=Unre")
+    found = await ctx.client.get(f"/api/invite/token/{parent_a.invite_token}/guardian-search?child_guest_id={child_a.id}&q=Unre")
     assert found.status_code == 200
     assert any(r["guest_id"] == stranger.id for r in found.json())
 
@@ -506,6 +522,13 @@ async def test_guesthub_cannot_manage_guest_they_did_not_submit(ctx):
         json={"child_guest_id": child_a.id, "guardian_guest_id": parent_e.id, "relationship": "Friend"},
     )
     assert attempt.status_code == 403
+
+    # A valid event link alone cannot search checked-in guests. Search is bound
+    # to a junior owned by the requesting parent before any names are returned.
+    search_attempt = await ctx.client.get(
+        f"/api/invite/token/{parent_e.invite_token}/guardian-search?child_guest_id={child_a.id}&q=Parent"
+    )
+    assert search_attempt.status_code == 403
 
 
 @pytest.mark.asyncio

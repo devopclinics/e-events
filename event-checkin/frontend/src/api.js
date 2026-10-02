@@ -1247,7 +1247,7 @@ export const api = {
   confirmGuardianAuthorizations: (token, childGuestIds) =>
     req('POST', `/invite/token/${encodeURIComponent(token)}/guardian-authorizations/confirm`, { child_guest_ids: childGuestIds || [] }),
   myJuniors: (token) => req('GET', `/invite/token/${encodeURIComponent(token)}/my-juniors`),
-  searchGuardianCandidates: (token, q) => req('GET', `/invite/token/${encodeURIComponent(token)}/guardian-search?q=${encodeURIComponent(q)}`),
+  searchGuardianCandidates: (token, childGuestId, q) => req('GET', `/invite/token/${encodeURIComponent(token)}/guardian-search?child_guest_id=${encodeURIComponent(childGuestId)}&q=${encodeURIComponent(q)}`),
   addGuardianAuthorization: (token, childGuestId, guardianGuestId, relationship) =>
     req('POST', `/invite/token/${encodeURIComponent(token)}/guardian-authorizations`,
       { child_guest_id: childGuestId, guardian_guest_id: guardianGuestId, relationship: relationship || 'Authorized guardian' }),

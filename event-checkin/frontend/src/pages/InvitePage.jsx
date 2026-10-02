@@ -1497,7 +1497,7 @@ function GuardianConfirmPanel({ pending, onConfirm }) {
 }
 
 function ManageGuardiansPanel({ token }) {
-  const [data, setData] = useState({ juniors: [], party: [], designation_scope: 'party' })
+  const [data, setData] = useState({ juniors: [], party: [], parent_checked_in: false, designation_scope: 'party' })
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState({}) // child_guest_id -> query string
   const [results, setResults] = useState({}) // child_guest_id -> [{guest_id, name}]
@@ -1514,7 +1514,7 @@ function ManageGuardiansPanel({ token }) {
     const timers = Object.entries(search).map(([childId, q]) => {
       if (!q || q.trim().length < 2) { setResults((r) => ({ ...r, [childId]: [] })); return null }
       return window.setTimeout(() => {
-        api.searchGuardianCandidates(token, q.trim())
+        api.searchGuardianCandidates(token, childId, q.trim())
           .then((rows) => setResults((r) => ({ ...r, [childId]: rows })))
           .catch(() => setResults((r) => ({ ...r, [childId]: [] })))
       }, 300)
@@ -1540,6 +1540,7 @@ function ManageGuardiansPanel({ token }) {
       {data.juniors.map((junior) => {
         const alreadyAuthorizedIds = new Set(junior.guardians.map((g) => g.guardian_guest_id))
         const partyOptions = data.party.filter((p) => p.guest_id !== junior.child_guest_id && !alreadyAuthorizedIds.has(p.guest_id))
+        const canManage = data.parent_checked_in && junior.checked_in
         return (
           <div key={junior.child_guest_id} className="mt-3 border-t border-slate-100 pt-3 first:mt-0 first:border-0 first:pt-0">
             <div className="font-semibold text-slate-800">{junior.child_name}</div>
@@ -1552,7 +1553,8 @@ function ManageGuardiansPanel({ token }) {
                 </li>
               ))}
             </ul>
-            {partyOptions.length > 0 && (
+            {!canManage && <p className="mt-2 text-xs text-amber-700">Available after you and {junior.child_name} have checked in.</p>}
+            {canManage && partyOptions.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-2">
                 {partyOptions.map((p) => (
                   <button key={p.guest_id} type="button" disabled={busy === `${junior.child_guest_id}:${p.guest_id}`}
@@ -1563,7 +1565,7 @@ function ManageGuardiansPanel({ token }) {
                 ))}
               </div>
             )}
-            {data.designation_scope === 'any_guest' && (
+            {canManage && data.designation_scope === 'any_guest' && (
               <div className="mt-2">
                 <input
                   value={search[junior.child_guest_id] || ''}

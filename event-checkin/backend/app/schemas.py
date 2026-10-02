@@ -2855,6 +2855,7 @@ class MyJunior(BaseModel):
     marked as needing pickup authorization, with their current guardians."""
     child_guest_id: str
     child_name: str
+    checked_in: bool = False
     guardians: list[MyJuniorGuardian] = Field(default_factory=list)
 
 
@@ -2869,6 +2870,7 @@ class MyJuniorsOut(BaseModel):
     # themself) — always offerable as a pickup guardian regardless of the
     # event's designation_scope setting.
     party: list[MyPartyMember] = Field(default_factory=list)
+    parent_checked_in: bool = False
     designation_scope: Literal["party", "any_guest"] = "party"
 
 

@@ -1060,7 +1060,10 @@ async def list_my_juniors(invite_token: str, db: AsyncSession = Depends(get_db))
     table, scoped to this requester's own party — plus their party's other
     members, always offerable as a pickup guardian regardless of scope."""
     guest, event = await _get_guest_by_token(invite_token, db)
-    empty = MyJuniorsOut(designation_scope=event.guardian_designation_scope or "party")
+    empty = MyJuniorsOut(
+        designation_scope=event.guardian_designation_scope or "party",
+        parent_checked_in=bool(guest.admitted),
+    )
     if not event.junior_guardian_handoff_enabled:
         return empty
 
@@ -1075,13 +1078,21 @@ async def list_my_juniors(invite_token: str, db: AsyncSession = Depends(get_db))
     ]
 
     if not event.guardian_authorizations:
-        return MyJuniorsOut(party=party, designation_scope=empty.designation_scope)
+        return MyJuniorsOut(
+            party=party,
+            parent_checked_in=empty.parent_checked_in,
+            designation_scope=empty.designation_scope,
+        )
     my_child_ids = [
         child_id for child_id, entries in event.guardian_authorizations.items()
         if entries and any(e.get("source") == "rsvp_submitter" and e.get("guardian_guest_id") == guest.id for e in entries)
     ]
     if not my_child_ids:
-        return MyJuniorsOut(party=party, designation_scope=empty.designation_scope)
+        return MyJuniorsOut(
+            party=party,
+            parent_checked_in=empty.parent_checked_in,
+            designation_scope=empty.designation_scope,
+        )
     all_guest_ids = {guest.id} | {
         entry.get("guardian_guest_id")
         for child_id in my_child_ids
@@ -1106,19 +1117,51 @@ async def list_my_juniors(invite_token: str, db: AsyncSession = Depends(get_db))
                 relationship=entry.get("relationship") or "Authorized guardian",
                 status=status,
             ))
-        juniors.append(MyJunior(child_guest_id=child_id, child_name=f"{child.first_name or ''} {child.last_name or ''}".strip(), guardians=guardians))
-    return MyJuniorsOut(juniors=juniors, party=party, designation_scope=empty.designation_scope)
+        juniors.append(MyJunior(
+            child_guest_id=child_id,
+            child_name=f"{child.first_name or ''} {child.last_name or ''}".strip(),
+            checked_in=bool(child.admitted),
+            guardians=guardians,
+        ))
+    return MyJuniorsOut(
+        juniors=juniors,
+        party=party,
+        parent_checked_in=empty.parent_checked_in,
+        designation_scope=empty.designation_scope,
+    )
+
+
+async def _managed_junior_or_403(guest: Guest, event: Event, child_guest_id: str, db: AsyncSession) -> tuple[Guest, list[dict]]:
+    """Resolve a junior the requesting parent may manage on event day.
+
+    This is deliberately used by both candidate search and mutation. A valid
+    event link by itself must never become a way to search checked-in guests.
+    """
+    if not event.junior_guardian_handoff_enabled:
+        raise HTTPException(400, "This event does not use guardian pickup authorization")
+    child = await db.get(Guest, child_guest_id)
+    if not child or child.event_id != event.id or child.rsvp_submitter_guest_id != guest.id:
+        raise HTTPException(403, "You can only manage pickup authorization for guests you registered")
+    entries = (event.guardian_authorizations or {}).get(child.id) or []
+    if not entries or not any(entry.get("source") == "rsvp_submitter" and entry.get("guardian_guest_id") == guest.id for entry in entries):
+        raise HTTPException(400, "This guest is not marked as a junior needing pickup authorization")
+    if not guest.admitted or not child.admitted:
+        raise HTTPException(400, "Parent and junior must be checked in before pickup authorization can be changed")
+    return child, entries
 
 
 @router.get("/token/{invite_token}/guardian-search", response_model=list[GuardianSearchResult])
 async def search_guardian_candidates(
-    invite_token: str, q: str = "", db: AsyncSession = Depends(get_db),
+    invite_token: str, child_guest_id: str, q: str = "", db: AsyncSession = Depends(get_db),
 ):
     """A parent searches for another checked-in guest to designate as a pickup
     guardian — only when the organizer has opted the event into any_guest
     scope. Deliberately narrow: checked-in guests only, short queries
     rejected, small result cap — never a full guest-list dump."""
     guest, event = await _get_guest_by_token(invite_token, db)
+    # Check ownership and event-day state before exposing even capped name
+    # matches. An ordinary attendee therefore cannot enumerate other guests.
+    await _managed_junior_or_403(guest, event, child_guest_id, db)
     if (event.guardian_designation_scope or "party") != "any_guest":
         raise HTTPException(400, "This event only allows designating guardians from your own party")
     query = q.strip()
@@ -1151,14 +1194,7 @@ async def add_guardian_authorization(
     confirm via their own link before it's usable (see
     guardian-authorizations/confirm)."""
     guest, event = await _get_guest_by_token(invite_token, db)
-    if not event.junior_guardian_handoff_enabled:
-        raise HTTPException(400, "This event does not use guardian pickup authorization")
-    child = await db.get(Guest, body.child_guest_id)
-    if not child or child.event_id != event.id or child.rsvp_submitter_guest_id != guest.id:
-        raise HTTPException(403, "You can only manage pickup authorization for guests you registered")
-    existing_entries = (event.guardian_authorizations or {}).get(child.id) or []
-    if not existing_entries:
-        raise HTTPException(400, "This guest is not marked as a junior needing pickup authorization")
+    child, existing_entries = await _managed_junior_or_403(guest, event, body.child_guest_id, db)
     guardian = await db.get(Guest, body.guardian_guest_id)
     if not guardian or guardian.event_id != event.id:
         raise HTTPException(404, "Guardian not found for this event")

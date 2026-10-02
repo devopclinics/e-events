@@ -1466,7 +1466,7 @@ async def scan_qr_zone(
     })
 
     return ScanZoneResult(
-        status="denied" if denied else "ok", denied=denied, deny_reason=deny_reason,
+        status="guardian_required" if guardian_denial else ("denied" if denied else "ok"), denied=denied, deny_reason=deny_reason,
         guest_name=f"{guest.first_name} {guest.last_name}", ticket_type=tt_name,
         zone_name=zone.name, direction=direction, occupancy=occ,
         journey_count=int(journey_count), seat_number=guest.seat_number, table_name=table_name,

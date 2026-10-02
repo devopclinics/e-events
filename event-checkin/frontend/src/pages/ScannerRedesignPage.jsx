@@ -170,7 +170,9 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
         guest_name: response.guest_name,
         deny_reason: response.deny_reason || (response.allowed === false ? response.message : undefined),
       }
-      onResult(result)
+      onResult(response.status === 'guardian_required' ? {
+        ...result, denied: false, message: 'Guardian verification required. Scan the authorized guardian’s pass next.',
+      } : result)
       if (response.status === 'guardian_required') {
         startGuardianStep(value, action, response, manifestGuest)
       } else {
@@ -259,10 +261,27 @@ function ManualMode({ event, sections, zones, onResult }) {
   const [zoneId, setZoneId] = useState('')
   const [direction, setDirection] = useState('in')
   const [guardianToken, setGuardianToken] = useState('')
+  const [guardianStep, setGuardianStep] = useState(null)
+  const [guardianSearch, setGuardianSearch] = useState('')
   const [operation, setOperation] = useState('admission')
   const separatedAccess = !!event?.venue_access_enabled && !!event?.separate_admission_access_enabled
   const zoneOperation = !!event?.venue_access_enabled && (!separatedAccess || operation === 'access')
   const groupChoiceEnabled = !!event?.walk_in_group_choice_enabled && !event?.section_mode_enabled
+  const guardianCandidates = (guardianStep?.candidates || []).filter((candidate) =>
+    !guardianSearch.trim() || `${candidate.name} ${candidate.relationship || ''}`.toLowerCase().includes(guardianSearch.trim().toLowerCase())
+  )
+
+  function beginGuardianStep(guest, response) {
+    setGuardianStep({ guest, candidates: response.guardian_candidates || [] })
+    setGuardianToken('')
+    setGuardianSearch('')
+  }
+
+  function cancelGuardianStep() {
+    setGuardianStep(null)
+    setGuardianToken('')
+    setGuardianSearch('')
+  }
 
   useEffect(() => {
     if (!event?.id || !groupChoiceEnabled) { setTableGroups([]); return }
@@ -284,30 +303,49 @@ function ManualMode({ event, sections, zones, onResult }) {
     return () => { active = false; window.clearTimeout(timer) }
   }, [event?.id, event?.manual_checkin_enabled, event?.checkout_enabled, query])
 
-  async function checkin(guest) {
+  async function checkin(guest, guardianPass = null) {
     setBusyId(`${guest.id}:checkin`); setError('')
     try {
       const response = zoneOperation
-        ? await api.scanZone(guest.qr_token, { zone_id: zoneId, direction, guardian_token: extractToken(guardianToken) || null })
+        ? await api.scanZone(guest.qr_token, { zone_id: zoneId, direction, guardian_token: guardianPass })
         : operation === 'checkout'
-          ? await api.manualCheckout(event.id, guest.id, extractToken(guardianToken) || null)
+          ? await api.manualCheckout(event.id, guest.id, guardianPass)
           : await api.manualCheckin(event.id, guest.id, event.section_mode_enabled ? sectionId || null : null)
-      onResult(response)
-      if (!zoneOperation) setResults((items) => items.map((item) => item.id === guest.id ? { ...item, admitted: operation !== 'checkout', checked_out: operation === 'checkout' } : item))
+      onResult(response.status === 'guardian_required' ? {
+        ...response, denied: false, message: 'Guardian verification required. Scan the authorized guardian’s pass next.',
+      } : response)
+      if (response.status === 'guardian_required') beginGuardianStep(guest, response)
+      else {
+        cancelGuardianStep()
+        if (!zoneOperation && (response.status === 'checked_out' || response.status === 'already_checked_out' || response.status === 'admitted' || response.status === 'already_admitted')) {
+          setResults((items) => items.map((item) => item.id === guest.id ? { ...item, admitted: operation !== 'checkout', checked_out: operation === 'checkout' } : item))
+        }
+      }
     } catch (err) { setError(err.message); onResult({ status: 'invalid', message: err.message }) }
     finally { setBusyId('') }
   }
 
-  async function checkout(guest) {
+  async function checkout(guest, guardianPass = null) {
     setBusyId(`${guest.id}:checkout`); setError('')
     try {
-      const response = await api.manualCheckout(event.id, guest.id, extractToken(guardianToken) || null)
-      onResult(response)
-      if (response.status === 'checked_out' || response.status === 'already_checked_out') {
-        setResults((items) => items.map((item) => item.id === guest.id ? { ...item, checked_out: true } : item))
+      const response = await api.manualCheckout(event.id, guest.id, guardianPass)
+      onResult(response.status === 'guardian_required' ? {
+        ...response, denied: false, message: 'Guardian verification required. Scan the authorized guardian’s pass next.',
+      } : response)
+      if (response.status === 'guardian_required') beginGuardianStep(guest, response)
+      else {
+        cancelGuardianStep()
+        if (response.status === 'checked_out' || response.status === 'already_checked_out') setResults((items) => items.map((item) => item.id === guest.id ? { ...item, checked_out: true } : item))
       }
     } catch (err) { setError(err.message); onResult({ status: 'invalid', message: err.message }) }
     finally { setBusyId('') }
+  }
+
+  async function confirmGuardian() {
+    const guardianPass = extractToken(guardianToken)
+    if (!guardianStep || !guardianPass) return
+    if (zoneOperation || operation === 'checkout') await checkin(guardianStep.guest, guardianPass)
+    else await checkout(guardianStep.guest, guardianPass)
   }
 
   async function register(e) {
@@ -355,10 +393,15 @@ function ManualMode({ event, sections, zones, onResult }) {
             </select>
           </div>
         )}
-        {(zoneOperation || operation === 'checkout' || (!separatedAccess && event.checkout_enabled)) && event.junior_guardian_handoff_enabled && (
-          <div className="sc-search-row">
-            <input className="sc-search-input" aria-label="Manual guardian pass token" value={guardianToken} onChange={(e) => setGuardianToken(e.target.value)} placeholder="Scan or paste authorized guardian pass (only needed if this guest requires one)"/>
-          </div>
+        {guardianStep && (
+          <section className="sc-guardian-handoff" aria-live="polite">
+            <strong>Guardian required for {guardianStep.guest.full_name}</strong>
+            <p>Find the authorized guardian below, then scan or paste that guardian’s pass. A name alone cannot approve the handoff.</p>
+            {guardianStep.candidates.length > 0 ? <><input className="sc-search-input" aria-label="Search authorized guardians" value={guardianSearch} onChange={(e) => setGuardianSearch(e.target.value)} placeholder="Search authorized guardians"/>
+              <div className="sc-guardian-candidates">{guardianCandidates.map((candidate) => <div key={candidate.guardian_guest_id}><b>{candidate.name}</b><small>{candidate.relationship}</small></div>)}{guardianCandidates.length === 0 && <p className="sc-empty">No confirmed guardian matches that search.</p>}</div></> : <p className="sc-empty">No confirmed guardian is available for this junior. Ask an event administrator to review the authorization.</p>}
+            <div className="sc-search-row sc-token-row"><input className="sc-search-input" aria-label="Manual guardian pass token" value={guardianToken} onChange={(e) => setGuardianToken(e.target.value)} placeholder="Guardian pass URL or QR token"/><button className="rr-btn primary" disabled={!guardianToken.trim() || !!busyId} onClick={confirmGuardian}>{busyId ? 'Verifying…' : 'Verify guardian QR'}</button></div>
+            <button type="button" className="rr-btn secondary" onClick={cancelGuardianStep} disabled={!!busyId}>Cancel and choose another guest</button>
+          </section>
         )}
         <div className="sc-search-row">
           <input className="sc-search-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by name or phone…"/>

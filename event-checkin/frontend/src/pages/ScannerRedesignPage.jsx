@@ -51,7 +51,7 @@ function extractScanPayload(raw) {
 function resultTone(result) {
   if (!result) return ''
   if (result.denied || result.status === 'denied' || result.status === 'invalid') return 'red'
-  if (result.status === 'pending_required_step') return 'amber'
+  if (result.status === 'pending_required_step' || result.status === 'guardian_required') return 'amber'
   if (/already/.test(result.status || '')) return 'amber'
   if (result.status === 'offline_queued') return 'blue'
   return 'green'
@@ -126,7 +126,7 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
       const scanAction = action || (mode === 'checkout' ? 'checkout' : 'checkin')
       if (scanAction === 'checkout') {
         if (!navigator.onLine) throw new Error('Check-out needs a network connection so the exit scan can be recorded.')
-        response = await api.scanCheckout(value)
+        response = await api.scanCheckout(value, extractToken(guardianToken) || null)
       }
       else if (accessMode && gateId && event.junior_guardian_handoff_enabled) throw new Error('Select a zone for guardian handoff scanning.')
       else if (accessMode && gateId) response = await api.scanGate(event.id, gateId, value)
@@ -148,7 +148,7 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
       setToken('')
     } catch (err) {
       const networkFailure = !navigator.onLine || /failed to fetch|network|load failed/i.test(err.message || '')
-      if (networkFailure && accessMode && event.junior_guardian_handoff_enabled) {
+      if (networkFailure && (accessMode || mode === 'checkout') && event.junior_guardian_handoff_enabled) {
         throw new Error('Guardian handoffs require an online connection for authorization checks.')
       }
       if (networkFailure && mode !== 'checkout' && action !== 'checkout') {
@@ -211,9 +211,9 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
           {sections.map((section) => <option key={section.id} value={section.id}>{section.name}</option>)}
         </select>
       )}
-      {accessMode && event.junior_guardian_handoff_enabled && mode !== 'checkout' && (
+      {(accessMode || mode === 'checkout') && event.junior_guardian_handoff_enabled && (
         <div className="sc-search-row sc-token-row">
-          <input className="sc-search-input" aria-label="Guardian pass token" value={guardianToken} onChange={(e) => setGuardianToken(e.target.value)} placeholder="Authorized guardian pass URL or QR token"/>
+          <input className="sc-search-input" aria-label="Guardian pass token" value={guardianToken} onChange={(e) => setGuardianToken(e.target.value)} placeholder="Authorized guardian pass URL or QR token (only needed if this guest requires one)"/>
         </div>
       )}
       <div className="sc-search-row sc-token-row">
@@ -270,7 +270,7 @@ function ManualMode({ event, sections, zones, onResult }) {
       const response = zoneOperation
         ? await api.scanZone(guest.qr_token, { zone_id: zoneId, direction, guardian_token: extractToken(guardianToken) || null })
         : operation === 'checkout'
-          ? await api.manualCheckout(event.id, guest.id)
+          ? await api.manualCheckout(event.id, guest.id, extractToken(guardianToken) || null)
           : await api.manualCheckin(event.id, guest.id, event.section_mode_enabled ? sectionId || null : null)
       onResult(response)
       if (!zoneOperation) setResults((items) => items.map((item) => item.id === guest.id ? { ...item, admitted: operation !== 'checkout', checked_out: operation === 'checkout' } : item))
@@ -281,7 +281,7 @@ function ManualMode({ event, sections, zones, onResult }) {
   async function checkout(guest) {
     setBusyId(`${guest.id}:checkout`); setError('')
     try {
-      const response = await api.manualCheckout(event.id, guest.id)
+      const response = await api.manualCheckout(event.id, guest.id, extractToken(guardianToken) || null)
       onResult(response)
       if (response.status === 'checked_out' || response.status === 'already_checked_out') {
         setResults((items) => items.map((item) => item.id === guest.id ? { ...item, checked_out: true } : item))
@@ -335,9 +335,9 @@ function ManualMode({ event, sections, zones, onResult }) {
             </select>
           </div>
         )}
-        {zoneOperation && event.junior_guardian_handoff_enabled && (
+        {(zoneOperation || operation === 'checkout' || (!separatedAccess && event.checkout_enabled)) && event.junior_guardian_handoff_enabled && (
           <div className="sc-search-row">
-            <input className="sc-search-input" aria-label="Manual guardian pass token" value={guardianToken} onChange={(e) => setGuardianToken(e.target.value)} placeholder="Scan or paste authorized guardian pass"/>
+            <input className="sc-search-input" aria-label="Manual guardian pass token" value={guardianToken} onChange={(e) => setGuardianToken(e.target.value)} placeholder="Scan or paste authorized guardian pass (only needed if this guest requires one)"/>
           </div>
         )}
         <div className="sc-search-row">

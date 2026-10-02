@@ -577,7 +577,7 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {}, guidedFlow =
   const [smsConsent, setSmsConsent] = useState(false)
   const [choice, setChoice] = useState('')
   const [answers, setAnswers] = useState({})
-  const emptyInvitee = () => ({ first_name: '', last_name: '', relationship: '', phone: '', email: '', guest_type: 'Invited Guest', age_group: '', notes: '' })
+  const emptyInvitee = () => ({ first_name: '', last_name: '', relationship: '', phone: '', email: '', guest_type: 'Invited Guest', age_group: '', notes: '', is_junior: false, pickup_authorized_by_invitee_indices: [] })
   const [invitees, setInvitees] = useState([])
   const [shipAddr, setShipAddr] = useState({})
   const [sizes, setSizes] = useState({})
@@ -675,8 +675,17 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {}, guidedFlow =
           whatsapp_consent: Boolean(form.phone.trim() && smsConsent),
           answers,
           invitees: multiInvitee && acceptsAdditionalInvitees
-            ? invitees
-                .map((row) => ({
+            ? (() => {
+                // Checkbox-selected pickup-authorization indices are against the
+                // on-screen `invitees` array, but empty rows are dropped before
+                // submitting — remap screen-index -> submitted-index here so
+                // references stay correct (and drop any that pointed at a
+                // filtered-out/empty row).
+                const kept = invitees
+                  .map((row, origIndex) => ({ row, origIndex }))
+                  .filter(({ row }) => row.first_name.trim() || row.last_name.trim() || row.phone.trim() || row.email.trim())
+                const indexMap = new Map(kept.map(({ origIndex }, newIndex) => [origIndex, newIndex]))
+                return kept.map(({ row }, newIndex) => ({
                   first_name: row.first_name.trim(),
                   last_name: row.last_name.trim(),
                   relationship: row.relationship.trim(),
@@ -685,8 +694,14 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {}, guidedFlow =
                   guest_type: row.guest_type,
                   age_group: row.age_group || undefined,
                   notes: row.notes.trim() || undefined,
+                  is_junior: event.junior_guardian_handoff_enabled ? !!row.is_junior : undefined,
+                  pickup_authorized_by_invitee_indices: event.junior_guardian_handoff_enabled
+                    ? (row.pickup_authorized_by_invitee_indices || [])
+                        .map((origIdx) => indexMap.get(origIdx))
+                        .filter((idx) => idx !== undefined && idx !== newIndex)
+                    : undefined,
                 }))
-                .filter((row) => row.first_name || row.last_name || row.phone || row.email)
+              })()
             : [],
           shipping_address: event.shipping ? shipAddr : undefined,
           sizes: event.shipping ? sizes : undefined,
@@ -909,6 +924,35 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {}, guidedFlow =
                       <input value={row.notes} onChange={(e) => setInvitee(index, 'notes', e.target.value)} className={inputCls} placeholder="Any seating, protocol, or meal note for this person" />
                     </div>
                   </div>
+                  {event.junior_guardian_handoff_enabled && (
+                    <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                        <input type="checkbox" checked={!!row.is_junior} onChange={(e) => setInvitee(index, 'is_junior', e.target.checked)} />
+                        This guest is a junior (needs pickup authorization)
+                      </label>
+                      {row.is_junior && invitees.length > 1 && (
+                        <div className="mt-2 pl-6">
+                          <div className="text-xs font-semibold text-slate-600">Who else in your party can pick up {row.first_name || 'this guest'}?</div>
+                          <small className="text-slate-400">You are always authorized automatically.</small>
+                          <div className="mt-1 flex flex-wrap gap-3">
+                            {invitees.map((other, j) => j === index ? null : (
+                              <label key={j} className="flex items-center gap-1 text-xs font-semibold text-slate-600">
+                                <input
+                                  type="checkbox"
+                                  checked={(row.pickup_authorized_by_invitee_indices || []).includes(j)}
+                                  onChange={(e) => setInvitee(index, 'pickup_authorized_by_invitee_indices',
+                                    e.target.checked
+                                      ? [...(row.pickup_authorized_by_invitee_indices || []), j]
+                                      : (row.pickup_authorized_by_invitee_indices || []).filter((x) => x !== j))}
+                                />
+                                {other.first_name || `Guest ${j + 1}`}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 )})}
                 </>
@@ -1437,6 +1481,112 @@ function CompleteGuestHubView({ event, hub, journey, previewMock, designTheme, g
   return <div className="flow-phone flow-option-four"><FlowTopBar event={event} /><div className="flow-home-banner"><span>{event?.organization_name || 'FESTIO EVENT'}</span><h1>{event.name}</h1><p>{fmtDate(event.event_date, event.timezone)} · {event.venue_name || 'Event venue'}</p></div><section className="flow-welcome"><h2>Welcome, {guest.name?.split(' ')[0] || 'Guest'}! 👋</h2><p>You're registered for the event.</p><div className="flow-two-actions"><button className="flow-primary" onClick={() => go('pass')}>▦ View My Pass</button><button className="flow-secondary" onClick={() => document.getElementById('flow-party')?.scrollIntoView({ behavior: 'smooth' })}>♟ View My Party</button></div></section><section className="flow-section"><div className="flow-section-heading"><h3>Your Event Journey</h3><button onClick={() => go(guest.admitted ? 'day' : 'pass')}>View Details →</button></div><div className="flow-journey-grid"><button className="done" onClick={() => go('pass')}>✓<b>Registration</b><small>Complete</small></button>{journey?.consent?.required && <button className={consentDone ? 'done' : ''} onClick={() => document.getElementById('flow-help')?.scrollIntoView({ behavior: 'smooth' })}>◉<b>Consent Form</b><small>{consentDone ? 'Complete' : 'Action required'}</small></button>}<button className={guest.admitted ? 'done' : 'pending'} onClick={() => go(guest.admitted ? 'day' : 'pass')}>○<b>Check-in</b><small>{guest.admitted ? 'Checked in' : 'Event day'}</small></button>{journey?.menu_enabled && <button className="pending" onClick={() => guest.qr_token && window.location.assign(`/scan/${guest.qr_token}#orders`)}>♨<b>Meals</b><small>{journey?.menu_has_choices ? 'Selected' : 'Choose meal'}</small></button>}</div></section><FlowTools event={event} hub={hub} journey={journey} go={go} designTheme={designTheme} guestContent={guestContent} onOpenServices={onOpenServices} moduleVisible={moduleVisible} /><FlowNext event={event} segments={segments} onProgramme={() => go('program')} /><section id="flow-party" className="flow-section flow-party"><div className="flow-section-heading"><h3>My Party ({hub?.party?.length || 1})</h3></div>{(hub?.party?.length ? hub.party : [{ name: guest.name || 'Guest', relationship: 'You' }]).map((p, i) => <div className="flow-person" key={p.id || i}><i>{(p.name || 'G').slice(0, 1)}</i><b>{p.name || 'Guest'}</b><small>{p.relationship || (i ? 'Guest' : 'You')}</small><span>✓ Registered</span></div>)}</section><section id="flow-help" className="flow-section flow-help"><h3>Need help?</h3><p>Use your invitation contact details or speak with the event organizer.</p></section></div>
 }
 
+function GuardianConfirmPanel({ pending, onConfirm }) {
+  if (!pending?.length) return null
+  return (
+    <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" style={{ margin: '0 0 .8rem' }}>
+      <strong className="block">Pickup authorization needs your confirmation</strong>
+      {pending.map((row) => (
+        <div key={row.child_guest_id} className="mt-2 flex items-center justify-between gap-3">
+          <span>You've been named as an authorized guardian for <b>{row.child_name}</b> ({row.relationship}).</span>
+          <button type="button" onClick={() => onConfirm([row.child_guest_id])} style={{ whiteSpace: 'nowrap', padding: '.5rem 1rem', borderRadius: '.6rem', border: 'none', background: '#92400e', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Confirm</button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function ManageGuardiansPanel({ token }) {
+  const [data, setData] = useState({ juniors: [], party: [], designation_scope: 'party' })
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState({}) // child_guest_id -> query string
+  const [results, setResults] = useState({}) // child_guest_id -> [{guest_id, name}]
+  const [busy, setBusy] = useState('')
+  const [error, setError] = useState('')
+
+  async function reload() {
+    try { setData(await api.myJuniors(token)) } catch { /* leave prior state */ } finally { setLoading(false) }
+  }
+  useEffect(() => { reload() }, [token])
+
+  useEffect(() => {
+    if (data.designation_scope !== 'any_guest') return undefined
+    const timers = Object.entries(search).map(([childId, q]) => {
+      if (!q || q.trim().length < 2) { setResults((r) => ({ ...r, [childId]: [] })); return null }
+      return window.setTimeout(() => {
+        api.searchGuardianCandidates(token, q.trim())
+          .then((rows) => setResults((r) => ({ ...r, [childId]: rows })))
+          .catch(() => setResults((r) => ({ ...r, [childId]: [] })))
+      }, 300)
+    })
+    return () => timers.forEach((t) => t && window.clearTimeout(t))
+  }, [search, data.designation_scope, token])
+
+  async function add(childId, guardianId, relationship) {
+    setBusy(`${childId}:${guardianId}`); setError('')
+    try {
+      await api.addGuardianAuthorization(token, childId, guardianId, relationship)
+      setSearch((s) => ({ ...s, [childId]: '' }))
+      await reload()
+    } catch (err) { setError(err.message || 'Could not add guardian') }
+    finally { setBusy('') }
+  }
+
+  if (loading || data.juniors.length === 0) return null
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm" style={{ margin: '0 0 .8rem' }}>
+      <strong className="block">Manage pickup authorization</strong>
+      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      {data.juniors.map((junior) => {
+        const alreadyAuthorizedIds = new Set(junior.guardians.map((g) => g.guardian_guest_id))
+        const partyOptions = data.party.filter((p) => p.guest_id !== junior.child_guest_id && !alreadyAuthorizedIds.has(p.guest_id))
+        return (
+          <div key={junior.child_guest_id} className="mt-3 border-t border-slate-100 pt-3 first:mt-0 first:border-0 first:pt-0">
+            <div className="font-semibold text-slate-800">{junior.child_name}</div>
+            <ul className="mt-1 space-y-1">
+              {junior.guardians.map((g) => (
+                <li key={g.guardian_guest_id} className="text-xs text-slate-600">
+                  {g.name} ({g.relationship}) — <span className={g.status === 'pending' ? 'text-amber-600 font-semibold' : 'text-emerald-700 font-semibold'}>
+                    {g.status === 'pending' ? 'Awaiting their confirmation' : g.status === 'admin' ? 'Admin-authorized' : 'Confirmed'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {partyOptions.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {partyOptions.map((p) => (
+                  <button key={p.guest_id} type="button" disabled={busy === `${junior.child_guest_id}:${p.guest_id}`}
+                    onClick={() => add(junior.child_guest_id, p.guest_id, 'Authorized guardian')}
+                    className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700">
+                    + {p.name || 'Party member'}
+                  </button>
+                ))}
+              </div>
+            )}
+            {data.designation_scope === 'any_guest' && (
+              <div className="mt-2">
+                <input
+                  value={search[junior.child_guest_id] || ''}
+                  onChange={(e) => setSearch((s) => ({ ...s, [junior.child_guest_id]: e.target.value }))}
+                  placeholder="Search any checked-in guest by name…"
+                  className="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs"
+                />
+                {(results[junior.child_guest_id] || []).map((r) => (
+                  <button key={r.guest_id} type="button" disabled={busy === `${junior.child_guest_id}:${r.guest_id}`}
+                    onClick={() => add(junior.child_guest_id, r.guest_id, 'Authorized guardian')}
+                    className="mt-1 mr-2 rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700">
+                    + {r.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function GuestHub({ event, accessToken, designTheme, previewMock = false, confirmed = true }) {
   const [hub, setHub] = useState(null)
   const [error, setError] = useState('')
@@ -1468,6 +1618,22 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   const [installState, setInstallState] = useState('')
   const [showInstallDialog, setShowInstallDialog] = useState(false)
   const [flowServicesOpen, setFlowServicesOpen] = useState('')
+  const [pendingGuardianConfirmations, setPendingGuardianConfirmations] = useState([])
+  useEffect(() => {
+    if (!accessToken || previewMock || !event?.junior_guardian_handoff_enabled) return
+    let cancelled = false
+    api.inviteTokenPage(accessToken)
+      .then((data) => { if (!cancelled) setPendingGuardianConfirmations(data.pending_guardian_confirmations || []) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [accessToken, previewMock, event?.junior_guardian_handoff_enabled])
+  async function confirmGuardianPickup(childGuestIds) {
+    try {
+      const result = await api.confirmGuardianAuthorizations(accessToken, childGuestIds)
+      const confirmedIds = result.confirmed || []
+      setPendingGuardianConfirmations((rows) => rows.filter((row) => !confirmedIds.includes(row.child_guest_id)))
+    } catch { /* leave it in the pending list; the guest can retry */ }
+  }
   useEffect(() => {
     if (!flowServicesOpen) return undefined
     const targets = { communications: 'journey-help', updates: 'journey-updates', resources: 'journey-resources', experience: 'journey-experience' }
@@ -1782,8 +1948,9 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
     || programDays.find((day) => day.segments?.some((segment) => new Date(segment.ends_at) > new Date()))
     || programDays[0]
 
-  if (journeyLayout && hub && !flowServicesOpen) return <JourneyGuestHubView event={event} hub={hub} journey={journey} previewMock={previewMock} designTheme={designTheme} guestContent={guestContent} onOpenServices={setFlowServicesOpen} moduleVisible={hubModuleVisible} />
-  if (completeLayout && hub && !flowServicesOpen) return <CompleteGuestHubView event={event} hub={hub} journey={journey} previewMock={previewMock} designTheme={designTheme} guestContent={guestContent} onOpenServices={setFlowServicesOpen} moduleVisible={hubModuleVisible} />
+  const showGuardianPanels = !previewMock && event?.junior_guardian_handoff_enabled && accessToken
+  if (journeyLayout && hub && !flowServicesOpen) return <><GuardianConfirmPanel pending={pendingGuardianConfirmations} onConfirm={confirmGuardianPickup} />{showGuardianPanels && <ManageGuardiansPanel token={accessToken} />}<JourneyGuestHubView event={event} hub={hub} journey={journey} previewMock={previewMock} designTheme={designTheme} guestContent={guestContent} onOpenServices={setFlowServicesOpen} moduleVisible={hubModuleVisible} /></>
+  if (completeLayout && hub && !flowServicesOpen) return <><GuardianConfirmPanel pending={pendingGuardianConfirmations} onConfirm={confirmGuardianPickup} />{showGuardianPanels && <ManageGuardiansPanel token={accessToken} />}<CompleteGuestHubView event={event} hub={hub} journey={journey} previewMock={previewMock} designTheme={designTheme} guestContent={guestContent} onOpenServices={setFlowServicesOpen} moduleVisible={hubModuleVisible} /></>
 
   if (guidedLayout) {
     const isConfirmed = !hasRsvp || hub?.guest?.rsvp_status === 'confirmed'

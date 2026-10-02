@@ -939,14 +939,14 @@ export const api = {
 
   // Scanner
   scan: (token, body) => req('POST', `/scan/${token}`, body),
-  scanCheckout: (token) => req('POST', `/scan/${token}/checkout`),
+  scanCheckout: (token, guardianToken) => req('POST', `/scan/${token}/checkout`, guardianToken ? { guardian_token: guardianToken } : undefined),
   offlineManifest: (eventId) => req('GET', `/scan/offline-manifest/${eventId}`),
   // Manual check-in (no QR)
   searchGuests: (eventId, q) => req('GET', `/events/${eventId}/guests/search?q=${encodeURIComponent(q)}`),
   manualCheckin: (eventId, guestId, tableGroupId) =>
     req('POST', `/events/${eventId}/guests/${guestId}/checkin${tableGroupId ? `?table_group_id=${encodeURIComponent(tableGroupId)}` : ''}`),
-  manualCheckout: (eventId, guestId) =>
-    req('POST', `/events/${eventId}/guests/${guestId}/checkout`),
+  manualCheckout: (eventId, guestId, guardianToken) =>
+    req('POST', `/events/${eventId}/guests/${guestId}/checkout`, guardianToken ? { guardian_token: guardianToken } : undefined),
   unadmitGuest: (eventId, guestId, notify = false) =>
     req('POST', `/events/${eventId}/guests/${guestId}/unadmit`, { notify }),
   // Section-based scanning: sections (table groups) the signed-in staffer may check into.
@@ -1241,6 +1241,16 @@ export const api = {
   guestJourney: (eventId, gid) => req('GET', `/events/${eventId}/guests/${gid}/journey`),
   guardianAuthorizations: (eventId) => req('GET', `/events/${eventId}/access/guardian-authorizations`),
   updateGuardianAuthorizations: (eventId, data) => req('PUT', `/events/${eventId}/access/guardian-authorizations`, data),
+  // Self-service: a guest (resolved by their own invite/qr token) checks and
+  // confirms pickup-authorization requests naming them as guardian.
+  inviteTokenPage: (token) => req('GET', `/invite/token/${encodeURIComponent(token)}`),
+  confirmGuardianAuthorizations: (token, childGuestIds) =>
+    req('POST', `/invite/token/${encodeURIComponent(token)}/guardian-authorizations/confirm`, { child_guest_ids: childGuestIds || [] }),
+  myJuniors: (token) => req('GET', `/invite/token/${encodeURIComponent(token)}/my-juniors`),
+  searchGuardianCandidates: (token, q) => req('GET', `/invite/token/${encodeURIComponent(token)}/guardian-search?q=${encodeURIComponent(q)}`),
+  addGuardianAuthorization: (token, childGuestId, guardianGuestId, relationship) =>
+    req('POST', `/invite/token/${encodeURIComponent(token)}/guardian-authorizations`,
+      { child_guest_id: childGuestId, guardian_guest_id: guardianGuestId, relationship: relationship || 'Authorized guardian' }),
   accessMovements: (eventId, limit = 1000) => req('GET', `/events/${eventId}/access/movements?limit=${limit}`),
   scanZone: (qrToken, body) => req('POST', `/scan/${qrToken}/zone`, body),
 

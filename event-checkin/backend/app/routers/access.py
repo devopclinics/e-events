@@ -48,6 +48,49 @@ async def zone_occupancy(zone_id: str, db: AsyncSession) -> int:
     return sum(direction == "in" for direction in latest.values())
 
 
+# Sources that count as already-trusted without a guardian confirm step:
+# None/absent = legacy or admin-authored (access.py's own PUT below), "admin" =
+# same, "rsvp_submitter" = the RSVP submitter auto-authorizing themself for
+# their own invitee. Everything else ("rsvp_other", "guardian_hub_other") was
+# designated by someone other than the guardian themself and needs an explicit
+# confirm via the guardian's own /r/{invite_token} link before it's usable.
+_TRUSTED_GUARDIAN_SOURCES = (None, "admin", "rsvp_submitter")
+
+
+def _entry_is_usable(entry: dict) -> bool:
+    return entry.get("source") in _TRUSTED_GUARDIAN_SOURCES or bool(entry.get("confirmed_at"))
+
+
+async def verify_guardian_handoff(
+    event: Event, child_guest: Guest, guardian_token: str | None, db: AsyncSession,
+) -> tuple[Guest | None, str | None, str | None]:
+    """Check whether `guardian_token` identifies a usable, authorized guardian
+    for `child_guest`. Returns (guardian, relationship, denial_reason).
+
+    (None, None, None) is a pure no-op: the event doesn't use this feature, or
+    this guest has no configured entries at all — every guest/event not using
+    guardian handoff takes this path, unchanged from before this helper
+    existed. Only guests WITH configured entries can ever be denied."""
+    if not event.junior_guardian_handoff_enabled:
+        return None, None, None
+    entries = (event.guardian_authorizations or {}).get(child_guest.id) or []
+    if not entries:
+        return None, None, None
+    token = (guardian_token or "").strip()
+    guardian = (
+        await db.scalar(select(Guest).where(Guest.event_id == event.id, Guest.qr_token == token))
+        if token else None
+    )
+    match = next((entry for entry in entries if guardian and entry.get("guardian_guest_id") == guardian.id), None)
+    if not token:
+        return None, None, "Authorized guardian credential is required"
+    if not guardian or not match:
+        return None, None, "Guardian is not authorized for this junior"
+    if not _entry_is_usable(match):
+        return None, None, "Guardian authorization is awaiting confirmation from the guardian"
+    return guardian, match.get("relationship") or "Authorized guardian", None
+
+
 def _zones_of_ticket(tt: TicketType | None) -> set[str] | None:
     """Allowed zone ids for a ticket type. None = all zones allowed."""
     if not tt or not tt.allowed_zone_ids:
@@ -355,10 +398,16 @@ async def get_guardian_authorizations(event_id: str, db: AsyncSession = Depends(
         for entry in entries or []:
             guardian = by_id.get(entry.get("guardian_guest_id"))
             if guardian:
+                source, confirmed_at = entry.get("source"), entry.get("confirmed_at")
+                status = "pending" if not _entry_is_usable(entry) else ("confirmed" if source else "admin")
                 rows.append({"child_guest_id": child.id, "child_name": _guardian_guest_name(child),
                              "guardian_guest_id": guardian.id, "guardian_name": _guardian_guest_name(guardian),
-                             "relationship": entry.get("relationship") or "Authorized guardian"})
-    return {"enabled": bool(event.junior_guardian_handoff_enabled), "authorizations": rows}
+                             "relationship": entry.get("relationship") or "Authorized guardian",
+                             # Echoed back verbatim on save so re-saving this panel can never
+                             # silently un-confirm a pending RSVP/GuestHub-designated guardian.
+                             "source": source, "confirmed_at": confirmed_at, "status": status})
+    return {"enabled": bool(event.junior_guardian_handoff_enabled), "authorizations": rows,
+            "designation_scope": event.guardian_designation_scope or "party"}
 
 
 @router.put("/{event_id}/access/guardian-authorizations")
@@ -378,10 +427,19 @@ async def update_guardian_authorizations(event_id: str, body: GuardianAuthorizat
         if key in seen:
             continue
         seen.add(key)
-        normalized[entry.child_guest_id].append({"guardian_guest_id": entry.guardian_guest_id,
-                                                  "relationship": entry.relationship.strip() or "Authorized guardian"})
+        new_entry = {"guardian_guest_id": entry.guardian_guest_id,
+                     "relationship": entry.relationship.strip() or "Authorized guardian"}
+        # Preserve source/confirmed_at when the frontend echoes them back for a
+        # row it loaded from GET — only a genuinely new admin-added row (which
+        # never had them) stays in the legacy 2-key shape.
+        if entry.source is not None:
+            new_entry["source"] = entry.source
+        if entry.confirmed_at is not None:
+            new_entry["confirmed_at"] = entry.confirmed_at
+        normalized[entry.child_guest_id].append(new_entry)
     event.junior_guardian_handoff_enabled = body.enabled
     event.guardian_authorizations = dict(normalized)
+    event.guardian_designation_scope = body.designation_scope
     await db.commit()
     return await get_guardian_authorizations(event_id, db, user)
 

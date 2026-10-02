@@ -9,9 +9,9 @@ from sqlalchemy.exc import IntegrityError
 from ..config import settings
 from ..database import get_db
 from ..models import ConsentForm, ConsentSignature, Guest, Event, EventUser, User, SeatingTable, MenuCategory, MenuItem, GuestMenuChoice, MenuCombination, MenuCombinationItem, Zone, TicketType, ScanEvent, TableGroup, Gate, GuestTag, GuestTagLink, ZoneTagRule, RSVPAnswer, RSVPQuestion
-from ..schemas import ConsentSignatureCreate, ExperienceNextStepOut, ExperienceStepOut, GuestExperienceProgressOut, PublicConsentOut, SendConsentCopyOut, ScanResult, GuestOut, TicketView, EventBrief, MenuCategoryOut, MenuItemOut, MenuCombinationOut, MenuCombinationItemOut, GuestMenuSubmit, PartnerInfo, PairRequest, ScanZoneRequest, ScanZoneResult
+from ..schemas import ConsentSignatureCreate, ExperienceNextStepOut, ExperienceStepOut, GuestExperienceProgressOut, PublicConsentOut, SendConsentCopyOut, ScanResult, GuestOut, TicketView, EventBrief, MenuCategoryOut, MenuItemOut, MenuCombinationOut, MenuCombinationItemOut, GuestMenuSubmit, PartnerInfo, PairRequest, ScanZoneRequest, ScanZoneResult, ScanCheckoutRequest
 from ..auth import require_official, _org_role
-from .access import zone_occupancy, ticket_allows
+from .access import zone_occupancy, ticket_allows, verify_guardian_handoff
 from ..entitlements import can_use_paid_channels, last_credit_ledger_id, reserve_message_credit
 from ..seating_terms import seating_term as _seating_term, seat_term as _seat_term
 from ..channels import channels_for_flow
@@ -956,6 +956,7 @@ async def scan_qr(
 @router.post("/{qr_token}/checkout", response_model=ScanResult)
 async def scan_qr_checkout(
     qr_token: str,
+    body: ScanCheckoutRequest | None = Body(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_official),
 ):
@@ -965,7 +966,7 @@ async def scan_qr_checkout(
     event = await db.get(Event, guest.event_id)
     if not event:
         return ScanResult(status="invalid", message="Event not found for this ticket.")
-    return await perform_checkout(guest, event, current_user, db)
+    return await perform_checkout(guest, event, current_user, db, guardian_token=(body.guardian_token if body else None))
 
 
 async def perform_checkout(
@@ -973,6 +974,7 @@ async def perform_checkout(
     event: Event,
     current_user: User,
     db: AsyncSession,
+    guardian_token: str | None = None,
 ) -> ScanResult:
     """Record a guest exit for QR and manual checkout through one flow."""
     if not event.checkout_enabled:
@@ -1003,7 +1005,25 @@ async def perform_checkout(
             guest=GuestOut.model_validate(guest),
         )
 
-    db.add(ScanEvent(event_id=event.id, guest_id=guest.id, zone_id=None, direction="out", scanned_by=current_user.id))
+    # Guardian handoff: a strict no-op (guardian stays None, no denial) for any
+    # guest/event not using the feature — verify_guardian_handoff short-circuits
+    # immediately in that case, so this never affects existing checkout behavior.
+    guardian, guardian_relationship, guardian_denial = await verify_guardian_handoff(
+        event, guest, guardian_token, db
+    )
+    if guardian_denial:
+        return ScanResult(
+            status="guardian_required",
+            message=guardian_denial,
+            guest=GuestOut.model_validate(guest),
+        )
+
+    db.add(ScanEvent(
+        event_id=event.id, guest_id=guest.id, zone_id=None, direction="out", scanned_by=current_user.id,
+        guardian_guest_id=guardian.id if guardian else None,
+        guardian_relationship=guardian_relationship,
+        guardian_verification_method="guardian_qr_checkout" if guardian else None,
+    ))
     await db.commit()
     # Reflect the check-out into the guest's experience progress (completes the
     # check_out step + records an ExperienceEvent). Best-effort — never block.
@@ -1023,6 +1043,8 @@ async def perform_checkout(
         status="checked_out",
         message=f"{guest.first_name} {guest.last_name} has been checked out.",
         guest=GuestOut.model_validate(guest),
+        guardian_name=f"{guardian.first_name} {guardian.last_name}" if guardian else None,
+        guardian_verification_method="guardian_qr_checkout" if guardian else None,
     )
 
 
@@ -1355,19 +1377,12 @@ async def scan_qr_zone(
     admission_denial = None
     if event.separate_admission_access_enabled and not guest.admitted:
         admission_denial = "Guest must check in to the convention before entering or exiting a zone"
-    if event.junior_guardian_handoff_enabled and not admission_denial:
-        entries = (event.guardian_authorizations or {}).get(guest.id) or []
-        if entries:
-            token = (body.guardian_token or "").strip()
-            guardian = await db.scalar(select(Guest).where(Guest.event_id == event.id, Guest.qr_token == token)) if token else None
-            match = next((entry for entry in entries if guardian and entry.get("guardian_guest_id") == guardian.id), None)
-            if not token:
-                guardian_denial = "Authorized guardian credential is required"
-            elif not guardian or not match:
-                guardian_denial = "Guardian is not authorized for this junior"
-            else:
-                guardian_relationship = match.get("relationship") or "Authorized guardian"
-                guardian_method = "guardian_qr"
+    if not admission_denial:
+        guardian, guardian_relationship, guardian_denial = await verify_guardian_handoff(
+            event, guest, body.guardian_token, db
+        )
+        if guardian:
+            guardian_method = "guardian_qr"
 
     # Accepted movements must alternate for each guest and zone. Rejected
     # attempts remain in the audit log without corrupting current occupancy.

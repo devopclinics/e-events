@@ -479,6 +479,10 @@ class Event(Base):
     junior_guardian_handoff_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     separate_admission_access_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     guardian_authorizations: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Who a parent/guardian may designate as a pickup guardian post-check-in via
+    # GuestHub: "party" (their own RSVP party only, default) or "any_guest" (can
+    # also search and pick any other checked-in guest at the event).
+    guardian_designation_scope: Mapped[str] = mapped_column(String(20), default="party")
     festiome_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     festiome_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     festiome_open_url: Mapped[str | None] = mapped_column(String(500), nullable=True)

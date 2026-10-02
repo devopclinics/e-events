@@ -707,6 +707,10 @@ class ExperienceProgressUpdate(BaseModel):
     metadata: Optional[dict] = None
 
 
+class SessionEntryOverride(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
+
+
 class InboundSenderRule(BaseModel):
     sender_kind: Literal["forwarder", "original"] = "forwarder"
     match_type: Literal["email", "domain"]

@@ -18,12 +18,27 @@ from ..models import (
     GuestMenuChoice,
     ScanEvent,
     TicketType,
+    RSVPAnswer,
+    RSVPQuestion,
 )
 from ..timeutil import event_tz, to_event_local
 
 
 class ExperienceCompletionError(ValueError):
     """A deterministic refusal to complete a guest step."""
+
+
+async def guest_age_group(guest: Guest, db: AsyncSession) -> str | None:
+    """Return the RSVP age-group answer without exposing free-form RSVP notes."""
+    rows = (await db.execute(
+        select(RSVPQuestion.question, RSVPAnswer.answer)
+        .join(RSVPAnswer, RSVPAnswer.question_id == RSVPQuestion.id)
+        .where(RSVPAnswer.guest_id == guest.id)
+    )).all()
+    for question, answer in rows:
+        if "age" in (question or "").lower() and str(answer or "").strip():
+            return str(answer).strip()
+    return None
 
 
 async def complete_guest_step(
@@ -228,6 +243,7 @@ async def step_applies_to_guest(step: ExperienceStep, guest: Guest, db: AsyncSes
       - guest_tags_include: any matching tag name or id
       - guest_tags_all: all listed tag names/ids must match
       - guest_tags_exclude: none of the listed tag names/ids may match
+      - age_groups_include / age_groups_exclude: RSVP age-group answer
     Unknown keys are ignored so older drafts do not break when new condition
     fields are introduced later.
     """
@@ -260,6 +276,15 @@ async def step_applies_to_guest(step: ExperienceStep, guest: Guest, db: AsyncSes
             return False
         ticket = await db.get(TicketType, guest.ticket_type_id)
         if not ticket or (ticket.name or "").lower() not in ticket_names:
+            return False
+
+    age_include = values(conditions.get("age_groups_include"))
+    age_exclude = values(conditions.get("age_groups_exclude"))
+    if age_include or age_exclude:
+        age_group = (await guest_age_group(guest, db) or "").lower()
+        if age_include and age_group not in age_include:
+            return False
+        if age_exclude and age_group in age_exclude:
             return False
 
     tag_conditions = (

@@ -509,6 +509,9 @@ function DailyAttendanceMode({ event, onResult }) {
   const [sessions, setSessions] = useState([])
   const [sessionId, setSessionId] = useState('')
   const [sessionsLoading, setSessionsLoading] = useState(false)
+  const [overrideGuest, setOverrideGuest] = useState(null)
+  const [overrideReason, setOverrideReason] = useState('')
+  const [overrideBusy, setOverrideBusy] = useState(false)
 
   useEffect(() => {
     if (tool !== 'session' || !event?.id) return
@@ -559,8 +562,22 @@ function DailyAttendanceMode({ event, onResult }) {
       onResult({ status: 'session_checked_in', message: 'Session attendance recorded.', guest, progress })
     } catch (err) {
       const message = err.message || 'Session attendance could not be recorded.'
+      if (message.includes('Not eligible for this session')) { setOverrideGuest(guest); setOverrideReason('') }
       setError(message); onResult({ status: 'invalid', message, guest })
     } finally { setBusyGuestId('') }
+  }
+
+  async function overrideSessionEntry() {
+    if (!overrideGuest || !sessionId || overrideReason.trim().length < 3 || overrideBusy) return
+    setOverrideBusy(true); setError('')
+    try {
+      const progress = await api.overrideSessionEntry(event.id, overrideGuest.id, sessionId, overrideReason.trim())
+      onResult({ status: 'session_overridden', message: 'Supervisor override recorded for this session.', guest: overrideGuest, progress })
+      setOverrideGuest(null); setOverrideReason('')
+    } catch (err) {
+      const message = err.message || 'The session override could not be recorded.'
+      setError(message); onResult({ status: 'invalid', message, guest: overrideGuest })
+    } finally { setOverrideBusy(false) }
   }
 
   if (!event?.daily_checkin_enabled) return <div className="sc-empty">Daily attendance is disabled for this event.</div>
@@ -587,9 +604,10 @@ function DailyAttendanceMode({ event, onResult }) {
       <label className="rd-field-label" htmlFor="daily-session">Session</label>
       <select id="daily-session" className="sc-selector" value={sessionId} onChange={(e) => setSessionId(e.target.value)} disabled={sessionsLoading || !sessions.length}>
         {!sessions.length && <option value="">{sessionsLoading ? 'Loading sessions…' : 'No published sessions available'}</option>}
-        {sessions.map((step) => <option key={step.id} value={step.id}>{step.title}</option>)}
+        {sessions.map((step) => { const groups = step.conditions?.age_groups_include; const label = Array.isArray(groups) ? groups.join(', ') : groups; return <option key={step.id} value={step.id}>{step.title}{label ? ` — ${label}` : ''}</option> })}
       </select>
-      {sessions.length > 0 && <DailyGuestLookup event={event} onSelect={recordSession} busyId={busyGuestId} actionLabel="Check in to session" emptyMessage="Session time, capacity, and event check-in are validated before attendance is recorded."/>}
+      {sessions.length > 0 && <DailyGuestLookup event={event} onSelect={recordSession} busyId={busyGuestId} actionLabel="Check in to session" emptyMessage="Session age group, time, capacity, and event check-in are validated before attendance is recorded."/>}
+      {overrideGuest && <section className="sc-session-override"><strong>Supervisor override required</strong><p>{overrideGuest.name || 'This guest'} is outside this session’s age eligibility. The override records who authorized entry and why. It does not bypass admission, session timing, or capacity.</p><label className="rd-field-label" htmlFor="session-override-reason">Override reason</label><textarea id="session-override-reason" className="sc-search-input" rows={2} value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} placeholder="Required: explain why entry is being authorized"/><div className="sc-session-override-actions"><button type="button" className="rr-btn primary" disabled={overrideReason.trim().length < 3 || overrideBusy} onClick={overrideSessionEntry}>{overrideBusy ? 'Recording…' : 'Override and record entry'}</button><button type="button" className="rr-btn secondary" disabled={overrideBusy} onClick={() => { setOverrideGuest(null); setOverrideReason('') }}>Cancel</button></div></section>}
       {!sessionsLoading && !sessions.length && <p className="sc-empty">Publish an Experience workflow with a Session attendance step to use this station.</p>}
     </div>}
     {error && <p className="sc-empty">{error}</p>}

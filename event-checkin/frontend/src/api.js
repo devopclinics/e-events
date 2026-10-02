@@ -706,6 +706,7 @@ export const api = {
     }),
   getGuestExperience: (eventId, guestId) => req('GET', `/events/${eventId}/experience/guests/${guestId}`),
   updateGuestExperienceStep: (eventId, guestId, stepId, data) => req('PUT', `/events/${eventId}/experience/guests/${guestId}/steps/${stepId}`, data),
+  overrideSessionEntry: (eventId, guestId, stepId, reason) => req('POST', `/events/${eventId}/experience/guests/${guestId}/steps/${stepId}/override-session-entry`, { reason }),
   listExperienceAudit: (eventId, limit = 100) => req('GET', `/events/${eventId}/experience/audit?limit=${limit}`),
   getExperienceNextSteps: (eventId, guestId) => req('GET', `/events/${eventId}/experience/guests/${guestId}/next-steps`),
   downloadExperienceExport: (eventId) => downloadFile(`/events/${eventId}/experience/export.csv`, `experience-progress.csv`),

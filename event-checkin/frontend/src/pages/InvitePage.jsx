@@ -1370,7 +1370,7 @@ function FlowPass({ event, hub, previewMock, onHome }) {
   return <div className="flow-pass-screen"><FlowTopBar event={event} onHome={onHome} /><div className="flow-pass-hero">{event?.logo_url && <img src={event.logo_url} alt="" />}<div><span>{event?.organization_name || 'FESTIO EVENT'}</span><h1>{event?.name}</h1><p>Unity · Heritage · Progress</p></div></div><section className="flow-pass-card"><h2>{guest.name || 'Guest'}</h2><p>Guest · {event?.organization_name || 'Registered attendee'}</p>{guest.qr_token && <img className="flow-qr" src={previewMock ? PREVIEW_QR_DATA_URI : `/api/scan/${guest.qr_token}/qr.png`} alt="Your QR pass code" />}<div className="flow-ready">✓ <b>{guest.admitted ? 'CHECKED IN' : 'READY FOR ENTRY'}</b><small>Present this QR at check-in</small></div><div className="flow-pass-facts"><span><b>▣</b>{fmtDate(event.event_date, event.timezone)}</span><span><b>●</b>{event.venue_name || 'Venue details'}</span><span><b>♟</b>Guests included</span></div><button type="button" className="flow-primary" onClick={onHome}>Open GuestHub →</button></section></div>
 }
 
-function FlowBottom({ screen, go }) { return <nav className="flow-bottom"><button className={screen === 'home' ? 'active' : ''} onClick={() => go('home')}>⌂<span>Home</span></button><button className={screen === 'program' ? 'active' : ''} onClick={() => go('program')}>▦<span>Programme</span></button><button onClick={() => go('day')}>◉<span>Live</span></button><button onClick={() => go('pass')}>♙<span>Me</span></button></nav> }
+function FlowBottom({ screen, go }) { return <nav className="flow-bottom"><button className={screen === 'home' ? 'active' : ''} onClick={() => go('home')}>⌂<span>Home</span></button><button className={screen === 'program' ? 'active' : ''} onClick={() => go('program')}>▦<span>Programme</span></button><button onClick={() => go('day')}>▶<span>Live</span></button><button onClick={() => go('pass')}>♙<span>Me</span></button></nav> }
 
 function FlowTools({ event, hub, journey, go, designTheme, guestContent, onOpenServices, moduleVisible = () => true }) {
   const guest = hub?.guest || {}
@@ -1385,7 +1385,7 @@ function FlowTools({ event, hub, journey, go, designTheme, guestContent, onOpenS
     venue && ['●', 'Venue Info', () => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue)}`, '_blank', 'noopener,noreferrer')],
     hotelBookingUrl && ['🏨', hotelBookingLabel, () => window.open(hotelBookingUrl, '_blank', 'noopener,noreferrer')],
     (journey?.menu_enabled || journey?.menu_selectable) && guest.qr_token && ['♨', 'Meals', () => window.location.assign(`/scan/${guest.qr_token}#orders`)],
-    moduleVisible('live') && event?.engagement_enabled && guest.qr_token && ['◉', 'Festio Live', () => window.location.assign(`/live/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(guest.qr_token)}`)],
+    moduleVisible('live') && event?.engagement_enabled && guest.qr_token && ['▶', 'Festio Live', () => window.location.assign(`/live/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(guest.qr_token)}`)],
     event?.registry_enabled && event?.registry_token && ['♥', 'Give / Support', () => window.location.assign(`/registry/${event.registry_token}`)],
     moduleVisible('festiome') && hub?.capabilities?.festiome && guest.qr_token && ['💬', 'FestioMe', () => window.location.assign(`/festiome/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(guest.qr_token)}`)],
     moduleVisible('messages') && (hub?.capabilities?.direct_host_messages || hub?.capabilities?.guest_chat) && ['✉', 'Communications', () => onOpenServices?.('communications')],
@@ -1925,7 +1925,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
                 {speakersVisible && speakers?.length > 0 && <a href="#journey-speakers"><span>♟</span><b>Speakers</b><small>People and sessions</small></a>}
                 {consolidatedVenue && <a href="#journey-details"><span>⌖</span><b>Venue</b><small>Location and directions</small></a>}
                 {event?.registry_enabled && event?.registry_token && <a href={`/registry/${event.registry_token}`}><span>♡</span><b>Giving</b><small>Gift list and support</small></a>}
-                {hubModuleVisible('live') && event?.engagement_enabled && hub?.guest?.qr_token && <a href={`/live/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}`}><span>◉</span><b>Festio Live</b><small>Polls, Q&amp;A and activities</small></a>}
+                {hubModuleVisible('live') && event?.engagement_enabled && hub?.guest?.qr_token && <a href={`/live/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}`}><span>▶</span><b>Festio Live</b><small>Polls, Q&amp;A and activities</small></a>}
                 {!!hub?.announcements?.length && <a href="#journey-updates"><span>●</span><b>Updates</b><small>Organizer announcements</small></a>}
                 <a href="#journey-help"><span>?</span><b>Help</b><small>Contact the event team</small></a>
               </nav>

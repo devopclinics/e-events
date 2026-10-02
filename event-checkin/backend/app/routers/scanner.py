@@ -11,7 +11,7 @@ from ..database import get_db
 from ..models import ConsentForm, ConsentSignature, Guest, Event, EventUser, User, SeatingTable, MenuCategory, MenuItem, GuestMenuChoice, MenuCombination, MenuCombinationItem, Zone, TicketType, ScanEvent, TableGroup, Gate, GuestTag, GuestTagLink, ZoneTagRule, RSVPAnswer, RSVPQuestion
 from ..schemas import ConsentSignatureCreate, ExperienceNextStepOut, ExperienceStepOut, GuestExperienceProgressOut, PublicConsentOut, SendConsentCopyOut, ScanResult, GuestOut, TicketView, EventBrief, MenuCategoryOut, MenuItemOut, MenuCombinationOut, MenuCombinationItemOut, GuestMenuSubmit, PartnerInfo, PairRequest, ScanZoneRequest, ScanZoneResult, ScanCheckoutRequest
 from ..auth import require_official, _org_role
-from .access import zone_occupancy, ticket_allows, verify_guardian_handoff
+from .access import zone_occupancy, ticket_allows, verify_guardian_handoff, usable_guardian_candidates
 from ..entitlements import can_use_paid_channels, last_credit_ledger_id, reserve_message_credit
 from ..seating_terms import seating_term as _seating_term, seat_term as _seat_term
 from ..channels import channels_for_flow
@@ -1016,6 +1016,7 @@ async def perform_checkout(
             status="guardian_required",
             message=guardian_denial,
             guest=GuestOut.model_validate(guest),
+            guardian_candidates=await usable_guardian_candidates(event, guest, db),
         )
 
     db.add(ScanEvent(
@@ -1471,6 +1472,7 @@ async def scan_qr_zone(
         journey_count=int(journey_count), seat_number=guest.seat_number, table_name=table_name,
         guardian_name=f"{guardian.first_name} {guardian.last_name}" if guardian and not guardian_denial else None,
         guardian_verification_method=guardian_method,
+        guardian_candidates=(await usable_guardian_candidates(event, guest, db)) if guardian_denial else [],
     )
 
 

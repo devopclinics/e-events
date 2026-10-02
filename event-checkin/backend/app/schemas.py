@@ -2175,6 +2175,7 @@ class ScanZoneResult(BaseModel):
     table_name: Optional[str] = None
     guardian_name: Optional[str] = None
     guardian_verification_method: Optional[str] = None
+    guardian_candidates: list[dict[str, str]] = Field(default_factory=list)
 
 
 class PeakBucket(BaseModel):
@@ -2413,6 +2414,7 @@ class ScanResult(BaseModel):
     # ScanResult caller (perform_admission, etc.) omits them as before.
     guardian_name: Optional[str] = None
     guardian_verification_method: Optional[str] = None
+    guardian_candidates: list[dict[str, str]] = Field(default_factory=list)
 
 
 class EventBrief(BaseModel):

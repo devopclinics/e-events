@@ -129,11 +129,17 @@ async def test_checkout_guardian_required_denies_without_and_wrong_token(ctx):
         event.status = "active"
         event.checkout_enabled = True
         event.junior_guardian_handoff_enabled = True
-        event.guardian_authorizations = {child["id"]: [{"guardian_guest_id": guardian["id"], "relationship": "Parent"}]}
+        event.guardian_authorizations = {child["id"]: [
+            {"guardian_guest_id": guardian["id"], "relationship": "Parent"},
+            {"guardian_guest_id": stranger["id"], "relationship": "Family friend", "source": "rsvp_other"},
+        ]}
         await s.commit()
 
     no_token = await ctx.client.post(f"/api/scan/{child['qr_token']}/checkout")
     assert no_token.json()["status"] == "guardian_required"
+    assert no_token.json()["guardian_candidates"] == [{
+        "guardian_guest_id": guardian["id"], "name": "Guardian Demo", "relationship": "Parent",
+    }]
 
     wrong_token = await ctx.client.post(
         f"/api/scan/{child['qr_token']}/checkout", json={"guardian_token": stranger["qr_token"]},

@@ -61,6 +61,40 @@ def _entry_is_usable(entry: dict) -> bool:
     return entry.get("source") in _TRUSTED_GUARDIAN_SOURCES or bool(entry.get("confirmed_at"))
 
 
+async def usable_guardian_candidates(
+    event: Event, child_guest: Guest, db: AsyncSession,
+) -> list[dict[str, str]]:
+    """Return only confirmed/trusted guardian names for this junior.
+
+    This staff-only response deliberately contains no QR credentials and is
+    scoped to the child currently being scanned. It helps staff identify who
+    should present a pass without exposing the event guest list.
+    """
+    if not event.junior_guardian_handoff_enabled:
+        return []
+    entries = (event.guardian_authorizations or {}).get(child_guest.id) or []
+    usable_ids = [
+        entry.get("guardian_guest_id") for entry in entries
+        if entry.get("guardian_guest_id") and _entry_is_usable(entry)
+    ]
+    if not usable_ids:
+        return []
+    guardians = (await db.execute(
+        select(Guest).where(Guest.event_id == event.id, Guest.id.in_(usable_ids))
+    )).scalars().all()
+    by_id = {guardian.id: guardian for guardian in guardians}
+    return [
+        {
+            "guardian_guest_id": guardian.id,
+            "name": " ".join(part for part in (guardian.first_name, guardian.last_name) if part).strip(),
+            "relationship": entry.get("relationship") or "Authorized guardian",
+        }
+        for entry in entries
+        if entry.get("guardian_guest_id") in by_id and _entry_is_usable(entry)
+        for guardian in [by_id[entry["guardian_guest_id"]]]
+    ]
+
+
 async def verify_guardian_handoff(
     event: Event, child_guest: Guest, guardian_token: str | None, db: AsyncSession,
 ) -> tuple[Guest | None, str | None, str | None]:

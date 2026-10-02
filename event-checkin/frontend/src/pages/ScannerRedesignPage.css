@@ -337,6 +337,17 @@
 .sc-experience-steps { display: grid; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid currentColor; }
 .sc-experience-step { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 0.8rem; }
 
+
+/* Guardian handoff: shown only after a junior is scanned and needs verification. */
+.sc-guardian-handoff { margin: 0 14px 14px; padding: 14px; border: 1px solid #d7b761; border-radius: 10px; background: #fff9e8; color: var(--rr-text); display: grid; gap: 10px; }
+.sc-guardian-handoff > strong { font-size: 0.95rem; }
+.sc-guardian-handoff > p { margin: 0; color: var(--rr-sub); font-size: 0.84rem; line-height: 1.45; }
+.sc-guardian-handoff .sc-search-input { padding-left: 12px; }
+.sc-guardian-candidates { display: grid; gap: 6px; max-height: 156px; overflow-y: auto; }
+.sc-guardian-candidates > div { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 9px 10px; border: 1px solid var(--rr-border); border-radius: 7px; background: var(--rr-surface); }
+.sc-guardian-candidates small { color: var(--rr-sub); }
+.dark .sc-guardian-handoff { background: #3a2d0e; border-color: #a9790f; }
+
 /* Manual search */
 .sc-manual { display: flex; flex-direction: column; gap: 12px; }
 .sc-search-row { display: flex; gap: 8px; align-items: center; }

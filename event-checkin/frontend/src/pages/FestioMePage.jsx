@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useGuestPush } from "../hooks/useGuestPush";
@@ -80,6 +81,7 @@ function Dialog({ title, children, onClose }) {
 
 export default function FestioMePage() {
   const { user } = useAuth();
+  const location = useLocation();
   const guestMode = typeof window !== "undefined" && window.location.pathname === "/festiome/guest";
   // Web Push is guest-only today (organizer/staff push isn't wired yet) and
   // reuses the same Guest Hub session token FestioMe already stores on entry.
@@ -225,6 +227,15 @@ export default function FestioMePage() {
       guestEvent = params.get("event"),
       guestPass = params.get("pass");
     if (guestEvent && guestPass) {
+      // A guest may open a new event pass while this SPA is still showing a
+      // prior FestioMe event. Clear that visible state before exchanging the
+      // new pass, and rerun this effect whenever the route query changes.
+      setLoading(true);
+      setServiceDown(false);
+      setGroups([]);
+      setGroupId("");
+      setChannels([]);
+      setMembers([]);
       api
         .startFestioMeGuestSession(guestEvent, guestPass)
         .then(() => {
@@ -253,7 +264,7 @@ export default function FestioMePage() {
         setNotice(errorText(error));
         loadGroups();
       });
-  }, [loadGroups]);
+  }, [loadGroups, location.search]);
 
   const loadGroupData = useCallback(async () => {
     if (!groupId) return;

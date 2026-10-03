@@ -86,8 +86,16 @@ async function getFestioMeSession(force = false) {
   const firebaseUser = auth.currentUser
   const onGuestRoute = typeof window !== 'undefined' && window.location?.pathname === '/festiome/guest'
   if (!force && festiomeSession?.token && festiomeSession.expiresAt > now + 30000 &&
+      (!onGuestRoute || festiomeSession.kind === 'guest') &&
       (festiomeSession.kind !== 'guest' || !firebaseUser || onGuestRoute)) {
     return festiomeSession.token
+  }
+  if (onGuestRoute) {
+    let context = festiomeSession?.kind === 'guest' ? festiomeSession : null
+    try { context ||= JSON.parse(sessionStorage.getItem('festiomeGuestSession') || 'null') } catch {}
+    if (!context?.eventId || !context?.passToken) throw new Error('Open FestioMe from your GuestHub link to join your event community.')
+    const session = await startFestioMeGuestSession(context.eventId, context.passToken)
+    return session.token
   }
   const firebaseToken = await getToken()
   if (!firebaseToken) throw new Error('Your Festio session is still loading. Please try again.')
@@ -111,11 +119,25 @@ async function getFestioMeSession(force = false) {
   return data.token
 }
 
+let festiomeGuestExchange = null
+
 async function startFestioMeGuestSession(eventId, passToken) {
+  if (festiomeGuestExchange?.eventId === eventId && festiomeGuestExchange?.passToken === passToken) {
+    return festiomeGuestExchange.promise
+  }
+  const exchange = { eventId, passToken }
+  exchange.promise = exchangeFestioMeGuestSession(eventId, passToken)
+  festiomeGuestExchange = exchange
+  try { return await exchange.promise }
+  finally { if (festiomeGuestExchange === exchange) festiomeGuestExchange = null }
+}
+
+async function exchangeFestioMeGuestSession(eventId, passToken) {
   // A guest pass always wins over an organizer's prior FestioMe session.
-  // Clear the old in-memory/storage context before exchanging the new pass.
-  festiomeSession = null
-  try { sessionStorage.removeItem('festiomeGuestSession') } catch {}
+  // Retain only the requested pass context during renewal, so simultaneous
+  // requests share the exchange and a failed exchange can be retried safely.
+  festiomeSession = { kind: 'guest', eventId, passToken }
+  try { sessionStorage.setItem('festiomeGuestSession', JSON.stringify(festiomeSession)) } catch {}
   const res = await fetch(`${BASE}/events/${encodeURIComponent(eventId)}/festiome/guest-token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -157,12 +179,12 @@ async function festiomeReq(method, path, body, retry = true) {
     signal: AbortSignal.timeout(10000),
   })
   if (res.status === 401 && retry) {
-    festiomeSession = null
-    try {
-      sessionStorage.removeItem('festiomeGuestSession')
-    } catch {
-      // Ignore storage restrictions.
+    if (typeof window !== 'undefined' && window.location.pathname === '/festiome/guest') {
+      await getFestioMeSession(true)
+      return festiomeReq(method, path, body, false)
     }
+    festiomeSession = null
+    try { sessionStorage.removeItem('festiomeGuestSession') } catch {}
     await getFestioMeSession(true)
     return festiomeReq(method, path, body, false)
   }
@@ -1482,7 +1504,7 @@ export const api = {
   startFestioMeGuestSession,
   festiomeGuestContext: () => {
     try {
-      const stored = JSON.parse(sessionStorage.getItem('festiomeGuestSession') || 'null')
+      const stored = festiomeSession?.kind === 'guest' ? festiomeSession : JSON.parse(sessionStorage.getItem('festiomeGuestSession') || 'null')
       return stored?.kind === 'guest' && stored?.eventId && stored?.passToken
         ? { eventId: stored.eventId, passToken: stored.passToken }
         : null

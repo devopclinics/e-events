@@ -4,7 +4,7 @@ import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useGuestPush } from "../hooks/useGuestPush";
 import "./FestioMePage.css";
-import "./FestioMeThemes.css";
+import "./FestioMeGuestShell.css";
 
 const KINDS = { discussion: "#", announcement: "📣", staff: "🔒" };
 const STAFF_ROLES = ["owner", "admin", "moderator"];
@@ -61,6 +61,7 @@ function Dialog({ title, children, onClose }) {
       onMouseDown={onClose}
     >
       <div
+        role="dialog" aria-modal="true" aria-label={title}
         className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl dark:bg-slate-900"
         onMouseDown={(event) => event.stopPropagation()}
       >
@@ -88,19 +89,6 @@ export default function FestioMePage() {
   const guestPushContext = guestMode ? api.festiomeGuestContext() : null;
   const { pushConfig, pushState, pushBusy, pushError, enablePush, disablePush } =
     useGuestPush(guestPushContext?.eventId, guestPushContext?.passToken, { skip: !guestPushContext });
-  // Purely cosmetic, opt-in: only events on the "forest-editorial" hub_style
-  // get a class added here (see FestioMeThemes.css) -- every other event's
-  // className stays exactly what it is today.
-  const [hubStyle, setHubStyle] = useState("");
-  useEffect(() => {
-    if (!guestPushContext?.eventId) return;
-    let cancelled = false;
-    api.publicDesignTheme(guestPushContext.eventId).then(
-      (theme) => { if (!cancelled) setHubStyle(theme?.hub_style || ""); },
-      () => {},
-    );
-    return () => { cancelled = true; };
-  }, [guestPushContext?.eventId]);
   // "Back to FestioHub" used to rely purely on browser history, which
   // silently no-ops when the guest arrived here fresh (new tab, QR code,
   // bookmark) — there's no history entry to go back to. The guest's Guest
@@ -113,7 +101,8 @@ export default function FestioMePage() {
       history.back();
     }
   }
-  const [showHome, setShowHome] = useState(true);
+  const [showHome, setShowHome] = useState(!guestMode);
+  const [mobileThread, setMobileThread] = useState(false);
   const [groups, setGroups] = useState([]),
     [groupId, setGroupId] = useState("");
   const [channels, setChannels] = useState([]),
@@ -249,6 +238,12 @@ export default function FestioMePage() {
         });
       return;
     }
+    if (guestMode && !guestEvent && !api.festiomeGuestContext()) {
+      setGroups([]); setChannels([]); setMembers([]); setGroupId("");
+      setServiceDown(true); setLoading(false);
+      setNotice("Open FestioMe from your guest's GuestHub link to join the correct event community.");
+      return;
+    }
     if (!token) {
       loadGroups(params.get("group") || "");
       return;
@@ -264,7 +259,7 @@ export default function FestioMePage() {
         setNotice(errorText(error));
         loadGroups();
       });
-  }, [loadGroups, location.search]);
+  }, [loadGroups, location.search, guestMode]);
 
   const loadGroupData = useCallback(async () => {
     if (!groupId) return;
@@ -279,12 +274,12 @@ export default function FestioMePage() {
       setChannelId((current) =>
         next.some((item) => item.id === current)
           ? current
-          : next.find((item) => Number(item.unread_count || 0) > 0)?.id || next[0]?.id || "",
+          : (guestMode ? next.find((item) => !item.is_dm && item.name.toLowerCase() === "general")?.id : next.find((item) => Number(item.unread_count || 0) > 0)?.id) || next[0]?.id || "",
       );
     } catch (error) {
       setNotice(errorText(error));
     }
-  }, [groupId]);
+  }, [groupId, guestMode]);
   useEffect(() => {
     setChannels([]);
     setMembers([]);
@@ -369,7 +364,7 @@ export default function FestioMePage() {
   }, [activeGroup?.name, eventRef, guestMode]);
 
   useEffect(() => {
-    if (showHome && eventRef) loadCommunication();
+    if (eventRef) loadCommunication();
   }, [eventRef, loadCommunication, showHome]);
 
   const mergeMessages = useCallback((incoming, prepend = false) => {
@@ -671,7 +666,7 @@ export default function FestioMePage() {
     try {
       const dm = await api.festiomeOpenDirectMessage(groupId, member.id);
       await loadGroupData();
-      setChannelId(dm.id);
+      setChannelId(dm.id); setMobileThread(true);
       setPanel("");
     } catch (e) {
       setNotice(errorText(e));
@@ -852,7 +847,7 @@ export default function FestioMePage() {
         interest_tags: profileForm.tags.split(",").map((t) => t.trim()).filter(Boolean),
         discoverable: profileForm.discoverable,
       });
-      await loadWorkspace(groupId);
+      await loadGroupData();
       setDialog("");
       setNotice("Profile updated");
     } catch (e) {
@@ -988,6 +983,7 @@ export default function FestioMePage() {
       </div>
     );
 
+  let secondaryView = null;
   if (showHome) {
     const displayName = (me?.display_name || name(user)).split(" ")[0] || "there";
     const unreadTotal = groups.reduce((total, group) => total + Number(group.unread_count || 0), 0)
@@ -1019,77 +1015,26 @@ export default function FestioMePage() {
     const openWorkspace = (group = activeGroup, preferredChannel = "") => {
       if (group?.id) setGroupId(group.id);
       if (preferredChannel) setChannelId(preferredChannel);
+      setMobileThread(true);
       setShowHome(false);
     };
     const nav = [
-      ["home", "⌂", "Home"],
+      [guestMode ? "chats" : "home", "◉", guestMode ? "Chats" : "Home"],
       ["people", "♙", "People"],
       ["groups", "♧", "Groups"],
       ["meetups", "▣", "Meetups"],
       ["sessions", "▹", "Sessions"],
       ["messages", "✉", "Messages"],
+      ...(guestMode ? [["event", "↗", "Event Hub"]] : []),
     ];
     const sourceBadge = (children, tone = "teal") => <span className={`rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-wide ${tone === "purple" ? "border-purple-400/30 bg-purple-500/10 text-purple-300" : "border-teal-400/30 bg-teal-500/10 text-teal-300"}`}>{children}</span>;
 
-    if (guestMode && hubStyle === "guesthub-mobile-dashboard" && homeSection === "home") {
-      const eventData = communication?.event || {};
-      const guestData = communication?.guest || {};
-      const passToken = guestPushContext?.passToken || "";
-      const eventId = guestPushContext?.eventId || eventRef || "";
-      const passUrl = passToken ? `/scan/${encodeURIComponent(passToken)}` : "";
-      const hubUrl = passToken ? `/r/${encodeURIComponent(passToken)}#guest-hub` : "";
-      const liveUrl = eventId && passToken ? `/live/guest?event=${encodeURIComponent(eventId)}&pass=${encodeURIComponent(passToken)}${currentSegment?.step_id ? `&session=${encodeURIComponent(currentSegment.step_id)}` : ""}` : "";
-      const hasProgramme = !!(currentSegment || nextSegment || journey?.program?.days?.length || sessionChannels.length);
-      const hasFeedback = !!(journey?.feedback_forms?.length || journey?.steps?.some((step) => step.type === "feedback"));
-      const dashboardActions = [
-        { key: "pass", icon: "▣", label: "My Pass", href: passUrl, enabled: !!passUrl },
-        { key: "programme", icon: "□", label: "Programme", onClick: () => setHomeSection("sessions"), enabled: hasProgramme },
-        { key: "speakers", icon: "♙", label: "Speakers", href: eventData.speaker_token ? `/speakers/${eventData.speaker_token}` : "", enabled: !!(eventData.speaker_enabled && eventData.speaker_token) },
-        { key: "exhibitors", icon: "▤", label: "Exhibitors", href: eventData.partner_token ? `/partners/${eventData.partner_token}` : "", enabled: !!(eventData.partner_enabled && eventData.partner_token) },
-        { key: "live", icon: "♧", label: "Festio Live", href: liveUrl, enabled: !!(eventData.engagement_enabled && liveUrl) },
-        { key: "activities", icon: "☆", label: "Activities", onClick: () => setHomeSection("meetups"), enabled: !!(meetups.length || groups.length) },
-        { key: "feedback", icon: "◯", label: "Feedback", href: passToken ? `/r/${encodeURIComponent(passToken)}?focus=feedback#guest-hub` : "", enabled: !!(hasFeedback && hubUrl) },
-        { key: "info", icon: "ⓘ", label: "Event Info", href: hubUrl, enabled: !!hubUrl },
-      ].filter((item) => item.enabled);
-      const upcoming = currentSegment || nextSegment;
-      const openAction = (item) => {
-        if (item.onClick) item.onClick();
-        else if (item.href) window.location.href = item.href;
-      };
-      return (
-        <div className="fm-mobile-dashboard-page">
-          <section className="fm-mobile-dashboard" aria-label="GuestHub mobile dashboard">
-            <header className="fm-mobile-dashboard-header">
-              <div><span>{eventData.name || activeGroup?.name || "Your event"}</span><small>GuestHub</small></div>
-              <b>{initials(guestData.name || me?.display_name || name(user))}</b>
-            </header>
-            <div className="fm-mobile-dashboard-welcome">
-              <span>WELCOME</span>
-              <h1>Welcome, {guestData.name || me?.display_name || name(user) || "Guest"}</h1>
-              <p>{me?.role && me.role !== "member" ? me.role : "Event guest"}</p>
-            </div>
-            {passUrl && <button type="button" className="fm-mobile-pass-card" onClick={() => { window.location.href = passUrl; }}><span>▣</span><div><strong>Your Festio Pass</strong><small>{guestData.pass_code || guestData.qr_token || "Ready for entry"}</small></div><b>View →</b></button>}
-            {upcoming && <button type="button" className="fm-mobile-next-card" onClick={() => setHomeSection("sessions")}><small>● {currentSegment ? "HAPPENING NOW" : "UP NEXT"}</small><strong>{upcoming.title}</strong><span>{upcoming.starts_at ? new Date(upcoming.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}{upcoming.location || upcoming.venue ? ` · ${upcoming.location || upcoming.venue}` : ""}</span></button>}
-            <div className="fm-mobile-action-grid">
-              {dashboardActions.map((item) => <button type="button" key={item.key} onClick={() => openAction(item)}><span>{item.icon}</span><strong>{item.label}</strong></button>)}
-            </div>
-            <nav className="fm-mobile-bottom-nav" aria-label="GuestHub navigation">
-              <button className="active" type="button" onClick={() => setHomeSection("home")}><span>⌂</span>Home</button>
-              <button type="button" disabled={!hasProgramme} onClick={() => setHomeSection("sessions")}><span>□</span>Programme</button>
-              <button type="button" disabled={!liveUrl} onClick={() => { if (liveUrl) window.location.href = liveUrl; }}><span>♧</span>Live</button>
-              <button type="button" onClick={() => setHomeSection("profile")}><span>♙</span>Me</button>
-            </nav>
-          </section>
-        </div>
-      );
-    }
-
-    return (
-      <div className={`festiome-unified-home${hubStyle ? ` festiome-style-${hubStyle}` : ''} mx-auto flex min-h-[calc(100dvh-5.5rem)] w-full max-w-7xl overflow-hidden border-y border-teal-400/15 bg-[#061120] text-white shadow-2xl sm:min-h-[calc(100vh-7rem)] sm:rounded-3xl sm:border`}>
+    secondaryView = (
+      <div className={`festiome-unified-home mx-auto flex min-h-[calc(100dvh-5.5rem)] w-full max-w-7xl overflow-hidden border-y border-teal-400/15 bg-[#061120] text-white shadow-2xl sm:min-h-[calc(100vh-7rem)] sm:rounded-3xl sm:border`}>
         <aside className="hidden w-56 shrink-0 flex-col border-r border-white/10 bg-[#050e1e] p-4 md:flex">
           <div className="mb-8 px-2 text-2xl font-black">Festio<span className="text-teal-300">Me</span></div>
           <nav className="space-y-2">
-            {nav.map(([key, icon, label]) => <button key={key} onClick={() => setHomeSection(key)} className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-bold ${homeSection === key ? "bg-teal-600/30 text-white" : "text-slate-300 hover:bg-white/5"}`}><span className="text-lg">{icon}</span>{label}{key === "messages" && unreadTotal > 0 && <span className="ml-auto rounded-full bg-purple-500 px-2 py-0.5 text-[10px]">{unreadTotal}</span>}</button>)}
+            {nav.map(([key, icon, label]) => <button key={key} onClick={() => { if (key === "event") openFestioHub(); else if (key === "chats") { setShowHome(false); setMobileThread(false); } else setHomeSection(key); }} className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-bold ${homeSection === key ? "bg-teal-600/30 text-white" : "text-slate-300 hover:bg-white/5"}`}><span className="text-lg">{icon}</span>{label}{key === "messages" && unreadTotal > 0 && <span className="ml-auto rounded-full bg-purple-500 px-2 py-0.5 text-[10px]">{unreadTotal}</span>}</button>)}
           </nav>
           <button onClick={() => setHomeSection("profile")} className={`mt-auto flex items-center gap-3 rounded-xl border border-white/10 px-3 py-3 text-sm font-bold ${homeSection === "profile" ? "bg-white/10" : ""}`}><span className="grid h-8 w-8 place-items-center rounded-full bg-teal-700">{initials(name(user))}</span>Profile</button>
         </aside>
@@ -1100,7 +1045,7 @@ export default function FestioMePage() {
             <div className="flex items-center gap-3"><button onClick={() => { setShowHome(false); openPreferences(); }} className="relative grid h-10 w-10 place-items-center rounded-full border border-white/15" aria-label="Notifications">🔔{unreadTotal > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-purple-500 px-1.5 text-[10px] font-black">{unreadTotal}</span>}</button><span className="grid h-10 w-10 place-items-center rounded-full bg-teal-700 text-xs font-black">{initials(name(user))}</span></div>
           </header>
 
-          <div className="sticky top-0 z-30 overflow-x-auto border-b border-white/10 bg-[#061120]/95 p-1.5 backdrop-blur md:hidden"><div className="flex min-w-max gap-1">{[...nav, ["profile", "◯", "Profile"]].map(([key, icon, label]) => <button key={key} onClick={() => setHomeSection(key)} className={`w-16 shrink-0 rounded-lg px-1 py-2 text-[9px] font-bold ${homeSection === key ? "bg-teal-600/30 text-teal-200" : "text-slate-400"}`}><span className="block text-sm">{icon}</span><span className="block truncate">{label}</span></button>)}</div></div>
+          <div className="sticky top-0 z-30 overflow-x-auto border-b border-white/10 bg-[#061120]/95 p-1.5 backdrop-blur md:hidden"><div className="flex min-w-max gap-1">{[...nav, ["profile", "◯", "Profile"]].map(([key, icon, label]) => <button key={key} onClick={() => { if (key === "event") openFestioHub(); else if (key === "chats") { setShowHome(false); setMobileThread(false); } else setHomeSection(key); }} className={`w-16 shrink-0 rounded-lg px-1 py-2 text-[9px] font-bold ${homeSection === key ? "bg-teal-600/30 text-teal-200" : "text-slate-400"}`}><span className="block text-sm">{icon}</span><span className="block truncate">{label}</span></button>)}</div></div>
 
           <main className="min-w-0 overflow-x-hidden p-3 pb-8 sm:p-7">
             {communicationError && <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100"><span>{communicationError}</span><button onClick={loadCommunication} className="font-black underline">Retry</button></div>}
@@ -1195,12 +1140,32 @@ export default function FestioMePage() {
         </div>
       </div>
     );
+    if (!guestMode) return secondaryView;
   }
 
+  function openGuestSection(section) {
+    setPanel("");
+    if (section === "chats") { setShowHome(false); setMobileThread(false); }
+    else { setHomeSection(section); setShowHome(true); }
+  }
+  const communityViews = [['groups','Browse groups'],['sessions','Session discussions'],['messages','Messages'],['feed','Event updates']];
+  const communityMenu = (className) => <details className={className}><summary aria-label="More community views">More</summary>{communityViews.map(([key,label]) => <button key={key} type="button" onClick={(event) => {openGuestSection(key);event.currentTarget.closest('details').open = false;}}>{label}</button>)}</details>;
+  const guestNav = <nav className="fm-chat-navigation" aria-label="FestioMe navigation">
+    <div className="fm-chat-logo">Festio<span>Me</span></div><p>Chat. Connect. Stay in the loop.</p>
+    {[['chats','◉','Chats'],['people','♙','People'],['meetups','▣','Meetups'],['event','↗','Event Hub'],['profile','●','Profile']].map(([key,icon,label]) => <button key={key} type="button" className={(showHome ? homeSection === key : key === 'chats') ? 'active' : ''} onClick={() => { if(key === 'event') openFestioHub(); else openGuestSection(key); }}><span>{icon}</span>{label}</button>)}
+    {communityMenu("fm-extra-nav")}
+    <button type="button" className="fm-chat-return" onClick={openFestioHub}>← Back to GuestHub</button><small>Powered by Festio</small>
+  </nav>;
   return (
-    <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-7xl overflow-hidden rounded-2xl border border-[#1b3a52] bg-[#0a1f33] shadow-sm border-[#1b3a52] bg-[#0a1f33]">
+    <div className={guestMode ? `fm-chat-shell ${mobileThread ? 'fm-thread-open' : ''} ${showHome ? 'fm-section-open' : ''}` : ''}>
+    {guestMode && guestNav}
+    <div className="fm-chat-workspace mx-auto flex h-[calc(100vh-8rem)] max-w-7xl overflow-hidden rounded-2xl border border-[#1b3a52] bg-[#0a1f33] shadow-sm border-[#1b3a52] bg-[#0a1f33]">
+      {guestMode && <header className="fm-event-header"><div className="fm-mobile-brand">Festio<span>Me</span></div>
+        <div className="fm-event-identity"><span className="fm-event-avatar">{initials(communication?.event?.name || activeGroup?.name || "Event")}</span><div><h1>{communication?.event?.name || activeGroup?.name || "Your event community"}</h1><p>Event community · {activeGroup?.member_count ?? members.length} members</p></div></div>
+        <div className="fm-event-actions">{communityMenu("fm-mobile-more")}<button type="button" className="fm-event-search" onClick={() => {setShowHome(false);setMobileThread(true);setPanel("search");}} aria-label="Search messages">⌕ <span>Search messages</span></button><button type="button" aria-label="Notification settings" onClick={openPreferences}>🔔</button><button type="button" className="fm-my-avatar" aria-label="My profile" onClick={() => openGuestSection("profile")}>{initials(me?.display_name || communication?.guest?.name || "Guest")}</button></div>
+      </header>}
       <aside
-        className={`${groupId ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col border-r border-[#1b3a52] border-[#1b3a52] md:w-72`}
+        className={`${guestMode ? "fm-chat-groups" : ""} ${groupId ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col border-r border-[#1b3a52] border-[#1b3a52] md:w-72`}
       >
         <div className="flex items-center justify-between border-b p-4 border-[#1b3a52]">
           <div>
@@ -1267,9 +1232,9 @@ export default function FestioMePage() {
           </div>
         ) : (
           <>
-            <header className="flex flex-wrap items-center gap-2 border-b p-3 border-[#1b3a52]">
-              <button onClick={() => setShowHome(true)} className="rounded-lg border px-3 py-2 text-xs font-bold text-teal-600 border-[#1b3a52] text-teal-300">← Home</button>
-              <button onClick={() => setGroupId("")} className="p-2 md:hidden">
+            <details className="fm-tools-menu" open={!guestMode ? true : undefined}><summary aria-label="Conversation options">••• More options</summary><header onClick={(event) => {if (guestMode && event.target.closest("button,a")) event.currentTarget.closest("details").open = false;}} className="fm-workspace-tools flex flex-wrap items-center gap-2 border-b p-3 border-[#1b3a52]">
+              <button onClick={() => { if(guestMode) setMobileThread(false); else setShowHome(true); }} className="rounded-lg border px-3 py-2 text-xs font-bold text-teal-600 border-[#1b3a52] text-teal-300">{guestMode ? "← Chats" : "← Home"}</button>
+              <button onClick={() => { if(guestMode) {setHomeSection("groups");setShowHome(true);} else setGroupId(""); }} className="p-2 md:hidden">
                 ←
               </button>
               <div className="min-w-0 flex-1">
@@ -1333,11 +1298,12 @@ export default function FestioMePage() {
                   Manage
                 </button>
               )}
-            </header>
+            </header></details>
             <div className="relative flex min-h-0 flex-1">
-              <aside className="hidden w-48 shrink-0 border-r bg-[#061120]/60 p-2 border-[#1b3a52] sm:block">
+              <aside className="fm-chat-list hidden w-48 shrink-0 border-r bg-[#061120]/60 p-2 border-[#1b3a52] sm:block">
+                {guestMode && <div className="fm-chat-list-title"><strong>Chats</strong><button type="button" aria-label="Start a conversation" onClick={() => openGuestSection("people")}>+</button></div>}
                 <div className="flex items-center justify-between px-2 py-2 text-[11px] font-bold uppercase text-[#7893a8]">
-                  <span>Channels</span>
+                  <span>{guestMode ? "Event chats" : "Channels"}</span>
                   {canManage && (
                     <button
                       onClick={() => {
@@ -1355,11 +1321,11 @@ export default function FestioMePage() {
                   .map((channel) => (
                     <button
                       key={channel.id}
-                      onClick={() => setChannelId(channel.id)}
+                      onClick={() => { setChannelId(channel.id); setMobileThread(true); }}
                       className={`mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm ${channel.id === channelId ? "bg-[#0a1f33] font-semibold text-teal-700 shadow bg-[#0d2338] text-teal-300" : "text-[#9bb0c1] text-[#c9d8e3]"}`}
                     >
                       <span>{channelIcon(channel)}</span>
-                      <span className="truncate">{channel.name}</span>
+                      <span className="truncate">{channel.name}{guestMode && channel.kind === "announcement" && <small className="fm-chat-readonly">Organizer posts · read-only</small>}</span>
                       {Number(channel.unread_count || 0) > 0 && (
                         <span className="ml-auto rounded-full bg-teal-600 px-1.5 text-[10px] text-white">
                           {channel.unread_count}
@@ -1377,11 +1343,11 @@ export default function FestioMePage() {
                   .map((channel) => (
                     <button
                       key={channel.id}
-                      onClick={() => setChannelId(channel.id)}
+                      onClick={() => { setChannelId(channel.id); setMobileThread(true); }}
                       className={`mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm ${channel.id === channelId ? "bg-[#0a1f33] font-semibold text-teal-700 shadow bg-[#0d2338] text-teal-300" : "text-[#9bb0c1] text-[#c9d8e3]"}`}
                     >
                       <span>{channelIcon(channel)}</span>
-                      <span className="truncate">{channel.name}</span>
+                      <span className="truncate">{channel.name}{guestMode && channel.kind === "announcement" && <small className="fm-chat-readonly">Organizer posts · read-only</small>}</span>
                       {Number(channel.unread_count || 0) > 0 && (
                         <span className="ml-auto rounded-full bg-teal-600 px-1.5 text-[10px] text-white">
                           {channel.unread_count}
@@ -1390,7 +1356,8 @@ export default function FestioMePage() {
                     </button>
                   ))}
               </aside>
-              <main className="flex min-w-0 flex-1 flex-col">
+              {guestMode && showHome && <div className="fm-secondary-view">{secondaryView}</div>}
+              <main className="fm-chat-thread flex min-w-0 flex-1 flex-col">
                 <div className="border-b p-2 sm:hidden">
                   <select
                     value={channelId}
@@ -1407,7 +1374,7 @@ export default function FestioMePage() {
                 {activeChannel && (
                   <div className="flex items-center gap-2 border-b px-4 py-2 text-sm border-[#1b3a52] sm:px-6">
                     <span>{channelIcon(activeChannel)}</span>
-                    <b className="truncate text-white">{activeChannel.name}</b>
+                    {guestMode && <button type="button" className="fm-back-chats" onClick={() => {setMobileThread(false);setPanel("");}}>← Chats</button>}<div className="fm-conversation-heading"><b className="truncate text-white">{activeChannel.name}</b>{guestMode && <p>{activeChannel.kind === "announcement" ? "Organizer posts · read-only for guests" : activeChannel.is_dm ? "Private conversation" : activeChannel.description || "Open conversation for attendees"}</p>}</div>
                     {activeChannel.is_private && !activeChannel.is_dm && (
                       <>
                         <span className="text-xs text-[#7893a8]">
@@ -1428,6 +1395,7 @@ export default function FestioMePage() {
                   </div>
                 )}
                 <div className="flex-1 overflow-y-auto px-4 py-3 sm:px-6">
+                  {guestMode && activeChannel && !activeChannel.is_dm && activeChannel.kind !== "announcement" && <details className="fm-chat-welcome" open><summary>Welcome to {activeGroup?.name}</summary><p>{activeChannel.description || "Connect with fellow attendees, share ideas, ask questions, and stay in the loop."}</p>{activeGroup?.rules && <p>{activeGroup.rules}</p>}</details>}
                   {cursor && (
                     <div className="pb-4 text-center">
                       <button
@@ -1449,20 +1417,22 @@ export default function FestioMePage() {
                       <div>
                         <div className="text-3xl">👋</div>
                         <h3 className="mt-3 font-bold text-white">
-                          Start {channelIcon(activeChannel)}{" "}
+                          Welcome to {activeGroup?.name}!<br />Start {channelIcon(activeChannel)}{" "}
                           {activeChannel?.name}
                         </h3>
                       </div>
                     </div>
                   )}
                   <div className="space-y-4">
-                    {messages.map((message) => {
+                    {messages.map((message, messageIndex) => {
                       const parent =
                         message.parent ||
                         messages.find((item) => item.id === message.parent_id);
                       const deleted = message.deleted || message.deleted_at;
                       return (
-                        <article key={message.id} className="group flex gap-3">
+                        <div key={message.id}>
+                        {guestMode && (messageIndex === 0 || new Date(messages[messageIndex - 1].created_at).toDateString() !== new Date(message.created_at).toDateString()) && <div className="fm-chat-date">{new Date(message.created_at).toLocaleDateString([], {weekday:"short",month:"short",day:"numeric"})}</div>}
+                        <article className="group flex gap-3">
                           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#13294a] text-xs font-bold bg-[#13294a]">
                             {initials(name(message))}
                           </span>
@@ -1544,7 +1514,7 @@ export default function FestioMePage() {
                               </div>
                             )}
                             {!deleted && (
-                              <div className="mt-1 flex gap-3 text-xs text-[#7893a8] opacity-20 group-hover:opacity-100">
+                              <div className="mt-1 flex gap-3 text-xs text-[#7893a8] opacity-100">
                                 <button onClick={() => setReply(message)}>
                                   Reply
                                 </button>
@@ -1615,6 +1585,7 @@ export default function FestioMePage() {
                             )}
                           </div>
                         </article>
+                        </div>
                       );
                     })}
                     <div ref={bottomRef} />
@@ -1636,7 +1607,8 @@ export default function FestioMePage() {
                     </button>
                   </div>
                 )}
-                {channelId && !rulesBlocked && (
+                {guestMode && activeChannel?.kind === "announcement" && !canModerate && <p className="fm-chat-announcement-notice">Organizer announcements. You can read updates and react to posts here.</p>}
+                {channelId && !rulesBlocked && (activeChannel?.kind !== "announcement" || canModerate) && (
                   <form
                     onSubmit={send}
                     className="relative border-t p-3 border-[#1b3a52]"
@@ -1753,9 +1725,11 @@ export default function FestioMePage() {
                           setDraft(e.target.value);
                           pingTyping();
                         }}
-                        placeholder={`Message ${channelIcon(activeChannel)} ${activeChannel?.name || ""} — use @ to mention`}
+                        aria-label="Write a message"
+                        placeholder={guestMode ? "Write a message…" : `Message ${channelIcon(activeChannel)} ${activeChannel?.name || ""} — use @ to mention`}
                         className="min-w-0 flex-1 rounded-full border bg-[#0a1f33] px-4 py-2.5 text-sm border-[#1b3a52] bg-[#0d2338] text-white"
                       />
+                      {guestMode && <button type="button" aria-label="Add emoji" className="fm-composer-emoji" onClick={() => setDraft((value) => value + " 😊")}>☺</button>}
                       <button
                         disabled={
                           (!draft.trim() && !attachments.length) || sending
@@ -1774,8 +1748,9 @@ export default function FestioMePage() {
                   </form>
                 )}
               </main>
+              {guestMode && !showHome && !panel && <aside className="fm-event-context"><h2>{communication?.event?.name || activeGroup?.name}</h2><p>{activeGroup?.description || "Your event community. Connect and stay in the loop."}</p><div className="fm-context-hub"><strong>Everything you need for the event</strong><p>Pass, programme, hotel and event information.</p><button type="button" onClick={openFestioHub}>← Back to GuestHub</button></div><h3>Members ({activeGroup?.member_count ?? members.length})</h3><div className="fm-context-faces">{members.slice(0,5).map((member) => <button key={member.id} type="button" title={name(member)} onClick={() => {setHomeSection("people");setShowHome(true);}}>{initials(name(member))}</button>)}</div><button type="button" className="fm-context-link" onClick={() => {setHomeSection("people");setShowHome(true);}}>See all members →</button><h3>Community</h3><button type="button" className="fm-context-link" onClick={openDiscover}>Browse event groups →</button><button type="button" className="fm-context-link" onClick={() => {setHomeSection("messages");setShowHome(true);}}>Message host →</button></aside>}
               {panel && (
-                <aside className="absolute inset-y-0 right-0 z-20 w-80 overflow-y-auto border-l bg-[#0a1f33] p-4 shadow-xl border-[#1b3a52] bg-[#0a1f33] md:static">
+                <aside className="fm-side-panel absolute inset-y-0 right-0 z-20 w-80 overflow-y-auto border-l bg-[#0a1f33] p-4 shadow-xl border-[#1b3a52] bg-[#0a1f33] md:static">
                   <div className="mb-4 flex justify-between">
                     <h3 className="font-bold capitalize text-white">
                       {panel}
@@ -2668,11 +2643,12 @@ export default function FestioMePage() {
       {notice && (
         <button
           onClick={() => setNotice("")}
-          className="fixed bottom-20 right-4 z-[80] max-w-sm rounded-xl bg-slate-900 px-4 py-3 text-left text-sm text-white shadow-xl bg-[#0a1f33] text-white"
+          className="fm-notice fixed bottom-20 right-4 z-[80] max-w-sm rounded-xl bg-slate-900 px-4 py-3 text-left text-sm text-white shadow-xl bg-[#0a1f33] text-white"
         >
           {notice}
         </button>
       )}
+    </div>
     </div>
   );
 }

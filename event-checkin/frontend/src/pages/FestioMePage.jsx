@@ -203,9 +203,9 @@ export default function FestioMePage() {
   const isOwner =
     me?.role === "owner" || activeGroup?.viewer_role === "owner";
 
-  const loadGroups = useCallback(async (preferred = "") => {
+  const loadGroups = useCallback(async (preferred = "", guestToken = "") => {
     try {
-      const next = list(await api.festiomeSpaces());
+      const next = list(guestToken ? await api.festiomeGuestSpaces(guestToken) : await api.festiomeSpaces());
       setGroups(next);
       setServiceDown(false);
       setGroupId((current) =>
@@ -238,9 +238,9 @@ export default function FestioMePage() {
       setMembers([]);
       api
         .startFestioMeGuestSession(guestEvent, guestPass)
-        .then(() => {
+        .then((session) => {
           history.replaceState({}, "", "/festiome/guest");
-          loadGroups();
+          loadGroups("", session.token);
         })
         .catch((error) => {
           setNotice(errorText(error));

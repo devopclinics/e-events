@@ -112,6 +112,10 @@ async function getFestioMeSession(force = false) {
 }
 
 async function startFestioMeGuestSession(eventId, passToken) {
+  // A guest pass always wins over an organizer's prior FestioMe session.
+  // Clear the old in-memory/storage context before exchanging the new pass.
+  festiomeSession = null
+  try { sessionStorage.removeItem('festiomeGuestSession') } catch {}
   const res = await fetch(`${BASE}/events/${encodeURIComponent(eventId)}/festiome/guest-token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1487,6 +1491,13 @@ export const api = {
     }
   },
   festiomeSpaces: () => festiomeReq('GET', '/festiome/v1/groups'),
+  // First guest load is passed the token returned by the exchange directly,
+  // avoiding any stale authenticated organizer session during route changes.
+  festiomeGuestSpaces: async (guestToken) => {
+    const res = await fetch(`${BASE}/festiome/v1/groups`, { headers: { Authorization: `Bearer ${guestToken}` } })
+    if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(data.detail || 'FestioMe community could not be loaded.') }
+    return res.json()
+  },
   festiomeSpace: (id) => festiomeReq('GET', `/festiome/v1/groups/${id}`),
   festiomeCreateSpace: (data) => festiomeReq('POST', '/festiome/v1/groups', data),
   festiomeUpdateSpace: (id, data) => festiomeReq('PATCH', `/festiome/v1/groups/${id}`, data),

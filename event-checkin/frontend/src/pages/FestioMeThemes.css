@@ -245,4 +245,34 @@
 .fm-mobile-bottom-nav button span { font-size:15px; }
 .fm-mobile-bottom-nav button.active { color:#2fac7b; }
 .fm-mobile-bottom-nav button:disabled { opacity:.35; }
-@media (min-width:640px) { .fm-mobile-dashboard-page { padding:38px 16px; } }
+/* The dashboard is selected for a guest, but guests often open it from a
+   desktop invitation email. Keep the same focused hierarchy while giving it
+   a readable desktop surface instead of a phone-sized card. */
+@media (min-width:640px) {
+  .fm-mobile-dashboard-page { padding:42px 24px 56px; }
+  .fm-mobile-dashboard { width:min(100%, 760px); border-radius:28px; }
+  .fm-mobile-dashboard-header { padding:24px 28px 17px; }
+  .fm-mobile-dashboard-header span { font-size:13px; }
+  .fm-mobile-dashboard-header small { font-size:12px; }
+  .fm-mobile-dashboard-header > b { width:42px; height:42px; font-size:13px; }
+  .fm-mobile-dashboard-welcome { padding:24px 28px 20px; }
+  .fm-mobile-dashboard-welcome > span { font-size:11px; }
+  .fm-mobile-dashboard-welcome h1 { font-size:30px; }
+  .fm-mobile-dashboard-welcome p { font-size:14px; }
+  .fm-mobile-pass-card,.fm-mobile-next-card { width:calc(100% - 56px); margin:0 28px 16px; }
+  .fm-mobile-pass-card { gap:16px; padding:17px; }
+  .fm-mobile-pass-card > span { width:48px; height:48px; font-size:25px; }
+  .fm-mobile-pass-card strong { font-size:16px; }
+  .fm-mobile-pass-card small { font-size:12px; }
+  .fm-mobile-pass-card > b { font-size:13px; }
+  .fm-mobile-next-card { padding:18px; }
+  .fm-mobile-next-card small { font-size:11px; }
+  .fm-mobile-next-card strong { font-size:17px; }
+  .fm-mobile-next-card span { font-size:13px; }
+  .fm-mobile-action-grid { grid-template-columns:repeat(4,1fr); gap:12px; padding:4px 28px 24px; }
+  .fm-mobile-action-grid button { min-height:112px; padding:16px; }
+  .fm-mobile-action-grid button > span { width:36px; height:36px; font-size:19px; }
+  .fm-mobile-action-grid strong { font-size:14px; }
+  .fm-mobile-bottom-nav button { min-height:66px; font-size:11px; }
+  .fm-mobile-bottom-nav button span { font-size:18px; }
+}

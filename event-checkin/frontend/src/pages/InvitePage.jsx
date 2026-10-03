@@ -1409,6 +1409,27 @@ function FlowTopBar({ event, onHome }) {
   return <header className="flow-topbar"><button type="button" onClick={onHome} className="flow-wordmark">Fest<span>io</span></button><div className="flow-event-mini">{event?.logo_url && <img src={event.logo_url} alt="" />}<b>{event?.name}</b></div><span className="flow-avatar">{(event?.name || 'F').slice(0, 1)}</span></header>
 }
 
+function GuestHubAccessState({ event, failure, onRetry, onViewEvent }) {
+  const title = !failure ? 'Opening your GuestHub…'
+    : failure === 'access' ? 'Open your personal GuestHub link'
+    : failure === 'pending' ? 'Your registration needs confirmation'
+    : 'Your GuestHub could not load'
+  const message = !failure ? 'Loading your registration, pass and party.'
+    : failure === 'access' ? 'The saved pass in this browser could not be verified. Open the personal GuestHub link in your confirmation email, or ask the event organizer for your link.'
+    : failure === 'pending' ? 'GuestHub becomes available when the organizer accepts your RSVP. Please check your confirmation or contact the organizer.'
+    : 'We could not retrieve your event details right now. Please try again. This does not change your registration.'
+  return (
+    <div className={`flow-phone ${event.guest_hub_layout === 'complete' ? 'flow-option-four' : 'flow-option-three'}`}>
+      <FlowTopBar event={event} />
+      <div className="flow-home-banner"><span>YOUR EVENT</span><h1>{event.name}</h1><p>{fmtDate(event.event_date, event.timezone)} · {event.venue_name || 'Event venue'}</p></div>
+      <section className="flow-welcome flow-access-state" aria-live="polite" aria-busy={!failure}>
+        <h2>{title}</h2><p>{message}</p>
+        {failure && <div className="flow-access-state-actions"><button type="button" className="flow-primary" onClick={onRetry}>Try again</button>{onViewEvent && <button type="button" className="flow-secondary" onClick={onViewEvent}>View event details</button>}</div>}
+      </section>
+    </div>
+  )
+}
+
 function FlowPass({ event, hub, previewMock, onHome }) {
   const guest = hub?.guest || {}
   return <div className="flow-pass-screen"><FlowTopBar event={event} onHome={onHome} /><div className="flow-pass-hero">{event?.logo_url && <img src={event.logo_url} alt="" />}<div><span>{event?.organization_name || 'FESTIO EVENT'}</span><h1>{event?.name}</h1><p>Unity · Heritage · Progress</p></div></div><section className="flow-pass-card"><h2>{guest.name || 'Guest'}</h2><p>Guest · {event?.organization_name || 'Registered attendee'}</p>{guest.qr_token && <img className="flow-qr" src={previewMock ? PREVIEW_QR_DATA_URI : `/api/scan/${guest.qr_token}/qr.png`} alt="Your QR pass code" />}<div className="flow-ready">✓ <b>{guest.admitted ? 'CHECKED IN' : 'READY FOR ENTRY'}</b><small>Present this QR at check-in</small></div><div className="flow-pass-facts"><span><b>▣</b>{fmtDate(event.event_date, event.timezone)}</span><span><b>●</b>{event.venue_name || 'Venue details'}</span><span><b>♟</b>Guests included</span></div><button type="button" className="flow-primary" onClick={onHome}>Open GuestHub →</button></section></div>
@@ -1589,9 +1610,11 @@ function ManageGuardiansPanel({ token }) {
   )
 }
 
-function GuestHub({ event, accessToken, designTheme, previewMock = false, confirmed = true }) {
+function GuestHub({ event, accessToken, designTheme, previewMock = false, confirmed = true, onViewEvent }) {
   const [hub, setHub] = useState(null)
   const [error, setError] = useState('')
+  const [hubFailure, setHubFailure] = useState(null)
+  const [hubRetry, setHubRetry] = useState(0)
   const [hidden, setHidden] = useState(false)
   const [message, setMessage] = useState('')
   const [chatMessage, setChatMessage] = useState('')
@@ -1849,24 +1872,31 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   useEffect(() => {
     if (!event?.id || !accessToken || previewMock) return
     let cancelled = false
+    let accessRejected = false
+    setHubFailure(null)
     async function load() {
+      if (accessRejected) return
       try {
         const data = await api.guestHub(event.id, accessToken)
-        if (!cancelled) { setHub(data); setError(''); setHidden(false) }
+        if (!cancelled) { setHub(data); setError(''); setHidden(false); setHubFailure(null) }
       } catch (err) {
         if (cancelled) return
         const msg = err.message || ''
-        if (msg.includes('disabled') || msg.includes('accepted')) {
+        if (msg.includes('disabled') || (msg.includes('accepted') && !journeyLayout && !completeLayout)) {
           setHidden(true)
           return
         }
+        const failure = [401, 404].includes(err.status) ? 'access'
+          : err.status === 403 && msg.includes('accepted') ? 'pending' : 'connection'
+        if (failure !== 'connection') { accessRejected = true; setHub(null) }
+        setHubFailure(failure)
         setError('Event updates are temporarily unavailable.')
       }
     }
     load()
     const id = setInterval(load, 25000)
     return () => { cancelled = true; clearInterval(id) }
-  }, [event?.id, accessToken, previewMock])
+  }, [event?.id, accessToken, previewMock, hubRetry, journeyLayout, completeLayout])
 
   // Speaker Showcase cross-link — same public token endpoint the ticketing
   // carousel and standalone page use, not a separate implementation. Default
@@ -1919,6 +1949,11 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   }
 
   if ((!accessToken && !speakersVisible) || hidden) return null
+  // A failed or slow pass lookup must never masquerade as a pending guest in
+  // the legacy companion layout. Keep the selected layout while recovering.
+  if (accessToken && !hub && (journeyLayout || completeLayout)) {
+    return <GuestHubAccessState event={event} failure={hubFailure} onRetry={() => setHubRetry((n) => n + 1)} onViewEvent={onViewEvent} />
+  }
   const colors = designColors(designTheme, event)
   // The detailed-service view for the two mobile-first layouts is a reading
   // surface. It must stay legible even when an event uses a mixed light/dark
@@ -3195,7 +3230,7 @@ function JourneyInviteShell({ event, tone, designTheme, title, dateLabel, timeLa
         ) : completeFlow && completeScreen === 'confirmed' ? (
           <div className="complete-confirmation"><FlowTopBar event={event} /><div className="complete-confirmation-body"><i>✓</i><h2>You’re Registered!</h2><p>Your registration for {title} is confirmed.</p><div className="complete-confirm-details"><span><b>Name</b>{freshConfirmation?.first_name || 'Guest'}</span><span><b>Registration status</b>Confirmed</span><span><b>Date</b>{dateLabel}</span><span><b>Venue</b>{event.venue_name || 'To be announced'}</span></div><button type="button" className="complete-primary" onClick={() => setCompleteScreen('hub')}>Open My GuestHub →</button>{freshConfirmation?.qr_token && <a className="complete-secondary-link" href={`/scan/${freshConfirmation.qr_token}`}>▦ View My Pass</a>}</div></div>
         ) : hasGuestHub && (!completeFlow || completeScreen === 'hub') ? (
-          <GuestHub event={event} accessToken={guestHubToken} designTheme={designTheme} confirmed={confirmed} />
+          <GuestHub key={`${event.id}:${guestHubToken}`} event={event} accessToken={guestHubToken} designTheme={designTheme} confirmed={confirmed} onViewEvent={completeFlow ? () => setCompleteScreen('event') : undefined} />
         ) : (
           <div className={`journey-registration-stage ${completeFlow ? 'complete-registration-stage' : ''}`}>
             {completeFlow && <FlowTopBar event={event} onHome={() => setCompleteScreen('event')} />}

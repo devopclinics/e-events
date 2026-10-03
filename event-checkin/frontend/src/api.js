@@ -35,6 +35,19 @@ async function getToken() {
   return u ? u.getIdToken() : null
 }
 
+// Public guest links use their own pass, not the organizer's Firebase session.
+// Preserve HTTP status for recovery and never redirect a guest to admin sign-in.
+async function guestRead(path, fallback) {
+  const response = await fetch(`${BASE}${path}`, { cache: 'no-store', signal: AbortSignal.timeout(15000) })
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    const error = new Error(typeof data.detail === 'string' ? data.detail : fallback)
+    error.status = response.status
+    throw error
+  }
+  return response.json()
+}
+
 async function uploadWebsiteAsset(eventId, file) {
   const token = await getToken()
   const form = new FormData(); form.append('file', file)
@@ -1115,9 +1128,7 @@ export const api = {
 
   // Guest Hub / event communication (messaging-service)
   guestHub: (eventId, token) =>
-    fetch(`${BASE}/messaging/events/${encodeURIComponent(eventId)}/guest-hub?token=${encodeURIComponent(token)}`).then((r) =>
-      r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Event updates are temporarily unavailable.'))),
-    ),
+    guestRead(`/messaging/events/${encodeURIComponent(eventId)}/guest-hub?token=${encodeURIComponent(token)}`, 'Event updates are temporarily unavailable.'),
   sendGuestDirectMessage: (eventId, token, body) =>
     fetch(`${BASE}/messaging/events/${encodeURIComponent(eventId)}/messages/direct?token=${encodeURIComponent(token)}`, {
       method: 'POST',
@@ -1684,7 +1695,7 @@ export const api = {
   listEventCertificates: (eventId) => req('GET', `/events/${eventId}/certificates`),
   revokeEventCertificate: (eventId, certificateId, reason) => req('POST', `/events/${eventId}/certificates/${certificateId}/revoke`, { reason }),
   listPresenterMaterials: (eventId) => req('GET', `/events/${eventId}/presenter-materials`),
-  guestLiveContent: (eventId, token) => req('GET', `/events/${eventId}/guest-content/${encodeURIComponent(token)}`),
+  guestLiveContent: (eventId, token) => guestRead(`/events/${encodeURIComponent(eventId)}/guest-content/${encodeURIComponent(token)}`, 'Guest resources are temporarily unavailable.'),
   addPresenterMaterialLink: (eventId, body) => req('POST', `/events/${eventId}/presenter-materials/link`, body),
   updatePresenterMaterial: (eventId, materialId, body) => req('PATCH', `/events/${eventId}/presenter-materials/${materialId}`, body),
   deletePresenterMaterial: (eventId, materialId) => req('DELETE', `/events/${eventId}/presenter-materials/${materialId}`),

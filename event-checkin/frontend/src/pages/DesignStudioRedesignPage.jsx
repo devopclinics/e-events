@@ -662,6 +662,8 @@ const WORDING_FIELDS = [
   ['admissionNote', 'Admission note', 'Present this pass at the door for entry.'],
   ['parkingNote', 'Parking note', ''],
   ['customMessage', 'Custom message', ''],
+  ['aboutHeading', 'About section heading', ''],
+  ['whoCanAttend', 'Who can attend', ''],
   ['aboutWebsite', 'About / website', ''],
   ['footerMessage', 'Footer message', ''],
   ['footerNote', 'Footer note', ''],

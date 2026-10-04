@@ -531,3 +531,65 @@
 .flow-help-link strong { font: 700 18px Georgia, serif; }
 .flow-help-link span { color: var(--muted); font-size: 12px; line-height: 1.5; }
 .flow-help-link:focus-visible { outline: 3px solid var(--event-primary, #075b47); outline-offset: 5px; border-radius: 6px; }
+
+/* NCNMO's published palette covers the whole guest journey, not just buttons. */
+[data-event-brand="ncnmo"] {
+  --event-soft-green: color-mix(in srgb, var(--event-primary) 8%, var(--event-surface));
+  --event-soft-gold: color-mix(in srgb, var(--event-accent) 16%, var(--event-surface));
+  --event-border: color-mix(in srgb, var(--event-primary) 22%, var(--event-surface));
+  --event-muted: color-mix(in srgb, var(--event-ink) 75%, var(--event-surface));
+}
+[data-event-brand="ncnmo"] :is(.complete-event-screen, .complete-registration-stage, .complete-confirmation, .flow-phone) {
+  --muted: var(--event-muted);
+  --line: var(--event-border);
+  background: var(--event-background);
+  color: var(--event-ink);
+}
+[data-event-brand="ncnmo"] .flow-topbar { border-bottom: 3px solid var(--event-accent); background: var(--event-surface); }
+[data-event-brand="ncnmo"] .flow-avatar { background: var(--event-soft-gold); color: var(--event-primary); }
+[data-event-brand="ncnmo"] :is(.complete-rsvp-hero, .flow-home-banner, .fh-complete-banner) {
+  background: linear-gradient(145deg, color-mix(in srgb, var(--event-primary) 96%, transparent), color-mix(in srgb, var(--event-secondary) 94%, transparent)), var(--event-cover, none);
+  background-color: var(--event-primary);
+  background-size: cover;
+  background-position: center;
+  border-bottom: 5px solid var(--event-accent);
+  color: #fff;
+}
+[data-event-brand="ncnmo"] :is(.complete-rsvp-brand h1, .flow-home-banner h1, .fh-complete-banner h2, .fh-complete-banner .fh-journey-event-name, .fh-complete-banner .fh-journey-welcome) { color: #fff; }
+[data-event-brand="ncnmo"] :is(.complete-rsvp-brand span, .complete-rsvp-brand em, .flow-home-banner>span, .fh-complete-banner .fh-journey-kicker) { color: var(--event-accent); }
+[data-event-brand="ncnmo"] :is(.complete-rsvp-meta, .flow-home-banner p, .fh-complete-banner .fh-journey-meta) { color: #fff; }
+[data-event-brand="ncnmo"] .complete-hero-cta { background: var(--event-accent); border-color: var(--event-accent); color: var(--event-primary); }
+[data-event-brand="ncnmo"] :is(.complete-rsvp-card, .complete-event-details, .complete-convention-plan, .flow-welcome, .complete-confirm-details) {
+  background: var(--event-surface);
+  border-color: var(--event-border);
+  border-top: 3px solid var(--event-accent);
+}
+[data-event-brand="ncnmo"] :is(.complete-section-label, .guided-step-heading>span, .complete-eyebrow) { color: var(--event-primary); }
+[data-event-brand="ncnmo"] :is(.complete-rsvp-card>p, .complete-convention-plan>p, .complete-important>p, .guided-step-heading p, .complete-plan-cards small, .complete-detail-list small, .guided-review-card small, .guided-review-card span) { color: var(--event-muted); }
+[data-event-brand="ncnmo"] .complete-detail-list>div { background: var(--event-soft-green); border-left: 3px solid var(--event-primary); }
+[data-event-brand="ncnmo"] :is(.complete-detail-list i, .complete-rsvp-card .complete-benefits i, .complete-plan-cards i) { background: var(--event-primary); color: var(--event-accent); }
+[data-event-brand="ncnmo"] .complete-plan-cards>:is(a,button) { background: var(--event-soft-gold); border-color: var(--event-accent); }
+[data-event-brand="ncnmo"] .complete-important { background: var(--event-soft-gold); border-color: var(--event-accent); border-left: 4px solid var(--event-accent); }
+[data-event-brand="ncnmo"] .complete-final-cta { background: var(--event-primary); border-color: var(--event-accent); color: #fff; }
+[data-event-brand="ncnmo"] .complete-final-cta :is(h2,p,.complete-returning-note b,.complete-link) { color: #fff; }
+[data-event-brand="ncnmo"] .complete-final-cta .complete-primary { background: var(--event-accent); border-color: var(--event-accent); color: var(--event-primary); }
+[data-event-brand="ncnmo"] :is(.complete-about-link,.flow-section-heading button,.flow-section-heading span) { color: var(--event-primary); }
+[data-event-brand="ncnmo"] .flow-tool-grid button { border: 1px solid var(--event-border); background: var(--event-soft-green); color: var(--event-primary); }
+[data-event-brand="ncnmo"] .flow-tool-grid button:nth-child(even) { background: var(--event-soft-gold); border-color: var(--event-accent); }
+[data-event-brand="ncnmo"] .flow-tool-grid button i { color: var(--event-primary); }
+[data-event-brand="ncnmo"] .flow-tool-grid button:first-child { background: var(--event-primary); color: #fff; }
+[data-event-brand="ncnmo"] .flow-tool-grid button:first-child i { color: var(--event-accent); }
+[data-event-brand="ncnmo"] .flow-journey-grid :is(div,button) { background: var(--event-soft-green); border: 1px solid var(--event-border); }
+[data-event-brand="ncnmo"] .flow-journey-grid .pending { background: var(--event-soft-gold); border-color: var(--event-accent); }
+[data-event-brand="ncnmo"] .flow-party { margin: 0 14px 14px; padding: 14px; background: var(--event-surface); border: 1px solid var(--event-border); border-radius: 13px; }
+[data-event-brand="ncnmo"] .flow-person i { background: var(--event-soft-gold); color: var(--event-primary); }
+[data-event-brand="ncnmo"] .flow-person span { background: var(--event-soft-green); color: var(--event-primary); }
+[data-event-brand="ncnmo"] .flow-help { background: var(--event-primary); border-left: 4px solid var(--event-accent); }
+[data-event-brand="ncnmo"] .flow-help-link { color: #fff; }
+[data-event-brand="ncnmo"] .flow-help-link span { color: #fff; }
+[data-event-brand="ncnmo"] .flow-help-link:focus-visible { outline-color: var(--event-accent); }
+[data-event-brand="ncnmo"] .flow-pass-screen { background: linear-gradient(160deg, var(--event-primary), var(--event-secondary) 65%, var(--event-background) 65.2%); }
+[data-event-brand="ncnmo"] .flow-pass-hero { color: #fff; }
+[data-event-brand="ncnmo"] .flow-pass-hero span { color: var(--event-accent); }
+[data-event-brand="ncnmo"] .flow-pass-card { background: var(--event-surface); border-color: var(--event-accent); }
+[data-event-brand="ncnmo"] :is(.flow-bottom,.flow-day-pass) { background: var(--event-surface); border-color: var(--event-border); }

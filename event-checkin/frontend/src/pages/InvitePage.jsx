@@ -5,6 +5,7 @@ import { api } from '../api'
 import { useGuestPush } from '../hooks/useGuestPush'
 import { parseUtc, fmtEventDateRange } from '../timeutil'
 import { seatingTerm, seatTerm } from '../seatingTerm'
+import { normalizePhone, phoneInputSettings } from '../lib/rsvpPhone.mjs'
 import './GuestHubThemes.css'
 import PublicTicketCheckout from '../components/PublicTicketCheckout'
 
@@ -66,19 +67,6 @@ function downloadICS(event) {
 /** WhatsApp share URL. */
 function whatsappShareUrl(text) {
   return `https://wa.me/?text=${encodeURIComponent(text)}`
-}
-
-// Format a phone as an international number, defaulting to Nigeria (+234).
-// Already-international numbers (starting with +) are kept as-is.
-function normalizePhone(raw) {
-  const s = (raw || '').trim()
-  if (!s) return ''
-  if (s.startsWith('+')) return s.replace(/[^\d+]/g, '')
-  const digits = s.replace(/\D/g, '')
-  if (!digits) return ''
-  if (digits.startsWith('234')) return '+' + digits          // 234... → +234...
-  if (digits.startsWith('0')) return '+234' + digits.slice(1) // 080... → +23480...
-  return '+234' + digits                                      // bare local → +234...
 }
 
 // ── Theme definitions ─────────────────────────────────────────────────────────
@@ -670,7 +658,7 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {}, guidedFlow =
           first_name: form.first_name.trim(),
           last_name: form.last_name.trim(),
           email: form.email.trim(),
-          phone: normalizePhone(form.phone) || undefined,
+          phone: normalizePhone(form.phone, event) || undefined,
           sms_consent: Boolean(form.phone.trim() && smsConsent),
           whatsapp_consent: Boolean(form.phone.trim() && smsConsent),
           answers,
@@ -689,7 +677,7 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {}, guidedFlow =
                   first_name: row.first_name.trim(),
                   last_name: row.last_name.trim(),
                   relationship: row.relationship.trim(),
-                  phone: normalizePhone(row.phone) || undefined,
+                  phone: normalizePhone(row.phone, event) || undefined,
                   email: row.email.trim() || undefined,
                   guest_type: row.guest_type,
                   age_group: row.age_group || undefined,
@@ -790,8 +778,8 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {}, guidedFlow =
           {collectPhone && (
             <div>
               <label className="mb-2 block text-sm font-bold text-slate-700">{dWording.phoneLabel || (multiInvitee ? 'Submitter phone' : 'Phone')} {phoneRequired ? <span className="text-red-500">*</span> : <span className="text-slate-400">(optional)</span>}</label>
-              <input required={phoneRequired} type="tel" value={form.phone} onChange={set('phone')} className={inputCls} placeholder="(555) 123-4567" />
-              <p className="mt-1 text-xs text-slate-500">Enter a U.S. number, or select the appropriate country code for an international number.</p>
+              <input required={phoneRequired} type="tel" value={form.phone} onChange={set('phone')} className={inputCls} placeholder={phoneInputSettings(event).placeholder} />
+              <p className="mt-1 text-xs text-slate-500">{phoneInputSettings(event).helpText}</p>
             </div>
           )}
 
@@ -908,7 +896,8 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {}, guidedFlow =
                     {collectPhone && (
                     <div>
                       <label className="mb-1 block text-xs font-bold text-slate-600">Phone {rowPhoneRequired ? <span className="text-red-500">*</span> : <span className="text-slate-400">(optional)</span>}</label>
-                      <input required={rowPhoneRequired} type="tel" value={row.phone} onChange={(e) => setInvitee(index, 'phone', e.target.value)} className={inputCls} placeholder="(555) 123-4567" />
+                      <input required={rowPhoneRequired} type="tel" value={row.phone} onChange={(e) => setInvitee(index, 'phone', e.target.value)} className={inputCls} placeholder={phoneInputSettings(event).placeholder} />
+                      <p className="mt-1 text-xs text-slate-500">{phoneInputSettings(event).helpText}</p>
                     </div>
                     )}
                     {collectEmail && (
@@ -1215,7 +1204,7 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone, tone, dWording = 
           status,
           first_name: form.first_name.trim(),
           last_name: form.last_name.trim(),
-          phone: normalizePhone(form.phone) || undefined,
+          phone: normalizePhone(form.phone, event) || undefined,
           sms_consent: Boolean(form.phone.trim() && smsConsent),
           whatsapp_consent: Boolean(form.phone.trim() && smsConsent),
           answers,
@@ -1261,7 +1250,8 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone, tone, dWording = 
       {event.rsvp_collect_phone && (
         <div>
           <label className="mb-2 block text-sm font-bold text-slate-700">{dWording.phoneLabel || 'Phone'} <span className="text-slate-400">(optional)</span></label>
-          <input type="tel" value={form.phone} onChange={set('phone')} className={inputCls} placeholder="+1 (832) 000-0000" />
+          <input type="tel" value={form.phone} onChange={set('phone')} className={inputCls} placeholder={phoneInputSettings(event).placeholder} />
+          <p className="mt-1 text-xs text-slate-500">{phoneInputSettings(event).helpText}</p>
         </div>
       )}
 

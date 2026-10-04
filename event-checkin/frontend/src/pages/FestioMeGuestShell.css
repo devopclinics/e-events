@@ -28,3 +28,18 @@
 .fm-chat-shell .fm-side-panel{z-index:50}
 
 .fm-chat-shell .fm-notice{z-index:25}
+
+/* Participant colors are stable by member ID, rather than changing per message. */
+.fm-chat-shell .fm-chat-thread article.fm-message > .fm-message-avatar {
+  background: var(--fm-author-background) !important;
+  color: var(--fm-author-color) !important;
+  border: 1px solid color-mix(in srgb, var(--fm-author-color) 22%, transparent);
+  border-radius: 50%;
+}
+.fm-chat-shell .fm-chat-thread article.fm-message > div {
+  background: var(--fm-author-background);
+  border-left: 3px solid var(--fm-author-color);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.fm-chat-shell .fm-chat-thread .fm-message-author { color: var(--fm-author-color) !important; }

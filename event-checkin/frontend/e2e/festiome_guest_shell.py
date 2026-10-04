@@ -12,11 +12,13 @@ ARTIFACTS.mkdir(exist_ok=True)
 def exercise(browser, width, height):
     context = browser.new_context(service_workers='block',viewport={'width': width, 'height': height})
     page = context.new_page()
-    errors, sent, exchanges, account_tokens = [], [], [], []
+    errors, sent, exchanges, account_tokens, reactions = [], [], [], [], []
     page.on('pageerror', lambda error: errors.append(str(error)))
     channels = [dict(id='general', name='General', kind='discussion', unread_count=3), dict(id='announcements', name='Announcements', kind='announcement', unread_count=1)]
     members = [dict(id='me',display_name='Aminu Muritala',is_me=True,role='member',bio='Community member'),dict(id='aisha',display_name='Aisha Bello',role='member',bio='Looking forward to the convention',interest_tags=['community'])]
     messages = [dict(id='welcome',author_name='Aisha Bello',author_member_id='aisha',body='Looking forward to meeting everyone!',created_at='2026-10-02T15:24:00Z',reactions=[])]
+    messages += [dict(id='second',author_name='Aminu Muritala',author_member_id='me',body='See you at the convention!',created_at='2026-10-02T15:25:00Z',reactions=[]),
+                 dict(id='third',author_name='Aisha Bello',author_member_id='aisha',body='Bringing my family too.',created_at='2026-10-02T15:26:00Z',reactions=[])]
     expired_once = [False]
     created_meetups = []
     def api(route):
@@ -35,13 +37,24 @@ def exercise(browser, width, height):
             value = channels
         elif path.endswith('/members'):
             value = members
+        elif '/reactions' in path:
+            from urllib.parse import unquote
+            message = next(m for m in messages if m['id'] == path.split('/messages/')[1].split('/')[0])
+            if req.method == 'POST':
+                emoji = req.post_data_json['emoji']
+                message['reactions'].append(dict(emoji=emoji,count=1,reacted_by_me=True))
+            else:
+                emoji = unquote(path.rsplit('/',1)[1])
+                message['reactions'] = [r for r in message['reactions'] if r['emoji'] != emoji]
+            reactions.append((req.method,emoji))
+            value = message
         elif path.endswith('/messages'):
             if req.method == 'POST':
                 sent.append(req.post_data_json)
                 value = dict(id='sent',author_name='Aminu Muritala',author_member_id='me',body=req.post_data_json['body'],created_at='2026-10-02T16:00:00Z',reactions=[])
                 messages.append(value)
             else:
-                value = dict(items=messages if 'general' in path or 'dm' in path else [], next_cursor=None)
+                value = dict(items=list(reversed(messages)) if 'general' in path or 'dm' in path else [], next_cursor=None)
         elif path.endswith('/dms'):
             value = dict(id='dm-aisha',name='Aisha Bello',is_dm=True,kind='discussion')
             if not any(c['id']==value['id'] for c in channels): channels.append(value)
@@ -83,9 +96,37 @@ def exercise(browser, width, height):
     composer = page.get_by_placeholder('Write a message…')
     expect(page.locator('.fm-chat-thread').get_by_text('Looking forward to meeting everyone!',exact=True)).to_be_visible()
     composer.fill('Hello from the UI regression test')
+    composer.evaluate('e => e.setSelectionRange(5,5)')
+    page.get_by_role('button',name='Add emoji',exact=True).click()
+    picker = page.get_by_role('dialog',name='Choose an emoji',exact=True)
+    expect(picker).to_be_visible()
+    picker.get_by_label('Search emojis').fill('green heart')
+    picker.get_by_role('button',name='green heart',exact=True).click()
+    expect(composer).to_have_value('Hello💚 from the UI regression test')
+    page.get_by_role('button',name='Add emoji',exact=True).click()
+    page.keyboard.press('Escape')
+    expect(picker).not_to_be_visible()
     page.locator('.fm-chat-thread form').get_by_role('button',name='Send',exact=True).click()
-    expect(page.locator('.fm-chat-thread').get_by_text('Hello from the UI regression test',exact=True)).to_be_visible()
-    assert sent[-1]['body'] == 'Hello from the UI regression test'
+    expect(page.locator('.fm-chat-thread').get_by_text('Hello💚 from the UI regression test',exact=True)).to_be_visible()
+    assert sent[-1]['body'] == 'Hello💚 from the UI regression test'
+    aisha = page.locator('.fm-message[data-author-id="aisha"]')
+    mine = page.locator('.fm-message[data-author-id="me"]')
+    color = lambda element: element.evaluate('e => getComputedStyle(e).getPropertyValue("--fm-author-color")')
+    assert color(aisha.first) == color(aisha.last)
+    assert color(aisha.first) != color(mine.first)
+    aisha.first.get_by_role('button',name="Add reaction to Aisha Bello's message",exact=True).click()
+    reaction_picker = page.get_by_role('dialog',name='React to message',exact=True)
+    reaction_picker.get_by_role('button',name='Faces',exact=True).click()
+    assert reaction_picker.locator('.fm-emoji-grid button').count() > 80
+    box = reaction_picker.bounding_box()
+    assert box['x'] >= 0 and box['x'] + box['width'] <= width and box['y'] >= 0 and box['y'] + box['height'] <= height
+    page.screenshot(path=str(ARTIFACTS/f'emojis-{width}.png'))
+    reaction_picker.get_by_label('Search emojis').fill('mosque')
+    reaction_picker.get_by_role('button',name='mosque',exact=True).click()
+    expect(page.locator('.fm-message').filter(has_text='Looking forward to meeting everyone!').get_by_role('button',name='🕌 1',exact=True)).to_be_visible()
+    page.locator('.fm-message').filter(has_text='Looking forward to meeting everyone!').get_by_role('button',name='🕌 1',exact=True).click()
+    expect(page.locator('.fm-message').filter(has_text='Looking forward to meeting everyone!').get_by_role('button',name='🕌 1',exact=True)).not_to_be_visible()
+    assert reactions == [('POST','🕌'),('DELETE','🕌')]
     shell_box = page.locator('.fm-chat-shell').bounding_box()
     assert shell_box['width'] <= 1340 if width < 1500 else shell_box['width'] <= 1460
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'Page overflows horizontally'
@@ -101,7 +142,7 @@ def exercise(browser, width, height):
     expect(page.get_by_role('dialog',name='Create a poll')).to_be_visible()
     page.get_by_role('dialog').get_by_role('button',name='×',exact=True).click()
     thread_form.get_by_role('button',name='+',exact=True).click()
-    page.locator('.fm-chat-thread article').first.get_by_role('button',name='Reply',exact=True).click()
+    page.locator('.fm-message').filter(has_text='Looking forward to meeting everyone!').get_by_role('button',name='Reply',exact=True).click()
     expect(thread_form.get_by_text('Replying to Aisha Bello',exact=True)).to_be_visible()
     thread_form.get_by_role('button',name='×',exact=True).click()
     page.get_by_role('button',name='Notification settings',exact=True).click()

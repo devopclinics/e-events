@@ -3,6 +3,8 @@ import { useLocation } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useGuestPush } from "../hooks/useGuestPush";
+import ChatEmojiPicker from "../components/ChatEmojiPicker";
+import { authorColorStyle } from "../lib/chatPresentation.mjs";
 import "./FestioMePage.css";
 import "./FestioMeGuestShell.css";
 
@@ -52,7 +54,6 @@ const errorText = (error) =>
   !error || error.status >= 500
     ? "FestioMe is temporarily unavailable. Your other Festio features are unaffected."
     : error.message || "FestioMe could not complete that request.";
-const REACTION_EMOJIS = ["❤️", "👍", "😂", "😮", "👏"];
 
 function Dialog({ title, children, onClose }) {
   return (
@@ -132,7 +133,9 @@ export default function FestioMePage() {
   const [editing, setEditing] = useState(null),
     [attachments, setAttachments] = useState([]),
     [uploading, setUploading] = useState(false);
-  const [reactionPickerFor, setReactionPickerFor] = useState(null);
+  const [emojiPicker, setEmojiPicker] = useState(null);
+  const composerRef = useRef(null);
+  useEffect(() => { setEmojiPicker(null); }, [channelId, groupId, showHome]);
   const [typingMember, setTypingMember] = useState(null);
   const typingClearRef = useRef(null);
   const lastTypingPingRef = useRef(0);
@@ -733,6 +736,24 @@ export default function FestioMePage() {
     } catch (e) {
       setNotice(errorText(e));
     }
+  }
+  function chooseEmoji(emoji) {
+    if (emojiPicker.kind === 'reaction') {
+      const message = messages.find((item) => item.id === emojiPicker.message.id) || emojiPicker.message;
+      const existing = (message.reactions || []).find((item) => item.emoji === emoji);
+      toggleReaction(message, emoji, existing?.reacted_by_me);
+      emojiPicker.anchor?.focus();
+    } else {
+      const start = composerRef.current?.selectionStart ?? draft.length;
+      const end = composerRef.current?.selectionEnd ?? start;
+      setDraft((value) => value.slice(0, start) + emoji + value.slice(end));
+      requestAnimationFrame(() => {
+        composerRef.current?.focus();
+        composerRef.current?.setSelectionRange(start + emoji.length, start + emoji.length);
+      });
+      pingTyping();
+    }
+    setEmojiPicker(null);
   }
   async function uploadFiles(files) {
     if (!files?.length) return;
@@ -1432,13 +1453,13 @@ export default function FestioMePage() {
                       return (
                         <div key={message.id}>
                         {guestMode && (messageIndex === 0 || new Date(messages[messageIndex - 1].created_at).toDateString() !== new Date(message.created_at).toDateString()) && <div className="fm-chat-date">{new Date(message.created_at).toLocaleDateString([], {weekday:"short",month:"short",day:"numeric"})}</div>}
-                        <article className="group flex gap-3">
-                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#13294a] text-xs font-bold bg-[#13294a]">
+                        <article className="fm-message group flex gap-3" data-author-id={message.author_member_id || message.sender_id || name(message)} style={guestMode ? authorColorStyle(message.author_member_id || message.sender_id || name(message)) : undefined}>
+                          <span className="fm-message-avatar grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#13294a] text-xs font-bold bg-[#13294a]">
                             {initials(name(message))}
                           </span>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-baseline gap-2">
-                              <b className="text-sm text-white">
+                              <b className="fm-message-author text-sm text-white">
                                 {name(message)}
                               </b>
                               <time className="text-[11px] text-[#7893a8]">
@@ -1529,28 +1550,15 @@ export default function FestioMePage() {
                                     </button>
                                   ))}
                                   <button
-                                    onClick={() => setReactionPickerFor(reactionPickerFor === message.id ? null : message.id)}
+                                    type="button"
+                                    aria-label={`Add reaction to ${name(message)}'s message`}
+                                    aria-haspopup="dialog"
+                                    aria-expanded={emojiPicker?.kind === 'reaction' && emojiPicker.message.id === message.id}
+                                    onClick={(event) => setEmojiPicker(emojiPicker?.kind === 'reaction' && emojiPicker.message.id === message.id ? null : { kind: 'reaction', message, anchor: event.currentTarget })}
                                     className="rounded-full border border-dashed border-[#1b3a52] px-1.5 border-[#1b3a52]"
                                   >
                                     +
                                   </button>
-                                  {reactionPickerFor === message.id && (
-                                    <span className="absolute bottom-full left-0 z-10 mb-1 flex gap-1 rounded-full border bg-[#0a1f33] p-1 text-sm shadow-lg border-[#1b3a52] bg-[#0d2338]">
-                                      {REACTION_EMOJIS.map((emoji) => (
-                                        <button
-                                          key={emoji}
-                                          onClick={() => {
-                                            const existing = (message.reactions || []).find((r) => r.emoji === emoji);
-                                            toggleReaction(message, emoji, existing?.reacted_by_me);
-                                            setReactionPickerFor(null);
-                                          }}
-                                          className="rounded-full px-1 hover:bg-[#0d2338] hover:bg-[#1a3555]"
-                                        >
-                                          {emoji}
-                                        </button>
-                                      ))}
-                                    </span>
-                                  )}
                                 </span>
                                 {(message.can_edit ||
                                   message.author_member_id === me?.id) && (
@@ -1720,6 +1728,7 @@ export default function FestioMePage() {
                         +
                       </button>
                       <input
+                        ref={composerRef}
                         value={draft}
                         onChange={(e) => {
                           setDraft(e.target.value);
@@ -1729,7 +1738,7 @@ export default function FestioMePage() {
                         placeholder={guestMode ? "Write a message…" : `Message ${channelIcon(activeChannel)} ${activeChannel?.name || ""} — use @ to mention`}
                         className="min-w-0 flex-1 rounded-full border bg-[#0a1f33] px-4 py-2.5 text-sm border-[#1b3a52] bg-[#0d2338] text-white"
                       />
-                      {guestMode && <button type="button" aria-label="Add emoji" className="fm-composer-emoji" onClick={() => setDraft((value) => value + " 😊")}>☺</button>}
+                      <button type="button" aria-label="Add emoji" aria-haspopup="dialog" aria-expanded={emojiPicker?.kind === 'composer'} className="fm-composer-emoji" onClick={(event) => setEmojiPicker(emojiPicker?.kind === 'composer' ? null : { kind: 'composer', anchor: event.currentTarget })}>☺</button>
                       <button
                         disabled={
                           (!draft.trim() && !attachments.length) || sending
@@ -2640,6 +2649,7 @@ export default function FestioMePage() {
           </form>
         </Dialog>
       )}
+      {emojiPicker && <ChatEmojiPicker key={emojiPicker.kind === 'reaction' ? emojiPicker.message.id : 'composer'} anchor={emojiPicker.anchor} title={emojiPicker.kind === 'reaction' ? 'React to message' : 'Choose an emoji'} onSelect={chooseEmoji} onClose={() => setEmojiPicker(null)} />}
       {notice && (
         <button
           onClick={() => setNotice("")}

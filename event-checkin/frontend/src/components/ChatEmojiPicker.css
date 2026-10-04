@@ -1,0 +1,15 @@
+.fm-emoji-picker { position: fixed; z-index: 95; display: flex; flex-direction: column; padding: 12px; border: 1px solid #cddde4; border-radius: 16px; background: #fff; color: #19344b; box-shadow: 0 12px 40px #16334b33; font-family: Inter, system-ui, sans-serif; font-size: 14px; color-scheme: light; }
+.fm-emoji-picker header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.fm-emoji-picker button { border: 0; background: transparent; color: #19344b; cursor: pointer; min-width: 32px; min-height: 36px; border-radius: 8px; }
+.fm-emoji-picker header button { font-size: 24px; }
+.fm-emoji-picker > input { width: 100%; margin: 8px 0; min-height: 40px; padding: 8px 10px; border: 1px solid #cddde4 !important; border-radius: 10px; background: #f8fbfc !important; color: #19344b !important; font-size: 16px; }
+.fm-emoji-picker > input::placeholder { color: #5c7384 !important; }
+.fm-emoji-picker nav { display: flex; gap: 1px; overflow-x: auto; flex: none; padding-bottom: 6px; border-bottom: 1px solid #e4edf1; }
+.fm-emoji-picker nav button { flex: none; font-size: 20px; }
+.fm-emoji-picker button:hover, .fm-emoji-picker button[aria-pressed=true] { background: #e3f5f1; }
+.fm-emoji-picker button:focus-visible, .fm-emoji-picker input:focus-visible { outline: 2px solid #008a7d; outline-offset: 2px; }
+.fm-emoji-results { overflow-y: auto; min-height: 0; overscroll-behavior: contain; }
+.fm-emoji-category-label { display: block; padding: 12px 4px 6px; font-size: 12px; font-weight: 700; color: #547083; }
+.fm-emoji-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.fm-emoji-grid button { font-size: 24px; min-height: 40px; }
+.fm-emoji-results p { padding: 10px; color: #547083; line-height: 1.5; }

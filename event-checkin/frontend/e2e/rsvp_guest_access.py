@@ -104,13 +104,33 @@ def exercise(browser, variant, width, user_agent=None):
     expect(page.get_by_role('heading', name='Welcome, Aminu!')).to_be_visible()
     expect(page.get_by_role('heading', name='My Party (2)')).to_be_visible()
     for feature in ('FestioMe', 'Communications', 'Book your hotel', 'Festio Live'):
-        expect(page.get_by_role('button', name=re.compile(feature))).to_be_visible()
+        expect(page.locator('.flow-tool-grid').get_by_role('button', name=re.compile(feature))).to_be_visible()
     consistent()
     page.screenshot(path=str(OUT / f'{variant}-registered.png'), full_page=True)
+    page.locator('.flow-help-link').focus()
+    page.locator('.flow-help-link').press('Enter')
+    expect(page.get_by_placeholder('Ask the host a question...')).to_be_visible()
+    page.get_by_role('button', name='← Back to GuestHub home').click()
+    page.get_by_role('button', name=re.compile('Help & FAQ')).click()
+    expect(page.get_by_placeholder('Ask the host a question...')).to_be_visible()
+    page.get_by_role('button', name='← Back to GuestHub home').click()
+    consistent()
     page.get_by_role('button', name=re.compile('View My Pass')).click()
     expect(page.get_by_role('img', name='Your QR pass code')).to_be_visible()
     page.get_by_role('button', name='Open GuestHub →').click()
     expect(page.get_by_role('heading', name='My Party (2)')).to_be_visible()
+
+    # The Help shortcut cannot enable organizer messaging when the event disables it.
+    HUB['capabilities']['direct_host_messages'] = False
+    EVENT['host_email'] = 'organizer@example.org'
+    page.reload()
+    expect(page.locator('.flow-help-link')).to_be_visible()
+    page.locator('.flow-help-link').click()
+    expect(page.get_by_text("Message Host isn't enabled for this event.", exact=True)).to_be_visible()
+    assert page.get_by_placeholder('Ask the host a question...').count() == 0
+    expect(page.get_by_role('link', name='Email the event organizer →')).to_have_attribute('href', 'mailto:organizer@example.org')
+    HUB['capabilities']['direct_host_messages'] = True
+    EVENT.pop('host_email')
 
     mode[0] = 'invalid'
     page.reload()

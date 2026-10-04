@@ -75,7 +75,7 @@ function whatsappShareUrl(text) {
 // Fallback "Guest type" options for the additional-invitee repeater, used
 // whenever an event has no rsvp_invitee_type_options override configured
 // (Guests → Multi-invitee settings → Guest type options).
-const DEFAULT_INVITEE_TYPES = ['Parent/Guardian', 'Invited Guest', 'Teacher', 'School/Staff', 'VIP/Dignitary', 'Other']
+const DEFAULT_INVITEE_TYPES = ['Spouse/Partner', 'Child', 'Parent/Guardian', 'Sibling', 'Relative', 'Friend', 'Invited Guest', 'Teacher', 'School/Staff', 'VIP/Dignitary', 'Other']
 
 const THEMES = {
   default: {
@@ -630,7 +630,9 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {}, guidedFlow =
   }, [additionalInviteeLimit])
 
   function setInvitee(index, key, value) {
-    setInvitees((rows) => rows.map((row, i) => (i === index ? { ...row, [key]: value } : row)))
+    setInvitees((rows) => rows.map((row, i) => (i === index
+      ? { ...row, [key]: value, ...(key === 'guest_type' ? { relationship: '' } : {}) }
+      : row)))
   }
 
   function addInvitee() {
@@ -677,7 +679,7 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {}, guidedFlow =
                 return kept.map(({ row }, newIndex) => ({
                   first_name: row.first_name.trim(),
                   last_name: row.last_name.trim(),
-                  relationship: row.relationship.trim(),
+                  relationship: row.guest_type.trim().toLowerCase() === 'other' ? row.relationship.trim() : row.guest_type,
                   phone: normalizePhone(row.phone, event) || undefined,
                   email: row.email.trim() || undefined,
                   guest_type: row.guest_type,
@@ -876,8 +878,8 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {}, guidedFlow =
                       <input required={rowNameRequired} value={row.last_name} onChange={(e) => setInvitee(index, 'last_name', e.target.value)} className={inputCls} placeholder="Invitee last name" />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-bold text-slate-600">Guest type</label>
-                      <select value={row.guest_type} onChange={(e) => setInvitee(index, 'guest_type', e.target.value)} className={inputCls}>
+                      <label htmlFor={`invitee-role-${index}`} className="mb-1 block text-xs font-bold text-slate-600">Relationship / role</label>
+                      <select id={`invitee-role-${index}`} value={row.guest_type} onChange={(e) => setInvitee(index, 'guest_type', e.target.value)} className={inputCls}>
                         {inviteeTypes.map((type) => <option key={type} value={type}>{type}</option>)}
                       </select>
                     </div>
@@ -890,10 +892,10 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {}, guidedFlow =
                       </select>
                     </div>
                     )}
-                    <div>
-                      <label className="mb-1 block text-xs font-bold text-slate-600">Relationship / role</label>
-                      <input value={row.relationship} onChange={(e) => setInvitee(index, 'relationship', e.target.value)} className={inputCls} placeholder="Aunt, teacher, chairman, etc." />
-                    </div>
+                    {row.guest_type.trim().toLowerCase() === 'other' && <div>
+                      <label htmlFor={`invitee-other-role-${index}`} className="mb-1 block text-xs font-bold text-slate-600">Please specify relationship / role</label>
+                      <input id={`invitee-other-role-${index}`} required={rowNameRequired} value={row.relationship} onChange={(e) => setInvitee(index, 'relationship', e.target.value)} className={inputCls} placeholder="For example, aunt or community leader" />
+                    </div>}
                     {collectPhone && (
                     <div>
                       <label className="mb-1 block text-xs font-bold text-slate-600">Phone {rowPhoneRequired ? <span className="text-red-500">*</span> : <span className="text-slate-400">(optional)</span>}</label>
@@ -1433,7 +1435,6 @@ function FlowTools({ event, hub, journey, go, designTheme, guestContent, onOpenS
   const venue = [event?.venue_name, event?.venue_address].filter(Boolean).join(', ')
   const hotelBookingUrl = externalUrl(designTheme?.wording?.hotelBookingUrl)
   const hotelBookingLabel = designTheme?.wording?.hotelBookingLabel || 'Book your hotel'
-  const helpEmail = event?.contact_email || event?.support_email || event?.host_email
   const tools = [
     guest.qr_token && ['▦', 'My Pass', () => go('pass')],
     moduleVisible('live_program') && journey?.program?.enabled !== false && (journey?.program?.days?.length || journey?.program?.current_segments?.length || journey?.program?.next_segments?.length) && ['▣', 'Programme', () => go('program')],
@@ -1448,7 +1449,7 @@ function FlowTools({ event, hub, journey, go, designTheme, guestContent, onOpenS
     hub?.announcements?.length > 0 && ['●', 'Event Updates', () => onOpenServices?.('updates')],
     (guestContent?.materials?.length || guestContent?.certificates?.length) && ['□', 'Resources', () => onOpenServices?.('resources')],
     moduleVisible('activity_progress') && (journey?.steps?.length || journey?.consent?.required || journey?.menu_selectable) && ['✓', 'My Experience', () => onOpenServices?.('experience')],
-    ['?', 'Help & FAQ', () => helpEmail ? window.location.assign(`mailto:${helpEmail}`) : document.getElementById('flow-help')?.scrollIntoView({ behavior: 'smooth' })],
+    ['?', 'Help & FAQ', () => onOpenServices?.('communications')],
   ].filter(Boolean)
   return <section className="flow-section"><div className="flow-tool-grid">{tools.map(([ic, label, action]) => <button key={label} onClick={action}><i>{ic}</i>{label}</button>)}</div></section>
 }
@@ -1490,7 +1491,7 @@ function CompleteGuestHubView({ event, hub, journey, previewMock, designTheme, g
   if (screen === 'pass') return <div className="flow-phone flow-option-four"><FlowPass event={event} hub={hub} previewMock={previewMock} onHome={() => go('home')} /></div>
   if (screen === 'program') return <FlowProgramView event={event} journey={journey} go={go} className="flow-option-four" />
   const consentDone = !journey?.consent?.required || journey?.consent?.signed
-  return <div className="flow-phone flow-option-four"><FlowTopBar event={event} /><div className="flow-home-banner"><span>{event?.organization_name || 'FESTIO EVENT'}</span><h1>{event.name}</h1><p>{fmtDate(event.event_date, event.timezone)} · {event.venue_name || 'Event venue'}</p></div><section className="flow-welcome"><h2>Welcome, {guest.name?.split(' ')[0] || 'Guest'}! 👋</h2><p>You're registered for the event.</p><div className="flow-two-actions"><button className="flow-primary" onClick={() => go('pass')}>▦ View My Pass</button><button className="flow-secondary" onClick={() => document.getElementById('flow-party')?.scrollIntoView({ behavior: 'smooth' })}>♟ View My Party</button></div></section><section className="flow-section"><div className="flow-section-heading"><h3>Your Event Journey</h3><button onClick={() => go(guest.admitted ? 'day' : 'pass')}>View Details →</button></div><div className="flow-journey-grid"><button className="done" onClick={() => go('pass')}>✓<b>Registration</b><small>Complete</small></button>{journey?.consent?.required && <button className={consentDone ? 'done' : ''} onClick={() => document.getElementById('flow-help')?.scrollIntoView({ behavior: 'smooth' })}>◉<b>Consent Form</b><small>{consentDone ? 'Complete' : 'Action required'}</small></button>}<button className={guest.admitted ? 'done' : 'pending'} onClick={() => go(guest.admitted ? 'day' : 'pass')}>○<b>Check-in</b><small>{guest.admitted ? 'Checked in' : 'Event day'}</small></button>{journey?.menu_enabled && <button className="pending" onClick={() => guest.qr_token && window.location.assign(`/scan/${guest.qr_token}#orders`)}>♨<b>Meals</b><small>{journey?.menu_has_choices ? 'Selected' : 'Choose meal'}</small></button>}</div></section><FlowTools event={event} hub={hub} journey={journey} go={go} designTheme={designTheme} guestContent={guestContent} onOpenServices={onOpenServices} moduleVisible={moduleVisible} /><FlowNext event={event} segments={segments} onProgramme={() => go('program')} /><section id="flow-party" className="flow-section flow-party"><div className="flow-section-heading"><h3>My Party ({hub?.party?.length || 1})</h3></div>{(hub?.party?.length ? hub.party : [{ name: guest.name || 'Guest', relationship: 'You' }]).map((p, i) => <div className="flow-person" key={p.id || i}><i>{(p.name || 'G').slice(0, 1)}</i><b>{p.name || 'Guest'}</b><small>{p.relationship || (i ? 'Guest' : 'You')}</small><span>✓ Registered</span></div>)}</section><section id="flow-help" className="flow-section flow-help"><h3>Need help?</h3><p>Use your invitation contact details or speak with the event organizer.</p></section></div>
+  return <div className="flow-phone flow-option-four"><FlowTopBar event={event} /><div className="flow-home-banner"><span>{event?.organization_name || 'FESTIO EVENT'}</span><h1>{event.name}</h1><p>{fmtDate(event.event_date, event.timezone)} · {event.venue_name || 'Event venue'}</p></div><section className="flow-welcome"><h2>Welcome, {guest.name?.split(' ')[0] || 'Guest'}! 👋</h2><p>You're registered for the event.</p><div className="flow-two-actions"><button className="flow-primary" onClick={() => go('pass')}>▦ View My Pass</button><button className="flow-secondary" onClick={() => document.getElementById('flow-party')?.scrollIntoView({ behavior: 'smooth' })}>♟ View My Party</button></div></section><section className="flow-section"><div className="flow-section-heading"><h3>Your Event Journey</h3><button onClick={() => go(guest.admitted ? 'day' : 'pass')}>View Details →</button></div><div className="flow-journey-grid"><button className="done" onClick={() => go('pass')}>✓<b>Registration</b><small>Complete</small></button>{journey?.consent?.required && <button className={consentDone ? 'done' : ''} onClick={() => document.getElementById('flow-help')?.scrollIntoView({ behavior: 'smooth' })}>◉<b>Consent Form</b><small>{consentDone ? 'Complete' : 'Action required'}</small></button>}<button className={guest.admitted ? 'done' : 'pending'} onClick={() => go(guest.admitted ? 'day' : 'pass')}>○<b>Check-in</b><small>{guest.admitted ? 'Checked in' : 'Event day'}</small></button>{journey?.menu_enabled && <button className="pending" onClick={() => guest.qr_token && window.location.assign(`/scan/${guest.qr_token}#orders`)}>♨<b>Meals</b><small>{journey?.menu_has_choices ? 'Selected' : 'Choose meal'}</small></button>}</div></section><FlowTools event={event} hub={hub} journey={journey} go={go} designTheme={designTheme} guestContent={guestContent} onOpenServices={onOpenServices} moduleVisible={moduleVisible} /><FlowNext event={event} segments={segments} onProgramme={() => go('program')} /><section id="flow-party" className="flow-section flow-party"><div className="flow-section-heading"><h3>My Party ({hub?.party?.length || 1})</h3></div>{(hub?.party?.length ? hub.party : [{ name: guest.name || 'Guest', relationship: 'You' }]).map((p, i) => <div className="flow-person" key={p.id || i}><i>{(p.name || 'G').slice(0, 1)}</i><b>{p.name || 'Guest'}</b><small>{p.relationship || (i ? 'Guest' : 'You')}</small><span>✓ Registered</span></div>)}</section><section id="flow-help" className="flow-section flow-help"><button type="button" className="flow-help-link" onClick={() => onOpenServices?.('communications')}><strong>Need help? →</strong><span>Open Communications to contact the event organizer.</span></button></section></div>
 }
 
 function GuardianConfirmPanel({ pending, onConfirm }) {
@@ -1946,6 +1947,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
     return <GuestHubAccessState event={event} failure={hubFailure} onRetry={() => setHubRetry((n) => n + 1)} onViewEvent={onViewEvent} />
   }
   const colors = designColors(designTheme, event)
+  const helpEmail = event?.contact_email || event?.support_email || event?.host_email
   // The detailed-service view for the two mobile-first layouts is a reading
   // surface. It must stay legible even when an event uses a mixed light/dark
   // brand palette, where a generic theme gradient can put pale text on a pale card.
@@ -2385,7 +2387,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
 
           {/* Need Help — Message Host + Guest Chat folded under one card */}
           <div id={(journeyLayout || completeLayout) ? 'journey-help' : undefined} className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
-            <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Need Help?</div>
+            <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>{flowServicesOpen === 'communications' ? 'Communications' : 'Need Help?'}</div>
             {hub?.capabilities?.direct_host_messages ? (
               <>
                 <div className="mt-3 max-h-40 space-y-2 overflow-auto">
@@ -2399,7 +2401,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
                 </form>
               </>
             ) : (
-              <p className="mt-2 text-sm" style={{ color: tone.label }}>Message Host isn't enabled for this event.</p>
+              <div className="mt-2 text-sm" style={{ color: tone.label }}><p>Message Host isn't enabled for this event.</p>{helpEmail && <a className="mt-2 inline-block font-bold underline" href={`mailto:${helpEmail}`}>Email the event organizer →</a>}</div>
             )}
             {hub?.capabilities?.guest_chat && (
               <>

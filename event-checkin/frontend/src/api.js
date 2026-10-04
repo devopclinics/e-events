@@ -1605,6 +1605,7 @@ export const api = {
   festiomeJoinGroup: (groupId, data) => festiomeReq('POST', `/festiome/v1/groups/${groupId}/join`, data || {}),
   festiomeAcceptRules: (groupId) => festiomeReq('POST', `/festiome/v1/groups/${groupId}/accept-rules`),
   festiomeCreateSubgroup: (eventRef, data) => festiomeReq('POST', `/festiome/v1/events/${encodeURIComponent(eventRef)}/subgroups`, data),
+  festiomeCreateGroupChat: (eventRef, data) => festiomeReq('POST', `/festiome/v1/events/${encodeURIComponent(eventRef)}/group-chats`, data),
   festiomeGroupJoinRequests: (groupId, status = 'pending') =>
     festiomeReq('GET', `/festiome/v1/groups/${groupId}/join-requests?status=${encodeURIComponent(status)}`),
   festiomeApproveJoinRequest: (groupId, requestId, data) =>

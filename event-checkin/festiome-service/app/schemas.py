@@ -19,6 +19,12 @@ class SubGroupCreate(BaseModel):
     rules: str = Field(default="", max_length=10000)
 
 
+class GroupChatCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    description: str = Field(default="", max_length=5000)
+    member_ids: list[str] = Field(min_length=1, max_length=100)
+
+
 class GroupOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str

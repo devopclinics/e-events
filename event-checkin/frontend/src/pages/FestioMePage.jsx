@@ -4,6 +4,7 @@ import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useGuestPush } from "../hooks/useGuestPush";
 import ChatEmojiPicker from "../components/ChatEmojiPicker";
+import FestioMeMeetups from "../components/FestioMeMeetups";
 import { authorColorStyle } from "../lib/chatPresentation.mjs";
 import "./FestioMePage.css";
 import "./FestioMeGuestShell.css";
@@ -144,17 +145,23 @@ export default function FestioMePage() {
     [searchAllGroups, setSearchAllGroups] = useState(false),
     [peopleSearch, setPeopleSearch] = useState(""),
     [reports, setReports] = useState([]);
+  const [searchRan, setSearchRan] = useState(false);
   const [leaderboard, setLeaderboard] = useState({ items: [], me: null }),
     [matches, setMatches] = useState([]),
     [profileForm, setProfileForm] = useState({ display_name: "", bio: "", tags: "", discoverable: true });
   const [connections, setConnections] = useState([]),
     [meetups, setMeetups] = useState([]),
-    [journey, setJourney] = useState(null),
-    [meetupDraft, setMeetupDraft] = useState({ title: "", location: "", starts_at: "", description: "" });
+    [journey, setJourney] = useState(null);
+  const [networkLoading, setNetworkLoading] = useState(false), [networkError, setNetworkError] = useState("");
+  const [groupChatMembers, setGroupChatMembers] = useState([]), [groupChatPickIds, setGroupChatPickIds] = useState([]);
+  const [groupChatLoading, setGroupChatLoading] = useState(false), [groupChatBusy, setGroupChatBusy] = useState(false);
+  const [groupChatDescription, setGroupChatDescription] = useState("");
+  const networkRequest = useRef(0);
   const [scheduleAt, setScheduleAt] = useState(""),
     [showComposerTools, setShowComposerTools] = useState(false);
   const [pollQuestion, setPollQuestion] = useState(""),
     [pollOptions, setPollOptions] = useState(["", ""]);
+  const [preferencesLoading, setPreferencesLoading] = useState(false), [preferencesError, setPreferencesError] = useState("");
   const [preferences, setPreferences] = useState({
     in_app: true,
     email: true,
@@ -178,12 +185,14 @@ export default function FestioMePage() {
   const activeGroup = groups.find((item) => item.id === groupId),
     activeChannel = channels.find((item) => item.id === channelId);
   const eventRef = activeGroup?.external_event_ref;
+  const primaryEventGroup = groups.find((item) => item.external_event_ref === (guestPushContext?.eventId || eventRef) && item.is_primary !== false);
   const me = members.find(
     (member) =>
       member.is_me ||
       (member.user_id && user?.id && member.user_id === user.id) ||
       (member.email && user?.email && member.email === user.email),
   );
+  const canManageEvent = ["owner", "admin"].includes(primaryEventGroup?.viewer_role);
   const canManage =
     ["owner", "admin"].includes(me?.role) ||
     ["owner", "admin"].includes(activeGroup?.viewer_role) ||
@@ -292,22 +301,31 @@ export default function FestioMePage() {
 
   const loadCommunityNetwork = useCallback(async () => {
     if (!groupId) return;
+    const request = ++networkRequest.current;
+    setNetworkLoading(true); setNetworkError("");
     const guestContext = guestMode ? api.festiomeGuestContext() : null;
     const results = await Promise.allSettled([
       api.festiomeMatches(groupId),
       api.festiomeConnections(groupId),
-      api.festiomeMeetups(groupId),
+      api.festiomeMeetups(groupId, true),
       guestMode && guestContext?.eventId && guestContext?.passToken
         ? api.guestExperience(guestContext.eventId, guestContext.passToken)
         : Promise.resolve(null),
     ]);
+    if (request !== networkRequest.current) return;
     if (results[0].status === "fulfilled") setMatches(list(results[0].value));
     if (results[1].status === "fulfilled") setConnections(list(results[1].value));
     if (results[2].status === "fulfilled") setMeetups(list(results[2].value));
     if (results[3].status === "fulfilled") setJourney(results[3].value);
+    if (results[2].status === "rejected") setNetworkError(errorText(results[2].reason));
+    setNetworkLoading(false);
   }, [groupId, guestMode]);
 
-  useEffect(() => { loadCommunityNetwork(); }, [loadCommunityNetwork]);
+  useEffect(() => {
+    setMeetups([]); setMatches([]); setConnections([]); setJourney(null);
+    loadCommunityNetwork();
+    return () => { networkRequest.current += 1; };
+  }, [loadCommunityNetwork]);
 
   const loadCommunication = useCallback(async () => {
     if (!eventRef) return;
@@ -512,6 +530,33 @@ export default function FestioMePage() {
       setNotice(errorText(e));
     }
   }
+  function openPanel(value) {
+    if (guestMode && value) { setShowHome(false); setMobileThread(true); }
+    setPanel(value);
+  }
+  async function openCreateGroup() {
+    setFormValue(""); setGroupChatDescription(""); setGroupChatPickIds([]);
+    if (!guestMode) { setDialog("new-group"); return; }
+    if (!primaryEventGroup) { setNotice("Open your event community before creating a group."); return; }
+    setDialog("new-group-chat"); setGroupChatLoading(true); setGroupChatMembers([]);
+    try { setGroupChatMembers(list(await api.festiomeMembers(primaryEventGroup.id))); }
+    catch (error) { setNotice(errorText(error)); }
+    finally { setGroupChatLoading(false); }
+  }
+  async function createGroupChat(event) {
+    event.preventDefault();
+    if (!formValue.trim() || !groupChatPickIds.length || groupChatBusy) return;
+    setGroupChatBusy(true);
+    try {
+      const created = await api.festiomeCreateGroupChat(primaryEventGroup.external_event_ref, {
+        name: formValue.trim(), description: groupChatDescription.trim(), member_ids: groupChatPickIds,
+      });
+      await loadGroups(created.id);
+      setDialog(""); setPanel(""); setShowHome(false); setMobileThread(true);
+      setNotice(`Created ${created.name}. Your selected members can now open it from Groups.`);
+    } catch (error) { setNotice(errorText(error)); }
+    finally { setGroupChatBusy(false); }
+  }
   async function updateGroup(action) {
     try {
       if (action === "rename")
@@ -530,7 +575,7 @@ export default function FestioMePage() {
     activeGroup && activeGroup.rules && activeGroup.rules_accepted === false;
 
   async function openDiscover() {
-    setPanel("discover");
+    openPanel("discover");
     if (!eventRef) {
       setDiscover([]);
       return;
@@ -566,7 +611,7 @@ export default function FestioMePage() {
     }
   }
   async function openJoinRequests() {
-    setPanel("requests");
+    openPanel("requests");
     try {
       setJoinReqs(list(await api.festiomeGroupJoinRequests(groupId)));
     } catch (e) {
@@ -667,7 +712,7 @@ export default function FestioMePage() {
   }
   async function startDirectMessage(member) {
     try {
-      const dm = await api.festiomeOpenDirectMessage(groupId, member.id);
+      const dm = await api.festiomeOpenDirectMessage(groupId, member.id || member.member_id);
       await loadGroupData();
       setChannelId(dm.id); setMobileThread(true);
       setPanel("");
@@ -805,8 +850,9 @@ export default function FestioMePage() {
   }
   async function runSearch(event) {
     event.preventDefault();
-    if (!search.trim()) return;
+    if (search.trim().length < 2) { setNotice("Enter at least two characters to search messages."); return; }
     try {
+      setSearchRan(true);
       setSearchResults(
         list(
           searchAllGroups
@@ -819,29 +865,29 @@ export default function FestioMePage() {
     }
   }
   async function openReports() {
-    setPanel("reports");
+    openPanel("reports");
     try {
       setReports(list(await api.festiomeReports(groupId)));
     } catch (e) {
       setNotice(errorText(e));
     }
   }
-  const refreshLeaderboard = useCallback(async () => {
+  const refreshLeaderboard = useCallback(async (showError = false) => {
     if (!groupId) return;
     try {
       const result = await api.festiomeLeaderboard(groupId);
       setLeaderboard({ items: result.items || [], me: result.me || null });
-    } catch {
-      /* the Profile tab's "your points" line is a nicety, not critical */
+    } catch (error) {
+      if (showError) setNotice(errorText(error));
     }
   }, [groupId]);
   useEffect(() => { refreshLeaderboard(); }, [refreshLeaderboard]);
   function openLeaderboard() {
-    setPanel("leaderboard");
-    refreshLeaderboard();
+    openPanel("leaderboard");
+    refreshLeaderboard(true);
   }
   async function openMatches() {
-    setPanel("matches");
+    openPanel("matches");
     if (!groupId) return;
     try {
       setMatches(list(await api.festiomeMatches(groupId)));
@@ -898,22 +944,24 @@ export default function FestioMePage() {
     }
   }
   async function openPreferences() {
-    setDialog("preferences");
+    setDialog("preferences"); setPreferencesLoading(true); setPreferencesError("");
     try {
       setPreferences(await api.festiomeNotificationPreferences(groupId));
-    } catch {
-      /* defaults remain usable */
-    }
+    } catch (error) {
+      setPreferencesError(errorText(error));
+    } finally { setPreferencesLoading(false); }
   }
   async function savePreferences(event) {
     event.preventDefault();
+    if (preferencesLoading || preferencesError) return;
+    setPreferencesLoading(true);
     try {
       await api.festiomeSaveNotificationPreferences(groupId, preferences);
       setDialog("");
       setNotice("FestioMe notification preferences saved.");
     } catch (e) {
       setNotice(errorText(e));
-    }
+    } finally { setPreferencesLoading(false); }
   }
   async function createPoll(event) {
     event.preventDefault();
@@ -1020,6 +1068,7 @@ export default function FestioMePage() {
     const dmChannels = channels.filter((channel) => channel.is_dm);
     const currentSegment = journey?.program?.current_segments?.[0] || null;
     const nextSegment = journey?.program?.next_segments?.[0] || null;
+    const programSegments = (journey?.program?.days || []).flatMap((day) => day.segments || []).filter((segment) => segment?.title);
     const sessionChannels = channels.filter((channel) => !channel.is_dm && /session|workshop|opening|keynote|panel/i.test(channel.name));
     const people = (matches.length ? matches.map((match) => ({
       ...members.find((member) => member.id === match.member_id),
@@ -1037,6 +1086,7 @@ export default function FestioMePage() {
       if (group?.id) setGroupId(group.id);
       if (preferredChannel) setChannelId(preferredChannel);
       setMobileThread(true);
+      setPanel("");
       setShowHome(false);
     };
     const nav = [
@@ -1119,18 +1169,18 @@ export default function FestioMePage() {
                 <div className="fm-guest-people-grid">{filteredPeople.map((member) => {
                   const suggestion = matches.find((item) => item.member_id === member.id);
                   const relationship = connections.find((item) => item.other_member?.id === member.id);
-                  return <article key={member.id}><span className="fm-preview-avatar">{initials(name(member))}</span><div><h3>{name(member)}</h3><p>{member.bio || "Event community member"}</p></div><div className="fm-preview-tags">{(suggestion?.shared_tags || member.interest_tags || []).slice(0, 4).map((tag) => <span key={tag}>{tag}</span>)}</div>{relationship?.direction === "incoming" && relationship.status === "pending" ? <div className="fm-preview-actions"><button className="primary" onClick={async () => { try { const updated = await api.festiomeDecideConnection(relationship.id, "accepted"); setConnections((items) => items.map((item) => item.id === updated.id ? updated : item)); } catch (error) { setNotice(errorText(error)); } }}>Accept</button><button onClick={async () => { try { const updated = await api.festiomeDecideConnection(relationship.id, "declined"); setConnections((items) => items.map((item) => item.id === updated.id ? updated : item)); } catch (error) { setNotice(errorText(error)); } }}>Decline</button></div> : <div className="fm-preview-actions"><button onClick={async () => { try { const dm = await api.festiomeOpenDirectMessage(groupId, member.id); await loadGroupData(); openWorkspace(activeGroup, dm.id); } catch (error) { setNotice(errorText(error)); } }}>Message</button><button className="primary" disabled={relationship?.status === "accepted" || relationship?.status === "pending"} onClick={async () => { try { const next = await api.festiomeRequestConnection(groupId, member.id); setConnections((items) => [next, ...items.filter((item) => item.id !== next.id)]); } catch (error) { setNotice(errorText(error)); } }}>{relationship?.status === "accepted" ? "Connected" : relationship?.status === "pending" ? "Requested" : "Connect"}</button></div>}</article>
+                  return <article key={member.id}><span className="fm-preview-avatar">{initials(name(member))}</span><div><h3>{name(member)}</h3><p>{member.bio || "Event community member"}</p></div><div className="fm-preview-tags">{(suggestion?.shared_tags || member.interest_tags || []).slice(0, 4).map((tag) => <span key={tag}>{tag}</span>)}</div>{relationship?.direction === "incoming" && relationship.status === "pending" ? <div className="fm-preview-actions"><button className="primary" onClick={async () => { try { const updated = await api.festiomeDecideConnection(relationship.id, "accepted"); setConnections((items) => items.map((item) => item.id === updated.id ? updated : item)); } catch (error) { setNotice(errorText(error)); } }}>Accept</button><button onClick={async () => { try { const updated = await api.festiomeDecideConnection(relationship.id, "declined"); setConnections((items) => items.map((item) => item.id === updated.id ? updated : item)); } catch (error) { setNotice(errorText(error)); } }}>Decline</button></div> : <div className="fm-preview-actions"><button onClick={async () => { try { const dm = await api.festiomeOpenDirectMessage(groupId, member.id || member.member_id); await loadGroupData(); openWorkspace(activeGroup, dm.id); } catch (error) { setNotice(errorText(error)); } }}>Message</button><button className="primary" disabled={relationship?.status === "accepted" || relationship?.status === "pending"} onClick={async () => { try { const next = await api.festiomeRequestConnection(groupId, member.id); setConnections((items) => [next, ...items.filter((item) => item.id !== next.id)]); } catch (error) { setNotice(errorText(error)); } }}>{relationship?.status === "accepted" ? "Connected" : relationship?.status === "pending" ? "Requested" : "Connect"}</button></div>}</article>
                 })}{!filteredPeople.length && <div className="fm-dashboard-empty">{q ? `No one matches "${peopleSearch}".` : "No one else has joined yet."}</div>}</div></section>
             })()}
 
-            {homeSection === "meetups" && <section className="fm-guest-page"><div className="fm-dashboard-title"><div><h2>Meetups</h2><p>Turn online introductions into useful event connections.</p></div><button onClick={() => setDialog(dialog === "meetup" ? "" : "meetup")}>Create meetup</button></div>{dialog === "meetup" && <form className="fm-guest-meetup-form" onSubmit={async (event) => { event.preventDefault(); try { const created = await api.festiomeCreateMeetup(groupId, { ...meetupDraft, title: meetupDraft.title.trim(), description: meetupDraft.description.trim(), location: meetupDraft.location.trim() }); setMeetups((items) => [...items, created].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at))); setMeetupDraft({ title: "", location: "", starts_at: "", description: "" }); setDialog(""); } catch (error) { setNotice(errorText(error)); } }}><input required value={meetupDraft.title} onChange={(event) => setMeetupDraft((value) => ({ ...value, title: event.target.value }))} placeholder="Meetup title"/><input value={meetupDraft.location} onChange={(event) => setMeetupDraft((value) => ({ ...value, location: event.target.value }))} placeholder="Location"/><input required type="datetime-local" value={meetupDraft.starts_at} onChange={(event) => setMeetupDraft((value) => ({ ...value, starts_at: event.target.value }))}/><textarea value={meetupDraft.description} onChange={(event) => setMeetupDraft((value) => ({ ...value, description: event.target.value }))} placeholder="What should people expect?"/><button>Create meetup</button></form>}<div className="fm-guest-meetup-list">{meetups.map((meetup) => <article key={meetup.id}><div className="fm-meetup-day"><strong>{new Date(meetup.starts_at).getDate()}</strong><span>{new Date(meetup.starts_at).toLocaleDateString([], { month: "short" })}</span></div><div><span>{new Date(meetup.starts_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}{meetup.location ? ` · ${meetup.location}` : ""}</span><h3>{meetup.title}</h3><p>{meetup.description || `Hosted by ${meetup.creator_name}`}</p><small>{meetup.attendee_count} going{meetup.capacity ? ` · ${Math.max(0, meetup.capacity - meetup.attendee_count)} spots left` : ""}</small></div><button className={meetup.my_status === "going" ? "active" : ""} onClick={async () => { try { const updated = await api.festiomeRsvpMeetup(meetup.id, meetup.my_status === "going" ? "interested" : "going"); setMeetups((items) => items.map((item) => item.id === updated.id ? updated : item)); } catch (error) { setNotice(errorText(error)); } }}>{meetup.my_status === "going" ? "Going ✓" : "RSVP"}</button></article>)}{!meetups.length && <div className="fm-dashboard-empty">No upcoming meetups yet. Create the first one.</div>}</div></section>}
+            {homeSection === "meetups" && <FestioMeMeetups key={groupId} groupId={groupId} groupName={activeGroup?.name} meetups={meetups} loading={networkLoading} error={networkError} readonly={me?.role === "readonly" || activeGroup?.viewer_role === "readonly"} onRefresh={loadCommunityNetwork} onChange={(item) => setMeetups((items) => [...items.filter((previous) => previous.id !== item.id), item].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)))} />}
 
-            {homeSection === "sessions" && <section className="fm-guest-page"><div className="fm-dashboard-title"><div><h2>Sessions</h2><p>Your live program and its community conversations.</p></div></div><div className="fm-program-list">{(journey?.program?.days || []).flatMap((day) => day.segments).map((segment) => {
+            {homeSection === "sessions" && <section className="fm-guest-page"><div className="fm-dashboard-title"><div><h2>Sessions</h2><p>Your live program and its community conversations.</p></div></div><div className="fm-program-list">{programSegments.map((segment) => {
               const channel = sessionChannels.find((item) => item.name.toLowerCase().includes(segment.title.toLowerCase().slice(0, 12))) || sessionChannels.find((item) => item.name.includes(segment.title.split(":")[0]));
               return <article key={segment.step_id} className={segment.state}><div><span>{segment.state}</span><h3>{segment.title}</h3><p>{new Date(segment.starts_at).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}{segment.category ? ` · ${segment.category}` : ""}</p></div><div>{channel && <button onClick={() => openWorkspace(activeGroup, channel.id)}>Open discussion</button>}{guestMode && guestPushContext?.eventId && guestPushContext?.passToken && <a href={`/live/guest?event=${encodeURIComponent(guestPushContext.eventId)}&pass=${encodeURIComponent(guestPushContext.passToken)}&session=${encodeURIComponent(segment.step_id)}`}>Festio Live</a>}</div></article>;
-            })}{!(journey?.program?.days || []).length && sessionChannels.map((channel) => <article key={channel.id}><div><span>COMMUNITY</span><h3>{channel.name}</h3><p>{channel.description || "Session conversation"}</p></div><button onClick={() => openWorkspace(activeGroup, channel.id)}>Open discussion</button></article>)}{!(journey?.program?.days || []).length && !sessionChannels.length && <div className="fm-dashboard-empty">No session communities are available yet.</div>}</div></section>}
+            })}{!programSegments.length && sessionChannels.map((channel) => <article key={channel.id}><div><span>COMMUNITY</span><h3>{channel.name}</h3><p>{channel.description || "Session conversation"}</p></div><button onClick={() => openWorkspace(activeGroup, channel.id)}>Open discussion</button></article>)}{!programSegments.length && !sessionChannels.length && <div className="fm-dashboard-empty">No session communities are available yet.</div>}</div></section>}
 
-            {homeSection === "groups" && <section><div className="mb-5 flex items-center justify-between gap-3"><div><h2 className="text-3xl font-black">Groups</h2><p className="mt-1 text-sm text-slate-400">Native FestioMe communities.</p></div>{!guestMode && <button onClick={() => { setShowHome(false); setDialog("new-group"); setFormValue(""); }} className="rounded-xl bg-teal-500 px-4 py-2 text-sm font-black text-slate-950">New group</button>}</div><div className="space-y-3">{groups.map((group) => <div key={group.id} className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.035] p-4"><span className="grid h-12 w-12 place-items-center rounded-xl bg-teal-500/20 font-black text-teal-200">{initials(group.name)}</span><div className="min-w-0 flex-1"><strong className="block truncate">{group.name}</strong><span className="text-sm text-slate-400">{group.member_count || 0} members</span></div><button onClick={() => openWorkspace(group)} className="rounded-xl border border-teal-400/40 px-4 py-2 text-sm font-black text-teal-300">Open group</button></div>)}</div></section>}
+            {homeSection === "groups" && <section className="fm-guest-page"><div className="fm-dashboard-title"><div><h2>Groups</h2><p>Your event community and invite-only group conversations.</p></div><div className="fm-group-actions"><button type="button" onClick={openDiscover}>Discover event groups</button><button type="button" onClick={openCreateGroup}>New group</button></div></div><div className="fm-group-list">{groups.map((group) => <article key={group.id}><span className="fm-preview-avatar">{initials(group.name)}</span><div><h3>{group.name}</h3><p>{group.member_count || 0} members · {group.is_primary ? 'Event community' : group.visibility === 'unlisted' ? 'Invite-only group' : 'Event group'}</p>{group.description && <p>{group.description}</p>}</div><div className="fm-group-actions"><button type="button" onClick={() => openWorkspace(group)}>Open group</button><button type="button" onClick={() => { setGroupId(group.id); setPanel(""); setHomeSection("meetups"); setShowHome(true); }}>View meetups</button></div></article>)}{!groups.length && <div className="fm-dashboard-empty">No groups available. Open FestioMe from your GuestHub to join your event community.</div>}</div></section>}
 
             {homeSection === "messages" && <section><div className="mb-5"><h2 className="text-3xl font-black">Messages</h2><p className="mt-1 text-sm text-slate-400">Private conversations stay in their original inbox.</p></div><div className="space-y-4">{guestMode && <article className="rounded-2xl border border-blue-400/20 bg-blue-500/[0.05] p-5"><div className="flex items-center justify-between gap-3"><strong>Message Host</strong><span className="text-xs text-amber-200">🔒 Only you and the organizer</span></div><div className="mt-4 space-y-3">{hostMessages.length ? hostMessages.map((item) => <div key={item.id} className="rounded-xl bg-white/[0.04] p-3"><div className="text-xs font-black">{item.sender_type === "organizer" ? "Event organizer" : "You"} · <span className="font-normal text-slate-500">{time(item.created_at)}</span></div><p className="mt-1 text-sm">{text(item)}</p></div>) : <p className="text-sm text-slate-400">No private messages yet. Use FestioHub to start a host conversation.</p>}</div>{guestMode && <button onClick={openFestioHub} className="mt-4 rounded-xl border border-blue-300/40 px-4 py-2 text-sm font-black text-blue-200">Open in FestioHub</button>}</article>}{!guestMode && <article className="rounded-2xl border border-blue-400/20 p-5"><strong>Guest Questions Inbox</strong><div className="mt-4 space-y-2">{hostInbox.length ? hostInbox.map((thread) => <div key={thread.thread_id || thread.id} className="rounded-xl bg-white/[0.04] p-3"><div className="text-sm font-black">{thread.guest_name || thread.title || "Guest question"}</div><p className="mt-1 text-sm text-slate-400">{thread.latest_message || thread.preview || "Private guest conversation"}</p></div>) : <p className="text-sm text-slate-400">No guest questions.</p>}</div><a href={`/admin?event=${encodeURIComponent(eventRef || "")}#communication`} className="mt-4 inline-flex rounded-xl border border-blue-300/40 px-4 py-2 text-sm font-black text-blue-200">Open organizer inbox</a></article>}{dmChannels.map((channel) => <button key={channel.id} onClick={() => openWorkspace(activeGroup, channel.id)} className="flex w-full items-center gap-3 rounded-2xl border border-white/10 p-4 text-left"><span className="grid h-10 w-10 place-items-center rounded-full bg-purple-500/20">✉</span><span className="flex-1"><strong className="block">{channel.name}</strong><span className="text-xs text-slate-400">FestioMe direct message</span></span><span className="text-sm font-black text-teal-300">Open</span></button>)}</div></section>}
 
@@ -1166,6 +1216,7 @@ export default function FestioMePage() {
 
   function openGuestSection(section) {
     setPanel("");
+    setDialog("");
     if (section === "chats") { setShowHome(false); setMobileThread(false); }
     else { setHomeSection(section); setShowHome(true); }
   }
@@ -1173,7 +1224,7 @@ export default function FestioMePage() {
   const communityMenu = (className) => <details className={className}><summary aria-label="More community views">More</summary>{communityViews.map(([key,label]) => <button key={key} type="button" onClick={(event) => {openGuestSection(key);event.currentTarget.closest('details').open = false;}}>{label}</button>)}</details>;
   const guestNav = <nav className="fm-chat-navigation" aria-label="FestioMe navigation">
     <div className="fm-chat-logo">Festio<span>Me</span></div><p>Chat. Connect. Stay in the loop.</p>
-    {[['chats','◉','Chats'],['people','♙','People'],['meetups','▣','Meetups'],['event','↗','Event Hub'],['profile','●','Profile']].map(([key,icon,label]) => <button key={key} type="button" className={(showHome ? homeSection === key : key === 'chats') ? 'active' : ''} onClick={() => { if(key === 'event') openFestioHub(); else openGuestSection(key); }}><span>{icon}</span>{label}</button>)}
+    {[['chats','◉','Chats'],['groups','♧','Groups'],['people','♙','People'],['meetups','▣','Meetups'],['event','↗','Event Hub'],['profile','●','Profile']].map(([key,icon,label]) => <button key={key} type="button" className={(showHome ? homeSection === key : key === 'chats') ? 'active' : ''} onClick={() => { if(key === 'event') openFestioHub(); else openGuestSection(key); }}><span>{icon}</span>{label}</button>)}
     {communityMenu("fm-extra-nav")}
     <button type="button" className="fm-chat-return" onClick={openFestioHub}>← Back to GuestHub</button><small>Powered by Festio</small>
   </nav>;
@@ -1182,7 +1233,7 @@ export default function FestioMePage() {
     {guestMode && guestNav}
     <div className="fm-chat-workspace mx-auto flex h-[calc(100vh-8rem)] max-w-7xl overflow-hidden rounded-2xl border border-[#1b3a52] bg-[#0a1f33] shadow-sm border-[#1b3a52] bg-[#0a1f33]">
       {guestMode && <header className="fm-event-header"><div className="fm-mobile-brand">Festio<span>Me</span></div>
-        <div className="fm-event-identity"><span className="fm-event-avatar">{initials(communication?.event?.name || activeGroup?.name || "Event")}</span><div><h1>{communication?.event?.name || activeGroup?.name || "Your event community"}</h1><p>Event community · {activeGroup?.member_count ?? members.length} members</p></div></div>
+        <div className="fm-event-identity"><span className="fm-event-avatar">{initials(communication?.event?.name || activeGroup?.name || "Event")}</span><div><h1>{communication?.event?.name || activeGroup?.name || "Your event community"}</h1><p>{activeGroup?.is_primary === false ? activeGroup.name : "Event community"} · {activeGroup?.member_count ?? members.length} members</p></div></div>
         <div className="fm-event-actions">{communityMenu("fm-mobile-more")}<button type="button" className="fm-event-search" onClick={() => {setShowHome(false);setMobileThread(true);setPanel("search");}} aria-label="Search messages">⌕ <span>Search messages</span></button><button type="button" aria-label="Notification settings" onClick={openPreferences}>🔔</button><button type="button" className="fm-my-avatar" aria-label="My profile" onClick={() => openGuestSection("profile")}>{initials(me?.display_name || communication?.guest?.name || "Guest")}</button></div>
       </header>}
       <aside
@@ -1254,7 +1305,7 @@ export default function FestioMePage() {
         ) : (
           <>
             <details className="fm-tools-menu" open={!guestMode ? true : undefined}><summary aria-label="Conversation options">••• More options</summary><header onClick={(event) => {if (guestMode && event.target.closest("button,a")) event.currentTarget.closest("details").open = false;}} className="fm-workspace-tools flex flex-wrap items-center gap-2 border-b p-3 border-[#1b3a52]">
-              <button onClick={() => { if(guestMode) setMobileThread(false); else setShowHome(true); }} className="rounded-lg border px-3 py-2 text-xs font-bold text-teal-600 border-[#1b3a52] text-teal-300">{guestMode ? "← Chats" : "← Home"}</button>
+              <button onClick={() => { if(guestMode) openGuestSection("chats"); else setShowHome(true); }} className="rounded-lg border px-3 py-2 text-xs font-bold text-teal-600 border-[#1b3a52] text-teal-300">{guestMode ? "← Chats" : "← Home"}</button>
               <button onClick={() => { if(guestMode) {setHomeSection("groups");setShowHome(true);} else setGroupId(""); }} className="p-2 md:hidden">
                 ←
               </button>
@@ -1281,13 +1332,13 @@ export default function FestioMePage() {
                 </button>
               )}
               <button
-                onClick={() => setPanel("search")}
+                onClick={() => openPanel("search")}
                 className="rounded-lg border px-3 py-2 text-xs border-[#1b3a52]"
               >
                 Search
               </button>
               <button
-                onClick={() => setPanel(panel === "people" ? "" : "people")}
+                onClick={() => openPanel(panel === "people" ? "" : "people")}
                 className="rounded-lg border px-3 py-2 text-xs border-[#1b3a52]"
               >
                 People
@@ -1313,7 +1364,7 @@ export default function FestioMePage() {
               </button>
               {canModerate && (
                 <button
-                  onClick={() => setPanel(panel === "manage" ? "" : "manage")}
+                  onClick={() => openPanel(panel === "manage" ? "" : "manage")}
                   className="rounded-lg border px-3 py-2 text-xs border-[#1b3a52]"
                 >
                   Manage
@@ -1322,7 +1373,7 @@ export default function FestioMePage() {
             </header></details>
             <div className="relative flex min-h-0 flex-1">
               <aside className="fm-chat-list hidden w-48 shrink-0 border-r bg-[#061120]/60 p-2 border-[#1b3a52] sm:block">
-                {guestMode && <div className="fm-chat-list-title"><strong>Chats</strong><button type="button" aria-label="Start a conversation" onClick={() => openGuestSection("people")}>+</button></div>}
+                {guestMode && <div className="fm-chat-list-title"><strong>Chats</strong><button type="button" aria-label="Start a conversation" onClick={() => setDialog("start-conversation")}>+</button></div>}
                 <div className="flex items-center justify-between px-2 py-2 text-[11px] font-bold uppercase text-[#7893a8]">
                   <span>{guestMode ? "Event chats" : "Channels"}</span>
                   {canManage && (
@@ -1759,16 +1810,16 @@ export default function FestioMePage() {
               </main>
               {guestMode && !showHome && !panel && <aside className="fm-event-context"><h2>{communication?.event?.name || activeGroup?.name}</h2><p>{activeGroup?.description || "Your event community. Connect and stay in the loop."}</p><div className="fm-context-hub"><strong>Everything you need for the event</strong><p>Pass, programme, hotel and event information.</p><button type="button" onClick={openFestioHub}>← Back to GuestHub</button></div><h3>Members ({activeGroup?.member_count ?? members.length})</h3><div className="fm-context-faces">{members.slice(0,5).map((member) => <button key={member.id} type="button" title={name(member)} onClick={() => {setHomeSection("people");setShowHome(true);}}>{initials(name(member))}</button>)}</div><button type="button" className="fm-context-link" onClick={() => {setHomeSection("people");setShowHome(true);}}>See all members →</button><h3>Community</h3><button type="button" className="fm-context-link" onClick={openDiscover}>Browse event groups →</button><button type="button" className="fm-context-link" onClick={() => {setHomeSection("messages");setShowHome(true);}}>Message host →</button></aside>}
               {panel && (
-                <aside className="fm-side-panel absolute inset-y-0 right-0 z-20 w-80 overflow-y-auto border-l bg-[#0a1f33] p-4 shadow-xl border-[#1b3a52] bg-[#0a1f33] md:static">
+                <aside aria-label={`${panel} panel`} className="fm-side-panel absolute inset-y-0 right-0 z-20 w-80 overflow-y-auto border-l bg-[#0a1f33] p-4 shadow-xl border-[#1b3a52] bg-[#0a1f33] md:static">
                   <div className="mb-4 flex justify-between">
                     <h3 className="font-bold capitalize text-white">
                       {panel}
                     </h3>
-                    <button onClick={() => setPanel("")}>×</button>
+                    <button aria-label={`Close ${panel} panel`} onClick={() => setPanel("")}>×</button>
                   </div>
                   {panel === "people" && (
                     <>
-                      <form onSubmit={invite} className="mb-5 flex gap-2">
+                      {canManage && <form onSubmit={invite} className="mb-5 flex gap-2">
                         <input
                           type="email"
                           required
@@ -1780,7 +1831,7 @@ export default function FestioMePage() {
                         <button className="rounded-lg bg-teal-600 px-3 text-xs font-semibold text-white">
                           Invite
                         </button>
-                      </form>
+                      </form>}
                       {members.some((member) => STAFF_ROLES.includes(member.role)) && (
                         <div className="mb-4">
                           <p className="mb-1 text-[11px] font-bold uppercase text-[#7893a8]">
@@ -1925,9 +1976,10 @@ export default function FestioMePage() {
                           value={search}
                           onChange={(e) => setSearch(e.target.value)}
                           placeholder="Search FestioMe"
+                          minLength={2}
                           className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm bg-[#0d2338]"
                         />
-                        <button className="rounded-lg bg-teal-600 px-3 text-white">
+                        <button aria-label="Search messages" className="rounded-lg bg-teal-600 px-3 text-white">
                           ⌕
                         </button>
                       </form>
@@ -1948,12 +2000,15 @@ export default function FestioMePage() {
                         </button>
                       </div>
                       <div className="mt-4 space-y-3">
+                        {!searchResults.length && <p>{searchRan ? "No matching messages. Try another search." : "Search messages in this group or across all your groups."}</p>}
                         {searchResults.map((result) => (
                           <button
                             key={result.id}
                             onClick={() => {
+                              if (result.group_id) setGroupId(result.group_id);
                               if (result.channel_id)
                                 setChannelId(result.channel_id);
+                              if (guestMode) { setShowHome(false); setMobileThread(true); }
                               setPanel("");
                             }}
                             className="block w-full rounded-lg border p-3 text-left border-[#1b3a52]"
@@ -2010,7 +2065,7 @@ export default function FestioMePage() {
                           Access &amp; rules
                         </button>
                       )}
-                      {canManage && eventRef && (
+                      {canManageEvent && eventRef && (
                         <button
                           onClick={() => {
                             setSubForm({ name: "", join_policy: "request", visibility: "listed", rules: "" });
@@ -2191,6 +2246,21 @@ export default function FestioMePage() {
           </>
         )}
       </section>
+      {dialog === "start-conversation" && <Dialog title="Start a conversation" onClose={() => setDialog("")}>
+        <div className="fm-start-conversation"><button type="button" onClick={() => openGuestSection("people")}>Direct message · Choose a person</button><button type="button" onClick={openCreateGroup}>New group · Choose people from your event</button><button type="button" onClick={() => openGuestSection("meetups")}>Meetups · Plan a gathering</button></div>
+      </Dialog>}
+      {dialog === "new-group-chat" && <Dialog title="Create an invite-only group" onClose={() => !groupChatBusy && setDialog("")}>
+        <form onSubmit={createGroupChat} className="fm-group-chat-form">
+          <p>Choose people from your event. This group is unlisted in the public event directory.</p>
+          <label>Group name<input autoFocus required maxLength={255} value={formValue} onChange={(event) => setFormValue(event.target.value)} placeholder="Group name" /></label>
+          <label>Description (optional)<textarea maxLength={5000} value={groupChatDescription} onChange={(event) => setGroupChatDescription(event.target.value)} placeholder="What is this group for?" /></label>
+          <fieldset><legend>Choose members ({groupChatPickIds.length} selected)</legend><div className="fm-group-member-picker">
+            {groupChatLoading ? <p>Loading event members…</p> : groupChatMembers.filter((member) => !member.is_me && member.id !== me?.id).map((member) => <label key={member.id}><input type="checkbox" checked={groupChatPickIds.includes(member.id)} onChange={(event) => setGroupChatPickIds((ids) => event.target.checked ? [...ids, member.id] : ids.filter((id) => id !== member.id))} />{name(member)}</label>)}
+            {!groupChatLoading && !groupChatMembers.some((member) => !member.is_me && member.id !== me?.id) && <p>No other event members are available yet.</p>}
+          </div></fieldset>
+          <button disabled={groupChatBusy || groupChatLoading || !formValue.trim() || !groupChatPickIds.length}>{groupChatBusy ? 'Creating…' : 'Create group'}</button>
+        </form>
+      </Dialog>}
       {dialog === "new-group" && (
         <Dialog title="Create FestioMe group" onClose={() => setDialog("")}>
           <form onSubmit={createGroup}>
@@ -2643,7 +2713,8 @@ export default function FestioMePage() {
                 <option value="none">Never</option>
               </select>
             </label>
-            <button className="w-full rounded-lg bg-teal-600 p-2 font-semibold text-white">
+            {preferencesError && <p role="alert">{preferencesError} <button type="button" onClick={openPreferences}>Try again</button></p>}
+            <button disabled={preferencesLoading || !!preferencesError} className="w-full rounded-lg bg-teal-600 p-2 font-semibold text-white disabled:opacity-40">
               Save preferences
             </button>
           </form>

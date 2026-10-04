@@ -75,6 +75,30 @@ async def setup_event(api):
 
 
 @pytest.mark.asyncio
+async def test_meetup_timezone_edit_cancel_and_permission(api):
+    group = await setup_event(api)
+    response = await api.post(f'/v1/groups/{group}/meetups', headers=guest('alice'), json={
+        'title':'Community lunch', 'starts_at':'2030-12-24T10:00:00-05:00',
+        'ends_at':'2030-12-24T11:00:00-05:00', 'capacity':4,
+    })
+    assert response.status_code == 201, response.text
+    meetup = response.json()
+    assert meetup['starts_at'].startswith('2030-12-24T15:00:00')
+    assert meetup['starts_at'].endswith('Z') or meetup['starts_at'].endswith('+00:00')
+    loaded = (await api.get(f'/v1/groups/{group}/meetups', headers=guest('bob'))).json()[0]
+    assert loaded['id'] == meetup['id'] and not loaded['can_manage']
+    url = f"/v1/meetups/{meetup['id']}"
+    assert (await api.patch(url, headers=guest('bob'), json={'title':'Unauthorized'})).status_code == 403
+    updated = await api.patch(url, headers=guest('alice'), json={'starts_at':'2030-12-24T09:00:00-06:00', 'ends_at':None, 'capacity':None})
+    assert updated.status_code == 200, updated.text
+    assert updated.json()['starts_at'].startswith('2030-12-24T15:00:00')
+    assert updated.json()['ends_at'] is None and updated.json()['capacity'] is None
+    assert (await api.patch(url, headers=guest('alice'), json={'title':'  '})).status_code == 400
+    assert (await api.patch(url, headers=guest('alice'), json={'status':'cancelled'})).status_code == 200
+    assert (await api.post(url+'/rsvp', headers=guest('bob'), json={'status':'going'})).status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_connection_request_and_accept(api):
     group_id = await setup_event(api)
     members = (await api.get(f"/v1/groups/{group_id}/members", headers=guest("alice"))).json()
@@ -109,6 +133,14 @@ async def test_meetup_create_rsvp_and_capacity(api):
     )
     assert joined.status_code == 200
     assert joined.json()["attendee_count"] == 2
+    full = await api.post(f"/v1/meetups/{meetup['id']}/rsvp", headers=user("owner"), json={"status": "going"})
+    assert full.status_code == 409 and full.json()["detail"] == "This meetup is full"
+    interested = await api.post(f"/v1/meetups/{meetup['id']}/rsvp", headers=user("owner"), json={"status": "interested"})
+    assert interested.status_code == 200 and interested.json()["interested_count"] == 1
+    changed = await api.post(f"/v1/meetups/{meetup['id']}/rsvp", headers=guest("bob"), json={"status": "declined"})
+    assert changed.status_code == 200 and changed.json()["attendee_count"] == 1
+    available = await api.post(f"/v1/meetups/{meetup['id']}/rsvp", headers=user("owner"), json={"status": "going"})
+    assert available.status_code == 200 and available.json()["attendee_count"] == 2
 
 
 @pytest.mark.asyncio

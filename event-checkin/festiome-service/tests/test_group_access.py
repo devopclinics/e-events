@@ -73,6 +73,50 @@ async def _event_with_guest(api, event="evt-1", host="host", guest_ref="g1"):
 
 
 @pytest.mark.asyncio
+async def test_guest_group_chat_persists_and_is_invite_only(api):
+    link = await _event_with_guest(api)
+    for ref in ('g2', 'g3'):
+        await api.put('/internal/v1/guesthub/event-links/evt-1/members/' + ref, headers=SVC, json={'name': ref})
+    roster = (await api.get(f"/v1/groups/{link['festiome_id']}/members", headers=guest('g1'))).json()
+    chosen = next(item['id'] for item in roster if item['display_name'] == 'g2')
+    created = await api.post('/v1/events/evt-1/group-chats', headers=guest('g1'), json={'name':'Family meetup', 'member_ids':[chosen, chosen]})
+    assert created.status_code == 201, created.text
+    group = created.json()
+    assert group['join_policy'] == 'closed' and group['visibility'] == 'unlisted'
+    assert group['viewer_role'] == 'owner' and group['member_count'] == 2
+    for ref in ('g1', 'g2'):
+        spaces = (await api.get('/v1/groups', headers=guest(ref))).json()
+        assert group['id'] in {item['id'] for item in spaces}
+        channels = (await api.get(f"/v1/groups/{group['id']}/channels", headers=guest(ref))).json()
+        assert any(item['name'] == 'General' for item in channels)
+    directory = (await api.get('/v1/events/evt-1/groups', headers=guest('g3'))).json()
+    assert group['id'] not in {item['id'] for item in directory}
+    assert (await api.get(f"/v1/groups/{group['id']}/members", headers=guest('g3'))).status_code == 404
+    # Guest-created private chats do not grant event-wide administration.
+    assert (await api.post('/v1/events/evt-1/subgroups', headers=guest('g1'), json={'name':'Public group'})).status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_guest_group_chat_rejects_cross_event_removed_and_self_members(api):
+    link = await _event_with_guest(api)
+    foreign = await _event_with_guest(api, event='evt-other', guest_ref='outside')
+    roster = (await api.get(f"/v1/groups/{foreign['festiome_id']}/members", headers=guest('outside'))).json()
+    foreign_id = next(item['id'] for item in roster if item['is_me'])
+    result = await api.post('/v1/events/evt-1/group-chats', headers=guest('g1'), json={'name':'Invalid', 'member_ids':[foreign_id]})
+    assert result.status_code == 400
+    own = (await api.get(f"/v1/groups/{link['festiome_id']}/members", headers=guest('g1'))).json()
+    own_id = next(item['id'] for item in own if item['is_me'])
+    assert (await api.post('/v1/events/evt-1/group-chats', headers=guest('g1'), json={'name':'Invalid', 'member_ids':[own_id]})).status_code == 400
+    assert (await api.post('/v1/events/evt-1/group-chats', headers=guest('g1'), json={'name':'Empty', 'member_ids':[]})).status_code == 422
+    assert (await api.post('/v1/events/evt-1/group-chats', headers=guest('outside'), json={'name':'Invalid', 'member_ids':[own_id]})).status_code == 404
+    await api.put('/internal/v1/guesthub/event-links/evt-1/members/g2', headers=SVC, json={'name':'Removed'})
+    rows = (await api.get(f"/v1/groups/{link['festiome_id']}/members", headers=guest('g1'))).json()
+    removed = next(item['id'] for item in rows if item['display_name'] == 'Removed')
+    await api.delete('/internal/v1/guesthub/event-links/evt-1/members/g2', headers=SVC)
+    assert (await api.post('/v1/events/evt-1/group-chats', headers=guest('g1'), json={'name':'Invalid', 'member_ids':[removed]})).status_code == 400
+
+
+@pytest.mark.asyncio
 async def test_open_subgroup_self_join_and_directory_visibility(api):
     await _event_with_guest(api)
     # Host opens an open-join sub-group and a closed one.

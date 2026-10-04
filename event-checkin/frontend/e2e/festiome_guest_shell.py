@@ -134,7 +134,7 @@ def exercise(browser, width, height):
     page.locator('.fm-tools-menu summary').click()
     page.locator('.fm-tools-menu').get_by_role('button',name='Search',exact=True).click()
     expect(page.locator('.fm-side-panel')).to_be_visible()
-    page.locator('.fm-side-panel').get_by_role('button',name='×',exact=True).click()
+    page.locator('.fm-side-panel').get_by_role('button',name='Close search panel',exact=True).click()
     thread_form = page.locator('.fm-chat-thread form')
     thread_form.get_by_role('button',name='+',exact=True).click()
     expect(thread_form.get_by_role('button',name='📎 Attach files',exact=True)).to_be_visible()
@@ -163,7 +163,7 @@ def exercise(browser, width, height):
             page.get_by_role('button',name='Create meetup',exact=True).click()
             page.get_by_placeholder('Meetup title').fill('Convention introductions')
             page.get_by_placeholder('Location',exact=True).fill('Welcome lounge')
-            page.locator('.fm-guest-meetup-form input[type=datetime-local]').fill('2026-12-24T13:00')
+            page.locator('.fm-guest-meetup-form').get_by_label('Start time',exact=True).fill('2026-12-24T13:00')
             page.locator('.fm-guest-meetup-form').get_by_role('button',name='Create meetup',exact=True).click()
             expect(page.get_by_role('heading',name='Convention introductions')).to_be_visible()
         if tab=='Profile':

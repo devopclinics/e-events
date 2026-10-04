@@ -11,7 +11,7 @@ import time
 import uuid
 from collections import Counter
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 import jwt
@@ -30,7 +30,7 @@ from .models import (
     ModerationReport, NotificationJob, NotificationPreference, PendingUpload, Poll, PollOption, PollVote, PointsEntry, Reaction, Tenant,
 )
 from .schemas import (
-    AttachmentOut, ChannelCreate, ChannelMemberAdd, ChannelMemberOut, ChannelOut, ChannelUpdate, ConnectionDecision, ConnectionOut, DirectMessageCreate, EventGroupAdminOut, EventLinkCreate, EventLinkOut, GroupCreate, GroupDirectoryOut, GroupOut, GroupUpdate, InternalSubGroupCreate, InvitationCreate,
+    AttachmentOut, ChannelCreate, ChannelMemberAdd, ChannelMemberOut, ChannelOut, ChannelUpdate, ConnectionDecision, ConnectionOut, DirectMessageCreate, EventGroupAdminOut, EventLinkCreate, EventLinkOut, GroupChatCreate, GroupCreate, GroupDirectoryOut, GroupOut, GroupUpdate, InternalSubGroupCreate, InvitationCreate,
     InvitationOut, JoinGroupRequest, JoinGroupResult, JoinRequestDecision, JoinRequestOut, MemberOut, MeetupCreate, MeetupOut, MeetupRsvp, MeetupUpdate, MessageCreate, MessageOut, MessagePage,
     MemberUpdate, MessageUpdate, NotificationPreferenceIn, NotificationPreferenceOut, OwnershipTransfer, PollCreate, PollVoteCreate, ProfileUpdate,
     ReactionCreate, ReactionOut, ReadStateOut, ReadStateUpdate, ReportCreate, RulesAcceptResult, SubGroupCreate,
@@ -1001,7 +1001,32 @@ async def create_event_subgroup(external_event_ref: str, body: SubGroupCreate, i
     return await _create_subgroup(db, primary, body, creator_identity=identity)
 
 
-async def _create_subgroup(db: AsyncSession, primary: FestioMeGroup, body: SubGroupCreate, *, creator_identity: Identity | None) -> GroupOut:
+@app.post("/v1/events/{external_event_ref}/group-chats", response_model=GroupOut, status_code=201)
+async def create_event_group_chat(external_event_ref: str, body: GroupChatCreate, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Event members can start an invite-only conversation with other event members."""
+    primary = await _event_group(db, external_event_ref)
+    actor = await _member(db, primary.id, identity)
+    if actor.role == "readonly":
+        raise HTTPException(403, "Readonly members cannot create group chats")
+    if not body.name.strip():
+        raise HTTPException(400, "Enter a group name")
+    wanted = set(body.member_ids) - {actor.id}
+    if not wanted:
+        raise HTTPException(400, "Choose at least one other event member")
+    selected = (await db.execute(select(Member).where(
+        Member.id.in_(wanted), Member.group_id == primary.id, Member.removed_at.is_(None),
+        Member.identity_kind.in_(["guest", "user"]),
+    ))).scalars().all()
+    if {member.id for member in selected} != wanted:
+        raise HTTPException(400, "Choose active members from this event only")
+    await _rate_limit(f"group-chat:{identity.kind}:{identity.subject}", 10, 3600)
+    return await _create_subgroup(db, primary, SubGroupCreate(
+        name=body.name.strip(), description=body.description.strip(),
+        join_policy="closed", visibility="unlisted",
+    ), creator_identity=identity, initial_members=selected)
+
+
+async def _create_subgroup(db: AsyncSession, primary: FestioMeGroup, body: SubGroupCreate, *, creator_identity: Identity | None, initial_members: list[Member] | None = None) -> GroupOut:
     group = FestioMeGroup(
         tenant_id=primary.tenant_id, external_event_ref=primary.external_event_ref,
         name=body.name.strip(), description=body.description.strip(),
@@ -1017,6 +1042,12 @@ async def _create_subgroup(db: AsyncSession, primary: FestioMeGroup, body: SubGr
         owner = Member(group_id=group.id, identity_kind="service", identity_ref="guesthub",
                        display_name="Festio", role="owner", rules_accepted_version=group.rules_version)
     db.add(owner); await db.flush()
+    for source in initial_members or []:
+        db.add(Member(
+            group_id=group.id, identity_kind=source.identity_kind, identity_ref=source.identity_ref,
+            display_name=source.display_name, role="member",
+            rules_accepted_version=group.rules_version,
+        ))
     if getattr(body, "staff_only", False):
         staff = (await db.execute(select(Member).where(
             Member.group_id == primary.id,
@@ -2070,11 +2101,12 @@ async def _meetup_out(db: AsyncSession, meetup: Meetup, viewer: Member) -> Meetu
         id=meetup.id, group_id=meetup.group_id, creator_member_id=meetup.creator_member_id,
         creator_name=creator.display_name if creator else "FestioMe member",
         title=meetup.title, description=meetup.description, location=meetup.location,
-        starts_at=meetup.starts_at, ends_at=meetup.ends_at, capacity=meetup.capacity,
+        starts_at=meetup.starts_at.replace(tzinfo=timezone.utc),
+        ends_at=meetup.ends_at.replace(tzinfo=timezone.utc) if meetup.ends_at else None, capacity=meetup.capacity,
         status=meetup.status, attendee_count=counts.get("going", 0),
         interested_count=counts.get("interested", 0), my_status=mine,
         can_manage=meetup.creator_member_id == viewer.id or viewer.role in ADMIN_ROLES,
-        created_at=meetup.created_at,
+        created_at=meetup.created_at.replace(tzinfo=timezone.utc),
     )
 
 
@@ -2093,8 +2125,10 @@ async def create_meetup(group_id: str, body: MeetupCreate, identity: Identity = 
     viewer = await _member(db, group_id, identity)
     if viewer.role == "readonly":
         raise HTTPException(403, "Readonly members cannot create meetups")
-    starts_at = body.starts_at.replace(tzinfo=None) if body.starts_at.tzinfo else body.starts_at
-    ends_at = body.ends_at.replace(tzinfo=None) if body.ends_at and body.ends_at.tzinfo else body.ends_at
+    starts_at = body.starts_at.astimezone(timezone.utc).replace(tzinfo=None) if body.starts_at.tzinfo else body.starts_at
+    ends_at = body.ends_at.astimezone(timezone.utc).replace(tzinfo=None) if body.ends_at and body.ends_at.tzinfo else body.ends_at
+    if not body.title.strip():
+        raise HTTPException(400, "Enter a meetup title")
     if ends_at and ends_at <= starts_at:
         raise HTTPException(400, "Meetup end time must be after its start time")
     meetup = Meetup(
@@ -2113,18 +2147,22 @@ async def create_meetup(group_id: str, body: MeetupCreate, identity: Identity = 
 
 @app.patch("/v1/meetups/{meetup_id}", response_model=MeetupOut)
 async def update_meetup(meetup_id: str, body: MeetupUpdate, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
-    meetup = await db.get(Meetup, meetup_id)
+    meetup = (await db.execute(select(Meetup).where(Meetup.id == meetup_id).with_for_update())).scalar_one_or_none()
     if not meetup:
         raise HTTPException(404, "FestioMe meetup not found")
     viewer = await _member(db, meetup.group_id, identity)
     if meetup.creator_member_id != viewer.id and viewer.role not in ADMIN_ROLES:
         raise HTTPException(403, "Only the meetup host or a group administrator can edit it")
-    patch = body.model_dump(exclude_none=True)
+    patch = body.model_dump(exclude_unset=True)
     for key, value in patch.items():
         if key in {"title", "description", "location"}:
+            if value is None or (key == "title" and not value.strip()):
+                raise HTTPException(400, "Enter a valid meetup title, description, and location")
             value = value.strip()
+        if key in {"starts_at", "status"} and value is None:
+            raise HTTPException(400, f"{key} cannot be empty")
         if key in {"starts_at", "ends_at"} and value and value.tzinfo:
-            value = value.replace(tzinfo=None)
+            value = value.astimezone(timezone.utc).replace(tzinfo=None)
         setattr(meetup, key, value)
     if meetup.ends_at and meetup.ends_at <= meetup.starts_at:
         raise HTTPException(400, "Meetup end time must be after its start time")
@@ -2136,7 +2174,7 @@ async def update_meetup(meetup_id: str, body: MeetupUpdate, identity: Identity =
 
 @app.post("/v1/meetups/{meetup_id}/rsvp", response_model=MeetupOut)
 async def rsvp_meetup(meetup_id: str, body: MeetupRsvp, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
-    meetup = await db.get(Meetup, meetup_id)
+    meetup = (await db.execute(select(Meetup).where(Meetup.id == meetup_id).with_for_update())).scalar_one_or_none()
     if not meetup or meetup.status != "scheduled":
         raise HTTPException(404, "FestioMe meetup not found")
     viewer = await _member(db, meetup.group_id, identity)

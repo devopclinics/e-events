@@ -119,3 +119,26 @@ async def test_admin_policy_update_queues_upserts_and_removals(ctx):
         by_guest = {row.payload["guest_ref"]: row.command for row in commands}
         assert by_guest[approved_id] == "member.upsert"
         assert by_guest[child_id] == "member.remove"
+
+
+@pytest.mark.asyncio
+async def test_adult_approvals_are_event_admin_only_and_validate_guest_ids(ctx):
+    event_id = ctx.ids["event_a"]
+    async with _Session() as session:
+        event = await session.get(Event, event_id)
+        event.is_paid = True
+        guest = await session.scalar(select(Guest).where(Guest.event_id == event_id))
+        event.festiome_access_policy = {"mode": "approved_adults", "adult_guest_ids": [guest.id]}
+        guest_id = guest.id
+        await session.commit()
+    path = f"/api/events/{event_id}/festiome/access-policy"
+    ctx.login(ctx.ids["user_b"])
+    assert (await ctx.client.get(path)).status_code == 404
+    assert (await ctx.client.put(path, json={"mode": "all_eligible"})).status_code == 404
+    ctx.login(ctx.ids["user_a"])
+    data = (await ctx.client.get(path)).json()
+    assert data["adult_guest_ids"] == [guest_id]
+    assert data["guests"][0]["approved"] is True
+    response = await ctx.client.put(path, json={"mode": "approved_adults", "adult_guest_ids": ["not-in-this-event"]})
+    assert response.status_code == 400
+    assert (await ctx.client.get(path)).json()["adult_guest_ids"] == [guest_id]

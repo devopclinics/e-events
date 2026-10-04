@@ -3,6 +3,7 @@ import RedesignShell, { Icon, ConfirmDialog, Modal } from './redesign/RedesignSh
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { api } from '../api'
 import './FestioMeRedesignPage.css'
+import FestioMeGuestAccessSettings from './FestioMeGuestAccessSettings'
 
 const HOME_SECTIONS = ['Overview', 'Community', 'People', 'Meetings', 'Content', 'Moderation', 'Analytics', 'Settings']
 
@@ -32,7 +33,7 @@ function adaptMessage(message, members = []) {
 
 export default function FestioMeRedesignPage() {
   const [eventId] = useCurrentEvent()
-  const [homeSection, setHomeSection] = useState('Overview')
+  const [homeSection, setHomeSection] = useState(() => new URLSearchParams(window.location.search).get('tab') === 'settings' ? 'Settings' : 'Overview')
   const [activeGroup, setActiveGroup] = useState('')
   const [active, setActive] = useState('')
   const [messages, setMessages] = useState([])
@@ -554,6 +555,8 @@ export default function FestioMeRedesignPage() {
         </div>
       )}
       {homeSection === 'Settings' && (
+        <>
+        <FestioMeGuestAccessSettings key={eventId} eventId={eventId} />
         <div className="rd-panel" style={{ maxWidth: 420 }}>
           <div className="rd-panel-head"><h3>Your profile</h3></div>
           <div className="rd-panel-body">
@@ -586,6 +589,7 @@ export default function FestioMeRedesignPage() {
             }}>Notification preferences</button>
           </div>
         </div>
+        </>
       )}
 
       {homeSection === 'Messages' && (

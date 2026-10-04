@@ -1614,6 +1614,8 @@ export const api = {
     festiomeReq('POST', `/festiome/v1/groups/${groupId}/join-requests/${requestId}/deny`),
   eventFestioMeStatus: (eventId) => req('GET', `/events/${eventId}/festiome/status`),
   enableEventFestioMe: (eventId) => req('POST', `/events/${eventId}/festiome/enable`),
+  festiomeAccessPolicy: (eventId) => req('GET', `/events/${eventId}/festiome/access-policy`),
+  festiomeSaveAccessPolicy: (eventId, data) => req('PUT', `/events/${eventId}/festiome/access-policy`, data),
   // Organizer group management (gated GuestHub endpoints, service-authed to FestioMe).
   festiomeManageGroups: (eventId) => req('GET', `/events/${eventId}/festiome/groups`),
   festiomeManageCreateGroup: (eventId, data) => req('POST', `/events/${eventId}/festiome/groups`, data),

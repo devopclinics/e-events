@@ -175,10 +175,13 @@ async def apply(event_id: str, manifest_path: Path) -> None:
             for child, adult in (("01", "09"), ("02", "10"), ("03", "09"), ("04", "10"), ("05", "09"), ("06", "10"), ("07", "10"))
         }
 
-        event.festiome_access_policy = {
-            "mode": "approved_adults",
-            "adult_guest_ids": [guests[demo_id].id for demo_id in ("08", "09", "10")],
-        }
+        # Initialize the demo's adult restriction once; later setup runs must
+        # preserve the organizer's approvals and revocations.
+        if not event.festiome_access_policy:
+            event.festiome_access_policy = {
+                "mode": "approved_adults",
+                "adult_guest_ids": [guests[demo_id].id for demo_id in ("08", "09", "10")],
+            }
         event.festiome_addon_enabled = True
 
         menu_rows = {}

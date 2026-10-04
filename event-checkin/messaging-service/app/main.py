@@ -136,6 +136,7 @@ class Event(Base):
     # whether a remote FestioMe group has already been provisioned.
     festiome_addon_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     festiome_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    festiome_access_policy: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     checkout_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     venue_name: Mapped[str | None] = mapped_column(String(255))
     admission_note: Mapped[str | None] = mapped_column(Text)
@@ -149,8 +150,14 @@ def _comm_blocked(event: "Event | None", feature: str) -> bool:
     return bool(event and feature in (event.blocked_comm_features or []))
 
 
-def festiome_available(event: "Event | None") -> bool:
-    """Expose FestioMe only while its event add-on is currently enabled."""
+def festiome_available(event: "Event | None", guest: "Guest | None" = None) -> bool:
+    """Respect both the event add-on and the current guest's admission policy."""
+    if guest is not None:
+        if not event or guest.event_id != event.id or not guest_is_attending(guest, event):
+            return False
+        policy = event.festiome_access_policy or {}
+        if policy.get("mode") == "approved_adults" and guest.id not in (policy.get("adult_guest_ids") or []):
+            return False
     return bool(
         event
         and event.festiome_addon_enabled
@@ -1435,7 +1442,7 @@ async def guest_hub(
             "direct_host_messages": bool(host_messages_on and attending),
             "guest_chat": chat_enabled,
             "guest_chat_posting": bool(chat_enabled and cfg.guest_chat_posting_enabled),
-            "festiome": festiome_available(event),
+            "festiome": festiome_available(event, guest),
         },
         "announcements": anns,
         "direct_messages": direct,

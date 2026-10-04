@@ -120,6 +120,7 @@ export default function FestioMePage() {
     [draft, setDraft] = useState(""),
     [reply, setReply] = useState(null),
     [sending, setSending] = useState(false);
+  const [entryErrorStatus, setEntryErrorStatus] = useState(null);
   const [panel, setPanel] = useState(""),
     [dialog, setDialog] = useState(""),
     [formValue, setFormValue] = useState("");
@@ -209,6 +210,7 @@ export default function FestioMePage() {
       const next = list(guestToken ? await api.festiomeGuestSpaces(guestToken) : await api.festiomeSpaces());
       setGroups(next);
       setServiceDown(false);
+      setEntryErrorStatus(null);
       setGroupId((current) =>
         next.some((g) => g.id === (preferred || current))
           ? preferred || current
@@ -216,6 +218,7 @@ export default function FestioMePage() {
       );
     } catch (error) {
       setServiceDown(true);
+      setEntryErrorStatus(error.status || null);
       setNotice(errorText(error));
     } finally {
       setLoading(false);
@@ -233,6 +236,7 @@ export default function FestioMePage() {
       // new pass, and rerun this effect whenever the route query changes.
       setLoading(true);
       setServiceDown(false);
+      setEntryErrorStatus(null);
       setGroups([]);
       setGroupId("");
       setChannels([]);
@@ -245,6 +249,7 @@ export default function FestioMePage() {
         })
         .catch((error) => {
           setNotice(errorText(error));
+          setEntryErrorStatus(error.status || null);
           setServiceDown(true);
           setLoading(false);
         });
@@ -1035,7 +1040,7 @@ export default function FestioMePage() {
       <div className="mx-auto mt-16 max-w-xl rounded-2xl border border-amber-300 bg-amber-50 p-8 text-center dark:border-amber-800 dark:bg-amber-950/30">
         <div className="text-3xl">💬</div>
         <h1 className="mt-3 text-xl font-bold dark:text-white">
-          FestioMe is taking a moment
+          {entryErrorStatus === 403 ? "FestioMe access needs approval" : entryErrorStatus === 404 ? "This pass cannot open FestioMe" : entryErrorStatus === 410 ? "This event has ended" : "FestioMe is taking a moment"}
         </h1>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
           {notice}
@@ -1047,8 +1052,13 @@ export default function FestioMePage() {
           }}
           className="mt-5 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white"
         >
-          Try again
+          {entryErrorStatus === 403 ? "Check access again" : "Try again"}
         </button>
+        {guestMode && api.festiomeGuestContext()?.passToken && <button
+          type="button"
+          onClick={openFestioHub}
+          className="ml-3 mt-5 rounded-lg border border-teal-600 px-4 py-2 text-sm font-semibold text-teal-700 dark:text-teal-300"
+        >← Back to GuestHub</button>}
       </div>
     );
 

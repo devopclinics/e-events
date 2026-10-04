@@ -1,9 +1,56 @@
+from datetime import datetime
+
 import pytest
 from sqlalchemy import select
 
 from app.models import Event, FestioMeOutbox, Guest
 from app.services.festiome_outbox import guest_is_festiome_eligible
 from conftest import _Session
+from app.main import app
+from app.services.festiome_client import get_festiome_client
+from test_festiome_integration import FakeFestioMeClient
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("rsvp_enabled,status", [(True, "confirmed"), (False, "invited")])
+async def test_valid_attending_pass_explains_adult_approval_and_allows_after_approval(ctx, rsvp_enabled, status):
+    app.dependency_overrides[get_festiome_client] = lambda: FakeFestioMeClient()
+    event_id = ctx.ids["event_a"]
+    async with _Session() as session:
+        event = await session.get(Event, event_id)
+        event.is_paid = True
+        event.festiome_addon_enabled = True
+        event.rsvp_enabled = rsvp_enabled
+        event.festiome_access_policy = {"mode": "approved_adults", "adult_guest_ids": []}
+        guest = await session.scalar(select(Guest).where(Guest.event_id == event_id))
+        guest.rsvp_status = status
+        guest_id, token = guest.id, guest.qr_token
+        other_event = Event(org_id=ctx.ids["org_b"], name="Other event", couples_name="Other",
+                            checkin_base_url="http://test", event_date=datetime(2026, 12, 24))
+        session.add(other_event)
+        await session.commit()
+        other_event_id = other_event.id
+
+    path = f"/api/events/{event_id}/festiome/guest-token"
+    denied = await ctx.client.post(path, json={"pass_token": token})
+    assert denied.status_code == 403
+    assert "Your pass is valid" in denied.json()["detail"]
+    assert "approved adults" in denied.json()["detail"]
+    assert (await ctx.client.post(path, json={"pass_token": "00000000-0000-0000-0000-000000000000"})).status_code == 404
+    cross_event = f"/api/events/{other_event_id}/festiome/guest-token"
+    assert (await ctx.client.post(cross_event, json={"pass_token": token})).status_code == 404
+
+    async with _Session() as session:
+        event = await session.get(Event, event_id)
+        event.festiome_access_policy = {"mode": "approved_adults", "adult_guest_ids": [guest_id]}
+        await session.commit()
+    assert (await ctx.client.post(path, json={"pass_token": token})).status_code == 200
+
+    async with _Session() as session:
+        guest = await session.get(Guest, guest_id)
+        guest.rsvp_status = "declined"
+        await session.commit()
+    assert (await ctx.client.post(path, json={"pass_token": token})).status_code == 404
 
 
 @pytest.mark.asyncio

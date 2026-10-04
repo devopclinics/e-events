@@ -312,6 +312,16 @@ async def exchange_guest_pass(
     if not event or event.status == "ended":
         raise HTTPException(410, "This event has ended")
     if not guest_is_festiome_eligible(guest, event):
+        attending = guest.rsvp_status == "confirmed" or (
+            not event.rsvp_enabled and guest.rsvp_status == "invited"
+        )
+        if attending and (event.festiome_access_policy or {}).get("mode") == "approved_adults":
+            raise HTTPException(
+                403,
+                "This event's FestioMe community is limited to approved adults. "
+                "Your pass is valid, but the organizer has not approved it for chat access. "
+                "Return to GuestHub to contact the organizer.",
+            )
         raise HTTPException(404, "Eligible guest pass not found")
     _require_festiome_addon(event)
     if not client.configured:

@@ -6,6 +6,7 @@ import { useGuestPush } from '../hooks/useGuestPush'
 import { parseUtc, fmtEventDateRange } from '../timeutil'
 import { seatingTerm, seatTerm } from '../seatingTerm'
 import { normalizePhone, phoneInputSettings } from '../lib/rsvpPhone.mjs'
+import { eventBrandingStyle } from '../lib/eventBranding.mjs'
 import './GuestHubThemes.css'
 import PublicTicketCheckout from '../components/PublicTicketCheckout'
 
@@ -1977,7 +1978,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
 
   const showGuardianPanels = !previewMock && event?.junior_guardian_handoff_enabled && accessToken
   if (journeyLayout && hub && !flowServicesOpen) return <><GuardianConfirmPanel pending={pendingGuardianConfirmations} onConfirm={confirmGuardianPickup} />{showGuardianPanels && <ManageGuardiansPanel token={accessToken} />}<JourneyGuestHubView event={event} hub={hub} journey={journey} previewMock={previewMock} designTheme={designTheme} guestContent={guestContent} onOpenServices={setFlowServicesOpen} moduleVisible={hubModuleVisible} /></>
-  if (completeLayout && hub && !flowServicesOpen) return <><GuardianConfirmPanel pending={pendingGuardianConfirmations} onConfirm={confirmGuardianPickup} />{showGuardianPanels && <ManageGuardiansPanel token={accessToken} />}<CompleteGuestHubView event={event} hub={hub} journey={journey} previewMock={previewMock} designTheme={designTheme} guestContent={guestContent} onOpenServices={setFlowServicesOpen} moduleVisible={hubModuleVisible} /></>
+  if (completeLayout && hub && !flowServicesOpen) return <div style={eventBrandingStyle(event, designTheme)}><GuardianConfirmPanel pending={pendingGuardianConfirmations} onConfirm={confirmGuardianPickup} />{showGuardianPanels && <ManageGuardiansPanel token={accessToken} />}<CompleteGuestHubView event={event} hub={hub} journey={journey} previewMock={previewMock} designTheme={designTheme} guestContent={guestContent} onOpenServices={setFlowServicesOpen} moduleVisible={hubModuleVisible} /></div>
 
   if (guidedLayout) {
     const isConfirmed = !hasRsvp || hub?.guest?.rsvp_status === 'confirmed'
@@ -2088,7 +2089,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
           </div>
         )}
         <div className={`mx-auto w-full max-w-[560px] rounded-[1.65rem] border p-5 shadow-2xl backdrop-blur sm:p-6 fh-hub-style-${hubStyle} ${completeLayout ? 'fh-complete-layout' : journeyLayout ? 'fh-journey-layout' : 'fh-companion-layout'}`}
-          style={{ background: `linear-gradient(145deg, ${tone.background}, ${tone.surface})`, borderColor: tone.border, color: tone.text, boxShadow: `0 22px 48px ${tone.shadow}` }}>
+          style={{ ...eventBrandingStyle(event, designTheme), background: `linear-gradient(145deg, ${tone.background}, ${tone.surface})`, borderColor: tone.border, color: tone.text, boxShadow: `0 22px 48px ${tone.shadow}` }}>
           {(journeyLayout || completeLayout) && (
             <header className={completeLayout ? 'fh-complete-banner' : 'fh-journey-hero'}>
               <div className="fh-journey-brand-row">
@@ -3182,7 +3183,7 @@ function JourneyInviteShell({ event, tone, designTheme, title, dateLabel, timeLa
     </section>
   ) : null
   return (
-    <div className={`${completeFlow ? 'complete-public-shell' : 'journey-public-shell'}`} style={{ '--journey-accent': tone.accent, '--journey-ink': tone.text, fontFamily: designFontFamily(designTheme) }}>
+    <div className={`${completeFlow ? 'complete-public-shell' : 'journey-public-shell'}`} style={{ ...eventBrandingStyle(event, designTheme), '--journey-accent': tone.accent, '--journey-ink': tone.text, fontFamily: designFontFamily(designTheme) }}>
       <aside className="journey-public-story" style={cover ? { backgroundImage: `linear-gradient(180deg, rgba(2,31,31,.18), rgba(2,31,31,.94)), url(${cover})` } : undefined}>
         <div className="journey-public-brand">
           {event.logo_url ? <img src={event.logo_url} alt="" /> : <span>{(event.name || 'F').trim().slice(0, 1)}</span>}

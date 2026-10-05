@@ -106,6 +106,66 @@ def _guided_next_phase(activity: EngagementActivity) -> str:
     return "complete"
 
 
+def _guided_previous_target(activity: EngagementActivity) -> tuple[str, str | None] | None:
+    """Walk the same show sequence backwards, including question boundaries."""
+    path = [("lobby", None), ("intro", None)]
+    if activity.type in GUIDED_FORM_TYPES:
+        path.extend((phase, None) for phase in ("answering", "locked", "results"))
+    elif activity.type == "q_and_a":
+        path.extend((phase, None) for phase in ("answering", "results"))
+    else:
+        for question in _active_questions(activity):
+            phases = ["question_preview", "answering", "locked"]
+            if _question_has_answer(question):
+                phases.append("reveal")
+            phases.append("results")
+            if activity.type == "quiz" and activity.config.get("leaderboard_enabled"):
+                phases.append("leaderboard")
+            path.extend((phase, question.id) for phase in phases)
+    path.append(("complete", path[-1][1]))
+    current = (activity.config.get("show_phase") or "lobby", activity.config.get("current_question_id"))
+    try:
+        index = path.index(current)
+    except ValueError:
+        return None
+    return path[index - 1] if index else None
+
+
+def _apply_guided_previous(activity: EngagementActivity, now: datetime) -> tuple[str, ActivityQuestion | None]:
+    target = _guided_previous_target(activity)
+    if target is None:
+        raise HTTPException(409, "There is no previous slide")
+    phase, question_id = target
+    current = next((question for question in activity.questions if question.id == question_id), None)
+    for question in activity.questions:
+        if question.live_state == "open":
+            question.live_state = "closed"
+    if current:
+        current.live_state = {
+            "answering": "open", "reveal": "answer_revealed",
+            "results": "results_visible", "leaderboard": "results_visible",
+        }.get(phase, "closed")
+        if phase == "answering":
+            current.config = {**(current.config or {}), "opened_at": now.isoformat()}
+    scene = {
+        "lobby": "join", "intro": "welcome", "question_preview": "question",
+        "answering": "responding", "locked": "question", "reveal": "correct_answer",
+        "results": "survey_insights" if activity.type in GUIDED_FORM_TYPES else "results",
+        "leaderboard": "leaderboard",
+    }[phase]
+    # Going back is a presenter correction. Hold this slide until they choose
+    # to advance or explicitly resume automation; keep all recorded responses.
+    activity.config = {
+        **(activity.config or {}), "show_phase": phase,
+        "current_question_id": question_id, "display_scene": scene,
+        "show_phase_started_at": now.isoformat(), "show_phase_deadline_at": None,
+        "show_automation_enabled": False,
+    }
+    if activity.status == "closed":
+        activity.status = "live"
+    return phase, current
+
+
 def _guided_automation_timings(activity: EngagementActivity) -> dict[str, int]:
     configured = (activity.config or {}).get("show_automation_timings") or {}
     return {
@@ -551,11 +611,28 @@ async def advance_guided_show(activity_id: str, identity: Identity = Depends(cur
     now = datetime.now(timezone.utc)
     next_phase, current = _apply_guided_advance(activity, now)
     await db.commit()
-    await publish(activity_id, "show.phase_changed", {"phase": next_phase, "question_id": current_id})
+    await publish(activity_id, "show.phase_changed", {"phase": next_phase, "question_id": activity.config.get("current_question_id")})
     if current:
         await publish(activity_id, "question.state_changed", {"question_id": current.id, "state": current.live_state})
     if next_phase == "complete":
         await publish(activity_id, "activity.status_changed", {"status": activity.status})
+    return await _fetch_activity(activity_id, db)
+
+
+@router.post("/activities/{activity_id}/show/previous", response_model=ActivityOut)
+async def previous_guided_show(activity_id: str, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    require_capability(identity, "control")
+    activity = await _get_owned_activity(activity_id, identity, db)
+    if activity.config.get("show_mode") != "guided":
+        raise HTTPException(409, "Start Guided Show Mode before going back")
+    if activity.status not in ("live", "paused", "closed") or (activity.status == "closed" and activity.config.get("show_phase") != "complete"):
+        raise HTTPException(409, "This activity is not available for a guided show")
+    phase, current = _apply_guided_previous(activity, datetime.now(timezone.utc))
+    await db.commit()
+    await publish(activity_id, "show.phase_changed", {"phase": phase, "question_id": activity.config.get("current_question_id")})
+    if current:
+        await publish(activity_id, "question.state_changed", {"question_id": current.id, "state": current.live_state})
+    await publish(activity_id, "activity.status_changed", {"status": activity.status})
     return await _fetch_activity(activity_id, db)
 
 

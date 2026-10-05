@@ -542,7 +542,7 @@ function QnaPanel({ guestToken, activityId, activityStatus }) {
   useLiveRefresh(guestToken, activityId, load)
 
   async function submit() {
-    if (!text.trim()) return
+    if (!text.trim() || busy) return
     setBusy(true)
     setError('')
     setNotice('')
@@ -550,7 +550,7 @@ function QnaPanel({ guestToken, activityId, activityStatus }) {
       const submitted = await api.liveGuestQnaSubmit(guestToken, activityId, text.trim())
       setItems((current) => current ? [...current.filter((item) => item.id !== submitted.id), { ...submitted, is_mine: true }] : [{ ...submitted, is_mine: true }])
       setText('')
-      setNotice('Question submitted — it will appear to everyone after the moderator features it.')
+      setNotice('Question submitted for moderation. You can ask another question below.')
       await load()
     } catch (e) { setError(e.message || 'Your question could not be sent. Please try again.') }
     finally { setBusy(false) }
@@ -565,12 +565,13 @@ function QnaPanel({ guestToken, activityId, activityStatus }) {
     <div className="grid gap-3">
       {activityStatus === 'live' && (
         <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2}
+          <p className="mb-3 text-sm font-semibold text-slate-600 dark:text-slate-300">Ask as many questions as you need while Q&amp;A is open. A moderator reviews each question before it is public.</p>
+          <textarea aria-label="Your question" value={text} onChange={(e) => setText(e.target.value)} rows={2}
             className="w-full rounded-xl border-2 border-slate-200 bg-white p-3 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-white"
             placeholder="Ask a question…" />
           <button type="button" disabled={!text.trim() || busy} onClick={submit}
             className="mt-2 min-h-11 w-full rounded-xl bg-teal-400 px-4 py-2 text-sm font-extrabold text-slate-950 disabled:opacity-50">
-            {busy ? 'Sending…' : 'Ask'}
+            {busy ? 'Sending…' : items?.some((item) => item.is_mine) ? 'Ask another question' : 'Ask'}
           </button>
           {notice && <div role="status" className="mt-3 rounded-xl bg-teal-50 p-3 text-xs font-bold text-teal-800 dark:bg-teal-950 dark:text-teal-200">{notice}</div>}
           {error && <div role="alert" className="mt-3 rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-700 dark:bg-rose-950 dark:text-rose-200">{error}</div>}
@@ -758,7 +759,7 @@ function ActivityView({ guestToken, activityId, onBack }) {
       {error && error.code !== 'FESTIO_LIVE_UNAVAILABLE' && <div role="alert" className="rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-700 dark:bg-rose-950 dark:text-rose-200">{error.message || error}</div>}
 
       {activity.type === 'q_and_a' ? (
-        !guided || showPhase === 'answering'
+        !guided || ['answering', 'results', 'complete'].includes(showPhase)
           ? <QnaPanel guestToken={guestToken} activityId={activityId} activityStatus={activity.status} />
           : <GuidedGuestNotice phase={showPhase} activity={activity}/>
       ) : activity.status === 'closed' || activity.status === 'completed' ? (

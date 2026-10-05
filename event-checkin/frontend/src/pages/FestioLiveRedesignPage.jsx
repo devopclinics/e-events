@@ -17,7 +17,7 @@ const DonationTrackerPanel = lazy(() => import('../components/live/DonationTrack
 const LIVE_NAV_GROUPS = [
   { label: 'Event', items: [['Overview', '⌂'], ['Settings', '⚙'], ['Help', '?']] },
   { label: 'Prepare', items: [['Activities', '◉'], ['Experiences', '♙'], ['Materials', '▤'], ['Question Bank', '?'], ['Certificates', '◆']] },
-  { label: 'Run live', items: [['Control Room', '▶'], ['Live Control', '●'], ['Displays', '▣'], ['Donations', '♡']] },
+  { label: 'Run live', items: [['Control Room', '▶'], ['Live Control', '●'], ['Staff access', '♙'], ['Displays', '▣'], ['Donations', '♡']] },
   { label: 'Results', items: [['Responses', '☷'], ['Analytics', '↗']] },
 ]
 const TABS = LIVE_NAV_GROUPS.flatMap((group) => group.items.map(([tab]) => tab))
@@ -34,6 +34,7 @@ const TAB_LABELS = {
   Analytics: 'Insights',
   'Question Bank': 'Question bank',
   Settings: 'Settings',
+  'Staff access': 'Presenter & moderator links',
   Help: 'Help',
   Overview: 'Event overview',
 }
@@ -73,6 +74,8 @@ function guidedActionLabel(activity) {
   const currentIndex = questions.findIndex((question) => question.id === activity.config?.current_question_id)
   const current = questions[currentIndex]
   if (phase === 'lobby') return 'Show activity intro →'
+  if (phase === 'intro' && activity.type === 'q_and_a') return 'Open Q&A →'
+  if (phase === 'answering' && activity.type === 'q_and_a') return 'Show questions →'
   if (phase === 'intro') return ['survey', 'feedback', 'q_and_a'].includes(activity.type) ? 'Open participation →' : 'Preview first question →'
   if (phase === 'question_preview') return 'Open voting →'
   if (phase === 'answering') return 'Lock responses →'
@@ -906,7 +909,7 @@ function DisplayCard({ display, draft, onDraftChange, onDraftApplied, eventId, a
 }
 
 
-function UnifiedControlRoom({ activities, displays, selected, loadingActivityId, busy, onSelectActivity, onOpenControls, onAdvance, advanceLabel, onPush, onClear, onManageDisplay, onOpenPresenter, onNewActivity }) {
+function UnifiedControlRoom({ activities, displays, selected, loadingActivityId, busy, onSelectActivity, onOpenControls, onAdvance, advanceLabel, onPush, onClear, onManageDisplay, onOpenPresenter, onOpenModerator, onPrevious, onNewActivity }) {
   const allActivities = activities || []
   const allDisplays = displays || []
   const [targetIds, setTargetIds] = useState([])
@@ -967,7 +970,7 @@ function UnifiedControlRoom({ activities, displays, selected, loadingActivityId,
     </header>
     <header className="fl-control-room-head">
       <div><span className="fl-eyebrow">One operator view</span><h2>Activities, live controls, and channels stay together.</h2><p>Choose what is live, select exactly which channels change, and keep every other screen untouched.</p></div>
-      <div className="fl-control-room-head-actions"><button className="rr-btn secondary" onClick={onOpenPresenter}>Presenter controls</button><button className="rr-btn primary" onClick={onNewActivity}>+ New activity</button></div>
+      <div className="fl-control-room-head-actions"><button className="rr-btn secondary" onClick={onOpenPresenter}>Presenter &amp; moderator links</button><button className="rr-btn secondary" disabled={!selected || selected.type !== 'q_and_a'} onClick={onOpenModerator}>Moderator queue</button><button className="rr-btn primary" onClick={onNewActivity}>+ New activity</button></div>
     </header>
     <div className="fl-control-room-shell">
       <aside className="fl-control-rail" aria-label="Activities and shows">
@@ -995,6 +998,7 @@ function UnifiedControlRoom({ activities, displays, selected, loadingActivityId,
             <label><span>Scene on selected channels</span><select className="rr-select" aria-label="Scene on selected channels" value={scene} disabled={busy} onChange={(event) => setScene(event.target.value)}>{allowedScenes.map((key) => <option key={key} value={key}>{DISPLAY_SCENES.find(([sceneKey]) => sceneKey === key)?.[1] || key}</option>)}</select></label>
             <button className="rr-btn primary" disabled={busy || !targetIds.length} onClick={pushSelected}>Push {sceneLabel} to {targetIds.length || '…'} selected</button>
             <button className="rr-btn secondary" disabled={busy || !targetIds.length} onClick={clearSelected}>Clear content</button>
+            <button className="rr-btn secondary" disabled={busy || selected.config?.show_mode !== 'guided' || !selected.config?.show_phase || selected.config?.show_phase === 'lobby'} onClick={onPrevious}>← Previous slide</button>
             <button className="rr-btn secondary" disabled={busy} onClick={onAdvance}>{advanceLabel}</button>
             <button className="rr-btn secondary" disabled={busy} onClick={onOpenControls}>Open activity controls</button>
           </div>
@@ -1519,6 +1523,15 @@ function FestioLiveEventPage({ eventId }) {
     } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
 
+  async function previousGuidedShow() {
+    if (!selected || busy) return
+    setBusy(true); setError('')
+    try {
+      setSelected(await api.livePreviousGuidedShow(eventId, selected.id))
+      await loadActivities()
+    } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+
   async function saveGuidedAutomation() {
     if (!selected) return
     setBusy(true); setError('')
@@ -1736,7 +1749,7 @@ function FestioLiveEventPage({ eventId }) {
         </aside>
         <div className="fl-workspace-main">
 
-      {enabled && !['Control Room', 'Donations'].includes(tab) && <section className="fl-operator-bar" aria-label="Live operator controls">
+      {enabled && !['Control Room', 'Donations', 'Staff access'].includes(tab) && <section className="fl-operator-bar" aria-label="Live operator controls">
         <div className="fl-operator-fields">
           <label><span>Activity controls</span><select className="rr-select" aria-label="Switch activity" disabled={busy || !activities} value={loadingActivityId || selected?.id || ''} onChange={(event) => { openActivity(event.target.value); setTab('Activities') }}><option value="">Choose an activity</option>{(activities || []).filter((activity) => activity.status !== 'archived' || activity.id === selected?.id).map((activity) => <option key={activity.id} value={activity.id}>{activity.title} · {activity.status}</option>)}</select></label>
           <label><span>Target display</span><select className="rr-select" aria-label="Target display" disabled={busy || !displays?.length} value={operatorDisplay?.id || ''} onChange={(event) => { setOperatorDisplayId(event.target.value); setOperatorReceipt('') }}>{!displays?.length && <option value="">{displays === null ? 'Loading displays…' : 'No displays yet'}</option>}{(displays || []).map((display) => <option key={display.id} value={display.id}>{display.name}</option>)}</select></label>
@@ -1784,7 +1797,9 @@ function FestioLiveEventPage({ eventId }) {
         onPush={pushControlRoomActivity}
         onClear={clearControlRoomChannels}
         onManageDisplay={(displayId) => { if (displayId) setOperatorDisplayId(displayId); setTab('Displays') }}
-        onOpenPresenter={() => setTab('Experiences')}
+        onOpenPresenter={() => setTab('Staff access')}
+        onOpenModerator={() => { setTab('Activities'); window.setTimeout(() => document.getElementById('fl-qna-moderation')?.scrollIntoView({ behavior: 'smooth' }), 0) }}
+        onPrevious={previousGuidedShow}
         onNewActivity={() => { setTab('Activities'); closeActivity(); setCreating(true) }}
       />}
 
@@ -1900,9 +1915,9 @@ function FestioLiveEventPage({ eventId }) {
                 <div><button className="rr-btn primary" disabled={busy || !activityDraft.title.trim()} onClick={saveActivityDetails}>{busy ? 'Saving…' : 'Save details'}</button></div>
               </div>}
               <div className="fl-guided-console">
-                <div><span>GUIDED SHOW MODE</span><h3>{SHOW_PHASE_LABELS[selected.config?.show_phase] || 'Ready to begin'}</h3><p>One presenter action keeps the main screen, guest phones, timer, voting and results synchronized.</p></div>
-                <button className="rr-btn primary" disabled={busy} onClick={selected.config?.show_mode === 'guided' && selected.config?.show_phase !== 'complete' ? advanceGuidedShow : startGuidedShow}>{busy ? 'Updating every screen…' : guidedActionLabel(selected)}</button>
-                <small>{(displays || []).some((display) => display.assigned_activity_id === selected.id) ? `${(displays || []).filter((display) => display.assigned_activity_id === selected.id).length} assigned display(s) will follow this show.` : 'Choose a target display above and send this activity to the screen.'}</small>
+                <div><span>GUIDED SHOW MODE</span><h3>{selected.type === 'q_and_a' && selected.config?.show_phase === 'answering' ? 'Q&A open' : selected.type === 'q_and_a' && selected.config?.show_phase === 'results' ? 'Questions on screen' : SHOW_PHASE_LABELS[selected.config?.show_phase] || 'Ready to begin'}</h3><p>One presenter action keeps the main screen, guest phones, timer, voting and results synchronized.</p></div>
+                <div className="fl-guided-buttons"><button className="rr-btn secondary" disabled={busy || selected.config?.show_mode !== 'guided' || !selected.config?.show_phase || selected.config?.show_phase === 'lobby'} onClick={previousGuidedShow}>← Previous slide</button><button className="rr-btn primary" disabled={busy} onClick={selected.config?.show_mode === 'guided' && selected.config?.show_phase !== 'complete' ? advanceGuidedShow : startGuidedShow}>{busy ? 'Updating every screen…' : guidedActionLabel(selected)}</button></div>
+                <small>{(displays || []).some((display) => display.assigned_activity_id === selected.id) ? `${(displays || []).filter((display) => display.assigned_activity_id === selected.id).length} assigned display(s) will follow this show.` : 'Choose a target display above and send this activity to the screen.'} Going back pauses automation and keeps all responses.</small>
               </div>
               <section className="fl-automation-panel">
                 <header>
@@ -2049,7 +2064,9 @@ function FestioLiveEventPage({ eventId }) {
 
               {selected.type === 'q_and_a' && (
                 <div>
-                  <h4 style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: '.05em', color: '#5b6a5c', margin: '0 0 10px' }}>Q&A moderation</h4>
+                  <h4 id="fl-qna-moderation" style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: '.05em', color: '#5b6a5c', margin: '0 0 10px' }}>Q&amp;A moderation</h4>
+                  <p className="rd-hint">Guests can ask multiple questions while participation is open. Pending questions stay private until featured.</p>
+                  <button className="rr-btn secondary" style={{ marginBottom: 12 }} onClick={() => { setShareRole('moderator'); setTab('Staff access') }}>Get moderator link</button>
                   {qnaItems === null ? <p className="rd-hint">Loading…</p> : qnaItems.length === 0 ? (
                     <p className="rd-hint">No questions submitted yet.</p>
                   ) : qnaItems.map((q) => (
@@ -2299,9 +2316,9 @@ function FestioLiveEventPage({ eventId }) {
         </div>
       )}
 
-      {tab === 'Settings' && (
+      {['Settings', 'Staff access'].includes(tab) && (
         <div className="rr-panel fl-section-panel">
-          <div className="rd-panel-head"><h3>Share Links</h3><p>Hand off Live Control or Q&A moderation without a Festio login</p></div>
+          <div className="rd-panel-head"><h3>Presenter &amp; moderator links</h3><p>Hand off Live Control or Q&A moderation without a Festio login</p></div>
           <div className="rd-panel-body">
             <p className="rd-hint" style={{ marginBottom: 14 }}>
               A Presenter link can go live/pause/close activities and advance questions from any phone or laptop.
@@ -2326,8 +2343,9 @@ function FestioLiveEventPage({ eventId }) {
             {shareLinks.map((l, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--rr-line, #eee)' }}>
                 <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#5b6a5c', width: 90 }}>{l.role}</span>
-                <input className="rr-input" readOnly value={l.url} style={{ flex: 1, fontSize: 12 }} onFocus={(e) => e.target.select()} />
+                <input className="rr-input" aria-label={`${l.role} link`} readOnly value={l.url} style={{ flex: 1, fontSize: 12 }} onFocus={(e) => e.target.select()} />
                 <button className="rr-link-btn" onClick={() => navigator.clipboard?.writeText(l.url)}>Copy</button>
+                <a className="rr-link-btn" href={l.url} target="_blank" rel="noopener noreferrer">Open {l.role}</a>
               </div>
             ))}
             <p className="rd-hint" style={{ marginTop: 16 }}>

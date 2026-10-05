@@ -83,7 +83,7 @@ async def submit_qna(activity_id: str, body: QnaSubmitIn, request: Request, iden
         raise HTTPException(409, "This activity doesn't accept Q&A submissions")
     if activity.status not in ("live", "paused"):
         raise HTTPException(409, "This Q&A isn't open right now")
-    if activity.config.get("show_mode") == "guided" and activity.config.get("show_phase") != "answering":
+    if activity.config.get("show_mode") == "guided" and activity.config.get("show_phase") not in ("answering", "results"):
         raise HTTPException(409, "The presenter hasn't opened Q&A yet")
     if not body.text.strip():
         raise HTTPException(422, "Enter a question")
@@ -105,7 +105,7 @@ async def upvote_qna(qna_id: str, request: Request, identity: Identity = Depends
     qna = await _get_owned_qna(qna_id, identity, db)
     activity = await _fetch_activity(qna.activity_id, db)
     require_activity_session(identity, activity.session_id, activity.config)
-    if activity.config.get("show_mode") == "guided" and activity.config.get("show_phase") != "answering":
+    if activity.config.get("show_mode") == "guided" and activity.config.get("show_phase") not in ("answering", "results"):
         raise HTTPException(409, "The presenter has closed Q&A")
     if qna.status not in ("featured", "answered"):
         raise HTTPException(409, "This question is awaiting moderation")

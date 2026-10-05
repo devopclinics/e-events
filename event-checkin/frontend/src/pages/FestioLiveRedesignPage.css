@@ -418,3 +418,5 @@ button.fl-program-activity-row { width: 100%; border-top: 0; border-left: 0; bor
   .fl-control-room-head-actions { justify-content: stretch; }
   .fl-control-room-head-actions .rr-btn { flex: 1; justify-content: center; }
 }
+
+.fl-guided-buttons { display: flex; gap: 8px; flex-wrap: wrap; }

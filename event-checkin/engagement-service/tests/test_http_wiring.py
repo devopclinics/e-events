@@ -120,6 +120,7 @@ class AuthRequiredTests(unittest.TestCase):
     def test_guided_show_controls_require_auth(self):
         self.assertEqual(client.post("/api/engagement/v1/activities/x/show/start").status_code, 401)
         self.assertEqual(client.post("/api/engagement/v1/activities/x/show/advance").status_code, 401)
+        self.assertEqual(client.post("/api/engagement/v1/activities/x/show/previous").status_code, 401)
         self.assertEqual(client.put("/api/engagement/v1/activities/x/show/automation", json={"enabled": True}).status_code, 401)
 
     def test_status_requires_auth(self):

@@ -43,6 +43,8 @@ function guidedActionLabel(activity) {
   const hasNext = currentIndex < questions.length - 1
   const current = questions[currentIndex]
   if (phase === 'lobby') return 'Show activity intro →'
+  if (phase === 'intro' && activity.type === 'q_and_a') return 'Open Q&A →'
+  if (phase === 'answering' && activity.type === 'q_and_a') return 'Show questions →'
   if (phase === 'intro') return ['survey', 'feedback', 'q_and_a'].includes(activity.type) ? 'Open participation →' : 'Preview first question →'
   if (phase === 'question_preview') return 'Open voting →'
   if (phase === 'answering') return 'Lock responses →'
@@ -256,6 +258,12 @@ export default function LiveControlPage() {
     try { setActivity(await api.liveControlAdvanceGuidedShow(token, activityId)); await load() }
     catch (e) { setError(e.message) } finally { setBusy(false) }
   }
+  async function previousGuidedShow() {
+    if (busy) return
+    setBusy(true); setError('')
+    try { setActivity(await api.liveControlPreviousGuidedShow(token, activityId)); await load() }
+    catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
   async function toggleGuidedAutomation() {
     setBusy(true); setError('')
     try {
@@ -426,9 +434,11 @@ export default function LiveControlPage() {
               <>
                 <section className="overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-violet-950 to-slate-900 text-white shadow-xl">
                   <div className="p-5">
-                    <div className="flex items-start justify-between gap-3"><div><div className="text-[10px] font-black uppercase tracking-[.2em] text-teal-300">Guided Show Mode</div><h2 className="mt-1 text-xl font-black">{SHOW_PHASE_LABELS[activity.config?.show_phase] || 'Ready to begin'}</h2><p className="mt-1 text-xs font-semibold text-slate-300">One action keeps the projector, guest phones, voting, timer and results in sync.</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${activity.config?.show_mode === 'guided' ? 'bg-teal-300 text-slate-950' : 'bg-white/10 text-slate-300'}`}>{activity.config?.show_mode === 'guided' ? 'Active' : 'Off'}</span></div>
+                    <div className="flex items-start justify-between gap-3"><div><div className="text-[10px] font-black uppercase tracking-[.2em] text-teal-300">Guided Show Mode</div><h2 className="mt-1 text-xl font-black">{activity.type === 'q_and_a' && activity.config?.show_phase === 'answering' ? 'Q&A open' : activity.type === 'q_and_a' && activity.config?.show_phase === 'results' ? 'Questions on screen' : SHOW_PHASE_LABELS[activity.config?.show_phase] || 'Ready to begin'}</h2><p className="mt-1 text-xs font-semibold text-slate-300">One action keeps the projector, guest phones, voting, timer and results in sync.</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${activity.config?.show_mode === 'guided' ? 'bg-teal-300 text-slate-950' : 'bg-white/10 text-slate-300'}`}>{activity.config?.show_mode === 'guided' ? 'Active' : 'Off'}</span></div>
                     {currentQuestion && <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-3"><div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Question {currentQuestionIndex + 1} of {activity.questions.length}</div><div className="mt-1 text-sm font-extrabold">{currentQuestion.prompt}</div></div>}
+                    <button type="button" disabled={busy || activity.config?.show_mode !== 'guided' || !activity.config?.show_phase || activity.config?.show_phase === 'lobby'} onClick={previousGuidedShow} className="mt-3 min-h-11 w-full rounded-xl border border-slate-400 px-4 font-bold disabled:opacity-40">← Previous slide</button>
                     <button type="button" disabled={busy} onClick={activity.config?.show_mode === 'guided' && activity.config?.show_phase !== 'complete' ? advanceGuidedShow : startGuidedShow} className="mt-4 min-h-14 w-full rounded-xl bg-gradient-to-r from-teal-300 via-cyan-300 to-violet-400 px-4 text-sm font-black text-slate-950 shadow-lg disabled:opacity-40">{busy ? 'Updating every screen…' : guidedActionLabel(activity)}</button>
+                    <p className="mt-2 text-xs text-slate-400">Going back pauses automation and keeps all responses.</p>
                     <div className="mt-3 flex items-center justify-between text-[11px] font-bold text-slate-400"><span>{selectedDisplay ? `Main screen: ${selectedDisplay.name}` : 'Select a main screen below'}</span>{automationDeadline ? <CountdownStatus deadlineAt={automationDeadline} prefix="Auto advance in "/> : questionDeadline && activity.config?.show_phase === 'answering' ? <CountdownStatus deadlineAt={questionDeadline} prefix="" suffix=" remaining"/> : <span>Server synchronized</span>}</div>
                     <button type="button" disabled={busy} onClick={toggleGuidedAutomation} className="mt-3 w-full rounded-xl border border-white/20 px-3 py-2 text-xs font-extrabold text-white">{activity.config?.show_automation_enabled ? 'Pause automation' : 'Resume automation'}</button>
                   </div>

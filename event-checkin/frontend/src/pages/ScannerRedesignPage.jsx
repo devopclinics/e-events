@@ -784,6 +784,7 @@ function CommandResultPanel({ result, onStepComplete, stepBusy }) {
             )}
             {result.zone_name && <div><Icon name="external" size={16}/><span>Access decision<strong>{result.direction?.toUpperCase()} · {result.zone_name}</strong></span></div>}
             {result.deny_reason && <div><Icon name="shield" size={16}/><span>Reason<strong>{result.deny_reason}</strong></span></div>}
+            {result.guardian_name && <div><Icon name="users" size={16}/><span>Guardian verification<strong>{result.guardian_name} · {result.guardian_verification_method?.startsWith('guardian_manual') ? 'Verified by staff' : 'QR verified'}</strong></span></div>}
           </div>
           {requiredSteps.length > 0 && (
             <div className="sc-command-next">

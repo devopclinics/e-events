@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { seatingTerm } from '../seatingTerm'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
@@ -51,7 +51,7 @@ function extractScanPayload(raw) {
 
 function resultTone(result) {
   if (!result) return ''
-  if (result.denied || result.status === 'denied' || result.status === 'invalid') return 'red'
+  if (result.denied || ['denied', 'invalid', 'not_active', 'not_assigned', 'no_seat_available', 'not_paid', 'checkin_disabled'].includes(result.status)) return 'red'
   if (result.status === 'pending_required_step' || result.status === 'guardian_required') return 'amber'
   if (/already/.test(result.status || '')) return 'amber'
   if (result.status === 'offline_queued') return 'blue'
@@ -100,6 +100,37 @@ function ResultCard({ result, onStepComplete, stepBusy }) {
       </div>
     </div>
   )
+}
+
+function AdmissionResultPopup({ result, onDismiss, onStepComplete, stepBusy }) {
+  const dialogRef = useRef(null)
+  const nextRef = useRef(null)
+  const title = result.status === 'admitted' ? 'Checked in'
+    : result.status === 'already_admitted' ? 'Already checked in'
+    : result.status === 'pending_required_step' ? 'Action required before check-in'
+    : result.status === 'offline_queued' ? 'Check-in queued offline'
+    : 'Unable to check in'
+  const tone = result.status === 'admitted' ? 'green'
+    : result.status === 'offline_queued' ? 'blue'
+    : ['already_admitted', 'pending_required_step'].includes(result.status) ? 'amber' : 'red'
+
+  useEffect(() => {
+    const previousFocus = document.activeElement
+    dialogRef.current.showModal()
+    nextRef.current.focus()
+    return () => { if (previousFocus?.isConnected) previousFocus.focus() }
+  }, [])
+
+  return <dialog ref={dialogRef} className={`sc-admission-popup sc-admission-popup-${tone}`}
+    aria-labelledby="sc-admission-popup-title" onCancel={(event) => { event.preventDefault(); onDismiss() }}>
+    <div className="sc-admission-popup-heading">
+      <Icon name={tone === 'green' ? 'check' : tone === 'red' ? 'shield' : 'info'} size={30}/>
+      <h2 id="sc-admission-popup-title">{title}</h2>
+      <button type="button" className="rr-btn secondary" aria-label="Close check-in result" onClick={onDismiss}>×</button>
+    </div>
+    <CommandResultPanel result={result} onStepComplete={onStepComplete} stepBusy={stepBusy}/>
+    <button ref={nextRef} type="button" className="rr-btn primary sc-admission-popup-next" onClick={onDismiss}>Scan next guest</button>
+  </dialog>
 }
 
 function GuardianCandidate({ candidate, manualEnabled, busy, action, onSelect }) {
@@ -156,9 +187,10 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
   async function recordGuestScan(value, action, guardianPass = null, guardianGuestId = null) {
     if (!value || busy) return
     setBusy(true); setError(''); onResult(null)
+    const scanAction = action || (mode === 'checkout' ? 'checkout' : 'checkin')
+    const admissionFeedback = scanAction === 'checkin' && !accessMode
     try {
       let response
-      const scanAction = action || (mode === 'checkout' ? 'checkout' : 'checkin')
       if (scanAction === 'checkout') {
         if (!navigator.onLine) throw new Error('Check-out needs a network connection so the exit scan can be recorded.')
         response = await api.scanCheckout(value, guardianPass, guardianGuestId)
@@ -171,10 +203,9 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
         const section = sections.find((item) => item.id === sectionId)
         response = await api.scan(value, section ? { station: section.name, station_id: section.id } : undefined)
       }
-      await onRefreshManifest()
       const manifestGuest = ((offlineManifest || loadOfflineManifest(event.id))?.guests || []).find((item) => item.qr_token === value)
       const result = {
-        ...response,
+        ...response, admission_feedback: admissionFeedback,
         guest: response.guest || manifestGuest,
         denied: response.denied ?? response.allowed === false,
         guest_name: response.guest_name,
@@ -189,6 +220,7 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
         cancelGuardianStep()
       }
       setToken('')
+      void onRefreshManifest()
     } catch (err) {
       const networkFailure = !navigator.onLine || /failed to fetch|network|load failed/i.test(err.message || '')
       if (networkFailure && (accessMode || mode === 'checkout') && event.junior_guardian_handoff_enabled) {
@@ -204,10 +236,10 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
           zoneId: zoneId || null, direction,
         })
         if (offline.manifest) onManifestChange(offline.manifest)
-        onQueueChange(); onResult(offline.result); setToken('')
+        onQueueChange(); onResult({ ...offline.result, admission_feedback: admissionFeedback }); setToken('')
         return
       }
-      const failed = { status: 'invalid', message: err.message || 'Scan failed' }
+      const failed = { status: 'invalid', message: err.message || 'Scan failed', admission_feedback: admissionFeedback }
       setError(failed.message); onResult(failed)
     } finally {
       setBusy(false)
@@ -326,7 +358,7 @@ function ManualMode({ event, sections, zones, onResult }) {
           : await api.manualCheckin(event.id, guest.id, event.section_mode_enabled ? sectionId || null : null)
       onResult(response.status === 'guardian_required' ? {
         ...response, denied: false, message: event.manual_checkin_enabled ? 'Check the guardian’s identity, then select them below, or scan their pass.' : 'Guardian verification required. Scan the authorized guardian’s pass next.',
-      } : response)
+      } : { ...response, admission_feedback: !zoneOperation && operation !== 'checkout' })
       if (response.status === 'guardian_required') beginGuardianStep(guest, response)
       else {
         cancelGuardianStep()
@@ -334,7 +366,7 @@ function ManualMode({ event, sections, zones, onResult }) {
           setResults((items) => items.map((item) => item.id === guest.id ? { ...item, admitted: operation !== 'checkout', checked_out: operation === 'checkout' } : item))
         }
       }
-    } catch (err) { setError(err.message); onResult({ status: 'invalid', message: err.message }) }
+    } catch (err) { setError(err.message); onResult({ status: 'invalid', message: err.message, admission_feedback: !zoneOperation && operation !== 'checkout' }) }
     finally { setBusyId('') }
   }
 
@@ -372,7 +404,7 @@ function ManualMode({ event, sections, zones, onResult }) {
         phone: form.phone.trim() || null,
         table_group_id: event.section_mode_enabled ? (sectionId || null) : groupChoiceEnabled ? (walkinGroupId || null) : null,
       })
-      onResult(response); setWalkin(false); setForm({ first_name: '', last_name: '', email: '', phone: '' })
+      onResult({ ...response, admission_feedback: true }); setWalkin(false); setForm({ first_name: '', last_name: '', email: '', phone: '' })
     } catch (err) { setError(err.message); onResult({ status: 'invalid', message: err.message }) }
     finally { setBusyId('') }
   }
@@ -925,6 +957,8 @@ export default function ScannerRedesignPage() {
   const { event, error: eventError, refresh: refreshEvent } = useEventDetails(eventId)
   const [mode, setMode] = useState('camera')
   const [result, setResult] = useState(null)
+  const [admissionPopup, setAdmissionPopup] = useState(false)
+  const resultRevision = useRef(0)
   const [zones, setZones] = useState([])
   const [gates, setGates] = useState([])
   const [sections, setSections] = useState([])
@@ -936,6 +970,11 @@ export default function ScannerRedesignPage() {
   const [stepBusy, setStepBusy] = useState(false)
   const [recentResults, setRecentResults] = useState([])
   const [attendance, setAttendance] = useState(null)
+
+  useEffect(() => {
+    resultRevision.current += 1
+    setResult(null); setAdmissionPopup(false)
+  }, [eventId])
 
   useEffect(() => {
     if (!event?.id) return
@@ -1002,18 +1041,19 @@ export default function ScannerRedesignPage() {
   }, [eventId])
 
   async function handleResult(nextResult) {
-    if (!nextResult) { setResult(null); return }
+    const revision = ++resultRevision.current
+    setResult(nextResult)
+    setAdmissionPopup(!!nextResult?.admission_feedback)
+    if (!nextResult) return
+    rememberResult(nextResult)
     if (nextResult.guest?.id && !nextResult.denied && nextResult.status !== 'invalid') void refreshEvent()
     const resultEventId = nextResult.guest?.event_id || eventId
     if (resultEventId && nextResult.guest?.id && !nextResult.experience_next_steps) {
       const nextSteps = await api.getExperienceNextSteps(resultEventId, nextResult.guest.id).catch(() => [])
-      const completeResult = { ...nextResult, experience_next_steps: nextSteps }
-      setResult(completeResult)
-      rememberResult(completeResult)
-      return
+      if (revision === resultRevision.current) {
+        setResult((current) => current ? { ...current, experience_next_steps: nextSteps } : current)
+      }
     }
-    setResult(nextResult)
-    rememberResult(nextResult)
   }
 
   function rememberResult(nextResult) {
@@ -1041,7 +1081,7 @@ export default function ScannerRedesignPage() {
         // Confirming the required step (e.g. "guest signed the waiver") also
         // admits them in the same action — no second scan needed.
         const admitted = await api.scan(result.guest.qr_token)
-        await handleResult(admitted)
+        await handleResult({ ...admitted, admission_feedback: result.admission_feedback })
         return
       }
       setResult((current) => current ? { ...current, experience_next_steps: nextSteps, step_error: '' } : current)
@@ -1074,6 +1114,7 @@ export default function ScannerRedesignPage() {
   return (
     <RedesignShell topActive="checkin" eventScoped>
       <div className="sc-page">
+        {admissionPopup && result && <AdmissionResultPopup result={result} onDismiss={() => setAdmissionPopup(false)} onStepComplete={completeExperienceStep} stepBusy={stepBusy}/>}
         {!eventId ? <div className="sc-empty">Select an event before scanning.</div> : (loadError || eventError) ? <div className="sc-empty">{loadError || eventError}</div> : !event ? <div className="sc-empty">Loading scanner configuration…</div> : (
           <LiveScannerCommandCenter
             event={event}

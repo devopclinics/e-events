@@ -50,6 +50,20 @@ export const INTERNAL_DOCS = [
 
 export const PDFS = [
   {
+    title: 'NCNMO Platform 2026 — Full Presentation (40 slides)',
+    description: 'Complete Platform 2026 presentation: who Festio is for, the needs, the complete Festio platform, guest journey, ID card, Junior handoff, day-by-day flows, live demo screens, Knack comparison, RFID roadmap, staffing, readiness, rollout, and what NCNMO needs to provide. The first 25 slides are the main deck; the rest is appendix.',
+    href: '/media/ncnmo-platform-2026-full-deck.pdf',
+    filename: 'ncnmo-platform-2026-full-deck.pdf',
+    type: 'PDF',
+  },
+  {
+    title: 'NCNMO Platform 2026 — Short Presentation (14 slides)',
+    description: 'Short version of the Platform 2026 presentation: who Festio is for, the eight needs, the complete Festio platform, Festio in action, guest journey, ID card with QR on the back, Junior guardian handoff, convention-on-a-page, live dashboards, what is ready today, rollout, and next steps.',
+    href: '/media/ncnmo-platform-2026-short-deck.pdf',
+    filename: 'ncnmo-platform-2026-short-deck.pdf',
+    type: 'PDF',
+  },
+  {
     title: 'NCNMO Platform 2026 — Two-Page Overview',
     description: 'Concise executive overview of the proposed Platform 2026 solution, AGM pilot, phone-based attendance model, staffing options, and next decision.',
     href: '/media/ncnmo-platform-2026-two-page-overview.pdf',

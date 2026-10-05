@@ -2127,7 +2127,11 @@ async def manual_checkout(
     guest = await db.get(Guest, guest_id)
     if not guest or guest.event_id != event_id:
         return ScanResult(status="invalid", message="Guest not found for this event.")
-    return await perform_checkout(guest, event, current_user, db, guardian_token=(body.guardian_token if body else None))
+    return await perform_checkout(
+        guest, event, current_user, db,
+        guardian_token=(body.guardian_token if body else None),
+        guardian_guest_id=(body.guardian_guest_id if body else None),
+    )
 
 
 async def _notify_unadmit(event: Event, guest: Guest, db: AsyncSession, background_tasks: BackgroundTasks) -> None:

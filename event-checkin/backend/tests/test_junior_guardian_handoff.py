@@ -571,3 +571,136 @@ async def test_my_juniors_endpoint_scoped_to_own_party(ctx):
     parent_g = by_name["ParentG Hub"]
     theirs = await ctx.client.get(f"/api/invite/token/{parent_g.invite_token}/my-juniors")
     assert theirs.json()["juniors"] == []
+
+
+async def _manual_handoff_setup(ctx):
+    ctx.login(ctx.ids["user_a"])
+    event_id = ctx.ids["event_a"]
+    async with _Session() as db:
+        event = await db.get(Event, event_id)
+        event.is_paid = True
+        event.status = "active"
+        event.venue_access_enabled = True
+        event.separate_admission_access_enabled = True
+        event.manual_checkin_enabled = True
+        event.checkout_enabled = True
+        event.junior_guardian_handoff_enabled = True
+        child = Guest(event_id=event_id, first_name="Maryam", last_name="Bello", admitted=True)
+        guardian = Guest(event_id=event_id, first_name="Ibrahim", last_name="Bello")
+        pending = Guest(event_id=event_id, first_name="Pending", last_name="Guardian")
+        stranger = Guest(event_id=event_id, first_name="Unrelated", last_name="Adult")
+        other_event = Event(org_id=ctx.ids["org_b"], name="Other Event", couples_name="Other", checkin_base_url="http://test", event_date=event.event_date)
+        db.add_all([child, guardian, pending, stranger, other_event])
+        await db.flush()
+        foreign = Guest(event_id=other_event.id, first_name="Foreign", last_name="Guardian")
+        db.add(foreign)
+        await db.flush()
+        event.guardian_authorizations = {child.id: [
+            {"guardian_guest_id": guardian.id, "relationship": "Parent"},
+            {"guardian_guest_id": pending.id, "relationship": "Aunt", "source": "rsvp_other"},
+            # Even a stale, incorrectly configured cross-event mapping cannot work.
+            {"guardian_guest_id": foreign.id, "relationship": "Parent"},
+        ]}
+        await db.commit()
+    response = await ctx.client.post(f"/api/events/{event_id}/zones", json={"name": "Junior B"})
+    assert response.status_code == 201, response.text
+    return event_id, child, guardian, pending, stranger, foreign, response.json()["id"]
+
+
+@pytest.mark.asyncio
+async def test_staff_selected_guardian_zone_handoff_and_audit(ctx):
+    event_id, child, guardian, _, _, _, zone_id = await _manual_handoff_setup(ctx)
+    url = f"/api/scan/{child.qr_token}/zone"
+    initial = await ctx.client.post(url, json={"zone_id": zone_id})
+    assert initial.json()["status"] == "guardian_required"
+    assert initial.json()["guardian_candidates"] == [{
+        "guardian_guest_id": guardian.id, "name": "Ibrahim Bello", "relationship": "Parent",
+    }]
+    # Candidate responses contain no guardian pass credential.
+    for direction in ("in", "out"):
+        response = await ctx.client.post(url, json={
+            "zone_id": zone_id, "direction": direction, "guardian_guest_id": guardian.id,
+        })
+        assert response.status_code == 200, response.text
+        assert response.json()["denied"] is False
+        assert response.json()["guardian_name"] == "Ibrahim Bello"
+        assert response.json()["guardian_verification_method"] == "guardian_manual"
+        duplicate = await ctx.client.post(url, json={
+            "zone_id": zone_id, "direction": direction, "guardian_guest_id": guardian.id,
+        })
+        assert duplicate.json()["denied"] is True
+    async with _Session() as db:
+        rows = (await db.scalars(select(ScanEvent).where(
+            ScanEvent.guest_id == child.id, ScanEvent.denied.is_(False),
+        ))).all()
+        assert len(rows) == 2
+        assert all(row.guardian_guest_id == guardian.id and row.guardian_relationship == "Parent"
+                   and row.guardian_verification_method == "guardian_manual"
+                   and row.scanned_by == ctx.ids["user_a"].id for row in rows)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("route", ["manual", "scanner"])
+async def test_staff_selected_guardian_checkout(ctx, route):
+    event_id, child, guardian, _, _, _, _ = await _manual_handoff_setup(ctx)
+    url = (f"/api/events/{event_id}/guests/{child.id}/checkout" if route == "manual"
+           else f"/api/scan/{child.qr_token}/checkout")
+    response = await ctx.client.post(url, json={"guardian_guest_id": guardian.id})
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "checked_out"
+    assert response.json()["guardian_verification_method"] == "guardian_manual_checkout"
+    async with _Session() as db:
+        row = await db.scalar(select(ScanEvent).where(ScanEvent.guest_id == child.id))
+        assert row.guardian_guest_id == guardian.id
+        assert row.guardian_verification_method == "guardian_manual_checkout"
+        assert row.scanned_by == ctx.ids["user_a"].id
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("route", ["zone", "checkout"])
+async def test_staff_selection_does_not_bypass_guardian_authorization(ctx, route):
+    event_id, child, guardian, pending, stranger, foreign, zone_id = await _manual_handoff_setup(ctx)
+    url = (f"/api/scan/{child.qr_token}/zone" if route == "zone"
+           else f"/api/events/{event_id}/guests/{child.id}/checkout")
+    base = {"zone_id": zone_id} if route == "zone" else {}
+    for invalid_id in (pending.id, stranger.id, foreign.id, "missing-guardian"):
+        response = await ctx.client.post(url, json={**base, "guardian_guest_id": invalid_id})
+        assert response.status_code == 200, response.text
+        assert response.json()["status"] == "guardian_required"
+    mixed = await ctx.client.post(url, json={**base, "guardian_guest_id": guardian.id, "guardian_token": guardian.qr_token})
+    assert mixed.json()["status"] == "guardian_required"
+    ctx.login(ctx.ids["user_b"])
+    forbidden = await ctx.client.post(url, json={**base, "guardian_guest_id": guardian.id})
+    if route == "zone":
+        assert forbidden.status_code == 403
+    else:
+        assert forbidden.json()["status"] == "not_assigned"
+    # Use the real authentication dependency for the anonymous request;
+    # the fixture's identity override deliberately bypasses token validation.
+    from app.auth import get_current_user
+    from app.main import app
+    override = app.dependency_overrides.pop(get_current_user)
+    try:
+        anonymous = await ctx.client.post(url, json={**base, "guardian_guest_id": guardian.id})
+        assert anonymous.status_code in (401, 403)
+    finally:
+        app.dependency_overrides[get_current_user] = override
+    ctx.login(ctx.ids["user_a"])
+    async with _Session() as db:
+        event = await db.get(Event, event_id)
+        event.manual_checkin_enabled = False
+        await db.commit()
+    disabled = await ctx.client.post(url, json={**base, "guardian_guest_id": guardian.id})
+    assert disabled.json()["status"] == "guardian_required"
+    async with _Session() as db:
+        event = await db.get(Event, event_id)
+        event.manual_checkin_enabled = True
+        event.guardian_authorizations = {child.id: [{"guardian_guest_id": pending.id, "source": "rsvp_other"}]}
+        await db.commit()
+    revoked = await ctx.client.post(url, json={**base, "guardian_guest_id": guardian.id})
+    assert revoked.json()["status"] == "guardian_required"
+    async with _Session() as db:
+        accepted = (await db.scalars(select(ScanEvent).where(
+            ScanEvent.guest_id == child.id, ScanEvent.denied.is_(False),
+        ))).all()
+        assert accepted == []

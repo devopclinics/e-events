@@ -1049,7 +1049,11 @@ async def scan_qr_checkout(
     event = await db.get(Event, guest.event_id)
     if not event:
         return ScanResult(status="invalid", message="Event not found for this ticket.")
-    return await perform_checkout(guest, event, current_user, db, guardian_token=(body.guardian_token if body else None))
+    return await perform_checkout(
+        guest, event, current_user, db,
+        guardian_token=(body.guardian_token if body else None),
+        guardian_guest_id=(body.guardian_guest_id if body else None),
+    )
 
 
 async def perform_checkout(
@@ -1058,6 +1062,7 @@ async def perform_checkout(
     current_user: User,
     db: AsyncSession,
     guardian_token: str | None = None,
+    guardian_guest_id: str | None = None,
 ) -> ScanResult:
     """Record a guest exit for QR and manual checkout through one flow."""
     if not event.checkout_enabled:
@@ -1092,7 +1097,7 @@ async def perform_checkout(
     # guest/event not using the feature — verify_guardian_handoff short-circuits
     # immediately in that case, so this never affects existing checkout behavior.
     guardian, guardian_relationship, guardian_denial = await verify_guardian_handoff(
-        event, guest, guardian_token, db
+        event, guest, guardian_token, db, guardian_guest_id=guardian_guest_id
     )
     if guardian_denial:
         return ScanResult(
@@ -1106,7 +1111,7 @@ async def perform_checkout(
         event_id=event.id, guest_id=guest.id, zone_id=None, direction="out", scanned_by=current_user.id,
         guardian_guest_id=guardian.id if guardian else None,
         guardian_relationship=guardian_relationship,
-        guardian_verification_method="guardian_qr_checkout" if guardian else None,
+        guardian_verification_method=("guardian_manual_checkout" if (guardian_guest_id or "").strip() else "guardian_qr_checkout") if guardian else None,
     ))
     await db.commit()
     # Reflect the check-out into the guest's experience progress (completes the
@@ -1128,7 +1133,7 @@ async def perform_checkout(
         message=f"{guest.first_name} {guest.last_name} has been checked out.",
         guest=GuestOut.model_validate(guest),
         guardian_name=f"{guardian.first_name} {guardian.last_name}" if guardian else None,
-        guardian_verification_method="guardian_qr_checkout" if guardian else None,
+        guardian_verification_method=("guardian_manual_checkout" if (guardian_guest_id or "").strip() else "guardian_qr_checkout") if guardian else None,
     )
 
 
@@ -1463,10 +1468,10 @@ async def scan_qr_zone(
         admission_denial = "Guest must check in to the convention before entering or exiting a zone"
     if not admission_denial:
         guardian, guardian_relationship, guardian_denial = await verify_guardian_handoff(
-            event, guest, body.guardian_token, db
+            event, guest, body.guardian_token, db, guardian_guest_id=body.guardian_guest_id
         )
         if guardian:
-            guardian_method = "guardian_qr"
+            guardian_method = "guardian_manual" if (body.guardian_guest_id or "").strip() else "guardian_qr"
 
     # Accepted movements must alternate for each guest and zone. Rejected
     # attempts remain in the audit log without corrupting current occupancy.

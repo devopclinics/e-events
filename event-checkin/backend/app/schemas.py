@@ -2160,10 +2160,12 @@ class ScanZoneRequest(BaseModel):
     zone_id: str
     direction: Optional[Literal["in", "out"]] = None  # default from zone mode
     guardian_token: Optional[str] = None
+    guardian_guest_id: Optional[str] = None  # Authenticated staff identity verification
 
 
 class ScanCheckoutRequest(BaseModel):
     guardian_token: Optional[str] = None
+    guardian_guest_id: Optional[str] = None  # Authenticated staff identity verification
 
 
 class ScanZoneResult(BaseModel):

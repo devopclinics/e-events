@@ -97,9 +97,13 @@ async def usable_guardian_candidates(
 
 async def verify_guardian_handoff(
     event: Event, child_guest: Guest, guardian_token: str | None, db: AsyncSession,
+    guardian_guest_id: str | None = None,
 ) -> tuple[Guest | None, str | None, str | None]:
-    """Check whether `guardian_token` identifies a usable, authorized guardian
-    for `child_guest`. Returns (guardian, relationship, denial_reason).
+    """Check whether the QR token or staff-selected ID is a usable, authorized guardian
+    for `child_guest`. Callers must authenticate and authorize the scanner
+    operator before accepting a staff-selected ID. The selected ID records
+    staff identity verification, never QR verification.
+    Returns (guardian, relationship, denial_reason).
 
     (None, None, None) is a pure no-op: the event doesn't use this feature, or
     this guest has no configured entries at all — every guest/event not using
@@ -111,12 +115,19 @@ async def verify_guardian_handoff(
     if not entries:
         return None, None, None
     token = (guardian_token or "").strip()
+    selected_id = (guardian_guest_id or "").strip()
+    if selected_id and token:
+        return None, None, "Choose either staff guardian verification or a guardian QR pass"
+    if selected_id and not event.manual_checkin_enabled:
+        return None, None, "Manual guardian verification is not enabled for this event"
     guardian = (
-        await db.scalar(select(Guest).where(Guest.event_id == event.id, Guest.qr_token == token))
-        if token else None
+        await db.scalar(select(Guest).where(
+            Guest.event_id == event.id,
+            Guest.id == selected_id if selected_id else Guest.qr_token == token,
+        )) if selected_id or token else None
     )
     match = next((entry for entry in entries if guardian and entry.get("guardian_guest_id") == guardian.id), None)
-    if not token:
+    if not token and not selected_id:
         return None, None, "Authorized guardian credential is required"
     if not guardian or not match:
         return None, None, "Guardian is not authorized for this junior"

@@ -979,15 +979,15 @@ export const api = {
 
   // Scanner
   scan: (token, body) => req('POST', `/scan/${token}`, body),
-  scanCheckout: (token, guardianToken) => req('POST', `/scan/${token}/checkout`, guardianToken ? { guardian_token: guardianToken } : undefined),
+  scanCheckout: (token, guardianToken, guardianGuestId) => req('POST', `/scan/${token}/checkout`, guardianGuestId ? { guardian_guest_id: guardianGuestId } : guardianToken ? { guardian_token: guardianToken } : undefined),
   recordDailyAttendance: (token) => req('POST', `/scan/${token}/daily-attendance`, {}),
   offlineManifest: (eventId) => req('GET', `/scan/offline-manifest/${eventId}`),
   // Manual check-in (no QR)
   searchGuests: (eventId, q) => req('GET', `/events/${eventId}/guests/search?q=${encodeURIComponent(q)}`),
   manualCheckin: (eventId, guestId, tableGroupId) =>
     req('POST', `/events/${eventId}/guests/${guestId}/checkin${tableGroupId ? `?table_group_id=${encodeURIComponent(tableGroupId)}` : ''}`),
-  manualCheckout: (eventId, guestId, guardianToken) =>
-    req('POST', `/events/${eventId}/guests/${guestId}/checkout`, guardianToken ? { guardian_token: guardianToken } : undefined),
+  manualCheckout: (eventId, guestId, guardianToken, guardianGuestId) =>
+    req('POST', `/events/${eventId}/guests/${guestId}/checkout`, guardianGuestId ? { guardian_guest_id: guardianGuestId } : guardianToken ? { guardian_token: guardianToken } : undefined),
   unadmitGuest: (eventId, guestId, notify = false) =>
     req('POST', `/events/${eventId}/guests/${guestId}/unadmit`, { notify }),
   // Section-based scanning: sections (table groups) the signed-in staffer may check into.

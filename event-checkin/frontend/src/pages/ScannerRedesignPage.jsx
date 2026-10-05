@@ -77,7 +77,7 @@ function ResultCard({ result, onStepComplete, stepBusy }) {
           </div>
         )}
         {result.zone_name && <div className="sc-result-guest">{result.direction?.toUpperCase()} · {result.zone_name}</div>}
-        {result.guardian_name && <div className="sc-result-guest">Guardian: {result.guardian_name}{result.guardian_verification_method ? ' / QR verified' : ''}</div>}
+        {result.guardian_name && <div className="sc-result-guest">Guardian: {result.guardian_name}{result.guardian_verification_method?.startsWith('guardian_manual') ? ' / Verified by staff' : result.guardian_verification_method ? ' / QR verified' : ''}</div>}
         {!!result.experience_next_steps?.length && (
           <div className="sc-experience-steps">
             <strong>Next Experience steps</strong>
@@ -100,6 +100,15 @@ function ResultCard({ result, onStepComplete, stepBusy }) {
       </div>
     </div>
   )
+}
+
+function GuardianCandidate({ candidate, manualEnabled, busy, action, onSelect }) {
+  const details = <span><b>{candidate.name}</b><small>{candidate.relationship}</small></span>
+  if (!manualEnabled) return <div>{details}</div>
+  return <button type="button" className="sc-guardian-candidate" disabled={busy} onClick={onSelect}
+    aria-label={`Verify ${candidate.name} and ${action}`}>
+    {details}<span className="sc-guardian-action">{busy ? 'Verifying…' : `Verify & ${action}`}</span>
+  </button>
 }
 
 function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, onManifestChange, onQueueChange, onRefreshManifest, onResult }) {
@@ -144,7 +153,7 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
     setError('')
   }
 
-  async function recordGuestScan(value, action, guardianPass = null) {
+  async function recordGuestScan(value, action, guardianPass = null, guardianGuestId = null) {
     if (!value || busy) return
     setBusy(true); setError(''); onResult(null)
     try {
@@ -152,11 +161,11 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
       const scanAction = action || (mode === 'checkout' ? 'checkout' : 'checkin')
       if (scanAction === 'checkout') {
         if (!navigator.onLine) throw new Error('Check-out needs a network connection so the exit scan can be recorded.')
-        response = await api.scanCheckout(value, guardianPass)
+        response = await api.scanCheckout(value, guardianPass, guardianGuestId)
       }
       else if (accessMode && gateId && event.junior_guardian_handoff_enabled) throw new Error('Select a zone for guardian handoff scanning.')
       else if (accessMode && gateId) response = await api.scanGate(event.id, gateId, value)
-      else if (accessMode && zoneId) response = await api.scanZone(value, { zone_id: zoneId, direction, guardian_token: guardianPass })
+      else if (accessMode && zoneId) response = await api.scanZone(value, { zone_id: zoneId, direction, guardian_token: guardianPass, guardian_guest_id: guardianGuestId })
       else if (accessMode) throw new Error('Select a gate or zone before scanning.')
       else {
         const section = sections.find((item) => item.id === sectionId)
@@ -172,7 +181,7 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
         deny_reason: response.deny_reason || (response.allowed === false ? response.message : undefined),
       }
       onResult(response.status === 'guardian_required' ? {
-        ...result, denied: false, message: 'Guardian verification required. Scan the authorized guardian’s pass next.',
+        ...result, denied: false, message: event.manual_checkin_enabled ? 'Check the guardian’s identity, then select them below, or scan their pass.' : 'Guardian verification required. Scan the authorized guardian’s pass next.',
       } : result)
       if (response.status === 'guardian_required') {
         startGuardianStep(value, action, response, manifestGuest)
@@ -183,7 +192,9 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
     } catch (err) {
       const networkFailure = !navigator.onLine || /failed to fetch|network|load failed/i.test(err.message || '')
       if (networkFailure && (accessMode || mode === 'checkout') && event.junior_guardian_handoff_enabled) {
-        throw new Error('Guardian handoffs require an online connection for authorization checks.')
+        const message = 'Guardian handoffs require an online connection for authorization checks.'
+        setError(message); onResult({ status: 'invalid', message })
+        return
       }
       if (networkFailure && mode !== 'checkout' && action !== 'checkout') {
         const offline = recordOfflineScan({
@@ -237,9 +248,9 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
       {guardianStep ? (
         <section className="sc-guardian-handoff" aria-live="polite">
           <strong>Guardian required for {guardianChildName}</strong>
-          <p>Find the authorized guardian below, then scan or paste that guardian’s pass. A name alone cannot approve the handoff.</p>
+          <p>{event.manual_checkin_enabled ? "Check the guardian’s identity in person, then select their name to complete this handoff. You can also scan or paste their pass." : "Scan or paste the authorized guardian’s pass to complete this handoff."}</p>
           {guardianStep.candidates.length > 0 ? <><input className="sc-search-input" aria-label="Search authorized guardians" value={guardianSearch} onChange={(e) => setGuardianSearch(e.target.value)} placeholder="Search authorized guardians"/>
-            <div className="sc-guardian-candidates">{guardianCandidates.map((candidate) => <div key={candidate.guardian_guest_id}><b>{candidate.name}</b><small>{candidate.relationship}</small></div>)}{guardianCandidates.length === 0 && <p className="sc-empty">No confirmed guardian matches that search.</p>}</div></> : <p className="sc-empty">No confirmed guardian is available for this junior. Ask an event administrator to review the authorization.</p>}
+            <div className="sc-guardian-candidates">{guardianCandidates.map((candidate) => <GuardianCandidate key={candidate.guardian_guest_id} candidate={candidate} manualEnabled={event.manual_checkin_enabled} busy={busy} action={guardianStep.action === 'checkout' || mode === 'checkout' ? 'check out' : direction === 'out' ? 'exit zone' : 'enter zone'} onSelect={() => recordGuestScan(guardianStep.childToken, guardianStep.action, null, candidate.guardian_guest_id)}/>)}{guardianCandidates.length === 0 && <p className="sc-empty">No confirmed guardian matches that search.</p>}</div></> : <p className="sc-empty">No confirmed guardian is available for this junior. Ask an event administrator to review the authorization.</p>}
           <div className="sc-search-row sc-token-row"><input className="sc-search-input" aria-label="Guardian pass token" value={guardianToken} onChange={(e) => setGuardianToken(e.target.value)} placeholder="Guardian pass URL or QR token"/><button className="rr-btn primary" disabled={!guardianToken.trim() || busy}>{busy ? 'Verifying…' : 'Verify guardian QR'}</button></div>
           <button type="button" className="rr-btn secondary" onClick={cancelGuardianStep} disabled={busy}>Cancel and scan another guest</button>
         </section>
@@ -304,16 +315,17 @@ function ManualMode({ event, sections, zones, onResult }) {
     return () => { active = false; window.clearTimeout(timer) }
   }, [event?.id, event?.manual_checkin_enabled, event?.checkout_enabled, query])
 
-  async function checkin(guest, guardianPass = null) {
+  async function checkin(guest, guardianPass = null, guardianGuestId = null) {
+    if (busyId) return
     setBusyId(`${guest.id}:checkin`); setError('')
     try {
       const response = zoneOperation
-        ? await api.scanZone(guest.qr_token, { zone_id: zoneId, direction, guardian_token: guardianPass })
+        ? await api.scanZone(guest.qr_token, { zone_id: zoneId, direction, guardian_token: guardianPass, guardian_guest_id: guardianGuestId })
         : operation === 'checkout'
-          ? await api.manualCheckout(event.id, guest.id, guardianPass)
+          ? await api.manualCheckout(event.id, guest.id, guardianPass, guardianGuestId)
           : await api.manualCheckin(event.id, guest.id, event.section_mode_enabled ? sectionId || null : null)
       onResult(response.status === 'guardian_required' ? {
-        ...response, denied: false, message: 'Guardian verification required. Scan the authorized guardian’s pass next.',
+        ...response, denied: false, message: event.manual_checkin_enabled ? 'Check the guardian’s identity, then select them below, or scan their pass.' : 'Guardian verification required. Scan the authorized guardian’s pass next.',
       } : response)
       if (response.status === 'guardian_required') beginGuardianStep(guest, response)
       else {
@@ -326,12 +338,13 @@ function ManualMode({ event, sections, zones, onResult }) {
     finally { setBusyId('') }
   }
 
-  async function checkout(guest, guardianPass = null) {
+  async function checkout(guest, guardianPass = null, guardianGuestId = null) {
+    if (busyId) return
     setBusyId(`${guest.id}:checkout`); setError('')
     try {
-      const response = await api.manualCheckout(event.id, guest.id, guardianPass)
+      const response = await api.manualCheckout(event.id, guest.id, guardianPass, guardianGuestId)
       onResult(response.status === 'guardian_required' ? {
-        ...response, denied: false, message: 'Guardian verification required. Scan the authorized guardian’s pass next.',
+        ...response, denied: false, message: event.manual_checkin_enabled ? 'Check the guardian’s identity, then select them below, or scan their pass.' : 'Guardian verification required. Scan the authorized guardian’s pass next.',
       } : response)
       if (response.status === 'guardian_required') beginGuardianStep(guest, response)
       else {
@@ -342,11 +355,11 @@ function ManualMode({ event, sections, zones, onResult }) {
     finally { setBusyId('') }
   }
 
-  async function confirmGuardian() {
-    const guardianPass = extractToken(guardianToken)
-    if (!guardianStep || !guardianPass) return
-    if (zoneOperation || operation === 'checkout') await checkin(guardianStep.guest, guardianPass)
-    else await checkout(guardianStep.guest, guardianPass)
+  async function confirmGuardian(guardianGuestId = null) {
+    const guardianPass = guardianGuestId ? null : extractToken(guardianToken)
+    if (!guardianStep || (!guardianPass && !guardianGuestId) || busyId) return
+    if (zoneOperation || operation === 'checkout') await checkin(guardianStep.guest, guardianPass, guardianGuestId)
+    else await checkout(guardianStep.guest, guardianPass, guardianGuestId)
   }
 
   async function register(e) {
@@ -377,7 +390,7 @@ function ManualMode({ event, sections, zones, onResult }) {
       )}
       {!walkin ? <>
         {separatedAccess && (
-          <select className="sc-selector" aria-label="Manual operation" value={operation} onChange={(e) => setOperation(e.target.value)}>
+          <select className="sc-selector" aria-label="Manual operation" value={operation} disabled={!!busyId} onChange={(e) => { cancelGuardianStep(); setOperation(e.target.value) }}>
             <option value="admission">Convention check-in</option>
             <option value="access">Zone access</option>
             <option value="checkout">Convention check-out</option>
@@ -385,11 +398,11 @@ function ManualMode({ event, sections, zones, onResult }) {
         )}
         {zoneOperation && (
           <div className="sc-search-row sc-access-row">
-            <select className="sc-selector" aria-label="Manual search zone" value={zoneId} onChange={(e) => setZoneId(e.target.value)}>
+            <select className="sc-selector" aria-label="Manual search zone" value={zoneId} disabled={!!busyId} onChange={(e) => { cancelGuardianStep(); setZoneId(e.target.value) }}>
               <option value="">Select zone</option>
               {zones.filter((zone) => zone.is_active !== false).map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}
             </select>
-            <select className="sc-selector" aria-label="Manual search direction" value={direction} onChange={(e) => setDirection(e.target.value)}>
+            <select className="sc-selector" aria-label="Manual search direction" value={direction} disabled={!!busyId} onChange={(e) => { cancelGuardianStep(); setDirection(e.target.value) }}>
               <option value="in">Check in to zone</option><option value="out">Check out of zone</option>
             </select>
           </div>
@@ -397,10 +410,10 @@ function ManualMode({ event, sections, zones, onResult }) {
         {guardianStep && (
           <section className="sc-guardian-handoff" aria-live="polite">
             <strong>Guardian required for {guardianStep.guest.full_name}</strong>
-            <p>Find the authorized guardian below, then scan or paste that guardian’s pass. A name alone cannot approve the handoff.</p>
+            <p>{event.manual_checkin_enabled ? "Check the guardian’s identity in person, then select their name to complete this handoff. You can also scan or paste their pass." : "Scan or paste the authorized guardian’s pass to complete this handoff."}</p>
             {guardianStep.candidates.length > 0 ? <><input className="sc-search-input" aria-label="Search authorized guardians" value={guardianSearch} onChange={(e) => setGuardianSearch(e.target.value)} placeholder="Search authorized guardians"/>
-              <div className="sc-guardian-candidates">{guardianCandidates.map((candidate) => <div key={candidate.guardian_guest_id}><b>{candidate.name}</b><small>{candidate.relationship}</small></div>)}{guardianCandidates.length === 0 && <p className="sc-empty">No confirmed guardian matches that search.</p>}</div></> : <p className="sc-empty">No confirmed guardian is available for this junior. Ask an event administrator to review the authorization.</p>}
-            <div className="sc-search-row sc-token-row"><input className="sc-search-input" aria-label="Manual guardian pass token" value={guardianToken} onChange={(e) => setGuardianToken(e.target.value)} placeholder="Guardian pass URL or QR token"/><button className="rr-btn primary" disabled={!guardianToken.trim() || !!busyId} onClick={confirmGuardian}>{busyId ? 'Verifying…' : 'Verify guardian QR'}</button></div>
+              <div className="sc-guardian-candidates">{guardianCandidates.map((candidate) => <GuardianCandidate key={candidate.guardian_guest_id} candidate={candidate} manualEnabled={event.manual_checkin_enabled} busy={!!busyId} action={zoneOperation ? (direction === 'out' ? 'exit zone' : 'enter zone') : 'check out'} onSelect={() => confirmGuardian(candidate.guardian_guest_id)}/>)}{guardianCandidates.length === 0 && <p className="sc-empty">No confirmed guardian matches that search.</p>}</div></> : <p className="sc-empty">No confirmed guardian is available for this junior. Ask an event administrator to review the authorization.</p>}
+            <div className="sc-search-row sc-token-row"><input className="sc-search-input" aria-label="Manual guardian pass token" value={guardianToken} onChange={(e) => setGuardianToken(e.target.value)} placeholder="Guardian pass URL or QR token"/><button className="rr-btn primary" disabled={!guardianToken.trim() || !!busyId} onClick={() => confirmGuardian()}>{busyId ? 'Verifying…' : 'Verify guardian QR'}</button></div>
             <button type="button" className="rr-btn secondary" onClick={cancelGuardianStep} disabled={!!busyId}>Cancel and choose another guest</button>
           </section>
         )}

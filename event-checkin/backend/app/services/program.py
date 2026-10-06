@@ -15,6 +15,7 @@ from ..models import Event, EventAnnouncement, EventMessage, ExperienceEvent, Ex
 from ..timeutil import event_tz, to_event_local
 from .experience import active_workflow
 from .festiome_outbox import queue_announcement
+from .engagement_sync_outbox import _snapshot
 
 
 def now_local() -> datetime:
@@ -112,10 +113,33 @@ async def program_state(event: Event, workflow: ExperienceWorkflow | None, db: A
     moment = now or now_local()
     current, future = [], []
     days: dict[str, dict] = {}
-    for step in segment_steps(workflow):
-        start, end = segment_window(event, step)
+    # Display imported session-attendance schedules as well as timed segments.
+    # This is read-only; automatic announcements/feedback still use segment_steps.
+    scheduled = []
+    for step in workflow.steps:
+        if not step.enabled or not (step.is_segment or step.type == "session_attendance"):
+            continue
+        snapshot = _snapshot(event, workflow, step, workflow.status)
+        if not snapshot["starts_at"] or not snapshot["ends_at"]:
+            continue
+        start = datetime.fromisoformat(snapshot["starts_at"])
+        end = datetime.fromisoformat(snapshot["ends_at"])
+        if end <= start:
+            continue
+        scheduled.append((start, end, step, snapshot))
+    scheduled.sort(key=lambda item: (item[0], item[2].sort_order or 0, item[2].title))
+    for start, end, step, snapshot in scheduled:
         active = start <= moment < end
-        segment = _segment_out(event, step, now=moment, active=active)
+        conditions = step.conditions or {}
+        groups = conditions.get("age_groups_include") or []
+        segment = {
+            "step_id": step.id, "key": step.key, "title": step.title,
+            "description": step.description, "starts_at": start, "ends_at": end,
+            "category": snapshot.get("category"), "room": snapshot.get("room"),
+            "speaker": snapshot.get("speaker"),
+            "age_groups": [str(group) for group in groups] if isinstance(groups, list) else [str(groups)],
+            "active": active, "state": "ongoing" if active else "ended" if end <= moment else "upcoming",
+        }
         day_key = start.date().isoformat()
         if day_key not in days:
             days[day_key] = {

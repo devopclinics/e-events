@@ -442,6 +442,7 @@ function BroadcastComposer({ notify, onSent, eventId }) {
   const [guestQuery, setGuestQuery] = useState('')
   const [pickedGuests, setPickedGuests] = useState([])
   const { guests: allGuests } = useGuests(eventId)
+  const [ticketAudiences, setTicketAudiences] = useState([])
   const [typedRecipients, setTypedRecipients] = useState([])
   const [typedName, setTypedName] = useState('')
   const [typedContact, setTypedContact] = useState('')
@@ -478,6 +479,27 @@ function BroadcastComposer({ notify, onSent, eventId }) {
     : []
 
   useEffect(() => { setCostAck(false) }, [message, channels.sms])
+
+  useEffect(() => {
+    let active = true
+    setTicketAudiences([])
+    api.listTicketTypes(eventId).then((items) => { if (active) setTicketAudiences(items) }).catch(() => {})
+    return () => { active = false }
+  }, [eventId])
+
+  function selectTicketAudience(ticketId) {
+    // Explicit recipient snapshot, using the existing reviewed send path.
+    // An empty match must never fall back to broadcasting to all guests.
+    const selected = allGuests.filter((g) => g.ticket_type_id === ticketId).map((g) => ({
+      id: g.id, name: [g.first_name, g.last_name].filter(Boolean).join(' ') || 'Guest',
+      contact: g.email || g.phone || 'No contact information',
+    }))
+    setPickedGuests(selected)
+    setTarget('none')
+    setTypedRecipients([])
+    setGuestQuery('')
+    setError(selected.length ? '' : 'No guests match this ticket type. No recipients have been selected.')
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -639,7 +661,7 @@ function BroadcastComposer({ notify, onSent, eventId }) {
       setPickedGuests([])
       setTypedRecipients([])
       setMmsUrl('')
-      notify(`${sendMode === 'test' ? 'Test send' : BROADCAST_PURPOSES[purpose].label} confirmed — queued: ${result.queued}, skipped (no contact): ${result.skipped_no_contact}, skipped (no consent): ${result.skipped_no_consent}, skipped (no credits): ${result.skipped_no_credits}`)
+      notify(`${sendMode === 'test' ? 'Test send' : BROADCAST_PURPOSES[purpose].label} queued for processing — queued: ${result.queued}, skipped (no contact): ${result.skipped_no_contact}, skipped (no consent): ${result.skipped_no_consent}, skipped (no credits): ${result.skipped_no_credits}`)
       await onSent?.()
     } catch (e) {
       const detail = e.message || 'Broadcast was not sent'
@@ -681,7 +703,7 @@ function BroadcastComposer({ notify, onSent, eventId }) {
               <option value="audience">Send to an audience</option>
               <option value="test">Test with one guest</option>
             </select>
-            <p className="rd-hint cm-broadcast-hint">{sendMode === 'test' ? 'Only the one guest you select will receive it.' : 'Use a guest segment or the feedback audience.'}</p>
+          <p className="rd-hint cm-broadcast-hint">{sendMode === 'test' ? 'Only the one guest you select will receive it.' : 'Use a guest segment or the feedback audience.'}</p>
           </div>
         </div>
 
@@ -728,6 +750,15 @@ function BroadcastComposer({ notify, onSent, eventId }) {
 
         {(sendMode === 'test' || purpose !== 'feedback') ? <>
           <label className="rd-field-label" style={{ marginTop: 12 }}>{sendMode === 'test' ? 'Choose one test guest' : 'Search guest list'} — {allGuests.length} guest{allGuests.length === 1 ? '' : 's'} loaded</label>
+          {sendMode === 'audience' && !contextualPurpose && ticketAudiences.length > 0 && <div>
+            <label className="rd-field-label">Select recipients by ticket type
+              <select className="rr-select" aria-label="Select recipients by ticket type" value="" onChange={(e) => { if (e.target.value) selectTicketAudience(e.target.value) }}>
+                <option value="">Choose a ticket type, e.g. Teachers or Volunteers</option>
+                {ticketAudiences.map((ticket) => <option key={ticket.id} value={ticket.id}>{ticket.name} ({allGuests.filter((g) => g.ticket_type_id === ticket.id).length})</option>)}
+              </select>
+            </label>
+            <p className="rd-hint">Replaces the current selection with matching guests from the loaded list. Review the names below before sending; delivery still follows consent and channel rules.</p>
+          </div>}
           <p className="rd-hint cm-broadcast-hint">{sendMode === 'test' ? 'This guest receives the real message on the selected channels.' : 'Optional — selecting guests overrides the audience segment below.'}</p>
           <div className="rd-search cm-broadcast-search">
             <Icon name="search" size={13} />
@@ -809,7 +840,7 @@ function BroadcastComposer({ notify, onSent, eventId }) {
         {error && <div className="cm-broadcast-feedback error" role="alert">{error}</div>}
         {result && (
           <div className="cm-broadcast-feedback success" role="status">
-            Broadcast confirmed · {result.queued} queued · {result.skipped_no_contact || 0} no contact · {result.skipped_no_consent || 0} no consent
+            Queued does not mean delivered. Check delivery records for final status. Broadcast queued · {result.queued} queued · {result.skipped_no_contact || 0} no contact · {result.skipped_no_consent || 0} no consent
             {result.skipped_no_credits ? ` · ${result.skipped_no_credits} out of credits` : ''}
           </div>
         )}

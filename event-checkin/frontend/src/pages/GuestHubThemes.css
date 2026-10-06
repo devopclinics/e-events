@@ -593,3 +593,7 @@
 [data-event-brand="ncnmo"] .flow-pass-hero span { color: var(--event-accent); }
 [data-event-brand="ncnmo"] .flow-pass-card { background: var(--event-surface); border-color: var(--event-accent); }
 [data-event-brand="ncnmo"] :is(.flow-bottom,.flow-day-pass) { background: var(--event-surface); border-color: var(--event-border); }
+.flow-program .flow-program-note { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 12px 0; }
+.flow-program-search { display: block; margin: 16px 0; font-size: 13px; font-weight: 700; line-height: 1.4; }
+.flow-program-search input { display: block; box-sizing: border-box; width: 100%; min-height: 44px; margin-top: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink); font: inherit; font-size: 16px; }
+.flow-program-search input:focus-visible { outline: 2px solid var(--g); outline-offset: 2px; }

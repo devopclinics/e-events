@@ -1462,10 +1462,34 @@ function FlowNext({ event, segments, onProgramme }) {
 
 function FlowProgramView({ event, journey, go, className = '' }) {
   const days = journey?.program?.days || []
-  const [activeDay, setActiveDay] = useState(days[0]?.date || '')
-  const selected = days.find((day) => day.date === activeDay) || days[0]
+  const [activeDay, setActiveDay] = useState('')
+  const [search, setSearch] = useState('')
+  const selected = days.find((day) => day.date === activeDay)
+    || days.find((day) => day.segments?.some((segment) => segment.active))
+    || days.find((day) => day.segments?.some((segment) => new Date(segment.ends_at) > new Date()))
+    || days[0]
   const segments = selected?.segments || journey?.program?.current_segments || journey?.program?.next_segments || []
-  return <div className={`flow-phone ${className}`}><FlowTopBar event={event} onHome={() => go('home')} /><main className="flow-program"><div className="flow-screen-title"><button onClick={() => go('home')}>←</button><h1>Programme</h1><span>⌕</span></div>{days.length > 0 && <div className="flow-day-tabs">{days.slice(0, 3).map((day) => <button key={day.date} className={day.date === (selected?.date || activeDay) ? 'active' : ''} onClick={() => setActiveDay(day.date)}>{fmtDate(day.date, event.timezone)}</button>)}</div>}<div className="flow-timeline">{segments.map((segment, i) => <article key={segment.step_id || i}><time>{fmtTime(segment.starts_at, event.timezone)}</time><i>{['🕌', '☕', '📖', '🎙️', '✨'][i % 5]}</i><div><b>{segment.title}</b><small>● {segment.location || segment.venue || event.venue_name || 'Main Hall'}</small></div><span>›</span></article>)}</div>{segments.length === 0 && <div className="flow-empty">The programme will appear here when it is published.</div>}</main><FlowBottom screen="program" go={go} /></div>
+  const visible = segments.filter((segment) => [segment.title, segment.description, segment.room, segment.speaker, ...(segment.age_groups || [])].filter(Boolean).join(' ').toLowerCase().includes(search.trim().toLowerCase()))
+  return <div className={`flow-phone ${className}`}>
+    <FlowTopBar event={event} onHome={() => go('home')} />
+    <main className="flow-program">
+      <div className="flow-screen-title"><button aria-label="Back to GuestHub" onClick={() => go('home')}>←</button><h1>Programme</h1></div>
+      <p className="flow-program-note">Times shown in {event.timezone || 'the event timezone'}.</p>
+      {days.length > 0 && <div className="flow-day-tabs" style={{ display: 'flex', flexWrap: 'wrap' }}>{days.map((day) => <button key={day.date} className={day.date === selected?.date ? 'active' : ''} aria-pressed={day.date === selected?.date} onClick={() => setActiveDay(day.date)}>{day.label || day.date}</button>)}</div>}
+      <label className="flow-program-search">Find a session, room, speaker or age group<input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search this day's timetable…" className="mt-2 w-full rounded-xl border p-3 text-sm" /></label>
+      <div className="flow-timeline">{visible.map((segment, i) => <article key={segment.step_id || i}>
+        <time>{fmtTime(segment.starts_at, event.timezone)}{segment.ends_at && <><br/>– {fmtTime(segment.ends_at, event.timezone)}</>}</time>
+        <i aria-hidden="true">▦</i><div><b>{segment.title}</b>
+          <small>{segment.room || segment.location || segment.venue || 'Room to be announced'}</small>
+          {segment.speaker && <small>{segment.speaker}</small>}
+          {segment.age_groups?.length > 0 && <small>{segment.age_groups.join(', ')}</small>}
+          {segment.description && <p className="mt-1 text-xs">{segment.description}</p>}
+        </div>
+      </article>)}</div>
+      {visible.length === 0 && <div className="flow-empty">{search.trim() ? 'No sessions match this search on the selected day.' : 'The programme will appear here when it is published.'}</div>}
+      <p className="flow-program-note">Session entry follows your pass eligibility. This timetable does not grant access to restricted sessions.</p>
+    </main><FlowBottom screen="program" go={go} />
+  </div>
 }
 
 function EventDayView({ event, hub, journey, previewMock, onHome }) {
@@ -1611,6 +1635,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   const [message, setMessage] = useState('')
   const [chatMessage, setChatMessage] = useState('')
   const [programDay, setProgramDay] = useState('')
+  const [programSearch, setProgramSearch] = useState('')
   const [hubTab, setHubTab] = useState('pass')
   const [speakers, setSpeakers] = useState(null)
   const [showAllSpeakers, setShowAllSpeakers] = useState(false)
@@ -1977,6 +2002,15 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
     || programDays.find((day) => day.segments?.some((segment) => segment.active))
     || programDays.find((day) => day.segments?.some((segment) => new Date(segment.ends_at) > new Date()))
     || programDays[0]
+  const visibleProgramSegments = (selectedProgramDay?.segments || []).filter((segment) =>
+    [segment.title, segment.description, segment.room, segment.speaker, ...(segment.age_groups || [])].filter(Boolean).join(' ').toLowerCase().includes(programSearch.trim().toLowerCase()))
+  const programSearchControl = <div className="mt-3">
+    <label className="block text-xs font-bold">Find a session, room, speaker or age group
+      <input type="search" value={programSearch} onChange={(e) => setProgramSearch(e.target.value)} placeholder="Search this day's timetable…" className="mt-2 w-full rounded-xl border p-3 text-sm" style={{ background: tone.panel, borderColor: tone.border, color: tone.text }}/>
+    </label>
+    <p className="mt-2 text-xs" style={{ color: tone.muted }}>Times shown in {event?.timezone || 'the event timezone'}. {visibleProgramSegments.length} session(s) match. The timetable does not grant admission to restricted sessions.</p>
+  </div>
+
 
   const showGuardianPanels = !previewMock && event?.junior_guardian_handoff_enabled && accessToken
   if (journeyLayout && hub && !flowServicesOpen) return <><GuardianConfirmPanel pending={pendingGuardianConfirmations} onConfirm={confirmGuardianPickup} />{showGuardianPanels && <ManageGuardiansPanel token={accessToken} />}<JourneyGuestHubView event={event} hub={hub} journey={journey} previewMock={previewMock} designTheme={designTheme} guestContent={guestContent} onOpenServices={setFlowServicesOpen} moduleVisible={hubModuleVisible} /></>
@@ -2293,7 +2327,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
               same fix as the journey card above. */}
           {hubModuleVisible('live_program') && journey?.program?.enabled && programDays.length > 0 && (
             <div id={(journeyLayout || completeLayout) ? 'journey-program' : undefined} className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
-              <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Your Schedule</div>
+              <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Your Schedule</div>{programSearchControl}
               {!!programDays.length && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {programDays.map((day) => <button key={day.date} type="button" onClick={() => setProgramDay(day.date)} className="rounded-full px-3 py-1.5 text-xs font-extrabold" style={{ background: selectedProgramDay?.date === day.date ? tone.accent : tone.chip, color: selectedProgramDay?.date === day.date ? tone.background : tone.text }}>{day.label}</button>)}
@@ -2301,7 +2335,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
               )}
               {selectedProgramDay && (
                 <div className="mt-3 divide-y" style={{ borderColor: tone.border }}>
-                  {selectedProgramDay.segments.map((segment) => {
+                  {visibleProgramSegments.map((segment) => {
                     const state = programSegmentState(segment)
                     const isNext = state === 'upcoming' && journey.program.next_segments?.[0]?.step_id === segment.step_id
                     const label = state === 'ongoing' ? 'Ongoing' : isNext ? 'Next' : state === 'ended' ? 'Ended' : 'Upcoming'
@@ -2312,7 +2346,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
                           {segment.title}
                           <span className="rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase" style={{ background: state === 'ongoing' || isNext ? `${tone.accent}22` : tone.chip, color: state === 'ongoing' || isNext ? tone.accent : tone.label }}>{label}</span>
                         </div>
-                        {segment.description && <div className="text-xs" style={{ color: tone.muted }}>{segment.description}</div>}
+                        <div className="mt-1 text-xs" style={{ color: tone.muted }}>{[segment.room, segment.speaker, ...(segment.age_groups || [])].filter(Boolean).join(" · ")}</div>{segment.description && <div className="text-xs" style={{ color: tone.muted }}>{segment.description}</div>}
                         {state === 'ongoing' && event?.engagement_enabled && hub?.guest?.qr_token && <a href={`/live/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}&session=${encodeURIComponent(segment.step_id)}`} className="mt-2 inline-flex min-h-9 items-center justify-center rounded-lg px-3 py-1.5 text-xs font-extrabold text-slate-950" style={{ background: tone.accent }}>{liveParticipation[segment.step_id]?.participated ? 'Open Festio Live again →' : 'Join Festio Live →'}</a>}
                       </div>
                     </div>
@@ -2629,15 +2663,15 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
 
         {hubModuleVisible('live_program') && journey?.program?.enabled && tabActive('program') && <div className="mt-6 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
           <div className="flex items-center justify-between gap-3"><div><h3 className="text-lg font-extrabold">Live Program</h3><p className="mt-1 text-sm" style={{ color: tone.muted }}>The program updates automatically as the event moves forward.</p></div><span className="rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: `${tone.accent}22`, color: tone.text }}>LIVE</span></div>
-          {journey.program.current_segments?.length ? <div className="mt-4 space-y-2">{journey.program.current_segments.map((segment) => <div key={segment.step_id} className="rounded-xl border p-3" style={{ background: tone.chip, borderColor: tone.border }}><div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>Happening now{segment.category ? ` · ${segment.category}` : ''}</div><div className="mt-1 font-extrabold">{segment.title}</div>{segment.description && <p className="mt-1 text-sm" style={{ color: tone.muted }}>{segment.description}</p>}<p className="mt-2 text-xs font-semibold" style={{ color: tone.label }}>Until {fmtTime(segment.ends_at, event?.timezone)}</p>{liveParticipation[segment.step_id]?.participated && <div className="mt-3 rounded-xl border px-4 py-2 text-center text-sm font-extrabold" style={{ borderColor: tone.accent, color: tone.accent }}>✓ Participated in Festio Live</div>}{event?.engagement_enabled && hub?.guest?.qr_token && <a href={`/live/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}&session=${encodeURIComponent(segment.step_id)}`} className="mt-3 flex min-h-11 items-center justify-center rounded-xl px-4 py-2 text-sm font-extrabold text-slate-950" style={{ background: tone.accent }}>{liveParticipation[segment.step_id]?.participated ? 'Open Festio Live again →' : 'Join Festio Live →'}</a>}</div>)}</div> : <p className="mt-4 text-sm" style={{ color: tone.muted }}>The next program item will appear here when it begins.</p>}
+          {journey.program.current_segments?.length ? <div className="mt-4 space-y-2">{journey.program.current_segments.map((segment) => <div key={segment.step_id} className="rounded-xl border p-3" style={{ background: tone.chip, borderColor: tone.border }}><div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>Happening now{segment.category ? ` · ${segment.category}` : ''}</div><div className="mt-1 font-extrabold">{segment.title}</div><div className="mt-1 text-xs" style={{ color: tone.muted }}>{[segment.room, segment.speaker, ...(segment.age_groups || [])].filter(Boolean).join(" · ")}</div>{segment.description && <p className="mt-1 text-sm" style={{ color: tone.muted }}>{segment.description}</p>}<p className="mt-2 text-xs font-semibold" style={{ color: tone.label }}>Until {fmtTime(segment.ends_at, event?.timezone)}</p>{liveParticipation[segment.step_id]?.participated && <div className="mt-3 rounded-xl border px-4 py-2 text-center text-sm font-extrabold" style={{ borderColor: tone.accent, color: tone.accent }}>✓ Participated in Festio Live</div>}{event?.engagement_enabled && hub?.guest?.qr_token && <a href={`/live/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}&session=${encodeURIComponent(segment.step_id)}`} className="mt-3 flex min-h-11 items-center justify-center rounded-xl px-4 py-2 text-sm font-extrabold text-slate-950" style={{ background: tone.accent }}>{liveParticipation[segment.step_id]?.participated ? 'Open Festio Live again →' : 'Join Festio Live →'}</a>}</div>)}</div> : <p className="mt-4 text-sm" style={{ color: tone.muted }}>The next program item will appear here when it begins.</p>}
           {!!journey.program.next_segments?.length && <div className="mt-4 border-t pt-3" style={{ borderColor: tone.border }}><div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>Up next</div>{journey.program.next_segments.slice(0, 2).map((segment) => <div key={segment.step_id} className="mt-2 text-sm"><span className="font-bold">{fmtLocalDateTime(segment.starts_at, event?.timezone)}</span><span style={{ color: tone.muted }}> · {segment.title}</span></div>)}</div>}
           {tabActive('program') && !!selectedProgramDay && <div className="mt-4 border-t pt-3" style={{ borderColor: tone.border }}>
             <div className="flex flex-wrap gap-2" aria-label="Programme day">
               {programDays.map((day) => <button key={day.date} type="button" onClick={() => setProgramDay(day.date)} className="rounded-full px-3 py-1.5 text-xs font-extrabold" style={{ background: selectedProgramDay.date === day.date ? tone.accent : tone.chip, color: selectedProgramDay.date === day.date ? tone.background : tone.text }}>{day.label}</button>)}
             </div>
-            <div className="mt-3 text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>{selectedProgramDay.label} programme</div>
+            <div className="mt-3 text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>{selectedProgramDay.label} programme</div>{programSearchControl}
             <div className="mt-2 divide-y" style={{ borderColor: tone.border }}>
-              {selectedProgramDay.segments.map((segment) => <div key={segment.step_id} className="py-3 first:pt-0 last:pb-0"><div className="flex gap-3"><div className="w-24 shrink-0 text-xs font-extrabold" style={{ color: segment.active ? tone.accent : tone.label }}>{fmtTime(segment.starts_at, event?.timezone)}–{fmtTime(segment.ends_at, event?.timezone)}</div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2 font-bold">{segment.title}{segment.active && <span className="rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase" style={{ background: `${tone.accent}22`, color: tone.accent }}>Now</span>}</div>{segment.description && <p className="mt-1 text-sm" style={{ color: tone.muted }}>{segment.description}</p>}</div></div></div>)}
+              {visibleProgramSegments.map((segment) => <div key={segment.step_id} className="py-3 first:pt-0 last:pb-0"><div className="flex gap-3"><div className="w-24 shrink-0 text-xs font-extrabold" style={{ color: segment.active ? tone.accent : tone.label }}>{fmtTime(segment.starts_at, event?.timezone)}–{fmtTime(segment.ends_at, event?.timezone)}</div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2 font-bold">{segment.title}{segment.active && <span className="rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase" style={{ background: `${tone.accent}22`, color: tone.accent }}>Now</span>}</div><div className="mt-1 text-xs" style={{ color: tone.muted }}>{[segment.room, segment.speaker, ...(segment.age_groups || [])].filter(Boolean).join(" · ")}</div>{segment.description && <p className="mt-1 text-sm" style={{ color: tone.muted }}>{segment.description}</p>}</div></div></div>)}
             </div>
           </div>}
         </div>}

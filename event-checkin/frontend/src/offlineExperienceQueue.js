@@ -17,8 +17,8 @@ function writeQueue(items) {
   window.dispatchEvent(new CustomEvent('experience-queue-change'))
 }
 
-export function experienceQueueCount() {
-  return readQueue().length
+export function experienceQueueCount(eventId) {
+  return readQueue().filter((item) => !eventId || item.eventId === eventId).length
 }
 
 export function enqueueExperienceStep(action) {
@@ -36,21 +36,25 @@ export function enqueueExperienceStep(action) {
   return item
 }
 
-export async function drainExperienceQueue(api) {
-  const queued = readQueue()
-  if (!queued.length) return { sent: 0, remaining: 0 }
-  const remaining = []
+let experienceDrain = null
+export function drainExperienceQueue(api, eventId) {
+  if (experienceDrain) return experienceDrain
+  experienceDrain = drainSteps(api, eventId).finally(() => { experienceDrain = null })
+  return experienceDrain
+}
+
+async function drainSteps(api, eventId) {
+  const queued = readQueue().filter((item) => !eventId || item.eventId === eventId)
   let sent = 0
   for (const item of queued) {
     try {
-      await api.updateGuestExperienceStep(item.eventId, item.guestId, item.stepId, item.payload)
+      const response = await api.updateGuestExperienceStep(item.eventId, item.guestId, item.stepId, item.payload)
+      if (!response) break
+      writeQueue(readQueue().filter((current) => JSON.stringify(current) !== JSON.stringify(item)))
       sent += 1
-    } catch (error) {
-      remaining.push(item)
-    }
+    } catch { break }
   }
-  writeQueue(remaining)
-  return { sent, remaining: remaining.length }
+  return { sent, remaining: experienceQueueCount(eventId) }
 }
 
 function readJson(key, fallback) {
@@ -68,7 +72,11 @@ function writeJson(key, value) {
 }
 
 export function saveOfflineManifest(eventId, manifest) {
-  writeJson(`${MANIFEST_PREFIX}${eventId}`, manifest)
+  // A refresh must not erase admissions that have not reached the server yet.
+  const pending = new Set(readAdmissions().filter((item) => item.eventId === eventId && item.type === 'admission').map((item) => item.token))
+  const merged = { ...manifest, guests: (manifest.guests || []).map((guest) => pending.has(guest.qr_token) ? { ...guest, admitted: true, offline_pending: true } : guest) }
+  writeJson(`${MANIFEST_PREFIX}${eventId}`, merged)
+  return merged
 }
 
 export function loadOfflineManifest(eventId) {
@@ -84,13 +92,38 @@ function writeAdmissions(items) {
   writeJson(ADMISSION_KEY, items)
 }
 
-export function offlineAdmissionCount() {
-  return readAdmissions().length
+export function offlineAdmissionItems(eventId) {
+  return readAdmissions().filter((item) => !eventId || item.eventId === eventId)
+}
+
+export function offlineAdmissionCount(eventId) {
+  return offlineAdmissionItems(eventId).length
+}
+
+export function offlineManifestStatus(manifest, eventId, now = Date.now()) {
+  if (!manifest || manifest.event_id !== eventId || manifest.version !== 2) return { ready: false, message: 'Prepare this scanner while online.' }
+  const expires = Date.parse(manifest.expires_at)
+  if (!Number.isFinite(expires) || expires <= now) return { ready: false, message: 'Offline guest list expired. Reconnect and prepare this scanner again.' }
+  if (manifest.event_status !== 'active') return { ready: false, message: 'This event is not active.' }
+  if (manifest.offline_admission_block_reason) return { ready: false, message: manifest.offline_admission_block_reason }
+  return { ready: true, message: 'Ready for offline general admission', expiresAt: expires }
+}
+
+export function searchOfflineGuests(eventId, query) {
+  const manifest = loadOfflineManifest(eventId)
+  const status = offlineManifestStatus(manifest, eventId)
+  if (!status.ready) throw new Error(status.message)
+  if (!manifest.manual_checkin_enabled) throw new Error('Manual check-in is disabled for this event.')
+  const needle = query.trim().toLowerCase()
+  if (needle.length < 2) return []
+  return (manifest.guests || []).filter((g) => `${g.first_name} ${g.last_name} ${g.phone || ''}`.toLowerCase().includes(needle)).slice(0, 30).map((g) => ({ ...g, full_name: `${g.first_name} ${g.last_name}`.trim(), phone_masked: g.phone ? `•••${g.phone.slice(-4)}` : '' }))
 }
 
 export function enqueueOfflineAdmission(action) {
   const key = `${action.eventId}:${action.token}`
-  const current = readAdmissions().filter((item) => item.key !== key)
+  const existing = readAdmissions().find((item) => item.key === key)
+  if (existing) return existing
+  const current = readAdmissions()
   const item = {
     key,
     type: 'admission',
@@ -99,6 +132,7 @@ export function enqueueOfflineAdmission(action) {
     guestId: action.guestId,
     guestName: action.guestName,
     createdAt: new Date().toISOString(),
+    syncStatus: 'pending',
   }
   writeAdmissions([...current, item])
   return item
@@ -121,27 +155,50 @@ export function enqueueOfflineAccessScan(action) {
   return item
 }
 
-export async function drainOfflineAdmissions(api) {
-  const queued = readAdmissions()
-  if (!queued.length) return { sent: 0, remaining: 0 }
-  const remaining = []
+let admissionDrain = null
+
+// Serialize drains in this tab, and across tabs where Web Locks is available.
+// Remove only an acknowledged item from the latest queue, never a stale snapshot.
+export function drainOfflineAdmissions(api, eventId, { retryRejected = false } = {}) {
+  if (admissionDrain) return admissionDrain
+  const run = () => drainAdmissions(api, eventId, retryRejected)
+  admissionDrain = (globalThis.navigator?.locks
+    ? navigator.locks.request('festio-offline-admissions', run)
+    : run()).finally(() => { admissionDrain = null })
+  return admissionDrain
+}
+
+async function drainAdmissions(api, eventId, retryRejected) {
+  const queued = offlineAdmissionItems(eventId)
   let sent = 0
   for (const item of queued) {
+    if (!readAdmissions().some((current) => current.key === item.key)) continue
+    if (item.syncStatus === 'needs_review' && !retryRejected) continue
     try {
+      let response
       if (item.type === 'gate') {
-        await api.scanGate(item.eventId, item.gateId, item.token)
+        response = await api.scanGate(item.eventId, item.gateId, item.token)
       } else if (item.type === 'zone') {
-        await api.scanZone(item.token, { zone_id: item.zoneId, direction: item.direction })
+        response = await api.scanZone(item.token, { zone_id: item.zoneId, direction: item.direction })
       } else {
-        await api.scan(item.token)
+        response = await api.scan(item.token)
       }
+      const access = ['gate', 'zone'].includes(item.type)
+      const accepted = access ? (response?.allowed === true || response?.status === 'ok') && !response?.denied && response?.allowed !== false : ['admitted', 'already_admitted'].includes(response?.status)
+      if (!accepted) {
+        writeAdmissions(readAdmissions().map((current) => current.key === item.key ? { ...current, syncStatus: 'needs_review', lastError: response?.message || response?.deny_reason || 'The server did not confirm this check-in.', lastAttemptAt: new Date().toISOString() } : current))
+        continue
+      }
+      writeAdmissions(readAdmissions().filter((current) => current.key !== item.key))
       sent += 1
-    } catch {
-      remaining.push(item)
+    } catch (error) {
+      const rejected = error.status >= 400 && error.status < 500 && error.status !== 429
+      writeAdmissions(readAdmissions().map((current) => current.key === item.key ? { ...current, syncStatus: rejected ? 'needs_review' : 'pending', lastError: error.message || 'Connection interrupted. Saved on this scanner.', lastAttemptAt: new Date().toISOString() } : current))
+      // Stop on an outage/auth failure; preserve every remaining item for retry.
+      if (!rejected || [401, 403].includes(error.status)) break
     }
   }
-  writeAdmissions(remaining)
-  return { sent, remaining: remaining.length }
+  return { sent, remaining: offlineAdmissionCount(eventId) }
 }
 
 function tagNames(manifest, matchedTagIds) {
@@ -191,9 +248,10 @@ export function recordOfflineScan({
   zoneId = null,
   direction = null,
 }) {
-  if (manifest?.expires_at && Date.parse(manifest.expires_at) < Date.now()) {
-    return {result:{status:'invalid',message:'Offline safety data is more than 30 minutes old. Reconnect and refresh before admitting tickets.'},manifest}
-  }
+  // Always prefer persisted state: React may not have rendered the previous scan.
+  manifest = loadOfflineManifest(eventId) || manifest
+  const safety = offlineManifestStatus(manifest, eventId)
+  if (!safety.ready) return { result: { status: 'invalid', message: safety.message }, manifest }
   if (!manifest?.guests?.length) {
     return {
       result: {
@@ -210,6 +268,8 @@ export function recordOfflineScan({
   }
 
   if (mode === 'admission') {
+    const rejected = offlineAdmissionItems(eventId).find((item) => item.token === token && item.syncStatus === 'needs_review')
+    if (rejected) return { result: { status: 'invalid', message: `Earlier offline check-in needs staff review: ${rejected.lastError || 'The server did not confirm admission.'}`, guest }, manifest }
     if (guest.admitted) {
       return {
         result: {
@@ -222,6 +282,7 @@ export function recordOfflineScan({
         manifest,
       }
     }
+    if (guest.offline_admission_block_reason) return { result: { status: 'invalid', message: guest.offline_admission_block_reason, guest }, manifest }
     const admittedAt = new Date().toISOString()
     const nextManifest = {
       ...manifest,
@@ -229,13 +290,13 @@ export function recordOfflineScan({
         ? { ...item, admitted: true, admitted_at: admittedAt }
         : item),
     }
-    saveOfflineManifest(eventId, nextManifest)
     enqueueOfflineAdmission({
       eventId,
       token,
       guestId: guest.id,
       guestName: `${guest.first_name} ${guest.last_name}`.trim(),
     })
+    saveOfflineManifest(eventId, nextManifest)
     return {
       manifest: nextManifest,
       result: {
@@ -247,6 +308,9 @@ export function recordOfflineScan({
       },
     }
   }
+
+  if (manifest.junior_guardian_handoff_enabled) return { result: { status: 'invalid', message: 'Guardian handoffs require an online connection for authorization checks.' }, manifest }
+  if (manifest.separate_admission_access_enabled && !guest.admitted) return { result: { status: 'invalid', message: 'Complete convention admission before entering a zone.' }, manifest }
 
   const gate = mode === 'gate'
     ? (manifest.gates || []).find((item) => item.id === gateId && item.is_active !== false)

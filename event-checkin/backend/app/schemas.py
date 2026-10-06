@@ -1082,6 +1082,9 @@ class GuestProgramSegmentOut(BaseModel):
     starts_at: datetime
     ends_at: datetime
     category: Optional[str] = None
+    room: Optional[str] = None
+    speaker: Optional[str] = None
+    age_groups: list[str] = Field(default_factory=list)
     active: bool = False
     state: Literal["ended", "ongoing", "upcoming"] = "upcoming"
 

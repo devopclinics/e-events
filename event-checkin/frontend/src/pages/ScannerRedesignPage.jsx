@@ -11,11 +11,13 @@ import {
   experienceQueueCount,
   loadOfflineManifest,
   offlineAdmissionCount,
+  searchOfflineGuests,
   recordOfflineScan,
   saveOfflineManifest,
 } from '../offlineExperienceQueue'
 import RedesignShell, { Icon, UnadmitDialog } from './redesign/RedesignShell'
 import './ScannerRedesignPage.css'
+import OfflineScannerPanel from '../components/OfflineScannerPanel'
 
 const MODES = [
   { id: 'camera', label: 'Convention check-in' },
@@ -190,9 +192,9 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
     const scanAction = action || (mode === 'checkout' ? 'checkout' : 'checkin')
     const admissionFeedback = scanAction === 'checkin' && !accessMode
     try {
+      if (!navigator.onLine) throw new TypeError('Network offline')
       let response
       if (scanAction === 'checkout') {
-        if (!navigator.onLine) throw new Error('Check-out needs a network connection so the exit scan can be recorded.')
         response = await api.scanCheckout(value, guardianPass, guardianGuestId)
       }
       else if (accessMode && gateId && event.junior_guardian_handoff_enabled) throw new Error('Select a zone for guardian handoff scanning.')
@@ -222,24 +224,29 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
       setToken('')
       void onRefreshManifest()
     } catch (err) {
-      const networkFailure = !navigator.onLine || /failed to fetch|network|load failed/i.test(err.message || '')
+      const networkFailure = !err.status && (!navigator.onLine || /failed to fetch|network|load failed|timed?\s*out|timeout/i.test(err.message || ''))
       if (networkFailure && (accessMode || mode === 'checkout') && event.junior_guardian_handoff_enabled) {
         const message = 'Guardian handoffs require an online connection for authorization checks.'
         setError(message); onResult({ status: 'invalid', message })
         return
       }
       if (networkFailure && mode !== 'checkout' && action !== 'checkout') {
-        const offline = recordOfflineScan({
-          eventId: event.id, token: value,
-          manifest: offlineManifest || loadOfflineManifest(event.id),
-          mode: accessMode ? (gateId ? 'gate' : 'zone') : 'admission', gateId: gateId || null,
-          zoneId: zoneId || null, direction,
-        })
-        if (offline.manifest) onManifestChange(offline.manifest)
-        onQueueChange(); onResult({ ...offline.result, admission_feedback: admissionFeedback }); setToken('')
+        try {
+          const offline = recordOfflineScan({
+            eventId: event.id, token: value,
+            manifest: offlineManifest || loadOfflineManifest(event.id),
+            mode: accessMode ? (gateId ? 'gate' : 'zone') : 'admission', gateId: gateId || null,
+            zoneId: zoneId || null, direction,
+          })
+          if (offline.manifest) onManifestChange(offline.manifest)
+          onQueueChange(); onResult({ ...offline.result, offline: true, admission_feedback: admissionFeedback }); setToken('')
+        } catch {
+          const message = 'This device could not save the check-in. Free storage or reconnect before admitting this guest.'
+          setError(message); onResult({ status: 'invalid', message, admission_feedback: admissionFeedback })
+        }
         return
       }
-      const failed = { status: 'invalid', message: err.message || 'Scan failed', admission_feedback: admissionFeedback }
+      const failed = { status: 'invalid', message: networkFailure && scanAction === 'checkout' ? 'Check-out needs a network connection so the exit scan can be recorded.' : err.message || 'Scan failed', admission_feedback: admissionFeedback }
       setError(failed.message); onResult(failed)
     } finally {
       setBusy(false)
@@ -291,7 +298,7 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
     </form>
   )
 }
-function ManualMode({ event, sections, zones, onResult }) {
+function ManualMode({ event, sections, zones, onResult, onManifestChange, onQueueChange }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [busyId, setBusyId] = useState('')
@@ -340,9 +347,20 @@ function ManualMode({ event, sections, zones, onResult }) {
     if (!event?.id || (!event.manual_checkin_enabled && !event.checkout_enabled) || query.trim().length < 2) { setResults([]); return }
     let active = true
     const timer = window.setTimeout(() => {
+      if (!navigator.onLine) {
+        try { setResults(searchOfflineGuests(event.id, query)); setError('Showing the saved guest list. Offline lookup supports convention admission only.') }
+        catch (error) { setResults([]); setError(error.message) }
+        return
+      }
       api.searchGuests(event.id, query.trim())
         .then((items) => { if (active) { setResults(items); setError('') } })
-        .catch((err) => { if (active) setError(err.message) })
+        .catch((err) => {
+          if (!active) return
+          if (!err.status && (!navigator.onLine || /failed to fetch|network|load failed|timed?\s*out|timeout/i.test(err.message || ''))) {
+            try { setResults(searchOfflineGuests(event.id, query)); setError('Showing the saved guest list. Offline lookup supports convention admission only.') }
+            catch (offlineError) { setError(offlineError.message); setResults([]) }
+          } else setError(err.message)
+        })
     }, 250)
     return () => { active = false; window.clearTimeout(timer) }
   }, [event?.id, event?.manual_checkin_enabled, event?.checkout_enabled, query])
@@ -351,6 +369,7 @@ function ManualMode({ event, sections, zones, onResult }) {
     if (busyId) return
     setBusyId(`${guest.id}:checkin`); setError('')
     try {
+      if (!navigator.onLine) throw new TypeError('Network offline')
       const response = zoneOperation
         ? await api.scanZone(guest.qr_token, { zone_id: zoneId, direction, guardian_token: guardianPass, guardian_guest_id: guardianGuestId })
         : operation === 'checkout'
@@ -366,7 +385,16 @@ function ManualMode({ event, sections, zones, onResult }) {
           setResults((items) => items.map((item) => item.id === guest.id ? { ...item, admitted: operation !== 'checkout', checked_out: operation === 'checkout' } : item))
         }
       }
-    } catch (err) { setError(err.message); onResult({ status: 'invalid', message: err.message, admission_feedback: !zoneOperation && operation !== 'checkout' }) }
+    } catch (err) {
+      if (!err.status && (!navigator.onLine || /failed to fetch|network|load failed|timed?\s*out|timeout/i.test(err.message || '')) && !zoneOperation && operation === 'admission') {
+        try {
+          const offline = recordOfflineScan({ eventId: event.id, token: guest.qr_token, manifest: loadOfflineManifest(event.id) })
+          onManifestChange(offline.manifest); onQueueChange()
+          onResult({ ...offline.result, offline: true, admission_feedback: true })
+          if (offline.result.status === 'offline_queued') setResults((items) => items.map((item) => item.id === guest.id ? { ...item, admitted: true } : item))
+        } catch (storageError) { setError(storageError.message || 'Could not save this check-in. Do not admit yet.') }
+      } else { setError(err.message); onResult({ status: 'invalid', message: err.message, admission_feedback: !zoneOperation && operation !== 'checkout' }) }
+    }
     finally { setBusyId('') }
   }
 
@@ -919,7 +947,7 @@ function LiveScannerCommandCenter({
           <div className="sc-command-mode-body">
             {(mode === 'camera' || mode === 'access' || mode === 'checkout') && <TokenScanner event={event} zones={zones} gates={gates} sections={sections} mode={mode} offlineManifest={offlineManifest} onManifestChange={onManifestChange} onQueueChange={onQueueChange} onRefreshManifest={onRefreshManifest} onResult={onResult}/>}
             {mode === 'daily' && <DailyAttendanceMode event={event} onResult={onResult}/>}
-            {mode === 'manual' && <ManualMode event={event} sections={sections} zones={zones} onResult={onResult}/>}
+            {mode === 'manual' && <ManualMode event={event} sections={sections} zones={zones} onResult={onResult} onManifestChange={onManifestChange} onQueueChange={onQueueChange}/>}
             {mode === 'eventqr' && <EventQRMode event={event}/>}
           </div>
         </section>
@@ -944,10 +972,11 @@ function LiveScannerCommandCenter({
             <div><span>Network</span><strong className={online ? 'ok' : ''}>{online ? 'Online' : 'Offline queue active'}</strong></div>
             <div><span>Offline manifest</span><strong>{manifestCount ? `${manifestCount} passes` : 'Not cached'}</strong></div>
             <div><span>Pending sync</span><strong className={pendingSync ? '' : 'ok'}>{pendingSync} actions</strong></div>
-            <div><span>Duplicate protection</span><strong className="ok">On</strong></div>
+            <div><span>Offline duplicate checks</span><strong>This device only</strong></div>
           </div>
         </section>
       </div>
+      <OfflineScannerPanel eventId={event.id} manifest={offlineManifest} online={online} onPrepare={onRefreshManifest} onSynced={onRefreshManifest}/>
     </div>
   )
 }
@@ -965,8 +994,8 @@ export default function ScannerRedesignPage() {
   const [loadError, setLoadError] = useState('')
   const [online, setOnline] = useState(() => navigator.onLine)
   const [offlineManifest, setOfflineManifest] = useState(() => eventId ? loadOfflineManifest(eventId) : null)
-  const [queuedAdmissions, setQueuedAdmissions] = useState(() => offlineAdmissionCount())
-  const [queuedActions, setQueuedActions] = useState(() => experienceQueueCount())
+  const [queuedAdmissions, setQueuedAdmissions] = useState(() => offlineAdmissionCount(eventId))
+  const [queuedActions, setQueuedActions] = useState(() => experienceQueueCount(eventId))
   const [stepBusy, setStepBusy] = useState(false)
   const [recentResults, setRecentResults] = useState([])
   const [attendance, setAttendance] = useState(null)
@@ -1000,10 +1029,12 @@ export default function ScannerRedesignPage() {
     if (!eventId || !navigator.onLine) return
     try {
       const manifest = await api.offlineManifest(eventId)
-      saveOfflineManifest(eventId, manifest)
-      setOfflineManifest(manifest)
-    } catch {
+      const saved = saveOfflineManifest(eventId, manifest)
+      setOfflineManifest(saved)
+      return { manifest: saved }
+    } catch (error) {
       setOfflineManifest(loadOfflineManifest(eventId))
+      return { error: error.message || 'Could not download the guest list.' }
     }
   }
 
@@ -1016,27 +1047,33 @@ export default function ScannerRedesignPage() {
   useEffect(() => {
     async function drainQueues() {
       setOnline(navigator.onLine)
-      if (!navigator.onLine) return
-      const [steps, admissions] = await Promise.all([drainExperienceQueue(api), drainOfflineAdmissions(api)])
+      if (!eventId || !navigator.onLine) return
+      const [steps, admissions] = await Promise.all([drainExperienceQueue(api, eventId), drainOfflineAdmissions(api, eventId)])
       setQueuedActions(steps.remaining)
       setQueuedAdmissions(admissions.remaining)
       if (admissions.sent) await refreshOfflineManifest()
     }
     function markOffline() { setOnline(false) }
     function updateCounts() {
-      setQueuedActions(experienceQueueCount())
-      setQueuedAdmissions(offlineAdmissionCount())
+      setQueuedActions(experienceQueueCount(eventId))
+      setQueuedAdmissions(offlineAdmissionCount(eventId))
     }
-    window.addEventListener('online', drainQueues)
+    const safeDrain = () => drainQueues().catch(() => { /* Saved records remain available for staff retry. */ })
+    window.addEventListener('online', safeDrain)
     window.addEventListener('offline', markOffline)
     window.addEventListener('experience-queue-change', updateCounts)
     window.addEventListener('offline-admission-change', updateCounts)
-    drainQueues()
+    updateCounts()
+    const retryTimer = window.setInterval(safeDrain, 15000)
+    const refreshTimer = window.setInterval(refreshOfflineManifest, 5 * 60 * 1000)
+    safeDrain()
     return () => {
-      window.removeEventListener('online', drainQueues)
+      window.removeEventListener('online', safeDrain)
       window.removeEventListener('offline', markOffline)
       window.removeEventListener('experience-queue-change', updateCounts)
       window.removeEventListener('offline-admission-change', updateCounts)
+      window.clearInterval(retryTimer)
+      window.clearInterval(refreshTimer)
     }
   }, [eventId])
 
@@ -1046,6 +1083,7 @@ export default function ScannerRedesignPage() {
     setAdmissionPopup(!!nextResult?.admission_feedback)
     if (!nextResult) return
     rememberResult(nextResult)
+    if (nextResult.offline || nextResult.status === 'offline_queued') return
     if (nextResult.guest?.id && !nextResult.denied && nextResult.status !== 'invalid') void refreshEvent()
     const resultEventId = nextResult.guest?.event_id || eventId
     if (resultEventId && nextResult.guest?.id && !nextResult.experience_next_steps) {
@@ -1086,7 +1124,7 @@ export default function ScannerRedesignPage() {
       }
       setResult((current) => current ? { ...current, experience_next_steps: nextSteps, step_error: '' } : current)
     } catch (error) {
-      if (!navigator.onLine || /failed to fetch|network|load failed/i.test(error.message || '')) {
+      if (!navigator.onLine || /failed to fetch|network|load failed|timed?\s*out|timeout/i.test(error.message || '')) {
         enqueueExperienceStep({
           eventId: resultEventId,
           guestId: result.guest.id,
@@ -1132,7 +1170,7 @@ export default function ScannerRedesignPage() {
             recentResults={recentResults}
             stepBusy={stepBusy}
             onManifestChange={setOfflineManifest}
-            onQueueChange={() => setQueuedAdmissions(offlineAdmissionCount())}
+            onQueueChange={() => setQueuedAdmissions(offlineAdmissionCount(eventId))}
             onRefreshManifest={refreshOfflineManifest}
             onResult={handleResult}
             onStepComplete={completeExperienceStep}

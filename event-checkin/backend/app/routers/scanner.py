@@ -874,12 +874,28 @@ async def offline_manifest(
         select(ZoneTagRule).join(Zone, Zone.id == ZoneTagRule.zone_id).where(Zone.event_id == event_id)
     )).scalars().all() if zones else []
     zone_occupancies = {z.id: await zone_occupancy(z.id, db) for z in zones}
+    # Fail closed offline when admission needs a live consent/workflow decision.
+    # Do not evaluate/mutate every guest's progress while downloading a manifest.
+    workflow = await active_workflow(event_id, db)
+    offline_block = None
+    if workflow and any(s.enabled and s.required and s.blocks_checkin for s in workflow.steps):
+        offline_block = "This event has required admission steps. Reconnect to verify them before check-in."
+    if event.section_mode_enabled:
+        offline_block = "Section admission requires an online connection."
+    needs_live_seating = bool(event.seating_enabled and not await _experience_defers_seating(event, db))
+    generated_at = datetime.utcnow()
     return {
+        "version": 2,
         "event_id": event_id,
         "event_name": event.name if event else "",
+        "event_status": event.status,
+        "manual_checkin_enabled": bool(event.manual_checkin_enabled),
+        "junior_guardian_handoff_enabled": bool(event.junior_guardian_handoff_enabled),
+        "separate_admission_access_enabled": bool(event.separate_admission_access_enabled),
+        "offline_admission_block_reason": offline_block,
         "venue_access_enabled": bool(event and event.venue_access_enabled),
-        "generated_at": datetime.utcnow().isoformat(),
-        "expires_at": (datetime.utcnow() + timedelta(minutes=30)).isoformat(),
+        "generated_at": generated_at.isoformat() + "Z",
+        "expires_at": (generated_at + timedelta(minutes=30)).isoformat() + "Z",
         "revoked_passes": sum(1 for g in guests if g.rsvp_status == "declined" and g.qr_token),
         "guests": [{
             "id": g.id,
@@ -896,6 +912,7 @@ async def offline_manifest(
             "is_vip": bool(g.is_vip),
             "rsvp_status": g.rsvp_status,
             "ticket_type_id": g.ticket_type_id,
+            "offline_admission_block_reason": "Reconnect to assign and validate a seat." if needs_live_seating and not g.seat_number else None,
         } for g in guests if g.qr_token],
         "zones": [{
             "id": z.id,

@@ -464,3 +464,10 @@
 .sc-admission-popup .sc-command-guidance strong { font-size: 15px; }
 .sc-admission-popup-next { width: 100%; margin-top: 16px; min-height: 46px; }
 @media (max-width: 480px) { .sc-admission-popup { padding: 14px; } .sc-admission-popup-heading h2 { font-size: 20px; } }
+.sc-offline-panel { margin-top: 16px; }
+.sc-offline-body { padding: 16px; font-size: 14px; line-height: 1.5; }
+.sc-offline-body p { margin: 0 0 12px; }
+.sc-offline-body li { padding: 8px 0; overflow-wrap: anywhere; }
+.sc-offline-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.sc-offline-body summary { cursor: pointer; font-weight: 700; }
+.sc-command-tabs { box-sizing: border-box; min-width: 0; max-width: 100%; }

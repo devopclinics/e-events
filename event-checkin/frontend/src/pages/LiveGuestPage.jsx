@@ -862,6 +862,8 @@ export default function LiveGuestPage() {
   const [error, setError] = useState('')
   const [retryNonce, setRetryNonce] = useState(0)
   const [activities, setActivities] = useState(null)
+  const [activitySearch, setActivitySearch] = useState('')
+  const [questionsOnly, setQuestionsOnly] = useState(false)
   const [activityId, setActivityId] = useState(null)
   const [workflowRun, setWorkflowRun] = useState(null)
   // Purely additive: only events on the "forest-editorial" hub_style (set in
@@ -981,9 +983,15 @@ export default function LiveGuestPage() {
         {guestToken && !activityId && (
           <div className="grid gap-3">
             {workflowRun && <div className="overflow-hidden rounded-2xl border border-teal-200 bg-white shadow-sm dark:border-teal-800 dark:bg-slate-900"><div className="h-2 bg-gradient-to-r from-teal-400 via-cyan-400 to-violet-500"/><div className="p-5"><div className="text-xs font-extrabold uppercase tracking-[.16em] text-teal-700 dark:text-teal-300">Guided experience · {workflowRun.status}</div><h2 className="mt-2 text-xl font-black text-slate-950 dark:text-white">{workflowRun.current_step?.title || 'The next moment will begin shortly'}</h2><p className="mt-2 text-sm font-semibold text-slate-600 dark:text-slate-300">{workflowRun.status === 'paused' ? 'The presenter has paused this experience.' : 'Watch the main screen. An interaction will appear here when it is time to participate.'}</p></div></div>}
+            {!!activities?.length && <section className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+              <label className="block text-sm font-bold">Find a speaker, session or activity<input type="search" value={activitySearch} onChange={(e) => setActivitySearch(e.target.value)} placeholder="Search by name or session title" className="mt-2 w-full rounded-xl border border-slate-300 bg-transparent p-3"/></label>
+              <label className="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={questionsOnly} onChange={(e) => setQuestionsOnly(e.target.checked)}/> Questions &amp; answers only</label>
+              {questionsOnly && <p className="mt-2 text-sm">Choose the named speaker or session before submitting. Each Q&amp;A has its own question queue; you can submit more than one question.</p>}
+              {activities.filter((a) => (!questionsOnly || a.type === 'q_and_a') && `${a.title} ${a.session_title || ''}`.toLowerCase().includes(activitySearch.trim().toLowerCase())).length === 0 && <p role="status" className="mt-3 text-sm">No activities match. Try a different name or show all activity types.</p>}
+            </section>}
             {activities === null ? <p className="text-center text-sm text-slate-600 dark:text-slate-300">Loading…</p> : activities.length === 0 ? (
               !workflowRun && <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center text-sm font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-900">Nothing is live right now — check back once your host starts something.</div>
-            ) : activities.map((a) => (
+            ) : activities.filter((a) => (!questionsOnly || a.type === 'q_and_a') && `${a.title} ${a.session_title || ''}`.toLowerCase().includes(activitySearch.trim().toLowerCase())).map((a) => (
               <button key={a.id} type="button" onClick={() => setActivityId(a.id)}
                 className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 text-left dark:border-slate-700 dark:bg-slate-900">
                 <div>

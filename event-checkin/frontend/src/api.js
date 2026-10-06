@@ -56,10 +56,11 @@ async function uploadWebsiteAsset(eventId, file) {
   return res.json()
 }
 
-async function req(method, path, body) {
+async function req(method, path, body, timeoutMs) {
   const token = await getToken()
   const opts = {
     method,
+    ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(() => { try { const value = localStorage.getItem(ATTRIBUTION_KEY); return value ? { 'X-Festio-Attribution': encodeURIComponent(value) } : {} } catch { return {} } })(),
@@ -978,14 +979,14 @@ export const api = {
   deleteCombination: (eventId, comboId) => req('DELETE', `/events/${eventId}/menu-combinations/${comboId}`),
 
   // Scanner
-  scan: (token, body) => req('POST', `/scan/${token}`, body),
+  scan: (token, body) => req('POST', `/scan/${token}`, body, 8000),
   scanCheckout: (token, guardianToken, guardianGuestId) => req('POST', `/scan/${token}/checkout`, guardianGuestId ? { guardian_guest_id: guardianGuestId } : guardianToken ? { guardian_token: guardianToken } : undefined),
   recordDailyAttendance: (token) => req('POST', `/scan/${token}/daily-attendance`, {}),
-  offlineManifest: (eventId) => req('GET', `/scan/offline-manifest/${eventId}`),
+  offlineManifest: (eventId) => req('GET', `/scan/offline-manifest/${eventId}`, undefined, 15000),
   // Manual check-in (no QR)
-  searchGuests: (eventId, q) => req('GET', `/events/${eventId}/guests/search?q=${encodeURIComponent(q)}`),
+  searchGuests: (eventId, q) => req('GET', `/events/${eventId}/guests/search?q=${encodeURIComponent(q)}`, undefined, 8000),
   manualCheckin: (eventId, guestId, tableGroupId) =>
-    req('POST', `/events/${eventId}/guests/${guestId}/checkin${tableGroupId ? `?table_group_id=${encodeURIComponent(tableGroupId)}` : ''}`),
+    req('POST', `/events/${eventId}/guests/${guestId}/checkin${tableGroupId ? `?table_group_id=${encodeURIComponent(tableGroupId)}` : ''}`, undefined, 8000),
   manualCheckout: (eventId, guestId, guardianToken, guardianGuestId) =>
     req('POST', `/events/${eventId}/guests/${guestId}/checkout`, guardianGuestId ? { guardian_guest_id: guardianGuestId } : guardianToken ? { guardian_token: guardianToken } : undefined),
   unadmitGuest: (eventId, guestId, notify = false) =>

@@ -881,7 +881,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
     setShowShare(event.invite_share_enabled !== false)
     setShowCalendar(event.invite_add_to_calendar_enabled !== false)
     setShowConfetti(event.rsvp_confetti_enabled !== false)
-    setHubLayout(['companion', 'journey', 'complete'].includes(event.guest_hub_layout) ? event.guest_hub_layout : 'classic')
+    setHubLayout(['companion', 'journey', 'complete', 'app'].includes(event.guest_hub_layout) ? event.guest_hub_layout : 'classic')
   }, [event])
 
   function copyLink() {
@@ -1122,6 +1122,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
                 ['companion', 'Companion', 'Redesigned single-scroll layout: Pass and next step first, one Event Details block, only the modules this event uses.'],
                 ['journey', 'Journey', 'Guided lifecycle layout that adapts from RSVP and readiness through check-in, live participation, feedback and certificates.'],
                 ['complete', 'Complete Flow', 'Five-stage mobile guest experience: event page, guided registration, confirmation, GuestHub and checked-in event-day view.'],
+                ['app', 'Event App', 'App-style GuestHub with Home, Programme, My Pass, Inbox and More. Enabled Live Activities, FestioMe and Meals stay easy to find.'],
               ].map(([val, label, desc]) => (
                 <button key={val} type="button" onClick={() => setHubLayout(val)}
                   className="rr-btn secondary"

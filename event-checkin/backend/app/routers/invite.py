@@ -12,14 +12,15 @@ import logging
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from sqlalchemy import func, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
 from ..database import get_db
-from ..models import Event, Guest, RSVPAnswer, RSVPQuestion, SeatingTable, Shipment, GuestShipment, TableGroup, TableGroupTable, TicketType
+from ..models import Event, Guest, RSVPAnswer, RSVPQuestion, SeatingTable, Shipment, GuestShipment, TableGroup, TableGroupTable, TicketType, ScanEvent, Zone
 from ..schemas import (
+    GuestAppPartyOut,
     InviteGuestPrefill, InvitePageOut, InviteTokenPageOut,
     InviteShippingOut, InviteShipmentNeed, ShippingAddressUpdate,
     RSVPConfirm, RSVPSubmit, RSVPTokenSubmit,
@@ -1322,3 +1323,58 @@ async def submit_invite_token_rsvp(
         rsvp_status=guest.rsvp_status,
         message=message,
     )
+
+
+@router.get("/token/{invite_token}/app-party", response_model=GuestAppPartyOut)
+async def app_party(invite_token: str, response: Response, db: AsyncSession = Depends(get_db)):
+    """Read-only credentials/status for self, registered dependants and trusted juniors.
+
+    Being in the same party alone does NOT expose another attendee's credential.
+    Existing scanner authorization still controls every admission and handoff.
+    """
+    guest, event = await _get_guest_by_token(invite_token, db)
+    if event.guest_hub_layout != "app":
+        raise HTTPException(404, "Event App is not enabled")
+    response.headers["Cache-Control"] = "no-store, private"
+    authorizations = event.guardian_authorizations or {}
+    trusted_children = [child for child, entries in authorizations.items()
+                        if any(entry.get("guardian_guest_id") == guest.id and _entry_is_usable(entry)
+                               for entry in (entries or []))]
+    # A junior's credential must never expose adult or sibling credentials.
+    is_junior = guest.id in authorizations
+    scopes = [Guest.id == guest.id]
+    if not is_junior:
+        scopes.append(Guest.rsvp_submitter_guest_id == guest.id)
+        if event.junior_guardian_handoff_enabled and trusted_children:
+            scopes.append(Guest.id.in_(trusted_children))
+    members = (await db.execute(select(Guest).where(Guest.event_id == event.id, or_(*scopes)))).scalars().all()
+    ids = [member.id for member in members]
+    ranked = select(ScanEvent.id, func.row_number().over(
+        partition_by=ScanEvent.guest_id,
+        order_by=(ScanEvent.scanned_at.desc(), ScanEvent.id.desc()),
+    ).label("rank")).where(ScanEvent.event_id == event.id,
+                           ScanEvent.guest_id.in_(ids), ScanEvent.denied.is_(False)).subquery()
+    scans = (await db.execute(select(ScanEvent).join(ranked, ScanEvent.id == ranked.c.id)
+                             .where(ranked.c.rank == 1))).scalars().all()
+    by_guest = {scan.guest_id: scan for scan in scans}
+    zone_ids = {scan.zone_id for scan in scans if scan.zone_id}
+    zones = (await db.execute(select(Zone).where(Zone.event_id == event.id, Zone.id.in_(zone_ids)))).scalars().all() if zone_ids else []
+    zone_names = {zone.id: zone.name for zone in zones}
+    rows = []
+    for member in members:
+        scan = by_guest.get(member.id)
+        junior = member.id in authorizations
+        status = "Checked in" if member.admitted else "Not checked in"
+        if scan:
+            if scan.zone_id and scan.direction == "in":
+                status = f"In {zone_names.get(scan.zone_id, 'event zone')}"
+            elif scan.direction == "out":
+                status = "Collected" if junior and scan.guardian_guest_id else ("Left zone" if scan.zone_id else "Checked out")
+        confirmed = member.admitted or member.rsvp_status == "confirmed" or not event.rsvp_enabled
+        rows.append({"id": member.id, "name": f"{member.first_name} {member.last_name}".strip(),
+                     "qr_token": member.qr_token if confirmed else None,
+                     "relationship": member.rsvp_relationship, "rsvp_status": member.rsvp_status,
+                     "admitted": member.admitted, "is_junior": junior,
+                     "checked_out": bool(scan and not scan.zone_id and scan.direction == "out"),
+                     "status": status, "status_at": scan.scanned_at.isoformat() + "Z" if scan else None})
+    return {"viewer_id": guest.id, "members": rows, "as_of": datetime.utcnow().isoformat() + "Z"}

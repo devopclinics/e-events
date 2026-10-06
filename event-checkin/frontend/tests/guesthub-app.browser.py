@@ -1,0 +1,123 @@
+"""Real bundled GuestHub integration, with all APIs isolated from live services."""
+import copy, json, threading, time, os, tempfile
+from datetime import datetime, timedelta, timezone
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+from pathlib import Path
+from urllib.parse import urlparse
+from playwright.sync_api import sync_playwright
+OUT=Path(os.environ.get('FESTIO_APP_ARTIFACTS') or tempfile.mkdtemp(prefix='festio-app-browser-'))
+OUT.mkdir(parents=True,exist_ok=True)
+BUILD=Path(os.environ.get('FESTIO_APP_BUILD') or Path(__file__).resolve().parents[1]/'dist')
+class Handler(SimpleHTTPRequestHandler):
+    def __init__(self,*args,**kwargs): super().__init__(*args,directory=str(BUILD),**kwargs)
+    def do_GET(self):
+        if not (BUILD/self.path.split('?')[0].lstrip('/')).is_file(): self.path='/index.html'
+        super().do_GET()
+    def log_message(self,*args): pass
+server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
+threading.Thread(target=server.serve_forever,daemon=True).start()
+BASE=f'http://127.0.0.1:{server.server_port}'
+now=datetime.now(timezone.utc)
+iso=lambda d:d.isoformat()
+event=dict(id='event-demo',name='NCNMO Platform 2026',guest_hub_layout='app',organization_name='NCNMO',event_date=iso(now-timedelta(hours=1)),event_end_date=iso(now+timedelta(days=4)),timezone='America/Indiana/Indianapolis',venue_name='The Westin Indianapolis',venue_address='Indianapolis, Indiana',status='active',experience_enabled=True,live_program_enabled=True,rsvp_enabled=True,rsvp_token='public-demo',engagement_enabled=True,festiome_enabled=True,festiome_addon_enabled=True,junior_guardian_handoff_enabled=False)
+parent=dict(id='parent',name='Amina Idris',first_name='Amina',last_name='Idris',qr_token='demo-parent-qr',rsvp_status='confirmed',admitted=True,checked_out=False,table_name='Family table 7',seat_number='12')
+child=dict(id='child',name='Sara Idris',qr_token='demo-child-qr',rsvp_status='confirmed',admitted=True,is_junior=True,status='In Junior room',status_at=iso(now),relationship='Child')
+hub=dict(guest=parent,party=[parent,{k:v for k,v in child.items() if k!='qr_token'}],capabilities=dict(direct_host_messages=True,guest_chat=False,festiome=True),announcements=[dict(id='a1',title='Welcome to Platform',body='Your arrival guide and event updates are here.',created_at=iso(now))],direct_messages=[],chat_messages=[])
+session=dict(step_id='session1',title='Faith, family & community',starts_at=iso(now+timedelta(minutes=42)),ends_at=iso(now+timedelta(minutes=102)),room='Main ballroom',speaker='Demo presenter',age_groups=['All attendees'],description='A conversation for the whole family.')
+journey=dict(experience_enabled=True,steps=[],next_steps=[],total_count=0,completed_count=0,consent=dict(required=False,signed=False,form=None),menu_enabled=True,menu_selectable=True,menu_has_choices=False,program=dict(enabled=True,days=[dict(date=now.date().isoformat(),label='Today',segments=[session])],current_segments=[],next_segments=[session]))
+feedback=dict(forms=[dict(step_id='feedback1',title='Convention feedback',submitted=False,can_edit=True,questions=[dict(id='q1',type='text',label='What worked well?',required=True)])])
+state=dict(event=event,hub=hub,journey=journey,feedback=feedback,hub_status=200,preview=False)
+errors=[];posts=[];unexpected=[];checks=[]
+def check(name,value=True):
+    assert value,name
+    checks.append(name)
+def intercept(route):
+    u=urlparse(route.request.url); p=u.path
+    if not route.request.url.startswith(BASE): return route.abort()
+    if not p.startswith('/api/') and not p.endswith('service-worker.js') and not p.endswith('guesthub-sw.js'): return route.continue_()
+    if p.endswith('.js'):return route.fulfill(status=404,body='')
+    data={}; status=200
+    if route.request.method=='POST':
+        posts.append(dict(path=p,body=route.request.post_data_json))
+        if '/consent/sign' in p: state['journey']['consent']['signed']=True
+        elif '/messages/direct' in p:state['hub']['direct_messages'].append(dict(id='m1',sender_type='guest',body=route.request.post_data_json['body']))
+        elif '/feedback' in p:state['feedback']['forms'][0]['submitted']=True
+        data={'ok':True}
+    elif p.endswith('/app-party'):data=dict(viewer_id='parent',members=[{**state['hub']['guest'],'status':'Checked in','status_at':iso(now)},child],as_of=iso(now))
+    elif p.startswith('/api/invite/token/'):data=dict(event=state['event'],guest=state['hub']['guest'],already_responded=True,deadline_passed=False,pending_guardian_confirmations=[])
+    elif p.endswith('/guest-hub'):
+        status=state['hub_status'];data=state['hub'] if status==200 else dict(detail='GuestHub is disabled')
+    elif p.endswith('/public-theme'):data=dict(colors=dict(primary='#124b3c',accent='#d6b45e'),wording={},hub_layout={})
+    elif p.endswith('/experience/me'):data=state['journey']
+    elif p.endswith('/experience/me/feedback'):data=state['feedback']
+    elif '/guest-content/' in p:data=dict(materials=[dict(id='mat',title='Arrival guide',kind='pdf',source_url='/media/demo.pdf')],certificates=[])
+    elif p.endswith('/qr.png'):return route.fulfill(content_type='image/svg+xml',body='<svg xmlns="http://www.w3.org/2000/svg" width="220" height="220"><rect width="220" height="220" fill="white"/><text x="25" y="100" fill="black">TEST QR FIXTURE</text></svg>')
+    elif '/push/config' in p:data=dict(enabled=False)
+    elif '/live/' in p or '/engagement/' in p:status=403;data=dict(detail='Fixture has no Live session')
+    else:unexpected.append(p)
+    route.fulfill(status=status,content_type='application/json',body=json.dumps(data))
+with sync_playwright() as pw:
+    engine=os.environ.get('FESTIO_APP_BROWSER','chromium')
+    options={'headless':True}
+    if engine!='webkit': options['args']=['--no-sandbox']
+    if engine=='edge': options['executable_path']=os.environ['FESTIO_EDGE_EXECUTABLE']
+    browser=(pw.webkit if engine=='webkit' else pw.chromium).launch(**options)
+    context=browser.new_context(viewport=dict(width=1440,height=1050),service_workers='block')
+    context.route('**/*',intercept)
+    page=context.new_page();page.on('pageerror',lambda e:errors.append(str(e)))
+    def load(hash='#/home',query=''):
+        page.goto(BASE+'/r/demo-token'+(query+'&' if query else '?')+'case='+str(time.time_ns())+hash);page.locator('.fh-event-app .greeting').wait_for() if hash=='#/home' and state['hub_status']==200 else page.locator('.fh-event-app').wait_for()
+        page.wait_for_timeout(350)
+    def go(screen):
+        page.locator(f'.fh-event-app nav:visible button[data-go="{screen}"]').first.click();page.wait_for_timeout(120)
+    load();check('real app shell renders',page.locator('.greeting').inner_text().find('Amina')>=0)
+    check('three prominent services',page.locator('.service-nav a').count()==3)
+    check('theme matches Design Studio',page.locator('.fh-event-app').evaluate('(e)=>getComputedStyle(e).getPropertyValue("--green")').strip()=='#124b3c')
+    page.screenshot(path=str(OUT/'desktop-home.png'),full_page=True)
+    go('programme');page.get_by_role('button',name='Faith, family').click();page.locator('dialog[open]').wait_for()
+    page.go_back();check('Back closes session',page.locator('dialog[open]').count()==0)
+    page.go_forward();page.locator('dialog[open]').wait_for();check('Forward restores session')
+    page.get_by_role('button',name='Close session').click();go('pass');page.locator('#app-member').select_option('child')
+    page.get_by_text('At pickup, show your own pass.',exact=True).wait_for();check('junior pickup guidance')
+    page.get_by_role('button',name='Switch to my pass').click();check('one tap guardian pass',page.locator('#app-member').input_value()=='parent')
+    check('assigned seating retained on pass','Family table 7' in page.locator('main').inner_text());check('full pass utilities remain accessible',page.get_by_role('link',name='Open full pass & options').get_attribute('href')=='/scan/demo-parent-qr')
+    go('more');check('services not buried in More',all(t not in page.locator('main').inner_text() for t in ['Live Activities','FestioMe','Meals']))
+    page.get_by_role('button',name='My party Family').click();check('recorded child status','In Junior room' in page.locator('main').inner_text())
+    page.get_by_role('button',name='Event essentials').click();page.get_by_role('button',name='Help & FAQ').click()
+    page.get_by_placeholder('Ask the host a question...').fill('Where is the registration desk?');page.locator('main').get_by_role('button',name='Send',exact=True).click()
+    page.get_by_text('Where is the registration desk?',exact=True).wait_for();check('original message handler submits',any('/messages/direct' in p['path'] for p in posts))
+    go('more');page.get_by_role('button',name='Feedback Share').click();page.locator('main textarea, main input').first.fill('Clear directions');page.get_by_role('button',name='Submit feedback').click();page.get_by_text('Thank you—your feedback has been recorded.').wait_for();check('existing feedback submits')
+    state['journey']['consent']=dict(required=True,signed=False,form=dict(id='consent1',title='Youth consent',body='Demo consent text',version=1))
+    load();page.get_by_role('button',name='Review next steps').click();page.get_by_placeholder('Type your full name to sign Youth consent').fill('Amina Idris');page.get_by_role('button',name='Sign & agree').click();page.get_by_text('Signed ✓',exact=True).wait_for();check('original consent handler submits')
+    context.set_default_timeout(8000)
+    page.set_viewport_size(dict(width=390,height=844));load();page.screenshot(path=str(OUT/'phone-home.png'),full_page=True)
+    metrics=page.evaluate('''()=>{const root=document.querySelector('.fh-event-app');const visible=e=>e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden';return {overflow:document.documentElement.scrollWidth>innerWidth,smallText:[...root.querySelectorAll('*')].filter(e=>visible(e)&&[...e.childNodes].some(n=>n.nodeType===3&&n.textContent.trim())&&parseFloat(getComputedStyle(e).fontSize)<12).map(e=>e.textContent),smallTargets:[...root.querySelectorAll('button,a')].filter(e=>visible(e)&&(e.getBoundingClientRect().height<44||e.getBoundingClientRect().width<44)).map(e=>e.textContent),header:root.querySelector('.topbar').getBoundingClientRect().height,bottom:root.querySelector('.bottom-nav').getBoundingClientRect().height}}''')
+    print(json.dumps(metrics),flush=True)
+    check('phone has no horizontal overflow',not metrics['overflow']);check('phone text minimum 12px',not metrics['smallText']);check('phone targets minimum 44px',not metrics['smallTargets'])
+    page.evaluate('window.scrollTo(0,500)');check('services scroll away',page.locator('.service-nav').bounding_box()['y']<0)
+    for screen in ['programme','pass','inbox','more']:
+        go(screen);check('phone '+screen+' fits',page.evaluate('document.documentElement.scrollWidth<=innerWidth'))
+        page.screenshot(path=str(OUT/f'phone-{screen}.png'),full_page=True)
+    page.reload();page.get_by_role('heading',name='Your event essentials').wait_for();check('route survives reload')
+    load('#/programme?session=session1');page.locator('dialog[open]').wait_for();page.get_by_role('button',name='Close session').click();check('direct session link closes to programme',page.url.endswith('#/programme'))
+    state['hub_status']=403;load();page.get_by_role('button',name='Try again',exact=True).wait_for();check('disabled hub shows recovery instead of blank');state['hub_status']=200
+    state['event']['engagement_enabled']=False;state['event']['festiome_enabled']=False;state['journey']['menu_enabled']=False;state['journey']['menu_selectable']=False
+    load();check('disabled services are hidden',page.locator('.service-nav').count()==0)
+    state['hub']['guest']['admitted']=False
+    state['journey']['consent']['signed']=False
+    load();check('before arrival does not request native consent',page.locator('.hero').inner_text().find('Review next steps')<0)
+    page.goto(BASE+'/r/demo-token?case='+str(time.time_ns())+'#/experience');page.get_by_text('Check in with event staff before signing.').wait_for();check('native consent remains admission gated',page.get_by_role('button',name='Sign & agree').count()==0)
+    state['hub']['guest']['admitted']=True
+    state['event']['event_end_date']=iso(now-timedelta(minutes=1))
+    load();check('closing state takes priority over stale actions','Thank you for attending' in page.locator('.hero').inner_text())
+    state['event']['event_end_date']=iso(now+timedelta(days=4))
+    state['journey']['consent']['required']=False
+    load(query='?studio-preview=1');go('pass');check('preview QR stays non-live',page.locator('.app-pass-qr').get_attribute('src').startswith('data:'));check('preview clearly marked','PREVIEW ONLY' in page.locator('main').inner_text())
+    for layout in ['classic' ,'companion','journey','complete']:
+        state['event']['guest_hub_layout']=layout;page.goto(BASE+'/r/demo-token?layout='+layout+'#guest-hub');page.wait_for_timeout(650)
+        check(layout+' original layout retained',page.locator('.fh-event-app').count()==0 and 'Amina' in page.locator('body').inner_text())
+    check('no browser runtime errors',not errors)
+    (OUT/'validation.json').write_text(json.dumps(dict(browser=engine,browser_version=browser.version,checks=checks,phone_metrics=metrics,errors=errors,isolated_post_paths=[p['path'] for p in posts],unmatched_fixture_requests=sorted(set(unexpected)),limitations=['Automated browser engine and viewport testing; no physical-device or branded Apple Safari testing','All API responses isolated fixtures; no staging or production mutations','Offline credential persistence remains disabled']),indent=2))
+    print(json.dumps(dict(passed=len(checks),metrics=metrics,errors=errors,unexpected=sorted(set(unexpected))),indent=2))
+    browser.close()
+server.shutdown()

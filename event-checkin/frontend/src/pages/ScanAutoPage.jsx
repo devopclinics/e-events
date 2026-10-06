@@ -808,7 +808,7 @@ export default function ScanAutoPage() {
   const paidPass = guest?.paid_ticket_pass_design || {}
   const passOpts = { showTable: true, showSeat: true, showHubButton: true, ...(designTheme?.pass_options || {}) }
   const guestHubToken = guest?.invite_token || guest?.qr_token || token
-  const showGuestHubButton = Boolean(guestHubToken && (passOpts.showHubButton || event?.experience_enabled))
+  const showGuestHubButton = Boolean(guestHubToken && (passOpts.showHubButton || event?.experience_enabled || event?.guest_hub_layout === 'app'))
   const coverImage = designTheme?.flyer_image_url || designTheme?.cover_image_url || ''
   const qrImageUrl = `/api/scan/${token}/qr.png`
   const checkoutQrImageUrl = `/api/scan/${token}/checkout-qr.png`
@@ -948,7 +948,7 @@ export default function ScanAutoPage() {
                   className="inline-flex min-h-11 w-full max-w-xs items-center justify-center rounded-lg px-5 py-2.5 text-sm font-bold text-slate-950"
                   style={{ background: paidPass.accent_color || colors.accent || '#14b8a6' }}
                 >
-                  {paidPass.button_label || (event?.live_program_enabled ? 'Open Live Program' : event?.experience_enabled ? 'Track my activity' : 'Open FestioHub')}
+                  {event?.guest_hub_layout === 'app' ? 'Back to GuestHub' : paidPass.button_label || (event?.live_program_enabled ? 'Open Live Program' : event?.experience_enabled ? 'Track my activity' : 'Open FestioHub')}
                 </a>
               )}
               {event?.festiome_addon_enabled && event?.festiome_enabled && guest?.event_id && (

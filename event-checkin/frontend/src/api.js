@@ -1127,6 +1127,8 @@ export const api = {
   testSendPostEventThankyou: (eventId, guestId) => req('POST', `/events/${eventId}/post-event-thankyou/test-send`, { guest_id: guestId }),
   sendNowPostEventThankyou: (eventId, force = false) => req('POST', `/events/${eventId}/post-event-thankyou/send-now`, { force }),
 
+  appParty: (token) => guestRead(`/invite/token/${encodeURIComponent(token)}/app-party`, "Party details are temporarily unavailable."),
+
   // Guest Hub / event communication (messaging-service)
   guestHub: (eventId, token) =>
     guestRead(`/messaging/events/${encodeURIComponent(eventId)}/guest-hub?token=${encodeURIComponent(token)}`, 'Event updates are temporarily unavailable.'),

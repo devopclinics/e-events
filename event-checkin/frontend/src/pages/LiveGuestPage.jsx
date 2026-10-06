@@ -972,6 +972,7 @@ export default function LiveGuestPage() {
     <div className={`live-guest-experience live-guest-${guestTheme} min-h-screen px-4 py-8`}>
       <div className="mx-auto max-w-md">
         <div className="mb-6 text-center">
+          {passToken && <a href={`/r/${encodeURIComponent(passToken)}#guest-hub`} className="mb-4 inline-flex min-h-11 items-center rounded-xl border px-4 text-sm font-bold">← Back to GuestHub</a>}
           <div className="live-guest-brand text-xs font-extrabold uppercase tracking-[0.2em]">Festio Live</div>
         </div>
         {error?.code === 'FESTIO_LIVE_UNAVAILABLE' && <LiveUnavailableState onRetry={() => { setError(''); setActivities(null); if (guestToken) loadActivities(); else setRetryNonce((value) => value + 1) }} backHref={passToken ? `/scan/${encodeURIComponent(passToken)}/hub` : '/'} />}

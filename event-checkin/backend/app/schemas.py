@@ -1036,6 +1036,25 @@ class ConsentReceivedOut(BaseModel):
 # /experience/me surface. Unlike the staff schemas above they deliberately omit
 # internal step config/conditions and only expose what a guest may see or act on.
 
+class GuestAppPartyMemberOut(BaseModel):
+    id: str
+    name: str
+    qr_token: Optional[str] = None
+    relationship: Optional[str] = None
+    rsvp_status: Optional[str] = None
+    admitted: bool
+    is_junior: bool
+    checked_out: bool
+    status: str
+    status_at: Optional[str] = None
+
+
+class GuestAppPartyOut(BaseModel):
+    viewer_id: str
+    members: list[GuestAppPartyMemberOut]
+    as_of: str
+
+
 class GuestJourneyGuestOut(BaseModel):
     id: str
     name: str
@@ -2436,6 +2455,7 @@ class ScanResult(BaseModel):
 
 
 class EventBrief(BaseModel):
+    guest_hub_layout: Optional[str] = None
     name: str
     couples_name: str
     event_date: datetime
@@ -2685,7 +2705,7 @@ class InviteSettingsUpdate(BaseModel):
     rsvp_capacity: Optional[int] = None
     invite_cover_image: Optional[str] = None
     logo_url: Optional[str] = None
-    guest_hub_layout: Optional[Literal["classic", "companion", "journey", "complete"]] = None
+    guest_hub_layout: Optional[Literal["classic", "companion", "journey", "complete", "app"]] = None
     invite_mode: Optional[Literal["open", "closed"]] = None
     rsvp_deadline: Optional[datetime] = None
     event_time_tbd: Optional[bool] = None

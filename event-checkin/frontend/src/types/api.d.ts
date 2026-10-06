@@ -97,6 +97,14 @@ export interface ApiKeyOut {
   scope: string
 }
 
+export interface ApprovedWhatsAppTemplateOut {
+  body: string
+  category: string
+  name: string
+  ref: string
+  variables: (string)[]
+}
+
 export interface AssignmentRequest {
   due_at?: (string) | null
   org_id?: (string) | null
@@ -119,11 +127,19 @@ export interface Body_upload_calendar_logo_api_organizations_me_calendars__calen
   file: string
 }
 
+export interface Body_upload_certificate_asset_api_events__event_id__certificate_assets_post {
+  file: string
+}
+
 export interface Body_upload_cover_image_api_events__event_id__upload_cover_post {
   file: string
 }
 
 export interface Body_upload_floor_bg_api_events__event_id__floor_plan_bg_post {
+  file: string
+}
+
+export interface Body_upload_gallery_image_api_events__event_id__conference_center_gallery_upload_post {
   file: string
 }
 
@@ -135,6 +151,15 @@ export interface Body_upload_logo_api_events__event_id__upload_logo_post {
   file: string
 }
 
+export interface Body_upload_material_api_events__event_id__presenter_materials_upload_post {
+  availability?: string
+  file: string
+  kind?: string
+  session_step_id?: string
+  title?: string
+  visibility?: string
+}
+
 export interface Body_upload_partner_logo_api_events__event_id__partners_upload_logo_post {
   file: string
 }
@@ -144,6 +169,10 @@ export interface Body_upload_speaker_photo_api_events__event_id__speakers_upload
 }
 
 export interface Body_upload_task_attachment_api_events__event_id__tasks__task_id__attachments_post {
+  file: string
+}
+
+export interface Body_upload_website_asset_api_events__event_id__website_assets_post {
   file: string
 }
 
@@ -163,6 +192,8 @@ export interface BroadcastRequest {
   mms_media_url?: (string) | null
   subject?: (string) | null
   target?: 'all' | 'admitted' | 'not_admitted' | 'confirmed' | 'declined' | 'no_reply' | 'feedback_nonresponders' | 'none'
+  whatsapp_template_ref?: (string) | null
+  whatsapp_template_vars?: (Record<string, string>) | null
 }
 
 export interface BroadcastResult {
@@ -233,6 +264,64 @@ export interface CheckoutRequest {
   tier: string
 }
 
+export interface ConferenceOperationIn {
+  category: 'meeting' | 'release' | 'gallery' | 'integration'
+  data?: Record<string, unknown>
+  related_id?: (string) | null
+  starts_at?: (string) | null
+  status?: string
+  title: string
+}
+
+export interface ConferenceOperationUpdate {
+  data?: (Record<string, unknown>) | null
+  related_id?: (string) | null
+  starts_at?: (string) | null
+  status?: (string) | null
+  title?: (string) | null
+}
+
+export interface ConferenceProfileUpdate {
+  calls_open?: boolean
+  deadline?: (string) | null
+  enabled_call_types?: ('speaker' | 'abstract' | 'exhibitor' | 'sponsor')[]
+  welcome_text?: (string) | null
+}
+
+export interface ConferenceSubmissionCreate {
+  consent_accepted?: boolean
+  details?: Record<string, unknown>
+  email: string
+  kind: 'speaker' | 'abstract' | 'exhibitor' | 'sponsor'
+  name: string
+  organization?: (string) | null
+  summary?: (string) | null
+  title?: (string) | null
+  track_id?: (string) | null
+  website_url?: (string) | null
+}
+
+export interface ConferenceSubmissionReview {
+  promote?: boolean
+  review_notes?: (string) | null
+  status: 'submitted' | 'under_review' | 'accepted' | 'declined' | 'waitlisted'
+}
+
+export interface ConferenceTemplateIn {
+  category?: string
+  definition?: Record<string, unknown>
+  name: string
+}
+
+export interface ConferenceTrackIn {
+  audience?: (string) | null
+  color?: (string) | null
+  description?: (string) | null
+  is_active?: boolean
+  name: string
+  sort_order?: number
+}
+
 export interface ConsentFormOut {
   body: string
   created_at: string
@@ -250,6 +339,24 @@ export interface ConsentFormUpsert {
   body: string
   require_signature?: boolean
   title?: string
+}
+
+export interface ConsentReceivedOut {
+  automation_id?: (string) | null
+  automation_name?: (string) | null
+  completed_at?: (string) | null
+  email?: (string) | null
+  first_name: string
+  guest_id: string
+  last_name: string
+  match_method?: (string) | null
+  override_reason?: (string) | null
+  phone?: (string) | null
+  signed_at?: (string) | null
+  signer_name?: (string) | null
+  source?: (string) | null
+  source_label: string
+  status: string
 }
 
 export interface ConsentSignatureCreate {
@@ -305,6 +412,14 @@ export interface CreditRateUpsert {
 export interface CurrencyRequest {
   currency: 'USD' | 'NGN'
   event_id: string
+}
+
+export interface DailyAttendanceResult {
+  attendance_date?: (string) | null
+  guest?: (GuestOut) | null
+  message: string
+  recorded_at?: (string) | null
+  status: string
 }
 
 export interface DashboardBreakdown {
@@ -408,6 +523,214 @@ export interface DemoRequestOut {
   ok?: boolean
 }
 
+export interface DonationAuditEntryOut {
+  actor_name?: (string) | null
+  amount_minor: number
+  channel: string
+  contribution_id: string
+  created_at: string
+  currency: string
+  donor_name?: (string) | null
+  from_status?: (string) | null
+  id: string
+  note?: (string) | null
+  reference: string
+  to_status: string
+}
+
+export interface DonationBulkVerifyIn {
+  contribution_ids: (string)[]
+  note?: (string) | null
+}
+
+export interface DonationBulkVerifyResult {
+  confirmed?: (string)[]
+  failed?: (Record<string, unknown>)[]
+}
+
+export interface DonationCampaignOut {
+  celebrate_milestones?: boolean
+  channel_totals?: (Record<string, unknown>)[]
+  channels?: (DonationChannelConfig)[]
+  confirmed_minor?: number
+  currency?: string
+  description?: (string) | null
+  donation_count?: number
+  enabled?: boolean
+  event_id: string
+  event_name: string
+  funds?: (Record<string, unknown>)[]
+  goal_minor?: number
+  id: string
+  milestones_minor?: (number)[]
+  needs_attention_count?: number
+  pending_minor?: number
+  pledge_count?: number
+  pledged_minor?: number
+  public_token: string
+  public_total_mode?: 'confirmed_only' | 'confirmed_and_pledged_separate'
+  public_url: string
+  recent_public?: (Record<string, unknown>)[]
+  refunded_minor?: number
+  show_donor_amounts?: boolean
+  show_donor_names?: boolean
+  show_pledged_total?: boolean
+  title?: string
+  total_potential_minor?: number
+}
+
+export interface DonationCampaignUpdate {
+  celebrate_milestones?: boolean
+  channels?: (DonationChannelConfig)[]
+  currency?: string
+  description?: (string) | null
+  enabled?: boolean
+  goal_minor?: number
+  milestones_minor?: (number)[]
+  public_total_mode?: 'confirmed_only' | 'confirmed_and_pledged_separate'
+  show_donor_amounts?: boolean
+  show_donor_names?: boolean
+  show_pledged_total?: boolean
+  title?: string
+}
+
+export interface DonationChannelConfig {
+  account_holder_name?: (string) | null
+  account_number?: (string) | null
+  account_type?: (string) | null
+  bank_name?: (string) | null
+  checkout_url?: (string) | null
+  enabled?: boolean
+  label: string
+  public_instructions?: (string) | null
+  recipient_email?: (string) | null
+  recipient_phone?: (string) | null
+  routing_number?: (string) | null
+  type: 'festio_pay' | 'cash_app' | 'zelle' | 'paypal' | 'bank_transfer' | 'offline' | 'pledge'
+}
+
+export interface DonationContributionCreate {
+  amount_minor: number
+  anonymous_publicly?: boolean
+  channel: 'festio_pay' | 'cash_app' | 'zelle' | 'paypal' | 'bank_transfer' | 'offline' | 'pledge'
+  contact_consent?: boolean
+  donor_email?: (string) | null
+  donor_name?: (string) | null
+  donor_phone?: (string) | null
+  expected_payment_channel?: ('festio_pay' | 'cash_app' | 'zelle' | 'paypal' | 'bank_transfer' | 'offline' | 'pledge') | null
+  expected_payment_date?: (string) | null
+  hide_amount_publicly?: boolean
+  message?: (string) | null
+  provider_reference?: (string) | null
+  registry_item_id?: (string) | null
+}
+
+export interface DonationContributionOut {
+  amount_minor: number
+  anonymous_publicly: boolean
+  channel: string
+  contact_consent?: boolean
+  created_at: string
+  currency: string
+  donor_email?: (string) | null
+  donor_name?: (string) | null
+  donor_phone?: (string) | null
+  evidence_url?: (string) | null
+  expected_payment_channel?: (string) | null
+  expected_payment_date?: (string) | null
+  hide_amount_publicly: boolean
+  id: string
+  message?: (string) | null
+  payment_reported_at?: (string) | null
+  provider_reference?: (string) | null
+  reference: string
+  refunded_minor?: number
+  registry_item_id?: (string) | null
+  reported_amount_minor?: (number) | null
+  source?: (string) | null
+  status: string
+  updated_at: string
+  verified_at?: (string) | null
+}
+
+export interface DonationDiscrepancyIn {
+  note?: (string) | null
+  reported_amount_minor: number
+}
+
+export interface DonationOfflineCreate {
+  amount_minor: number
+  anonymous_publicly?: boolean
+  channel: 'festio_pay' | 'cash_app' | 'zelle' | 'paypal' | 'bank_transfer' | 'offline' | 'pledge'
+  contact_consent?: boolean
+  donor_email?: (string) | null
+  donor_name?: (string) | null
+  donor_phone?: (string) | null
+  expected_payment_channel?: ('festio_pay' | 'cash_app' | 'zelle' | 'paypal' | 'bank_transfer' | 'offline' | 'pledge') | null
+  expected_payment_date?: (string) | null
+  hide_amount_publicly?: boolean
+  message?: (string) | null
+  provider_reference?: (string) | null
+  registry_item_id?: (string) | null
+  source?: (string) | null
+  status?: 'pending_verification' | 'confirmed' | 'pledged'
+}
+
+export interface DonationPaymentReportIn {
+  channel?: ('festio_pay' | 'cash_app' | 'zelle' | 'paypal' | 'bank_transfer' | 'offline' | 'pledge') | null
+  evidence_note?: (string) | null
+  provider_reference?: (string) | null
+}
+
+export interface DonationPublicCampaignOut {
+  channels: (DonationChannelConfig)[]
+  confirmed_minor: number
+  cover_image_url?: (string) | null
+  currency: string
+  description?: (string) | null
+  donation_count?: number
+  event_name: string
+  funds?: (Record<string, unknown>)[]
+  goal_minor: number
+  logo_url?: (string) | null
+  pledge_count?: number
+  pledge_payment_channels?: (Record<string, unknown>)[]
+  pledged_minor: number
+  recent_public?: (Record<string, unknown>)[]
+  show_pledged_total: boolean
+  title: string
+  token: string
+}
+
+export interface DonationPublicContributionOut {
+  access_token: string
+  account_holder_name?: (string) | null
+  account_number?: (string) | null
+  account_type?: (string) | null
+  amount_minor: number
+  bank_name?: (string) | null
+  channel: string
+  checkout_url?: (string) | null
+  currency: string
+  expected_payment_channel?: (string) | null
+  expected_payment_date?: (string) | null
+  id: string
+  instructions?: (string) | null
+  payment_reported_at?: (string) | null
+  recipient_email?: (string) | null
+  recipient_phone?: (string) | null
+  reference: string
+  registry_item_id?: (string) | null
+  routing_number?: (string) | null
+  status: string
+}
+
+export interface DonationTransitionIn {
+  note?: (string) | null
+  provider_reference?: (string) | null
+  reported_amount_minor?: (number) | null
+}
+
 export interface DueDateRequest {
   due_at?: (string) | null
 }
@@ -419,6 +742,7 @@ export interface EventBrief {
   experience_enabled?: boolean
   festiome_addon_enabled?: boolean
   festiome_enabled?: boolean
+  guest_hub_layout?: (string) | null
   live_program_enabled?: boolean
   menu_enabled?: boolean
   name: string
@@ -433,6 +757,10 @@ export interface EventBrief {
   seating_enabled?: boolean
   seating_term?: (string) | null
   status: string
+}
+
+export interface EventCodeUpdate {
+  event_code: string
 }
 
 export interface EventControls {
@@ -501,6 +829,7 @@ export interface EventOut {
   checkout_enabled?: boolean
   couples_name: string
   created_at: string
+  daily_checkin_enabled?: boolean
   default_guest_table_group_id?: (string) | null
   description: (string) | null
   enforce_table_groups?: boolean
@@ -517,6 +846,8 @@ export interface EventOut {
   festiome_last_error?: (string) | null
   festiome_last_sync_at?: (string) | null
   festiome_open_url?: (string) | null
+  guardian_authorizations?: (Record<string, unknown>) | null
+  guardian_designation_scope?: string
   guest_cap?: (number) | null
   guest_hub_layout?: (string) | null
   hotel_address?: (string) | null
@@ -531,6 +862,7 @@ export interface EventOut {
   invite_share_enabled?: boolean
   invite_theme?: string
   is_paid?: boolean
+  junior_guardian_handoff_enabled?: boolean
   live_program_enabled?: boolean
   logistics_enabled?: boolean
   logo_url?: (string) | null
@@ -589,6 +921,7 @@ export interface EventOut {
   seating_term?: (string) | null
   section_mode_enabled?: boolean
   self_checkin_enabled?: boolean
+  separate_admission_access_enabled?: boolean
   source_last_error?: (string) | null
   source_last_sync_at?: (string) | null
   source_last_warning?: (string) | null
@@ -620,6 +953,8 @@ export interface EventReminderCreate {
   sort_order?: number
   subject?: (string) | null
   whatsapp_body?: (string) | null
+  whatsapp_template_ref?: (string) | null
+  whatsapp_template_vars?: (Record<string, string>) | null
 }
 
 export interface EventReminderOut {
@@ -642,6 +977,8 @@ export interface EventReminderOut {
   status: string
   subject?: (string) | null
   whatsapp_body?: (string) | null
+  whatsapp_template_ref?: (string) | null
+  whatsapp_template_vars?: (Record<string, string>) | null
 }
 
 export interface EventReminderUpdate {
@@ -656,6 +993,8 @@ export interface EventReminderUpdate {
   sort_order?: (number) | null
   subject?: (string) | null
   whatsapp_body?: (string) | null
+  whatsapp_template_ref?: (string) | null
+  whatsapp_template_vars?: (Record<string, string>) | null
 }
 
 export interface EventResetRequest {
@@ -825,6 +1164,11 @@ export interface ExperienceWorkflowOut {
   version: number
 }
 
+export interface FestioMeAccessPolicyRequest {
+  adult_guest_ids?: (string)[]
+  mode?: 'all_eligible' | 'approved_adults'
+}
+
 export interface FestioMeGuestSession {
   expires_at: string
   open_url?: (string) | null
@@ -953,6 +1297,54 @@ export interface GateScanResult {
 export interface GrantRequest {
   add_credits?: (number) | null
   tier?: (string) | null
+}
+
+export interface GuardianAddRequest {
+  child_guest_id: string
+  guardian_guest_id: string
+  relationship?: string
+}
+
+export interface GuardianAuthorizationEntry {
+  child_guest_id: string
+  confirmed_at?: (string) | null
+  guardian_guest_id: string
+  relationship?: string
+  source?: (string) | null
+}
+
+export interface GuardianAuthorizationUpdate {
+  authorizations?: (GuardianAuthorizationEntry)[]
+  designation_scope?: 'party' | 'any_guest'
+  enabled: boolean
+}
+
+export interface GuardianConfirmRequest {
+  child_guest_ids?: (string)[]
+}
+
+export interface GuardianSearchResult {
+  guest_id: string
+  name: string
+}
+
+export interface GuestAppPartyMemberOut {
+  admitted: boolean
+  checked_out: boolean
+  id: string
+  is_junior: boolean
+  name: string
+  qr_token?: (string) | null
+  relationship?: (string) | null
+  rsvp_status?: (string) | null
+  status: string
+  status_at?: (string) | null
+}
+
+export interface GuestAppPartyOut {
+  as_of: string
+  members: (GuestAppPartyMemberOut)[]
+  viewer_id: string
 }
 
 export interface GuestConsentStateOut {
@@ -1127,10 +1519,13 @@ export interface GuestProgramOut {
 
 export interface GuestProgramSegmentOut {
   active?: boolean
+  age_groups?: (string)[]
   category?: (string) | null
   description?: (string) | null
   ends_at: string
   key: string
+  room?: (string) | null
+  speaker?: (string) | null
   starts_at: string
   state?: 'ended' | 'ongoing' | 'upcoming'
   step_id: string
@@ -1254,6 +1649,111 @@ export interface HTTPValidationError {
   detail?: (ValidationError)[]
 }
 
+export interface InboundCompletionCondition {
+  field: 'subject' | 'body'
+  operator: 'contains' | 'equals' | 'starts_with'
+  value: string
+}
+
+export interface InboundCompletionRules {
+  conditions: (InboundCompletionCondition)[]
+  match?: 'all' | 'any'
+}
+
+export interface InboundEmailAuditOut {
+  automation_id?: (string) | null
+  automation_name?: (string) | null
+  extracted_identifiers?: ((Record<string, unknown>)[]) | null
+  failure_code?: (string) | null
+  failure_reason?: (string) | null
+  from_address?: (string) | null
+  guest_email?: (string) | null
+  guest_id?: (string) | null
+  guest_name?: (string) | null
+  id: string
+  match_method?: (string) | null
+  match_status: string
+  original_sender?: (string) | null
+  processed_at?: (string) | null
+  processing_status: string
+  received_at: string
+  reviewed_at?: (string) | null
+  reviewer_name?: (string) | null
+  rule_status: string
+  sanitized_excerpt?: (string) | null
+  sender_status: string
+  subject?: (string) | null
+}
+
+export interface InboundEmailAutomationCreate {
+  address_prefix?: (string) | null
+  completion_rules: InboundCompletionRules
+  name: string
+  sender_rules: (InboundSenderRule)[]
+  status?: 'active' | 'paused'
+  step_id: string
+}
+
+export interface InboundEmailAutomationOut {
+  address_prefix: string
+  completion_rules: Record<string, unknown>
+  created_at: string
+  event_id: string
+  id: string
+  inbound_address: string
+  name: string
+  sender_rules?: (Record<string, unknown>)[]
+  stats?: Record<string, number>
+  status: string
+  step_id: string
+  updated_at: string
+}
+
+export interface InboundEmailAutomationUpdate {
+  completion_rules?: (InboundCompletionRules) | null
+  name?: (string) | null
+  sender_rules?: ((InboundSenderRule)[]) | null
+  status?: ('active' | 'paused') | null
+  step_id?: (string) | null
+}
+
+export interface InboundEmailManualMatch {
+  guest_id: string
+}
+
+export interface InboundEmailRevalidationOut {
+  outcomes?: Record<string, number>
+  revalidated: number
+}
+
+export interface InboundEmailReviewOut {
+  automation_id?: (string) | null
+  candidate_guest_ids?: ((string)[]) | null
+  extracted_identifiers?: ((Record<string, unknown>)[]) | null
+  failure_code?: (string) | null
+  failure_reason?: (string) | null
+  from_address?: (string) | null
+  id: string
+  match_method?: (string) | null
+  match_status: string
+  matched_guest_id?: (string) | null
+  original_sender?: (string) | null
+  processed_at?: (string) | null
+  processing_status: string
+  received_at: string
+  resend_email_id: string
+  rule_status: string
+  sanitized_excerpt?: (string) | null
+  sender_status: string
+  subject?: (string) | null
+}
+
+export interface InboundSenderRule {
+  match_type: 'email' | 'domain'
+  sender_kind?: 'forwarder' | 'original'
+  value: string
+}
+
 export interface InviteGuestPrefill {
   email?: (string) | null
   email_locked?: boolean
@@ -1278,6 +1778,7 @@ export interface InvitePageOut {
   experience_enabled?: boolean
   festiome_addon_enabled?: boolean
   festiome_enabled?: boolean
+  guardian_designation_scope?: string
   guest_hub_layout?: (string) | null
   guest_hub_v2?: boolean
   hotel_address?: (string) | null
@@ -1291,9 +1792,12 @@ export interface InvitePageOut {
   invite_mode?: string
   invite_share_enabled?: boolean
   invite_theme: string
+  junior_guardian_handoff_enabled?: boolean
   live_program_enabled?: boolean
   logo_url?: (string) | null
   name: string
+  partner_enabled?: boolean
+  partner_token?: (string) | null
   questions?: (RSVPQuestionOut)[]
   registry_enabled?: boolean
   registry_token?: (string) | null
@@ -1330,7 +1834,7 @@ export interface InvitePageOut {
 
 export interface InviteSettingsUpdate {
   event_time_tbd?: (boolean) | null
-  guest_hub_layout?: ('classic' | 'companion' | 'journey' | 'complete') | null
+  guest_hub_layout?: ('classic' | 'companion' | 'journey' | 'complete' | 'app') | null
   invite_add_to_calendar_enabled?: (boolean) | null
   invite_capacity_bar_enabled?: (boolean) | null
   invite_countdown_enabled?: (boolean) | null
@@ -1378,6 +1882,14 @@ export interface InviteTokenPageOut {
   deadline_passed?: boolean
   event: InvitePageOut
   guest: InviteGuestPrefill
+  pending_guardian_confirmations?: (PendingGuardianConfirmation)[]
+}
+
+export interface IssueRequest {
+  eligible_only?: boolean
+  guest_ids?: (string)[]
+  send_email?: boolean
+  template_id: string
 }
 
 export interface JoinRequestDecision {
@@ -1388,7 +1900,14 @@ export interface JourneyStep {
   denied?: boolean
   deny_reason?: (string) | null
   direction: string
+  guardian_guest_id?: (string) | null
+  guardian_name?: (string) | null
+  guardian_relationship?: (string) | null
+  guardian_verification_method?: (string) | null
   scanned_at: string
+  scanned_by_email?: (string) | null
+  scanned_by_name?: (string) | null
+  scanned_by_user_id?: (string) | null
   zone_name?: (string) | null
 }
 
@@ -1427,9 +1946,12 @@ export interface LiveShareLinkIn {
 }
 
 export interface LiveShareLinkOut {
+  code: string
+  event_id: string
   expires_in: number
   role: string
   token: string
+  url: string
 }
 
 export interface ManualInviteRecipient {
@@ -1447,6 +1969,26 @@ export interface ManualInviteResult {
   errors?: (string)[]
   sent: number
   skipped: number
+}
+
+export interface MaterialLinkCreate {
+  availability?: string
+  kind?: string
+  presenter_notes?: (string) | null
+  session_step_id?: (string) | null
+  title: string
+  url: string
+  visibility?: string
+}
+
+export interface MaterialUpdate {
+  availability?: (string) | null
+  kind?: (string) | null
+  presenter_notes?: (string) | null
+  session_step_id?: (string) | null
+  status?: (string) | null
+  title?: (string) | null
+  visibility?: (string) | null
 }
 
 export interface MemberRole {
@@ -1573,6 +2115,34 @@ export interface MessageTemplateSave {
   sms_body?: (string) | null
   subject?: (string) | null
   whatsapp_body?: (string) | null
+  whatsapp_template_ref?: (string) | null
+  whatsapp_template_vars?: (Record<string, string>) | null
+}
+
+export interface MyJunior {
+  checked_in?: boolean
+  child_guest_id: string
+  child_name: string
+  guardians?: (MyJuniorGuardian)[]
+}
+
+export interface MyJuniorGuardian {
+  guardian_guest_id: string
+  name: string
+  relationship: string
+  status: 'admin' | 'confirmed' | 'pending'
+}
+
+export interface MyJuniorsOut {
+  designation_scope?: 'party' | 'any_guest'
+  juniors?: (MyJunior)[]
+  parent_checked_in?: boolean
+  party?: (MyPartyMember)[]
+}
+
+export interface MyPartyMember {
+  guest_id: string
+  name: string
 }
 
 export interface MyTaskOut {
@@ -1756,6 +2326,12 @@ export interface PeakBucket {
   ins?: number
   outs?: number
   t: string
+}
+
+export interface PendingGuardianConfirmation {
+  child_guest_id: string
+  child_name: string
+  relationship: string
 }
 
 export interface PlanUpsert {
@@ -2183,11 +2759,15 @@ export interface RegistryItemOut {
   description?: (string) | null
   event_id: string
   external_url?: (string) | null
+  giving_unavailable_reason?: (string) | null
+  giving_url?: (string) | null
   id: string
   image_url?: (string) | null
   is_active: boolean
   kind: string
   payment_instructions?: (string) | null
+  pledge_count?: number
+  pledged_minor?: number
   quantity_wanted: number
   raised_minor?: number
   remaining?: (number) | null
@@ -2263,6 +2843,12 @@ export interface ReminderTestSendRequest {
   channel: 'email' | 'sms' | 'whatsapp'
   subject?: (string) | null
   to: string
+  whatsapp_template_ref?: (string) | null
+  whatsapp_template_vars?: (Record<string, string>) | null
+}
+
+export interface RevokeRequest {
+  reason: string
 }
 
 export interface RSVPConfirm {
@@ -2281,9 +2867,11 @@ export interface RSVPInviteeSubmit {
   first_name?: string
   full_name?: string
   guest_type?: (string) | null
+  is_junior?: boolean
   last_name?: string
   notes?: (string) | null
   phone?: (string) | null
+  pickup_authorized_by_invitee_indices?: (number)[]
   relationship?: (string) | null
 }
 
@@ -2337,9 +2925,17 @@ export interface RSVPTokenSubmit {
   whatsapp_consent?: boolean
 }
 
+export interface ScanCheckoutRequest {
+  guardian_guest_id?: (string) | null
+  guardian_token?: (string) | null
+}
+
 export interface ScanResult {
   eligibilities?: (Record<string, string>)[]
   experience_next_steps?: (ExperienceNextStepOut)[]
+  guardian_candidates?: (Record<string, string>)[]
+  guardian_name?: (string) | null
+  guardian_verification_method?: (string) | null
   guest?: (GuestOut) | null
   guest_summary?: Record<string, (string) | null>
   message: string
@@ -2352,6 +2948,8 @@ export interface ScanResult {
 
 export interface ScanZoneRequest {
   direction?: ('in' | 'out') | null
+  guardian_guest_id?: (string) | null
+  guardian_token?: (string) | null
   zone_id: string
 }
 
@@ -2359,6 +2957,9 @@ export interface ScanZoneResult {
   denied?: boolean
   deny_reason?: (string) | null
   direction: string
+  guardian_candidates?: (Record<string, string>)[]
+  guardian_name?: (string) | null
+  guardian_verification_method?: (string) | null
   guest_name: string
   journey_count?: number
   occupancy?: number
@@ -2373,10 +2974,12 @@ export interface ScheduledCommunicationCreate {
   anchor?: ('event_start' | 'event_end' | 'rsvp_deadline' | 'experience_step') | null
   anchor_step_id?: (string) | null
   audience_mode?: 'dynamic' | 'frozen'
-  audience_type?: 'all' | 'not_invited' | 'not_responded' | 'confirmed' | 'declined' | 'waitlisted' | 'checked_in' | 'not_checked_in'
-  channels?: ('email' | 'sms' | 'whatsapp')[]
-  communication_type: 'invitation' | 'rsvp_reminder' | 'event_reminder' | 'session_reminder' | 'feedback_request' | 'follow_up' | 'announcement'
+  audience_type?: 'all' | 'not_invited' | 'not_responded' | 'confirmed' | 'declined' | 'waitlisted' | 'checked_in' | 'not_checked_in' | 'consent_incomplete'
+  channels?: ('email' | 'sms' | 'mms' | 'whatsapp')[]
+  communication_type: 'invitation' | 'rsvp_reminder' | 'event_reminder' | 'session_reminder' | 'feedback_request' | 'follow_up' | 'announcement' | 'consent_reminder'
   email_body?: (string) | null
+  mms_body?: (string) | null
+  mms_media_url?: (string) | null
   name: string
   offset_minutes?: (number) | null
   scheduled_at_local?: (string) | null
@@ -2385,6 +2988,8 @@ export interface ScheduledCommunicationCreate {
   subject?: (string) | null
   trigger_type?: 'absolute' | 'relative'
   whatsapp_body?: (string) | null
+  whatsapp_template_ref?: (string) | null
+  whatsapp_template_vars?: (Record<string, string>) | null
 }
 
 export interface ScheduledCommunicationOut {
@@ -2400,6 +3005,8 @@ export interface ScheduledCommunicationOut {
   event_id: string
   id: string
   last_error?: (string) | null
+  mms_body?: (string) | null
+  mms_media_url?: (string) | null
   name: string
   offset_minutes?: (number) | null
   recipients_estimated?: number
@@ -2416,16 +3023,20 @@ export interface ScheduledCommunicationOut {
   trigger_type: string
   updated_at: string
   whatsapp_body?: (string) | null
+  whatsapp_template_ref?: (string) | null
+  whatsapp_template_vars?: (Record<string, string>) | null
 }
 
 export interface ScheduledCommunicationUpdate {
   anchor?: ('event_start' | 'event_end' | 'rsvp_deadline' | 'experience_step') | null
   anchor_step_id?: (string) | null
   audience_mode?: ('dynamic' | 'frozen') | null
-  audience_type?: ('all' | 'not_invited' | 'not_responded' | 'confirmed' | 'declined' | 'waitlisted' | 'checked_in' | 'not_checked_in') | null
-  channels?: (('email' | 'sms' | 'whatsapp')[]) | null
-  communication_type?: ('invitation' | 'rsvp_reminder' | 'event_reminder' | 'session_reminder' | 'feedback_request' | 'follow_up' | 'announcement') | null
+  audience_type?: ('all' | 'not_invited' | 'not_responded' | 'confirmed' | 'declined' | 'waitlisted' | 'checked_in' | 'not_checked_in' | 'consent_incomplete') | null
+  channels?: (('email' | 'sms' | 'mms' | 'whatsapp')[]) | null
+  communication_type?: ('invitation' | 'rsvp_reminder' | 'event_reminder' | 'session_reminder' | 'feedback_request' | 'follow_up' | 'announcement' | 'consent_reminder') | null
   email_body?: (string) | null
+  mms_body?: (string) | null
+  mms_media_url?: (string) | null
   name?: (string) | null
   offset_minutes?: (number) | null
   scheduled_at_local?: (string) | null
@@ -2434,6 +3045,8 @@ export interface ScheduledCommunicationUpdate {
   subject?: (string) | null
   trigger_type?: ('absolute' | 'relative') | null
   whatsapp_body?: (string) | null
+  whatsapp_template_ref?: (string) | null
+  whatsapp_template_vars?: (Record<string, string>) | null
 }
 
 export interface SeatAssignRequest {
@@ -2488,6 +3101,10 @@ export interface SelfCheckinSearch {
 export interface SendConsentCopyOut {
   ok: boolean
   sent_to: string
+}
+
+export interface SessionEntryOverride {
+  reason: string
 }
 
 export interface ShipmentCreate {
@@ -2692,6 +3309,15 @@ export interface TemplatePreviewRequest {
   sms_body?: (string) | null
   subject?: (string) | null
   whatsapp_body?: (string) | null
+  whatsapp_template_ref?: (string) | null
+  whatsapp_template_vars?: (Record<string, string>) | null
+}
+
+export interface TemplateSave {
+  active?: boolean
+  design?: Record<string, unknown>
+  eligibility?: Record<string, unknown>
+  name: string
 }
 
 export interface TemplateTestSendRequest {
@@ -2702,6 +3328,8 @@ export interface TemplateTestSendRequest {
   subject?: (string) | null
   to: string
   whatsapp_body?: (string) | null
+  whatsapp_template_ref?: (string) | null
+  whatsapp_template_vars?: (Record<string, string>) | null
 }
 
 export interface TicketSalesReportDelivery {
@@ -2864,6 +3492,42 @@ export interface WebhookEndpointOut {
   id: string
   is_active: boolean
   url: string
+}
+
+export interface WhatsAppTemplateSubmissionCheckoutOut {
+  provider: string
+  url: string
+}
+
+export interface WhatsAppTemplateSubmissionCreate {
+  body: string
+  category?: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION'
+  name: string
+  sample_values?: Record<string, string>
+}
+
+export interface WhatsAppTemplateSubmissionOut {
+  bird_project_id?: (string) | null
+  body: string
+  category: string
+  created_at: string
+  id: string
+  is_shared: boolean
+  max_retries: number
+  name: string
+  platform_name: string
+  reject_reason?: (string) | null
+  retry_count: number
+  sample_values: Record<string, string>
+  status: string
+  updated_at: string
+  variables: (string)[]
+}
+
+export interface WhatsAppTemplateSubmissionRetry {
+  body: string
+  category: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION'
+  sample_values?: Record<string, string>
 }
 
 export interface ZoneCreate {

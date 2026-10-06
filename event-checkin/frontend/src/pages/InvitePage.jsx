@@ -9,6 +9,7 @@ import { normalizePhone, phoneInputSettings } from '../lib/rsvpPhone.mjs'
 import { eventBrandingKey, eventBrandingStyle } from '../lib/eventBranding.mjs'
 import './GuestHubThemes.css'
 import PublicTicketCheckout from '../components/PublicTicketCheckout'
+import EventApp from '../components/guesthub/EventApp'
 
 // ── Invite page helpers ───────────────────────────────────────────────────────
 
@@ -1644,6 +1645,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   const [sendingChat, setSendingChat] = useState(false)
   // Experience journey (only populated when the event has Experience enabled).
   const [journey, setJourney] = useState(null)
+  const [journeyError, setJourneyError] = useState('')
   const [liveParticipation, setLiveParticipation] = useState({})
   const [guestContent, setGuestContent] = useState({ materials: [], certificates: [] })
   const [hubMenuDay, setHubMenuDay] = useState('')
@@ -1716,7 +1718,8 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   const companionLayout = event?.guest_hub_layout === 'companion'
   const journeyLayout = event?.guest_hub_layout === 'journey'
   const completeLayout = event?.guest_hub_layout === 'complete'
-  const guidedLayout = companionLayout || journeyLayout || completeLayout
+  const appLayout = event?.guest_hub_layout === 'app'
+  const guidedLayout = companionLayout || journeyLayout || completeLayout || appLayout
 
   // Design Studio's preview iframe loads with #guest-hub in the URL, but this
   // section doesn't exist in the DOM until the async event/theme fetch above
@@ -1784,7 +1787,8 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
     try {
       const data = await api.guestExperience(event.id, accessToken)
       setJourney(data)
-    } catch { /* journey is best-effort; keep the rest of the Hub working */ }
+      setJourneyError('')
+    } catch { setJourneyError('Programme, meals and next steps could not refresh. Displayed information may be out of date.') }
   }, [event?.id, accessToken, previewMock])
 
   useEffect(() => { loadJourney() }, [loadJourney])
@@ -1899,7 +1903,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
       } catch (err) {
         if (cancelled) return
         const msg = err.message || ''
-        if (msg.includes('disabled') || (msg.includes('accepted') && !journeyLayout && !completeLayout)) {
+        if (!appLayout && (msg.includes('disabled') || (msg.includes('accepted') && !journeyLayout && !completeLayout))) {
           setHidden(true)
           return
         }
@@ -1913,7 +1917,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
     load()
     const id = setInterval(load, 25000)
     return () => { cancelled = true; clearInterval(id) }
-  }, [event?.id, accessToken, previewMock, hubRetry, journeyLayout, completeLayout])
+  }, [event?.id, accessToken, previewMock, hubRetry, journeyLayout, completeLayout, appLayout])
 
   // Speaker Showcase cross-link — same public token endpoint the ticketing
   // carousel and standalone page use, not a separate implementation. Default
@@ -1966,6 +1970,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   }
 
   if ((!accessToken && !speakersVisible) || hidden) return null
+  if (appLayout && !hub) return <EventApp event={event} hub={null} failure={hubFailure} onRetry={() => setHubRetry(n => n + 1)} onViewEvent={onViewEvent} designTheme={designTheme} />
   // A failed or slow pass lookup must never masquerade as a pending guest in
   // the legacy companion layout. Keep the selected layout while recovering.
   if (accessToken && !hub && (journeyLayout || completeLayout)) {
@@ -1981,7 +1986,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
     text: '#102f34', muted: '#476167', label: '#526c71', panel: '#ffffff',
     panelStrong: '#ffffff', chip: '#f3f8f5', border: '#c9d9d3', shadow: 'rgba(15,47,44,.14)',
   }
-  const tone = flowServicesOpen && (journeyLayout || completeLayout)
+  const tone = appLayout || (flowServicesOpen && (journeyLayout || completeLayout))
     ? serviceWorkspaceTone
     : readableTone(colors)
   const hasRsvp = event?.rsvp_enabled !== false
@@ -2117,7 +2122,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
           : 'Registration in progress'
     const hasExperienceModules = !!(passCells.some((c) => c.l === seatingTerm(event) || c.l === seatTerm(event)) || consent?.required || journey?.menu_enabled)
 
-    return (
+    const guidedView = (
       <section className="py-2">
         {(journeyLayout || completeLayout) && flowServicesOpen && (
           <div className="mx-auto mb-3 w-full max-w-[560px]">
@@ -2304,7 +2309,16 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
                   </div>
                 )}
               </div>
-              {consent?.form && !consent.signed && (
+              {appLayout && consent?.form && (
+                <section className="mt-3 rounded-xl border p-3" style={{ borderColor: tone.border }}>
+                  <h3 className="font-bold">{consent.form.title}</h3>
+                  <p className="text-sm">Form version {consent.form.version}</p>
+                  <div className="mt-2 whitespace-pre-wrap text-sm">{consent.form.body}</div>
+                  {!hub?.guest?.admitted && <p className="mt-2 text-sm">Check in with event staff before signing.</p>}
+                  {consent.signed && <a className="mt-2 inline-flex items-center font-bold underline" href={api.consentPdfDownloadUrl(accessToken)} target="_blank" rel="noreferrer">Download signed consent PDF</a>}
+                </section>
+              )}
+              {consent?.form && !consent.signed && (!appLayout || hub?.guest?.admitted) && (
                 <form onSubmit={submitConsent} className="mt-3 flex flex-col gap-2 sm:flex-row">
                   <input value={signName} onChange={(e) => setSignName(e.target.value)} maxLength={255} placeholder={`Type your full name to sign ${consent.form.title}`}
                     className="min-h-11 flex-1 rounded-xl border px-4 py-2 text-sm placeholder-slate-400" style={{ background: tone.panel, borderColor: tone.border, color: tone.text }} />
@@ -2421,7 +2435,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
           )}
 
           {/* Need Help — Message Host + Guest Chat folded under one card */}
-          <div id={(journeyLayout || completeLayout) ? 'journey-help' : undefined} className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+          <div id={(journeyLayout || completeLayout || appLayout) ? 'journey-help' : undefined} className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
             <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>{flowServicesOpen === 'communications' ? 'Communications' : 'Need Help?'}</div>
             {hub?.capabilities?.direct_host_messages ? (
               <>
@@ -2471,7 +2485,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
           </div>
 
           {feedbackForms.map((form, formIndex) => (
-            <div id={formIndex === 0 ? 'feedback' : undefined} key={form.step_id} className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+            <div data-app-panel="feedback" id={formIndex === 0 ? 'feedback' : undefined} key={form.step_id} className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-extrabold">{form.title}</h3>
@@ -2540,6 +2554,8 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
         </div>
       </section>
     )
+    if (appLayout) return <EventApp event={event} hub={hub} journey={journey} designTheme={designTheme} guestContent={guestContent} feedbackForms={feedbackForms} moduleVisible={hubModuleVisible} serviceTree={guidedView} previewMock={previewMock} previewQr={PREVIEW_QR_DATA_URI} journeyError={journeyError} onRetryJourney={loadJourney} error={error} onRetry={() => setHubRetry(n => n + 1)} markStepDone={markStepDone} markingStepId={markingStepId} guardianControls={{ pending: <GuardianConfirmPanel pending={pendingGuardianConfirmations} onConfirm={confirmGuardianPickup} />, manage: showGuardianPanels ? <ManageGuardiansPanel token={accessToken} /> : null }} />
+    return guidedView
   }
 
   return (
@@ -3526,12 +3542,15 @@ export default function InvitePage() {
             This event is at capacity — RSVPs below join the waitlist and we'll notify you if a spot opens up.
           </div>
         )}
-        <RSVPForm event={event} theme={theme} onConfirmed={handleConfirmed} tone={tone} dWording={dWording} guidedFlow={event.guest_hub_layout === 'complete'} />
+        <RSVPForm event={event} theme={theme} onConfirmed={handleConfirmed} tone={tone} dWording={dWording} guidedFlow={['complete', 'app'].includes(event.guest_hub_layout)} />
       </div>
     )
   }
 
-  if (['journey', 'complete'].includes(event.guest_hub_layout)) {
+  if (event.guest_hub_layout === 'app' && hasGuestHub) {
+    return <GuestHub event={event} accessToken={guestHubToken} designTheme={designTheme} previewMock={isStudioPreview} confirmed={!!confirmed || tokenMeta.already_responded} onViewEvent={() => { window.location.assign(publicInviteUrl(event)) }} />
+  }
+  if (['journey', 'complete', 'app'].includes(event.guest_hub_layout)) {
     return (
       <JourneyInviteShell
         event={event}
@@ -3550,7 +3569,7 @@ export default function InvitePage() {
         guestHubToken={guestHubToken}
         confirmed={!!confirmed || tokenMeta.already_responded}
         freshConfirmation={confirmed}
-        completeFlow={event.guest_hub_layout === 'complete'}
+        completeFlow={['complete', 'app'].includes(event.guest_hub_layout)}
       />
     )
   }

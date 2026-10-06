@@ -1,0 +1,1660 @@
+.fh-event-app {
+  --green: #124b3c;
+  --deep: #10372e;
+  --mint: #e5f3ec;
+  --gold: #d6b45e;
+  --ink: #18372f;
+  --muted: #60736b;
+  --line: #dce6df;
+  --bg: #f4f6f2;
+  --white: #fff;
+  --shadow: 0 15px 45px #193c3010
+}
+.fh-event-app * {
+  box-sizing: border-box
+}
+.fh-event-app {
+  margin: 0;
+  color: var(--ink);
+  background: #e9eeea;
+  font-family: ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-size: 15px;
+  line-height: 1.5
+}
+.fh-event-app button,.fh-event-app input,.fh-event-app select,.fh-event-app textarea {
+  font: inherit
+}
+.fh-event-app button,.fh-event-app a,.fh-event-app input,.fh-event-app select,.fh-event-app textarea {
+  -webkit-tap-highlight-color: transparent
+}
+.fh-event-app button {
+  cursor: pointer;
+  color: inherit
+}
+.fh-event-app button:focus-visible,.fh-event-app a:focus-visible,.fh-event-app input:focus-visible,.fh-event-app select:focus-visible,.fh-event-app textarea:focus-visible {
+  outline: 3px solid #a97d26;
+  outline-offset: 3px
+}
+.fh-event-app button {
+  border: 0
+}
+.fh-event-app a {
+  color: var(--green)
+}
+.fh-event-app svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0
+}
+.fh-event-app h1,.fh-event-app h2,.fh-event-app h3,.fh-event-app p {
+  margin: 0
+}
+.fh-event-app h1 {
+  font-size: 30px;
+  letter-spacing: -1px;
+  line-height: 1.2
+}
+.fh-event-app h2 {
+  font-size: 21px;
+  letter-spacing: -.5px;
+  line-height: 1.3
+}
+.fh-event-app h3 {
+  font-size: 16px
+}
+.fh-event-app small,.fh-event-app .small {
+  font-size: 12px
+}
+.fh-event-app button:disabled {
+  cursor: default;
+  opacity: .55
+}
+.fh-event-app .app {
+  max-width: 1264px;
+  margin: 0 auto 32px;
+  display: grid;
+  grid-template-columns: 208px minmax(0,1fr);
+  min-height: 820px;
+  background: var(--bg);
+  border: 1px solid #cad8ce;
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 22px 70px #18362b15
+}
+.fh-event-app .sidebar {
+  background: var(--deep);
+  color: #f4faf5;
+  padding: 28px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 26px
+}
+.fh-event-app .wordmark {
+  font-size: 26px;
+  font-weight: 850;
+  letter-spacing: -1px;
+  padding: 0 12px
+}
+.fh-event-app .wordmark span {
+  color: #a3d6ba
+}
+.fh-event-app .wordmark small {
+  display: block;
+  color: #c0d7cb;
+  font-weight: 400;
+  font-size: 12px;
+  letter-spacing: .12em;
+  margin-top: 3px
+}
+.fh-event-app .side-nav {
+  display: grid;
+  gap: 7px
+}
+.fh-event-app .side-nav button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: transparent;
+  color: #d4e4db;
+  border-radius: 12px;
+  min-height: 48px;
+  padding: 12px 14px;
+  text-align: left;
+  font-weight: 550
+}
+.fh-event-app .side-nav button.active {
+  background: #ffffff16;
+  color: white;
+  box-shadow: inset 3px 0 var(--gold)
+}
+.fh-event-app .count {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  width: 21px;
+  height: 21px;
+  background: var(--gold);
+  color: #21392d;
+  font-size: 12px;
+  font-weight: 750
+}
+.fh-event-app .side-bottom {
+  margin-top: auto;
+  padding: 16px 12px;
+  border-top: 1px solid #ffffff20
+}
+.fh-event-app .side-bottom p {
+  color: #afccbc;
+  font-size: 12px;
+  margin: 6px 0 16px
+}
+.fh-event-app .side-bottom button {
+  background: #ffffff13;
+  color: white;
+  padding: 11px;
+  border: 1px solid #ffffff25;
+  border-radius: 9px;
+  width: 100%;
+  text-align: left;
+  font-size: 13px
+}
+.fh-event-app .main-shell {
+  min-width: 0
+}
+.fh-event-app .topbar {
+  height: 86px;
+  padding: 18px 30px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  background: white;
+  border-bottom: 1px solid var(--line)
+}
+.fh-event-app .event-mark {
+  width: 43px;
+  height: 43px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #d7cba5;
+  background: #f9f4e5;
+  color: var(--green);
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 800
+}
+.fh-event-app .event-name {
+  font-size: 15px;
+  font-weight: 750
+}
+.fh-event-app .event-sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 3px
+}
+.fh-event-app .top-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-left: auto
+}
+.fh-event-app .icon-button {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: white;
+  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  position: relative
+}
+.fh-event-app .dot {
+  position: absolute;
+  right: 9px;
+  top: 7px;
+  width: 7px;
+  height: 7px;
+  border: 2px solid white;
+  box-sizing: content-box;
+  background: #c67b37;
+  border-radius: 50%
+}
+.fh-event-app .avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #ede6d3;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 750
+}
+.fh-event-app .workspace {
+  padding: 28px 30px 30px;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) 256px;
+  gap: 25px
+}
+.fh-event-app .content {
+  min-width: 0
+}
+.fh-event-app .eyebrow {
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  font-size: 12px;
+  font-weight: 800;
+  color: #7c632f
+}
+.fh-event-app .greeting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 23px
+}
+.fh-event-app .greeting p {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 7px
+}
+.fh-event-app .status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 30px;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--mint);
+  color: #28664e;
+  padding: 6px 10px;
+  white-space: nowrap
+}
+.fh-event-app .hero {
+  background: var(--green);
+  border-radius: 19px;
+  color: white;
+  padding: 23px;
+  position: relative;
+  overflow: hidden
+}
+.fh-event-app .hero:after {
+  content: "";
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  border: 35px solid #ffffff06;
+  transform: rotate(40deg);
+  border-radius: 48px;
+  right: -100px;
+  top: -100px;
+  pointer-events: none
+}
+.fh-event-app .hero .eyebrow {
+  color: #e9d49b
+}
+.fh-event-app .hero h2 {
+  font-size: 25px;
+  max-width: 330px;
+  margin: 9px 0
+}
+.fh-event-app .hero p {
+  color: #d3e4d9;
+  font-size: 13px;
+  max-width: 360px;
+  line-height: 1.6
+}
+.fh-event-app .hero-foot {
+  margin-top: 22px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between
+}
+.fh-event-app .hero-foot small {
+  color: #c6dacd
+}
+.fh-event-app .primary {
+  border-radius: 10px;
+  background: var(--green);
+  color: white;
+  padding: 12px 17px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 44px;
+  font-size: 13px;
+  font-weight: 750
+}
+.fh-event-app .hero .primary {
+  background: #f4df9e;
+  color: #203c2d
+}
+.fh-event-app .secondary {
+  border: 1px solid var(--line);
+  background: white;
+  border-radius: 10px;
+  padding: 11px 15px;
+  min-height: 44px;
+  font-weight: 650;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px
+}
+.fh-event-app .text-button {
+  background: transparent;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 44px;
+  padding: 7px 0
+}
+.fh-event-app .section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 23px 0 10px;
+  gap: 8px
+}
+.fh-event-app .section-heading h2 {
+  font-size: 16px
+}
+.fh-event-app .quick-grid {
+  display: grid;
+  grid-template-columns: repeat(4,1fr);
+  gap: 9px
+}
+.fh-event-app .quick {
+  background: white;
+  border: 1px solid var(--line);
+  padding: 15px 6px 12px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 650;
+  min-height: 99px
+}
+.fh-event-app .icon-tile {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: var(--mint);
+  display: grid;
+  place-items: center;
+  color: var(--green)
+}
+.fh-event-app .gold {
+  background: #faf0d6;
+  color: #8c6c23
+}
+.fh-event-app .lilac {
+  background: #eeeafa;
+  color: #65538b
+}
+.fh-event-app .blue {
+  background: #e8eff9;
+  color: #466797
+}
+.fh-event-app .card {
+  border: 1px solid var(--line);
+  background: white;
+  border-radius: 15px;
+  padding: 18px
+}
+.fh-event-app .session-card {
+  width: 100%;
+  text-align: left;
+  display: grid;
+  grid-template-columns: 50px 1fr 20px;
+  gap: 13px;
+  align-items: start
+}
+.fh-event-app .session-card .time {
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.4;
+  color: var(--green);
+  padding-top: 2px
+}
+.fh-event-app .session-card .time small {
+  display: block;
+  color: var(--muted);
+  font-weight: 450;
+  font-size: 12px
+}
+.fh-event-app .session-card p {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 5px
+}
+.fh-event-app .session-card .status {
+  margin-top: 10px;
+  font-size: 12px;
+  padding: 3px 8px
+}
+.fh-event-app .muted {
+  color: var(--muted)
+}
+.fh-event-app .announcement {
+  display: flex;
+  gap: 13px;
+  align-items: flex-start;
+  width: 100%;
+  text-align: left
+}
+.fh-event-app .announcement p {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px
+}
+.fh-event-app .announcement .icon-tile {
+  flex-shrink: 0
+}
+.fh-event-app .context {
+  padding-top: 4px
+}
+.fh-event-app .context .card {
+  margin-bottom: 17px
+}
+.fh-event-app .context h3 {
+  font-size: 14px;
+  margin-bottom: 12px
+}
+.fh-event-app .date-art {
+  background: #f4edda;
+  border: 1px solid #e8dfc6;
+  border-radius: 13px;
+  padding: 18px;
+  text-align: center;
+  margin-bottom: 14px
+}
+.fh-event-app .date-art .eyebrow {
+  font-size: 12px
+}
+.fh-event-app .date-art strong {
+  display: block;
+  font-size: 29px;
+  font-family: Georgia,serif;
+  margin: 5px 0;
+  color: var(--green)
+}
+.fh-event-app .fact {
+  display: flex;
+  gap: 9px;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 12px
+}
+.fh-event-app .fact svg {
+  width: 17px;
+  height: 17px
+}
+.fh-event-app .person {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #edf0e9;
+  font-size: 12px
+}
+.fh-event-app .person:last-of-type {
+  border-bottom: 0
+}
+.fh-event-app .person small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px
+}
+.fh-event-app .context .text-button {
+  width: 100%;
+  text-align: left
+}
+.fh-event-app .help-card {
+  background: #e9f1e9!important
+}
+.fh-event-app .help-card p {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 9px
+}
+.fh-event-app .footer-note {
+  font-size: 12px;
+  color: #76877b;
+  margin-top: 18px
+}
+.fh-event-app .bottom-nav {
+  display: none
+}
+.fh-event-app .page-head {
+  margin-bottom: 21px
+}
+.fh-event-app .page-head p {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 7px
+}
+.fh-event-app .days {
+  display: flex;
+  gap: 7px;
+  margin: 16px 0;
+  overflow-x: auto;
+  padding: 3px 0 7px
+}
+.fh-event-app .day {
+  flex: 1;
+  min-width: 56px;
+  border: 1px solid var(--line);
+  background: white;
+  border-radius: 11px;
+  padding: 9px 8px;
+  font-size: 12px
+}
+.fh-event-app .day strong {
+  display: block;
+  font-size: 18px;
+  margin-top: 2px
+}
+.fh-event-app .day.active {
+  background: var(--green);
+  color: white;
+  border-color: var(--green)
+}
+.fh-event-app .search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: white;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px
+}
+.fh-event-app .search svg {
+  width: 18px
+}
+.fh-event-app .search input {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 13px 0;
+  outline: 0;
+  min-width: 0;
+  color: var(--ink)
+}
+.fh-event-app .schedule-list {
+  display: grid;
+  gap: 12px
+}
+.fh-event-app .schedule-label {
+  font-size: 12px;
+  font-weight: 650;
+  margin: 13px 0
+}
+.fh-event-app .notice {
+  padding: 13px 15px;
+  background: #f8f1de;
+  border: 1px solid #ecdfba;
+  border-radius: 11px;
+  font-size: 12px;
+  color: #685527;
+  margin-top: 16px
+}
+.fh-event-app .pass-card {
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: white;
+  text-align: center;
+  max-width: 440px;
+  margin: auto
+}
+.fh-event-app .pass-top {
+  background: var(--green);
+  color: white;
+  padding: 24px
+}
+.fh-event-app .pass-top h2 {
+  font-family: Georgia,serif;
+  font-size: 25px;
+  margin: 10px 0
+}
+.fh-event-app .pass-top .eyebrow {
+  color: #ecd79a
+}
+.fh-event-app .pass-body {
+  padding: 22px
+}
+.fh-event-app .pass-body h2 {
+  font-size: 22px
+}
+.fh-event-app .pass-body p {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 5px
+}
+.fh-event-app .qr-art {
+  width: 192px;
+  height: 192px;
+  background: repeating-conic-gradient(#173d30 0 25%,#fff 0 50%) 0/22px 22px;
+  margin: 20px auto;
+  position: relative;
+  border: 12px solid white;
+  outline: 1px solid var(--line);
+  display: grid;
+  place-items: center
+}
+.fh-event-app .qr-art strong {
+  background: white;
+  border: 2px solid #173d30;
+  transform: rotate(-12deg);
+  padding: 10px;
+  font-size: 14px;
+  box-shadow: 0 0 0 10px white
+}
+.fh-event-app .pass-details {
+  display: flex;
+  justify-content: space-between;
+  text-align: left;
+  border-top: 1px dashed #cddbcf;
+  padding: 16px 0;
+  margin-top: 18px;
+  font-size: 12px
+}
+.fh-event-app .pass-details small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px
+}
+.fh-event-app .full {
+  width: 100%
+}
+.fh-event-app .member-select {
+  width: 100%;
+  padding: 12px;
+  margin: 0 0 18px;
+  border: 1px solid var(--line);
+  background: white;
+  border-radius: 10px;
+  color: var(--ink)
+}
+.fh-event-app .inbox-list {
+  display: grid;
+  gap: 10px
+}
+.fh-event-app .message-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  text-align: left
+}
+.fh-event-app .message-row p {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 5px
+}
+.fh-event-app .message-row time {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  margin-left: auto
+}
+.fh-event-app .message-row .icon-tile {
+  flex-shrink: 0
+}
+.fh-event-app .more-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px
+}
+.fh-event-app .service {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  min-height: 82px;
+  padding: 14px
+}
+.fh-event-app .service .icon-tile {
+  flex-shrink: 0
+}
+.fh-event-app .service strong {
+  font-size: 12px;
+  display: block
+}
+.fh-event-app .service small {
+  font-size: 12px;
+  display: block;
+  color: var(--muted);
+  margin-top: 3px
+}
+.fh-event-app .service>svg {
+  width: 14px;
+  margin-left: auto
+}
+.fh-event-app .profile-card {
+  display: flex;
+  gap: 13px;
+  align-items: center;
+  margin-bottom: 21px
+}
+.fh-event-app .profile-card h3 {
+  font-size: 16px
+}
+.fh-event-app .profile-card p {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px
+}
+.fh-event-app .profile-card .avatar {
+  width: 48px;
+  height: 48px
+}
+.fh-event-app .empty {
+  padding: 28px;
+  text-align: center;
+  color: var(--muted);
+  background: white;
+  border: 1px dashed var(--line);
+  border-radius: 12px
+}
+.fh-event-app .content:focus {
+  outline: none
+}
+.fh-event-app dialog {
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 0;
+  width: calc(100% - 32px);
+  max-width: 470px;
+  color: var(--ink);
+  box-shadow: 0 30px 100px #102d2c55;
+  max-height: 85dvh
+}
+.fh-event-app dialog::backdrop {
+  background: #0d2c2460;
+  backdrop-filter: blur(3px)
+}
+.fh-event-app .dialog-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--line)
+}
+.fh-event-app .dialog-head h2 {
+  font-size: 20px
+}
+.fh-event-app .dialog-body {
+  padding: 22px
+}
+.fh-event-app .dialog-body p {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0 0 16px
+}
+.fh-event-app .dialog-body h3 {
+  margin: 15px 0 8px
+}
+.fh-event-app .dialog-body textarea {
+  width: 100%;
+  min-height: 110px;
+  border: 1px solid #cbdacf;
+  border-radius: 10px;
+  padding: 12px;
+  color: var(--ink);
+  resize: vertical
+}
+.fh-event-app .dialog-body label {
+  display: block;
+  font-size: 12px;
+  font-weight: 650;
+  margin-bottom: 7px
+}
+.fh-event-app .dialog-body .primary {
+  margin-top: 12px
+}
+.fh-event-app .dialog-body .notice {
+  margin-bottom: 15px
+}
+.fh-event-app .toast {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--deep);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 12px;
+  z-index: 10;
+  font-size: 13px;
+  max-width: calc(100% - 30px);
+  box-shadow: var(--shadow)
+}
+.fh-event-app [hidden] {
+  display: none!important
+}
+.fh-event-app .mobile-brand {
+  display: none
+}
+@media(max-width:1150px) {
+  .fh-event-app .app {
+    margin-left: 16px;
+    margin-right: 16px;
+    grid-template-columns: 190px minmax(0,1fr)
+  }
+  .fh-event-app .workspace {
+    grid-template-columns: 1fr;
+    max-width: 730px;
+    margin: auto
+  }
+  .fh-event-app .context {
+    display: none
+  }
+  .fh-event-app .topbar {
+    padding-left: 26px;
+    padding-right: 26px
+  }
+}
+/* Responsive phone layout; the desktop device preview has corresponding frame overrides below. */
+@media(max-width:700px) {
+  .fh-event-app {
+    background: var(--bg)
+  }
+  .fh-event-app .device-control {
+    display: none
+  }
+  .fh-event-app .app {
+    display: block;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    min-height: 100dvh;
+    box-shadow: none
+  }
+  .fh-event-app .sidebar {
+    display: none
+  }
+  .fh-event-app .topbar {
+    height: 76px;
+    padding: 13px 18px;
+    position: sticky;
+    top: 0;
+    z-index: 3
+  }
+  .fh-event-app .event-mark {
+    width: 36px;
+    height: 36px;
+    font-size: 12px;
+    border-radius: 10px
+  }
+  .fh-event-app .event-name {
+    font-size: 12px
+  }
+  .fh-event-app .event-sub {
+    font-size: 12px
+  }
+  .fh-event-app .top-actions {
+    gap: 7px
+  }
+  .fh-event-app .top-actions .avatar {
+    display: none
+  }
+  .fh-event-app .icon-button {
+    width: 38px;
+    height: 38px
+  }
+  .fh-event-app .workspace {
+    display: block;
+    padding: 24px 18px 102px
+  }
+  .fh-event-app .context {
+    display: none
+  }
+  .fh-event-app .greeting h1 {
+    font-size: 27px
+  }
+  .fh-event-app .greeting {
+    align-items: flex-start;
+    margin-bottom: 20px
+  }
+  .fh-event-app .greeting>.status {
+    font-size: 12px;
+    padding: 5px 7px;
+    margin-top: 5px
+  }
+  .fh-event-app .hero {
+    padding: 21px
+  }
+  .fh-event-app .hero h2 {
+    font-size: 24px
+  }
+  .fh-event-app .hero-foot {
+    gap: 8px
+  }
+  .fh-event-app .hero-foot small {
+    font-size: 12px
+  }
+  .fh-event-app .hero-foot .primary {
+    font-size: 12px;
+    padding: 11px 13px
+  }
+  .fh-event-app .quick-grid {
+    gap: 7px
+  }
+  .fh-event-app .quick {
+    font-size: 12px;
+    padding: 12px 4px;
+    min-height: 93px
+  }
+  .fh-event-app .section-heading {
+    margin-top: 22px
+  }
+  .fh-event-app .bottom-nav {
+    display: grid;
+    grid-template-columns: repeat(5,1fr);
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #fffffff5;
+    backdrop-filter: blur(14px);
+    border-top: 1px solid var(--line);
+    padding: 8px 8px calc(9px + env(safe-area-inset-bottom));
+    z-index: 4
+  }
+  .fh-event-app .bottom-nav button {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: #738477;
+    font-size: 12px;
+    min-height: 48px;
+    border-radius: 10px
+  }
+  .fh-event-app .bottom-nav button.active {
+    color: var(--green);
+    background: var(--mint);
+    font-weight: 750
+  }
+  .fh-event-app .bottom-nav button[data-go=pass] svg {
+    background: var(--green);
+    color: white;
+    padding: 7px;
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+    margin-top: -12px
+  }
+  .fh-event-app .bottom-nav button[data-go=pass] {
+    gap: 1px
+  }
+  .fh-event-app .bottom-nav .count {
+    position: absolute;
+    top: 0;
+    margin-left: 30px;
+    width: 16px;
+    height: 16px;
+    font-size: 12px
+  }
+  .fh-event-app .bottom-nav button {
+    position: relative
+  }
+  .fh-event-app .more-grid {
+    gap: 8px
+  }
+  .fh-event-app .service {
+    padding: 12px 9px;
+    gap: 8px
+  }
+  .fh-event-app .service>svg {
+    display: none
+  }
+  .fh-event-app .service strong {
+    font-size: 12px
+  }
+  .fh-event-app .toast {
+    bottom: 92px
+  }
+  .fh-event-app .page-head h1 {
+    font-size: 28px
+  }
+  .fh-event-app dialog {
+    max-height: 82dvh
+  }
+  .fh-event-app .card {
+    padding: 16px
+  }
+  .fh-event-app .pass-body {
+    padding: 20px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  .fh-event-app * {
+    scroll-behavior: auto!important
+  }
+}
+/* Iteration 2: actionable status, next session and capability-aware navigation. */
+.fh-event-app .greeting {
+  align-items: center
+}
+.fh-event-app .greeting h1 {
+  font-size: 28px;
+  margin-top: 6px
+}
+.fh-event-app .greeting>.status {
+  flex-shrink: 0
+}
+.fh-event-app .hero {
+  padding: 21px 23px
+}
+.fh-event-app .hero h2 {
+  max-width: 440px;
+  font-size: 25px
+}
+.fh-event-app .hero-foot {
+  margin-top: 17px
+}
+.fh-event-app .hero.attention {
+  background: #fff3d8;
+  border: 1px solid #e2c273;
+  color: #4d3b18
+}
+.fh-event-app .hero.attention .eyebrow {
+  color: #80601d
+}
+.fh-event-app .hero.attention p,.fh-event-app .hero.attention small {
+  color: #705626
+}
+.fh-event-app .hero.attention .primary {
+  background: #71521b;
+  color: white
+}
+.fh-event-app .up-next {
+  background: white;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--gold);
+  border-radius: 15px;
+  padding: 17px 19px;
+  margin-top: 16px
+}
+.fh-event-app .up-next-heading {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 9px
+}
+.fh-event-app .starts {
+  font-size: 12px;
+  color: var(--green);
+  background: var(--mint);
+  padding: 4px 9px;
+  border-radius: 20px;
+  font-weight: 650
+}
+.fh-event-app .up-next h2 {
+  font-size: 19px
+}
+.fh-event-app .up-next-facts {
+  display: flex;
+  gap: 13px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 11px
+}
+.fh-event-app .up-next-facts span {
+  display: flex;
+  align-items: center;
+  gap: 5px
+}
+.fh-event-app .up-next-facts svg {
+  width: 16px;
+  height: 16px
+}
+.fh-event-app .up-next-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-top: 3px
+}
+.fh-event-app .preview-clock {
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+  color: var(--muted);
+  font-size: 12px
+}
+.fh-event-app .inbox-filters {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 17px
+}
+.fh-event-app .inbox-filters button {
+  background: white;
+  border: 1px solid var(--line);
+  padding: 10px 14px;
+  min-height: 44px;
+  border-radius: 22px;
+  font-size: 12px
+}
+.fh-event-app .inbox-filters button.active {
+  background: var(--green);
+  color: white;
+  border-color: var(--green)
+}
+.fh-event-app .message-type {
+  display: block;
+  font-size: 12px;
+  font-weight: 750;
+  color: #57716a;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: 6px
+}
+.fh-event-app .message-type.actions {
+  color: #866019
+}
+.fh-event-app .toast {
+  z-index: 20
+}
+.fh-event-app dialog .dialog-feedback {
+  padding: 12px;
+  background: var(--mint);
+  border-radius: 10px;
+  font-size: 12px;
+  margin-top: 10px
+}
+.fh-event-app .quick {
+  min-width: 0
+}
+.fh-event-app .hero-foot .primary {
+  flex-shrink: 0
+}
+.fh-event-app .search:focus-within {
+  outline: 3px solid #a97d26;
+  outline-offset: 3px
+}
+@media(max-width:700px) {
+  .fh-event-app .greeting {
+    align-items: flex-start;
+    gap: 8px
+  }
+  .fh-event-app .greeting h1 {
+    font-size: 24px
+  }
+  .fh-event-app .greeting>.status {
+    margin-top: 27px
+  }
+  .fh-event-app .hero h2 {
+    font-size: 23px
+  }
+  .fh-event-app .hero-foot small {
+    font-size: 12px
+  }
+  .fh-event-app .up-next {
+    padding: 16px
+  }
+  .fh-event-app .up-next-facts {
+    gap: 8px
+  }
+  .fh-event-app .inbox-filters button {
+    padding: 10px 12px
+  }
+  .fh-event-app .event-name {
+    font-size: 12px
+  }
+  .fh-event-app .quick {
+    font-size: 12px
+  }
+  .fh-event-app .hero-foot {
+    flex-wrap: wrap
+  }
+}
+/* Enabled guest services are persistent destinations, never hidden in More. */
+.fh-event-app .service-nav {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0,1fr);
+  gap: 10px;
+  padding: 12px 30px;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 3
+}
+.fh-event-app .service-nav button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 52px;
+  padding: 9px 13px;
+  background: #f8faf7;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 750
+}
+.fh-event-app .service-nav button>.icon-tile {
+  flex-shrink: 0
+}
+.fh-event-app .service-nav button>svg {
+  width: 15px;
+  margin-left: auto
+}
+.fh-event-app .service-nav button:hover {
+  border-color: #98b4a1;
+  background: var(--mint)
+}
+@media(max-width:700px) {
+  .fh-event-app .service-nav {
+    top: 76px;
+    padding: 10px 18px;
+    gap: 7px
+  }
+  .fh-event-app .service-nav button {
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    padding: 9px 4px;
+    font-size: 12px
+  }
+  .fh-event-app .service-nav button>svg {
+    display: none
+  }
+  .fh-event-app .service-nav .icon-tile {
+    width: 29px;
+    height: 29px;
+    border-radius: 9px
+  }
+}
+/* Review 4: readable labels, less persistent phone chrome, explicit pickup guidance. */
+.fh-event-app .app {
+  min-height: 820px
+}
+.fh-event-app .wordmark {
+  font-size: 24px;
+  letter-spacing: -.5px
+}
+.fh-event-app .avatar:is(button) {
+  min-width: 44px;
+  min-height: 44px
+}
+.fh-event-app .topbar {
+  min-height: 76px;
+  height: auto
+}
+.fh-event-app .event-mark {
+  flex-shrink: 0
+}
+.fh-event-app .event-name {
+  font-size: 14px
+}
+.fh-event-app .event-sub {
+  font-size: 12px
+}
+.fh-event-app .greeting {
+  flex-wrap: wrap
+}
+.fh-event-app .status {
+  white-space: normal
+}
+.fh-event-app .greeting>.status {
+  margin-top: 0!important
+}
+.fh-event-app .quick-grid {
+  grid-template-columns: repeat(auto-fit,minmax(105px,1fr))
+}
+.fh-event-app .quick {
+  font-size: 13px
+}
+.fh-event-app .quick .icon-tile {
+  flex-shrink: 0
+}
+.fh-event-app .member-status {
+  display: block;
+  color: var(--green);
+  font-weight: 650;
+  font-size: 13px;
+  margin: 5px 0 2px
+}
+.fh-event-app .status-freshness {
+  margin-top: 14px!important
+}
+.fh-event-app .pass-offline {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+  margin-top: 18px;
+  text-align: left
+}
+.fh-event-app .pass-offline strong {
+  font-size: 13px
+}
+.fh-event-app .pass-offline small {
+  display: block;
+  color: var(--muted);
+  margin-top: 8px
+}
+.fh-event-app .pickup-note {
+  text-align: left
+}
+.fh-event-app .pickup-note p {
+  color: #705626;
+  margin: 8px 0 12px
+}
+.fh-event-app .person {
+  align-items: flex-start;
+  flex-wrap: wrap
+}
+.fh-event-app .person .text-button {
+  flex-shrink: 0
+}
+.fh-event-app .person>div {
+  min-width: 0;
+  flex: 1
+}
+.fh-event-app .service-nav button {
+  font-size: 13px
+}
+.fh-event-app .count,.fh-event-app .bottom-nav .count {
+  font-size: 12px;
+  min-width: 20px;
+  min-height: 20px
+}
+.fh-event-app .bottom-nav .count {
+  top: -5px
+}
+.fh-event-app .schedule-label {
+  overflow-wrap: anywhere
+}
+.fh-event-app .session-card {
+  grid-template-columns: 52px minmax(0,1fr) 18px;
+  gap: 10px
+}
+.fh-event-app .up-next-heading {
+  flex-wrap: wrap
+}
+.fh-event-app .up-next-facts {
+  font-size: 13px
+}
+.fh-event-app .notice {
+  font-size: 13px
+}
+.fh-event-app .footer-note {
+  font-size: 12px
+}
+.fh-event-app .dialog-body small {
+  font-size: 12px
+}
+.fh-event-app dialog {
+  max-height: 85vh;
+  max-height: 85dvh
+}
+.fh-event-app .service strong {
+  font-size: 13px
+}
+.fh-event-app .service small {
+  font-size: 12px
+}
+.fh-event-app .service .icon-tile {
+  width: 30px;
+  height: 30px
+}
+.fh-event-app .more-grid {
+  grid-template-columns: repeat(auto-fit,minmax(160px,1fr))
+}
+.fh-event-app .context .person small {
+  font-size: 12px
+}
+@media(max-width:700px) {
+  .fh-event-app .topbar {
+    position: sticky;
+    top: 0;
+    padding: 10px 16px;
+    gap: 9px;
+    min-height: 76px;
+    height: auto
+  }
+  .fh-event-app .event-name {
+    font-size: 13px
+  }
+  .fh-event-app .event-sub {
+    font-size: 12px
+  }
+  .fh-event-app .service-nav {
+    position: static;
+    top: auto;
+    padding: 10px 16px
+  }
+  .fh-event-app .service-nav button {
+    font-size: 12px
+  }
+  .fh-event-app .workspace {
+    padding-top: 20px;
+    padding-bottom: 112px
+  }
+  .fh-event-app .greeting h1 {
+    font-size: 25px
+  }
+  .fh-event-app .greeting>.status {
+    margin-top: 0
+  }
+  .fh-event-app .bottom-nav button {
+    font-size: 12px
+  }
+  .fh-event-app .service strong {
+    font-size: 13px
+  }
+  .fh-event-app .service small {
+    font-size: 12px
+  }
+  .fh-event-app .quick {
+    font-size: 13px
+  }
+  .fh-event-app .app {
+    min-height: 100vh;
+    min-height: 100dvh
+  }
+  .fh-event-app .inbox-filters {
+    flex-wrap: wrap
+  }
+  .fh-event-app .message-row {
+    gap: 9px
+  }
+  .fh-event-app .hero-foot small {
+    font-size: 12px
+  }
+  .fh-event-app .starts {
+    font-size: 12px
+  }
+  .fh-event-app .section-heading h2 {
+    font-size: 17px
+  }
+}
+.fh-event-app .sidebar .side-bottom button {
+  min-height: 44px
+}
+.fh-event-app .inbox-filters button {
+  min-width: 44px
+}
+@media(max-width:700px) {
+  .fh-event-app .app {
+    overflow: visible
+  }
+}
+/* Production adapters remain inside this layout's namespace. */
+.fh-event-app {
+  padding: 20px 12px;
+  min-height: 100vh;
+  font-size: 15px;
+  color-scheme: light
+}
+.fh-event-app .app {
+  margin: 0 auto;
+  overflow: clip
+}
+.fh-event-app .hero,.fh-event-app .pass-top,.fh-event-app .sidebar,.fh-event-app .primary {
+  color: var(--on-primary)
+}
+.fh-event-app .sidebar .side-nav button,.fh-event-app .sidebar small,.fh-event-app .sidebar p {
+  color: var(--on-primary)
+}
+.fh-event-app .hero .primary {
+  color: #203c2d
+}
+.fh-event-app .app-service-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 9px 13px;
+  background: #f8faf7;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 750;
+  text-decoration: none;
+  color: var(--ink)
+}
+.fh-event-app .app-service-link>svg {
+  width: 15px;
+  margin-left: auto
+}
+.fh-event-app .event-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 10px
+}
+.fh-event-app .app-pass-qr {
+  display: block;
+  width: 220px;
+  height: 220px;
+  max-width: 100%;
+  margin: 20px auto;
+  background: white;
+  padding: 12px
+}
+.fh-event-app .app-update {
+  margin-bottom: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere
+}
+.fh-event-app .app-update p {
+  margin: 10px 0
+}
+.fh-event-app .app-service-panel {
+  color: var(--ink)
+}
+.fh-event-app .app-service-panel * {
+  font-size: max(12px,1em)
+}
+.fh-event-app .app-service-panel button,.fh-event-app .app-service-panel a {
+  min-height: 44px;
+  min-width: 44px
+}
+.fh-event-app .app-service-panel input:not([type=checkbox]),.fh-event-app .app-service-panel textarea,.fh-event-app .app-service-panel select {
+  min-width: 0;
+  min-height: 44px;
+  font-size: 16px
+}
+.fh-event-app .pass-offline>* {
+  display: block;
+  margin-top: 10px
+}
+.fh-event-app .content>h1 {
+  margin-bottom: 16px
+}
+.fh-event-app .context .person {
+  flex-wrap: wrap
+}
+.fh-event-app .day {
+  min-height: 44px;
+  min-width: 44px
+}
+.fh-event-app .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 3
+}
+.fh-event-app .app-service-link:hover {
+  border-color: #98b4a1
+}
+@media(max-width:700px) {
+  .fh-event-app {
+    padding: 0
+  }
+  .fh-event-app .app {
+    overflow: visible
+  }
+  .fh-event-app .app-service-link {
+    flex-direction: column;
+    gap: 5px;
+    padding: 9px 4px;
+    font-size: 12px
+  }
+  .fh-event-app .app-service-link>svg {
+    display: none
+  }
+  .fh-event-app .workspace {
+    padding-bottom: 110px
+  }
+  .fh-event-app .more-grid {
+    grid-template-columns: 1fr 1fr
+  }
+  .fh-event-app .topbar {
+    max-height: none
+  }
+  .fh-event-app .hero .primary {
+    white-space: normal
+  }
+  .fh-event-app .app-service-panel form {
+    display: flex;
+    flex-direction: column
+  }
+  .fh-event-app .event-name {
+    overflow-wrap: anywhere
+  }
+}
+.fh-event-app h1,.fh-event-app h2,.fh-event-app h3 {
+  font-weight: 700
+}
+.fh-event-app .icon-button {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  flex-shrink: 0
+}
+.fh-event-app .service-nav {
+  position: static
+}
+.fh-event-app .hero p {
+  color: var(--on-primary)
+}
+.fh-event-app .hero.attention,.fh-event-app .hero.attention p {
+  color: #4d3b18
+}
+.fh-event-app .hero.attention .primary {
+  color: white
+}
+
+.fh-event-app .pass-details { flex-wrap: wrap; gap: 14px; }

@@ -4,6 +4,10 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import './index.css'
 
+// Distinguish a downloaded module from a React render failure in diagnostics.
+// A new content hash also avoids previously cached failures for the old entry.
+document.documentElement.dataset.festioStartup = 'module-loaded'
+
 // In the Capacitor native app the web is served from https://localhost, so the
 // app's relative `/api/...` calls must be redirected to the real backend. This
 // is set only for mobile builds (VITE_API_ORIGIN); it is a strict no-op on the

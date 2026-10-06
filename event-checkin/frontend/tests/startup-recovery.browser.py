@@ -38,6 +38,7 @@ with sync_playwright() as p:
   elif scenario=='persistent':
    page.get_by_text('Festio could not load the latest app files.',exact=False).wait_for();check('persistent failure has bounded automatic retries',len(attempts)==3)
    page.get_by_role('button',name='Reload Festio',exact=True).wait_for();check('persistent failure provides recovery instead of blank',len(page.locator('body').inner_text())>20)
+   check('failed asset is identified',page.locator('[data-startup-details]').is_visible() and '.js' in page.locator('[data-startup-details]').inner_text())
    check('recovery fits phone',page.evaluate('document.documentElement.scrollWidth<=innerWidth'));page.screenshot(path=str(OUT/'phone-recovery.png'))
   else:
    page.get_by_role('button',name='Reload Festio',exact=True).wait_for();check(scenario+' remains readable without reload loop',len(attempts)==1 and len(page.locator('body').inner_text())>20)

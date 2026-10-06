@@ -232,7 +232,7 @@ async def active_workflow(event_id: str, db: AsyncSession) -> ExperienceWorkflow
     return await load_workflow(workflow.id, db) if workflow else None
 
 
-async def step_applies_to_guest(step: ExperienceStep, guest: Guest, db: AsyncSession) -> bool:
+async def step_applies_to_guest(step: ExperienceStep, guest: Guest, db: AsyncSession, *, audience_context: dict | None = None) -> bool:
     """Evaluate the small, explicit condition language used by Experience steps.
 
     Supported keys:
@@ -274,14 +274,15 @@ async def step_applies_to_guest(step: ExperienceStep, guest: Guest, db: AsyncSes
     if ticket_names:
         if not guest.ticket_type_id:
             return False
-        ticket = await db.get(TicketType, guest.ticket_type_id)
-        if not ticket or (ticket.name or "").lower() not in ticket_names:
+        ticket = None if audience_context is not None else await db.get(TicketType, guest.ticket_type_id)
+        ticket_name = audience_context.get("ticket_name", "") if audience_context is not None else (ticket.name if ticket else "")
+        if (ticket_name or "").lower() not in ticket_names:
             return False
 
     age_include = values(conditions.get("age_groups_include"))
     age_exclude = values(conditions.get("age_groups_exclude"))
     if age_include or age_exclude:
-        age_group = (await guest_age_group(guest, db) or "").lower()
+        age_group = ((audience_context.get("age_group") if audience_context is not None else await guest_age_group(guest, db)) or "").lower()
         if age_include and age_group not in age_include:
             return False
         if age_exclude and age_group in age_exclude:
@@ -293,13 +294,16 @@ async def step_applies_to_guest(step: ExperienceStep, guest: Guest, db: AsyncSes
         conditions.get("guest_tags_exclude"),
     )
     if any(v is not None for v in tag_conditions):
-        tag_rows = (await db.execute(
-            select(GuestTag.id, GuestTag.name)
-            .join(GuestTagLink, GuestTagLink.tag_id == GuestTag.id)
-            .where(GuestTagLink.guest_id == guest.id)
-        )).all()
-        guest_tags = {str(tag_id).lower() for tag_id, _ in tag_rows}
-        guest_tags.update((name or "").lower() for _, name in tag_rows)
+        if audience_context is not None:
+            guest_tags = audience_context["tags"]
+        else:
+            tag_rows = (await db.execute(
+                select(GuestTag.id, GuestTag.name)
+                .join(GuestTagLink, GuestTagLink.tag_id == GuestTag.id)
+                .where(GuestTagLink.guest_id == guest.id)
+            )).all()
+            guest_tags = {str(tag_id).lower() for tag_id, _ in tag_rows}
+            guest_tags.update((name or "").lower() for _, name in tag_rows)
 
         include = values(conditions.get("guest_tags_include"))
         if include and not include.intersection(guest_tags):

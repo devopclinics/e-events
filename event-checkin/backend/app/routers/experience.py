@@ -2005,7 +2005,7 @@ async def my_experience(
         steps=steps_out,
         next_steps=next_out,
         consent=consent_state,
-        program=GuestProgramOut(**(await program_state(event, loaded, db))),
+        program=GuestProgramOut(**(await program_state(event, loaded, db, guest=guest))),
         **menu_state,
         completed_count=completed,
         total_count=len(steps_out),

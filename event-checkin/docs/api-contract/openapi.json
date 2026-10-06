@@ -9393,6 +9393,40 @@
         "title": "GuestPassExchange",
         "type": "object"
       },
+      "GuestProgramAudienceOut": {
+        "properties": {
+          "age_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age Group"
+          },
+          "guest_id": {
+            "title": "Guest Id",
+            "type": "string"
+          },
+          "is_self": {
+            "default": false,
+            "title": "Is Self",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "guest_id",
+          "name"
+        ],
+        "title": "GuestProgramAudienceOut",
+        "type": "object"
+      },
       "GuestProgramDayOut": {
         "description": "A local-calendar grouping for a multi-day live programme.",
         "properties": {
@@ -9421,6 +9455,13 @@
       },
       "GuestProgramOut": {
         "properties": {
+          "audiences": {
+            "items": {
+              "$ref": "#/components/schemas/GuestProgramAudienceOut"
+            },
+            "title": "Audiences",
+            "type": "array"
+          },
           "current_segments": {
             "items": {
               "$ref": "#/components/schemas/GuestProgramSegmentOut"
@@ -9458,6 +9499,17 @@
             },
             "title": "Next Segments",
             "type": "array"
+          },
+          "viewer_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Viewer Id"
           }
         },
         "title": "GuestProgramOut",
@@ -9476,6 +9528,20 @@
             },
             "title": "Age Groups",
             "type": "array"
+          },
+          "audience_guest_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience Guest Ids"
           },
           "category": {
             "anyOf": [

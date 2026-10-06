@@ -1104,6 +1104,7 @@ class GuestProgramSegmentOut(BaseModel):
     room: Optional[str] = None
     speaker: Optional[str] = None
     age_groups: list[str] = Field(default_factory=list)
+    audience_guest_ids: Optional[list[str]] = None
     active: bool = False
     state: Literal["ended", "ongoing", "upcoming"] = "upcoming"
 
@@ -1115,8 +1116,17 @@ class GuestProgramDayOut(BaseModel):
     segments: list[GuestProgramSegmentOut] = Field(default_factory=list)
 
 
+class GuestProgramAudienceOut(BaseModel):
+    guest_id: str
+    name: str
+    age_group: Optional[str] = None
+    is_self: bool = False
+
+
 class GuestProgramOut(BaseModel):
     enabled: bool = False
+    viewer_id: Optional[str] = None
+    audiences: list[GuestProgramAudienceOut] = Field(default_factory=list)
     current_segments: list[GuestProgramSegmentOut] = Field(default_factory=list)
     next_segments: list[GuestProgramSegmentOut] = Field(default_factory=list)
     days: list[GuestProgramDayOut] = Field(default_factory=list)

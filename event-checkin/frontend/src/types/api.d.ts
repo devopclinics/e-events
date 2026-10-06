@@ -1503,6 +1503,13 @@ export interface GuestPassExchange {
   pass_token: string
 }
 
+export interface GuestProgramAudienceOut {
+  age_group?: (string) | null
+  guest_id: string
+  is_self?: boolean
+  name: string
+}
+
 export interface GuestProgramDayOut {
   date: string
   label: string
@@ -1510,16 +1517,19 @@ export interface GuestProgramDayOut {
 }
 
 export interface GuestProgramOut {
+  audiences?: (GuestProgramAudienceOut)[]
   current_segments?: (GuestProgramSegmentOut)[]
   days?: (GuestProgramDayOut)[]
   enabled?: boolean
   feedback_open?: (Record<string, unknown>) | null
   next_segments?: (GuestProgramSegmentOut)[]
+  viewer_id?: (string) | null
 }
 
 export interface GuestProgramSegmentOut {
   active?: boolean
   age_groups?: (string)[]
+  audience_guest_ids?: ((string)[]) | null
   category?: (string) | null
   description?: (string) | null
   ends_at: string

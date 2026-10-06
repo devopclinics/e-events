@@ -13,7 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import Event, EventAnnouncement, EventMessage, ExperienceEvent, ExperienceStep, ExperienceWorkflow
 from ..timeutil import event_tz, to_event_local
-from .experience import active_workflow
+from .experience import active_workflow, step_applies_to_guest
+from .program_audience import programme_audiences
 from .festiome_outbox import queue_announcement
 from .engagement_sync_outbox import _snapshot
 
@@ -107,10 +108,11 @@ async def feedback_availability(event: Event, workflow: ExperienceWorkflow, db: 
     return {"controlled": True, "open": bool(window), "window": window}
 
 
-async def program_state(event: Event, workflow: ExperienceWorkflow | None, db: AsyncSession, *, now: datetime | None = None) -> dict:
+async def program_state(event: Event, workflow: ExperienceWorkflow | None, db: AsyncSession, *, now: datetime | None = None, guest=None) -> dict:
     if not event.live_program_enabled or not workflow:
         return {"enabled": False, "current_segments": [], "next_segments": [], "days": [], "feedback_open": None}
     moment = now or now_local()
+    people, audiences, contexts = await programme_audiences(event, guest, db) if guest else ([], [], {})
     current, future = [], []
     days: dict[str, dict] = {}
     # Display imported session-attendance schedules as well as timed segments.
@@ -138,6 +140,7 @@ async def program_state(event: Event, workflow: ExperienceWorkflow | None, db: A
             "category": snapshot.get("category"), "room": snapshot.get("room"),
             "speaker": snapshot.get("speaker"),
             "age_groups": [str(group) for group in groups] if isinstance(groups, list) else [str(groups)],
+            "audience_guest_ids": [p.id for p in people if await step_applies_to_guest(step, p, db, audience_context=contexts[p.id])] if guest else None,
             "active": active, "state": "ongoing" if active else "ended" if end <= moment else "upcoming",
         }
         day_key = start.date().isoformat()
@@ -155,6 +158,8 @@ async def program_state(event: Event, workflow: ExperienceWorkflow | None, db: A
     feedback_windows = await _feedback_windows(event, workflow, db, now=moment)
     return {
         "enabled": True,
+        "viewer_id": guest.id if guest else None,
+        "audiences": audiences,
         "current_segments": current,
         "next_segments": future[:3],
         "days": list(days.values()),

@@ -116,6 +116,31 @@ with sync_playwright() as pw:
     for layout in ['classic' ,'companion','journey','complete']:
         state['event']['guest_hub_layout']=layout;page.goto(BASE+'/r/demo-token?layout='+layout+'#guest-hub');page.wait_for_timeout(650)
         check(layout+' original layout retained',page.locator('.fh-event-app').count()==0 and 'Amina' in page.locator('body').inner_text())
+    # Personal timetable must work on every layout, using the same API data.
+    state['hub']['guest']['admitted']=False
+    own={**session,'step_id':'adult-session','title':'Adult learning circle','state':'upcoming','audience_guest_ids':['parent']}
+    junior={**session,'step_id':'junior-session','title':'Junior discovery hour','starts_at':iso(now+timedelta(minutes=10)),'state':'upcoming','audience_guest_ids':['child']}
+    shared={**session,'step_id':'shared-session','title':'Community gathering','state':'upcoming','audience_guest_ids':['parent','child']}
+    state['journey']['program'].update(viewer_id='parent',audiences=[dict(guest_id='parent',name='Amina Idris',age_group='Adults',is_self=True),dict(guest_id='child',name='Sara Idris',age_group='Juniors',is_self=False)],days=[dict(date=now.date().isoformat(),label='Today',segments=[junior,own,shared])],current_segments=[],next_segments=[junior,own,shared])
+    for layout in ['app','classic','companion','journey','complete']:
+        state['event']['guest_hub_layout']=layout
+        page.goto(BASE+'/r/demo-token?audience='+layout+('#/home' if layout=='app' else '#guest-hub'))
+        page.wait_for_timeout(700)
+        if layout=='app':
+            check('Home next excludes other age groups','Junior discovery hour' not in page.locator('main').inner_text())
+            go('programme')
+        elif layout in ['journey','complete']:
+            page.get_by_role('button',name='View Full Programme').first.click()
+        elif layout=='classic':
+            page.get_by_role('tab',name='Program').first.click()
+        select=page.get_by_role('combobox',name='Show programme for').first
+        select.wait_for()
+        def shown(text): return text in page.locator('body').inner_text()
+        check(layout+' defaults to own and shared',shown('Adult learning circle') and shown('Community gathering') and not shown('Junior discovery hour'))
+        select.select_option('child');check(layout+' child programme',shown('Junior discovery hour') and shown('Community gathering') and not shown('Adult learning circle'))
+        select.select_option('all');check(layout+' all programmes',shown('Junior discovery hour') and shown('Adult learning circle'))
+        check(layout+' audience selector fits phone',page.evaluate('document.documentElement.scrollWidth<=innerWidth'))
+        if layout=='app':page.screenshot(path=str(OUT/'phone-programme-audiences.png'),full_page=True)
     check('no browser runtime errors',not errors)
     (OUT/'validation.json').write_text(json.dumps(dict(browser=engine,browser_version=browser.version,checks=checks,phone_metrics=metrics,errors=errors,isolated_post_paths=[p['path'] for p in posts],unmatched_fixture_requests=sorted(set(unexpected)),limitations=['Automated browser engine and viewport testing; no physical-device or branded Apple Safari testing','All API responses isolated fixtures; no staging or production mutations','Offline credential persistence remains disabled']),indent=2))
     print(json.dumps(dict(passed=len(checks),metrics=metrics,errors=errors,unexpected=sorted(set(unexpected))),indent=2))

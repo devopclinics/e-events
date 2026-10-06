@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import MealMenuView from './guesthub/MealMenuView'
 import { api } from '../api'
 
 function multiBoundsLabel(min, max) {
@@ -279,7 +280,7 @@ export default function MenuSelection({ token, categories, initialChoices, mealS
 
   async function submit(e) {
     e.preventDefault()
-    if (!canSubmit) return
+    if (!canSubmit || saving) return
     setSaving(true)
     onSavingChange?.(true)
     setMsg('')
@@ -305,6 +306,13 @@ export default function MenuSelection({ token, categories, initialChoices, mealS
       </div>
     )
   }
+
+  if (embedded) return <MealMenuView categories={categories} menuDay={menuDay} setMenuDay={setMenuDay} choices={{single, multi, combo}} initialChoices={initialChoices} saving={saving} error={error} msg={msg} canSubmit={canSubmit} categoryError={categoryError} submit={submit} hasExistingChoice={hasExistingChoice} allDisplayOnly={allDisplayOnly} onChoose={(cat, id) => {
+    setMsg(''); setError('');
+    if (cat.selection_type === 'multi') setMulti(prev => { const values = prev[cat.id] || []; return {...prev, [cat.id]: values.includes(id) ? values.filter(v => v !== id) : [...values, id]}; });
+    else if (cat.selection_type === 'combo') setCombo(prev => ({...prev, [cat.id]: id}));
+    else setSingle(prev => ({...prev, [cat.id]: id}));
+  }} />
 
   return (
     <div className="meal-picker border-2 border-amber-400 dark:border-amber-500 bg-amber-50 dark:bg-amber-900/20 rounded-xl overflow-hidden shadow-md">

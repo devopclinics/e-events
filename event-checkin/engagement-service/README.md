@@ -68,3 +68,8 @@ of the Festio guest ID and anonymize exports and leaderboards.
 The failure acceptance script stops only the engagement API and worker, checks
 core staging surfaces, and restores the exact version from `VERSION` even when
 the host `.env` contains an older `APP_VERSION`.
+
+
+## Current operating documentation (October 2026)
+
+The maintained procedures are in `frontend/src/guideContent.mjs` (repository paths are relative to event-checkin), the generated Help/guide and `/media/festio-current-operations.html`. Offline scanner manifests are version 2 with a 30-minute UTC expiry; queued local admission is not server confirmation. Guest Programme responses include room, speaker and age groups. Speaker Q&A, Guided Show automation, chat membership and broadcast delivery have distinct authorization/lifecycle rules. Consult the knowledge inventory before changing or deploying documentation.

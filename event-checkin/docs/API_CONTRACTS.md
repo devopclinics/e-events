@@ -77,3 +77,8 @@ the type to check against, but doesn't yet fail a build when a hardcoded
 frontend list falls out of sync with it. A future step could add a small
 lint rule or test asserting specific hardcoded arrays match their generated
 enum type; not done here.
+
+
+## Current operating documentation (October 2026)
+
+The maintained procedures are in `frontend/src/guideContent.mjs` (repository paths are relative to event-checkin), the generated Help/guide and `/media/festio-current-operations.html`. Offline scanner manifests are version 2 with a 30-minute UTC expiry; queued local admission is not server confirmation. Guest Programme responses include room, speaker and age groups. Speaker Q&A, Guided Show automation, chat membership and broadcast delivery have distinct authorization/lifecycle rules. Consult the knowledge inventory before changing or deploying documentation.

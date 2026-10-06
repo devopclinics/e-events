@@ -52,3 +52,11 @@
 {"question":"How do platform operators edit pricing and plans?","route":"pricing_info"}
 {"question":"How much does Festio cost?","route":"pricing_info"}
 {"question":"What plan am I currently on?","route":"sensitive"}
+{"question": "How do I prepare this scanner for offline check-in?", "route": "model"}
+{"question": "Why does a saved check-in say Needs review?", "route": "model"}
+{"question": "Can I release a junior using a cached guardian name?", "route": "model"}
+{"question": "Where do I record daily attendance and session exit?", "route": "model"}
+{"question": "Can I ask another question to a different Sheikh?", "route": "model"}
+{"question": "Why does my Guided Show not show a countdown?", "route": "model"}
+{"question": "Does a queued broadcast mean it was delivered?", "route": "model"}
+{"question": "Can I create an invite-only FestioMe group and a meetup?", "route": "model"}

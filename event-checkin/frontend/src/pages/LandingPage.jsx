@@ -250,6 +250,9 @@ const eventTypes = [
 ]
 
 const faqs = [
+  { q: 'Can check-in work during an internet outage?', a: 'A scanner prepared online can queue eligible general admissions for a short outage using a saved list with a 30-minute expiry. Keep the page open and reconcile saved records after reconnecting. Junior handoffs, daily/session attendance and checkout require connectivity; plan and rehearse the venue connection.' },
+  { q: 'Does Festio support multi-day timetables and speaker questions?', a: 'Configured, published programmes can show all dated sessions with rooms, speakers and age groups. Organizers can create separate moderated Q&A activities per speaker/session, and guests can ask multiple questions. Session eligibility and activity availability still apply.' },
+
   {
     q: 'Is this only for luxury or invite-only events?',
     a: 'It is strongest for relationship-driven invite-only events such as galas, VIP dinners, and private forums, but it works just as well for open RSVP events like conferences and community gatherings.',

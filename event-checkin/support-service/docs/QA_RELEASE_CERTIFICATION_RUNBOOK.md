@@ -72,3 +72,15 @@ Run cases in checklist order where practical, but preserve these dependencies:
 ## Issue and completion criteria
 
 An issue report must include expected result, actual result, exact reproduction steps, affected role/event/guest, timestamp/timezone, device/browser, URL or endpoint, and evidence. Before release sign-off, every applicable P0 must Pass or have an explicitly accepted issue; all other cases must be Pass, accepted Issue, justified Blocked, or documented N/A. Attach both exported checklist files to the release review.
+
+
+## October 2026 knowledge and operational verification
+
+- Regenerate the support KB and Media Library copies from `frontend/src/guideContent.mjs`; the generated files must match before release.
+- Prepare a staging scanner online; test valid and expired manifests, QR/manual local admission, a duplicate, storage failure, reconnect and a rejected record that remains Needs review. Do not use production guests or send unapproved provider messages.
+- Rehearse online guardian selection/QR authorization, pending authorization denial, daily event-local attendance and session age/time/capacity checks. An age override must not bypass guardian authorization.
+- Verify every programme day, room/speaker search, two submissions to one moderated Q&A, correct speaker queue, and timed Guided Show answering/reveal/next/previous.
+- Test FestioMe personal GuestHub entry, invite-only group membership, meetup response and read-only announcements.
+- Inspect ticket-type broadcast recipients, empty selection, credits/consent and final delivery records. Queued is not delivered.
+- Check desktop/mobile views; hardware, venue network, multi-device outage behavior and approved provider delivery remain separate evidence gates.
+- Deploy/restart the support-service and support-worker with the refreshed KB. A frontend build alone does not update AI retrieval. Use the knowledge hash to distinguish cached answers from the new release.

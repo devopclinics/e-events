@@ -15,7 +15,9 @@
     "test:e2e:live-guest-regressions": "node e2e/festio-live-guest-regressions.mjs",
     "generate:api-types": "node scripts/generate-api-types.mjs",
     "check:help-content": "node scripts/check-help-content-drift.mjs",
-    "check:api-contract": "./scripts/check-api-contract-drift.sh"
+    "check:api-contract": "./scripts/check-api-contract-drift.sh",
+    "prebuild": "node scripts/gen-operations-reference.mjs",
+    "check:knowledge": "node --test tests/knowledge-output.test.mjs"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.3",

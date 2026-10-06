@@ -1,3 +1,4 @@
+// Reviewed against implemented workflows on 2026-10-06. Regenerate derived guides after editing.
 export const CONTENT = {
   // ─────────────────────────────────────────────────────────────────────────
   // ORGANIZER
@@ -20,48 +21,54 @@ export const CONTENT = {
         tip: 'The free tier includes email invites, RSVP tracking, and up to 25 guests. Upgrade to an Event Pass to unlock SMS/WhatsApp, QR check-in, seating, entry areas, and more.',
       },
       {
-        id: 'org-rsvp-only', icon: '✉️', title: 'Just need RSVPs? Start here',
-        intro: 'Not every event needs seating, orders, or entry rules — sometimes you just want a clean guest list and RSVP count.',
-        steps: [
-          'When creating your event, choose attendance mode "Invitation / RSVP" and leave the RSVP form checkbox on — skip the other add-on checkboxes (Seating, Orders, Planner, etc.) entirely.',
-          'Using the guided setup wizard instead? The RSVP step offers two cards: "Skip RSVP" or "With RSVP" — pick "With RSVP".',
-          'That\'s it — you get a free-tier event with an invite page, RSVP tracking, and up to 25 guests, with no paid features enabled.',
-          'You can always turn on more add-ons later from Guest Communication → Features & messaging once you actually need them.',
+        "id": "org-rsvp-only",
+        "icon": "✉️",
+        "title": "Just need RSVPs? Start here",
+        "intro": "Not every event needs seating, orders, or entry rules — sometimes you just want a clean guest list and RSVP count.",
+        "steps": [
+          "When creating your event, choose attendance mode \"Invitation / RSVP\" and leave the RSVP form checkbox on — skip the other add-on checkboxes (Seating, Orders, Planner, etc.) entirely.",
+          "Using the guided setup wizard instead? The RSVP step offers two cards: \"Skip RSVP\" or \"With RSVP\" — pick \"With RSVP\".",
+          "That's it — you get a free-tier event with an invite page, RSVP tracking, and up to 25 guests, with no paid features enabled.",
+          "You can always turn on more add-ons later from Guest Communication → Features & Channels once you actually need them."
         ],
-        tip: 'This path is the fastest way to get a shareable RSVP link out the door — add seating, check-in, or messaging channels only when the event actually needs them.',
+        "tip": "This path is the fastest way to get a shareable RSVP link out the door — add seating, check-in, or messaging channels only when the event actually needs them."
       },
       {
-        id: 'org-create', icon: '📅', title: 'Create your event',
-        img: '/media/help2-event-setup.png',
-        intro: 'Each event is a self-contained workspace with its own guests, invites, settings, and day-of tools.',
-        steps: [
-          'In Event Setup, click New Event.',
-          'Enter the event name, an optional host/organiser display name, date & time, and a base URL slug (used in invite links).',
-          'Save. Open the event — navigation is grouped into Setup (Start here, Guests, Invites & RSVP), Entry areas/rules, Add-ons (Seating, Orders, Deliveries, Gift list), and Team & settings. On a phone the sidebar becomes a dropdown.',
-          'Under Guest Communication → Features &amp; messaging, toggle on the add-ons you need: Venue Access, Seating, Orders, Logistics, Registry (gift list), Speakers, Partners, Reminders, Experience, Planner, Festio Live, and FestioMe. Most require an Event Pass — once enabled it appears in the sidebar.',
-          'The event you pick is remembered across Results, Check-in, and Orders — you only choose it once. The current event shows as a chip in the top bar.',
-          'Set the event to Draft while preparing, Active on the day to enable check-in, and Ended afterwards.',
-          'You can create multiple events — each is independent with its own guest list and settings.',
+        "id": "org-create",
+        "icon": "📅",
+        "title": "Create your event",
+        "img": "/media/help2-event-setup.png",
+        "intro": "Each event is a self-contained workspace with its own guests, invites, settings, and day-of tools.",
+        "steps": [
+          "In Event Setup, click New Event.",
+          "Enter the event name, an optional host/organiser display name, date & time, and a base URL slug (used in invite links).",
+          "Save. Open the event — navigation is grouped into Setup (Start here, Guests, Invites & RSVP), Entry areas/rules, Add-ons (Seating, Orders, Deliveries, Gift list), and Team & settings. On a phone the sidebar becomes a dropdown.",
+          "Under Guest Communication → Features & Channels, toggle on the add-ons you need: Venue Access, Seating, Orders, Logistics, Registry (gift list), Speakers, Partners, Reminders, Experience, Planner, Festio Live, and FestioMe. Most require an Event Pass — once enabled it appears in the sidebar.",
+          "The event you pick is remembered across Results, Check-in, and Orders — you only choose it once. The current event shows as a chip in the top bar.",
+          "Set the event to Draft while preparing, Active on the day to enable check-in, and Ended afterwards.",
+          "You can create multiple events — each is independent with its own guest list and settings."
         ],
-        tip: 'The base URL slug is used in all invite and RSVP links (e.g. festio.events/invite/your-slug). Keep it short and memorable.',
+        "tip": "The base URL slug is used in all invite and RSVP links (e.g. festio.events/invite/your-slug). Keep it short and memorable."
       },
       {
-        id: 'org-guests', icon: '👥', title: 'Add your guest list',
-        img: '/media/help2-guests.png',
-        intro: 'Import from a spreadsheet, sync from Google Sheets, or add guests one at a time.',
-        steps: [
-          'Go to Start here → Download template. It contains exactly the columns your event uses — with an Excel dropdown for ticket types — so nothing is missed.',
-          'Fill in the template and click Upload guest file. Your own spreadsheet works too: column names match in any case or spacing (First Name = first_name = FIRST NAME).',
-          'Email is optional — guests without an email can still receive SMS/WhatsApp invites and be checked in by QR.',
-          'For live sync: paste a Google Sheets or OneDrive share link. Import once, or set a sync interval while the event is Active.',
-          'Watch the sync status badge: green = ok, amber = imported with warnings (unknown ticket types, rows over plan limit, invalid phone numbers), red = sync failed (check the share link is still public).',
-          'Re-importing never creates duplicates — it fills in missing phone numbers, ticket types, addresses, and tags for existing guests.',
-          'For Entry rules events: add a "tags" column (e.g. "VIP; Press") — unknown tags are created automatically and control which areas each guest may enter.',
-          'The free tier allows up to 25 guests total. An Event Pass raises this limit based on the tier you choose.',
-          'To add a single guest: Guests tab → Add guest, fill in the form.',
+        "id": "org-guests",
+        "icon": "👥",
+        "title": "Add your guest list",
+        "img": "/media/help2-guests.png",
+        "intro": "Import from a spreadsheet, sync from Google Sheets, or add guests one at a time.",
+        "steps": [
+          "Go to Start here → Download template. It contains exactly the columns your event uses — with an Excel dropdown for ticket types — so nothing is missed.",
+          "Fill in the template and click Upload guest file. Your own spreadsheet works too: column names match in any case or spacing (First Name = first_name = FIRST NAME).",
+          "Email is optional — guests without an email can still receive SMS/WhatsApp invites and be checked in by QR.",
+          "For live sync: paste a Google Sheets or OneDrive share link. Import once, or set a sync interval while the event is Active.",
+          "Watch the sync status badge: green = ok, amber = imported with warnings (unknown ticket types, rows over plan limit, invalid phone numbers), red = sync failed (check the share link is still public).",
+          "Review the import preview and row warnings. Matching depends on the supplied identifiers; correct ambiguous or duplicate records before confirming a repeat import.",
+          "For Entry rules events: add a \"tags\" column (e.g. \"VIP; Press\") — unknown tags are created automatically and control which areas each guest may enter.",
+          "The free tier allows up to 25 guests total. An Event Pass raises this limit based on the tier you choose.",
+          "To add a single guest: Guests tab → Add guest, fill in the form."
         ],
-        tip: 'Column matching is flexible — "First Name", "first_name", "firstname" all map to the same field. The only required column is a name (first + last, or full name).',
-        warn: 'Phone numbers must include the country code (e.g. +2348012345678 for Nigeria, +14155551234 for US) for SMS/WhatsApp delivery to work.',
+        "tip": "Column matching is flexible — \"First Name\", \"first_name\", \"firstname\" all map to the same field. The only required column is a name (first + last, or full name).",
+        "warn": "For phone delivery use the real international number. Set the intended default country for local input; a US event may use +1. Never blindly change a genuine +234 number to +1. Review import warnings and duplicates before sending messages."
       },
       {
         id: 'org-rsvp', icon: '✉️', title: 'Set up your RSVP & invite page',
@@ -138,19 +145,20 @@ export const CONTENT = {
         tip: 'Use the filter + bulk-select to approve, email, or change ticket types for a whole group at once.',
       },
       {
-        id: 'org-broadcast', icon: '📣', title: 'Broadcast an update',
-        img: '/media/help2-invites-rsvp.png',
-        intro: 'Push a message to any subset of guests at any time — before, during, or after the event.',
-        steps: [
-          'Invites & RSVP → Broadcast Message.',
-          'Write your message (plain text — keep it short for SMS/WhatsApp).',
-          'Choose your target: All guests, RSVP Attending, RSVP Declined, No reply, Checked-in, or Not checked-in.',
-          'Pick your channel(s): email, SMS, WhatsApp — or all three.',
-          'Preview the estimated credit cost before sending.',
-          'Hit Send. Delivery happens in the background — you can leave the page.',
-          'Useful examples: venue change, schedule update, parking instructions, "doors open in 30 minutes", post-event thank-you.',
+        "id": "org-broadcast",
+        "icon": "📣",
+        "title": "Broadcast an update",
+        "img": "/media/help2-invites-rsvp.png",
+        "intro": "Send an event update to a reviewed audience using the event’s enabled channels.",
+        "steps": [
+          "Open Guest Communication and the broadcast composer. Select the correct event before selecting recipients.",
+          "Choose an audience filter or explicit guests. Select recipients by ticket type selects a snapshot of the loaded guests, such as Teachers or Volunteers; review the selected names and count. An empty ticket-type selection must not be treated as All guests.",
+          "Write the message and select the enabled email, SMS or WhatsApp channels. Check contact details, applicable consent and the credit estimate before sending.",
+          "Review the message and recipients, then confirm the send. Queued means accepted for background processing, not delivered. Check delivery records for final channel status and failures.",
+          "Use Scheduler for a later update. Dynamic audiences are evaluated when sent; frozen audiences preserve the selected recipient set. Review event timezone, timing and status before scheduling.",
+          "Resolve the reason for failed delivery before retrying. Do not resend to everyone merely because some recipients failed."
         ],
-        warn: 'Broadcast sends are immediate and cannot be recalled once sent. Double-check your message and target group before confirming.',
+        "warn": "Sent messages cannot be recalled. Do not promise delivery when a job is only queued. Provider/network availability and messaging consent still apply."
       },
       {
         id: 'org-templates', icon: '✏️', title: 'Customize your message templates',
@@ -167,94 +175,109 @@ export const CONTENT = {
         warn: 'The WhatsApp body field you edit here is not what guests actually receive. Every real WhatsApp send goes through a fixed, Meta-approved template managed in Bird\'s dashboard — the platform shows an inline reminder of this wherever you edit WhatsApp wording. To change what WhatsApp messages actually say, submit a new template for Meta review (see the WhatsApp Templates section below the editor — a one-time $5 review fee applies) rather than editing the text field.',
       },
       {
-        id: 'org-seating', icon: '🍽️', title: 'Seating & orders',
-        badge: 'Paid',
-        imgs: ['/media/help2-menu-fields.png', '/media/help2-orders.png'],
-        intro: 'Assign tables, let guests pick meals, drinks, gifts, or other items, and give staff a live Orders view.',
-        steps: [
-          'Guest Communication → Features &amp; messaging → turn on Seating and/or Orders (requires an Event Pass).',
-          'Seating tab → Create tables: set a name (Table 1, Head Table, VIP Round…), capacity, and optionally a section label.',
-          'Use Auto-assign to fill tables automatically by RSVP order, or drag guests to specific seats manually.',
-          'Reserve seats: mark seats as unavailable (blocked for a VIP arrival, accessibility needs, etc.).',
-          'Partner pairing: guests can link their plus-one on their ticket page — auto-assign keeps them together.',
-          'Orders tab → Add categories (Meals, Drinks, Gifts, Merchandise) and items with optional descriptions.',
-          'Guests see the available items on their ticket page and pick before your deadline.',
-          'Orders view: a read-only view your staff or caterer can open on a tablet — shows each table\'s order totals and individual choices, updating live.',
-          'Use the seating plan and order totals as the working list for your caterer or fulfilment team.',
+        "id": "org-seating",
+        "icon": "🍽️",
+        "title": "Seating & orders",
+        "badge": "Paid",
+        "imgs": [
+          "/media/help2-menu-fields.png",
+          "/media/help2-orders.png"
         ],
-        tip: 'Use the RSVP deadline as your cutoff when you do not want guests changing item choices at the last minute.',
+        "intro": "Assign tables, let guests pick meals, drinks, gifts, or other items, and give staff a live Orders view.",
+        "steps": [
+          "Guest Communication → Features & Channels → turn on Seating and/or Orders (requires an Event Pass).",
+          "Seating tab → Create tables: set a name (Table 1, Head Table, VIP Round…), capacity, and optionally a section label.",
+          "Use Auto-assign to fill tables automatically by RSVP order, or drag guests to specific seats manually.",
+          "Reserve seats: mark seats as unavailable (blocked for a VIP arrival, accessibility needs, etc.).",
+          "Partner pairing: guests can link their plus-one on their ticket page — auto-assign keeps them together.",
+          "Orders tab → Add categories (Meals, Drinks, Gifts, Merchandise) and items with optional descriptions.",
+          "Guests see the available items on their ticket page and pick before your deadline.",
+          "Orders view: a read-only view your staff or caterer can open on a tablet — shows each table's order totals and individual choices, updating live.",
+          "Use the seating plan and order totals as the working list for your caterer or fulfilment team."
+        ],
+        "tip": "Use the RSVP deadline as your cutoff when you do not want guests changing item choices at the last minute."
       },
       {
-        id: 'org-access', icon: '🎫', title: 'Entry areas & ticket rules',
-        badge: 'Paid',
-        img: '/media/help2-entry-areas.png',
-        intro: 'Control which guests can enter which areas of your venue — enforced automatically at every scan.',
-        steps: [
-          'Guest Communication → Features &amp; messaging → turn on Venue Access (requires an Event Pass).',
-          'Entry areas tab → Areas: create the areas in your venue — Main Hall, VIP Lounge, Backstage, Green Room, etc. Set an optional capacity limit and direction mode (Entry only / Exit only / Both).',
-          'Ticket types: create tiers — GA (General Admission), VIP, Press, Staff, Speaker. For each type, choose which zones they may enter. Leave empty to allow all zones.',
-          'Assign ticket types: set a guest\'s type one by one from their profile, or include a ticket_type column in your imported spreadsheet.',
-          'Tags: create classifiers (VIP, 21+, Speaker, Media…) for finer control — a guest can have multiple tags. Set zone rules to require specific tags.',
-          'Gates: create a named gate for each scanner position (e.g. "Main Entrance", "VIP Gate", "Backstage Door"). Pin it to a zone + direction. Staff select their gate once — access rules are enforced automatically.',
-          'Analytics: live occupancy per zone, peak arrival times, room-to-room flow, and each guest\'s full journey through the venue.',
+        "id": "org-access",
+        "icon": "🎫",
+        "title": "Entry areas & ticket rules",
+        "badge": "Paid",
+        "img": "/media/help2-entry-areas.png",
+        "intro": "Control which guests can enter which areas of your venue — enforced automatically at every scan.",
+        "steps": [
+          "Guest Communication → Features & Channels → turn on Venue Access (requires an Event Pass).",
+          "Venue Access → Zones: create the areas in your venue — Main Hall, VIP Lounge, Backstage, Green Room, etc. Set an optional capacity limit and direction mode (Entry only / Exit only / Both).",
+          "Ticket types: create tiers — GA (General Admission), VIP, Press, Staff, Speaker. For each type, choose which zones they may enter. Leave empty to allow all zones.",
+          "Assign ticket types: set a guest's type one by one from their profile, or include a ticket_type column in your imported spreadsheet.",
+          "Tags: create classifiers (VIP, 21+, Speaker, Media…) for finer control — a guest can have multiple tags. Set zone rules to require specific tags.",
+          "Gates: create a named gate for each scanner position (e.g. \"Main Entrance\", \"VIP Gate\", \"Backstage Door\"). Pin it to a zone + direction. Staff select their gate once — access rules are enforced automatically.",
+          "Analytics: live occupancy per zone, peak arrival times, room-to-room flow, and each guest's full journey through the venue."
         ],
-        tip: 'Gates are the easiest setup for multi-zone events: staff just select "I\'m at Main Entrance" and scan — the zone and direction are automatic for every scan after that.',
+        "tip": "Gates are the easiest setup for multi-zone events: staff just select \"I'm at Main Entrance\" and scan — the zone and direction are automatic for every scan after that."
       },
       {
-        id: 'org-sections', icon: '🔲', title: 'Section scanning (multi-entrance seating)',
-        badge: 'Paid',
-        intro: 'For events seated by table group with two or more entrances — each scanner routes walk-ins and manual check-ins into the section it\'s assigned to.',
-        steps: [
-          'Guest Communication → Features & messaging → turn on Section scanning (only shown once you have table groups set up in Seating).',
-          'On the Team page, assign each staff member (or each device) the table-group section they\'re stationed at.',
-          'Walk-ins and manual check-ins scanned at that station seat into that section automatically, instead of a single shared default group.',
-          'A guest\'s own assigned group always wins if it doesn\'t match the scanning station — there\'s no override flow by design.',
+        "id": "org-sections",
+        "icon": "🔲",
+        "title": "Section scanning (multi-entrance seating)",
+        "badge": "Paid",
+        "intro": "For events seated by table group with two or more entrances — each scanner routes walk-ins and manual check-ins into the section it's assigned to.",
+        "steps": [
+          "Guest Communication → Features & Channels → turn on Section scanning (only shown once you have table groups set up in Seating).",
+          "On the Team page, assign each staff member (or each device) the table-group section they're stationed at.",
+          "Walk-ins and manual check-ins scanned at that station seat into that section automatically, instead of a single shared default group.",
+          "A guest's own assigned group always wins if it doesn't match the scanning station — there's no override flow by design."
         ],
-        warn: 'Section scanning and Venue Access (zone/gate-based entry rules) can\'t both be on for the same event — turn one off before enabling the other.',
+        "warn": "Section scanning and Venue Access (zone/gate-based entry rules) can't both be on for the same event — turn one off before enabling the other."
       },
       {
-        id: 'org-experience', icon: '🧭', title: 'Experience workflows: consent, souvenirs, rooms & sessions',
-        badge: 'Paid',
-        img: '/media/help2-org-experience.png',
-        intro: 'Build a step-by-step operational journey for each guest — check-in, consent, seating, souvenirs, sessions — tracked from Setup to departure.',
-        steps: [
-          'Guest Communication → Features & messaging → turn on Experience, then open Experience settings.',
-          'Workflow tab: start from a template (VIP Dinner Guest Journey, Conference Registration, Wedding Reception, Simple Check-in) or build your own from steps like check-in, consent, seating assignment, meal selection, souvenir, badge, room assignment, session attendance, or feedback.',
-          'Only one workflow can be live per event at a time. Publish makes it active; to change a published workflow you Clone it first, then publish the clone.',
-          'Consent tab: guests sign consent from their Festio Pass page — this only becomes available after they\'ve checked in, so don\'t make an earlier step depend on consent being signed first.',
-          'Guests tab, Feedback tab, and Analytics tab track each guest\'s progress through the workflow and completion rates per step.',
-          'Inbound Automations and Messages let you react to step completion (e.g. a message once a guest is seated).',
+        "id": "org-experience",
+        "icon": "🧭",
+        "title": "Experience workflows: consent, souvenirs, rooms & sessions",
+        "badge": "Paid",
+        "img": "/media/help2-org-experience.png",
+        "intro": "Build a step-by-step operational journey for each guest — check-in, consent, seating, souvenirs, sessions — tracked from Setup to departure.",
+        "steps": [
+          "Guest Communication → Features & Channels → turn on Experience, then open Experience settings.",
+          "Workflow tab: start from a template (VIP Dinner Guest Journey, Conference Registration, Wedding Reception, Simple Check-in) or build your own from steps like check-in, consent, seating assignment, meal selection, souvenir, badge, room assignment, session attendance, or feedback.",
+          "Only one workflow can be live per event at a time. Publish makes it active; to change a published workflow you Clone it first, then publish the clone.",
+          "Consent tab: guests sign consent from their Festio Pass page — this only becomes available after they've checked in, so don't make an earlier step depend on consent being signed first.",
+          "Guests tab, Feedback tab, and Analytics tab track each guest's progress through the workflow and completion rates per step.",
+          "Inbound Automations and Messages let you react to step completion (e.g. a message once a guest is seated)."
         ],
-        warn: 'Step ordering matters: the default "welcome pack" preset requires consent before souvenir pickup, but consent can\'t be signed until after check-in — putting a consent-dependent step earlier than check-in will silently block guests from completing it.',
+        "warn": "Step ordering matters: the default \"welcome pack\" preset requires consent before souvenir pickup, but consent can't be signed until after check-in — putting a consent-dependent step earlier than check-in will silently block guests from completing it."
       },
       {
-        id: 'org-logistics', icon: '📦', title: 'Deliveries: ship merch, aso-ebi & gifts',
-        badge: 'Paid',
-        img: '/media/help2-deliveries.png',
-        steps: [
-          'Guest Communication → Features &amp; messaging → turn on Logistics.',
-          'Deliveries tab → New Shipment. Name it (e.g. "Aso-ebi fabric", "Welcome bag", "Gift delivery").',
-          'Add items to the shipment — each with a name, optional size/variant, and quantity.',
-          'Guest addresses: collected automatically if you turned on address collection in RSVP settings, or import them via the ship_address columns in your guest list.',
-          'Packing list: a shareable read-only page your fulfilment vendor opens — they see guest names, addresses, and items without needing a login.',
-          'Mark items as packed/shipped per guest — or bulk-mark a whole shipment.',
-          'Use multiple shipments for different waves (pre-event aso-ebi vs post-event gift delivery).',
+        "id": "org-logistics",
+        "icon": "📦",
+        "title": "Deliveries: ship merch, aso-ebi & gifts",
+        "badge": "Paid",
+        "img": "/media/help2-deliveries.png",
+        "steps": [
+          "Guest Communication → Features & Channels → turn on Logistics.",
+          "Deliveries tab → New Shipment. Name it (e.g. \"Aso-ebi fabric\", \"Welcome bag\", \"Gift delivery\").",
+          "Add items to the shipment — each with a name, optional size/variant, and quantity.",
+          "Guest addresses: collected automatically if you turned on address collection in RSVP settings, or import them via the ship_address columns in your guest list.",
+          "Packing list: a shareable read-only page your fulfilment vendor opens — they see guest names, addresses, and items without needing a login.",
+          "Mark items as packed/shipped per guest — or bulk-mark a whole shipment.",
+          "Use multiple shipments for different waves (pre-event aso-ebi vs post-event gift delivery)."
         ],
-        tip: 'Add the shipping address fields to your RSVP custom questions so guests fill them in when they confirm — no separate data collection needed.',
+        "tip": "Add the shipping address fields to your RSVP custom questions so guests fill them in when they confirm — no separate data collection needed."
       },
       {
-        id: 'org-registry', icon: '🎁', title: 'Gift list',
-        badge: 'Paid',
-        img: '/media/help2-gift-list.png',
-        steps: [
-          'Guest Communication → Features &amp; messaging → turn on Registry.',
-          'Gift list tab → Add items: paste a store link and the platform auto-fills the title, image, and price. Or add cash funds (e.g. "Honeymoon fund", "New home contribution").',
-          'Write a welcome message shown at the top of the gift list page.',
-          'Share the public gift list link directly — paste it in WhatsApp, add it to your invite page, or print it on physical invites.',
-          'Guests mark what they\'ll bring (or how much they\'re contributing) so nobody doubles up.',
-          'No money moves through Festio — guests purchase or give directly to you. The gift list is purely a wish-list coordination tool.',
-          'You can see who has claimed each item from the Gift list tab.',
-        ],
+        "id": "org-registry",
+        "icon": "🎁",
+        "title": "Gift list",
+        "badge": "Paid",
+        "img": "/media/help2-gift-list.png",
+        "steps": [
+          "Guest Communication → Features & Channels → turn on Registry.",
+          "Gift list tab → Add items: paste a store link and the platform auto-fills the title, image, and price. Or add cash funds (e.g. \"Honeymoon fund\", \"New home contribution\").",
+          "Write a welcome message shown at the top of the gift list page.",
+          "Share the public gift list link directly — paste it in WhatsApp, add it to your invite page, or print it on physical invites.",
+          "Guests mark what they'll bring (or how much they're contributing) so nobody doubles up.",
+          "No money moves through Festio — guests purchase or give directly to you. The gift list is purely a wish-list coordination tool.",
+          "You can see who has claimed each item from the Gift list tab."
+        ]
       },
       {
         id: 'org-ticketing', icon: '🎫', title: 'Ticket sales',
@@ -273,19 +296,21 @@ export const CONTENT = {
         warn: 'Ticket sales currently runs in test mode only — payments use Stripe/Paystack test keys, so no real money changes hands yet. Treat it as a preview of the checkout flow, not a live revenue channel, until this is confirmed generally available.',
       },
       {
-        id: 'org-community', icon: '💬', title: 'FestioMe: guest community & groups',
-        badge: 'Paid',
-        img: '/media/help2-org-community.png',
-        intro: 'A community space for your guests — sub-groups, channels, and announcements, reachable from their Guest Hub.',
-        steps: [
-          'Guest Communication → Features & messaging → turn on FestioMe, then Open FestioMe.',
-          'Community tab → Create group: set a join policy — Open, Requires approval, or Invite only. Tick "Event-team support group" for a staff-only, unlisted group.',
-          'Inside a group, + Create channel: choose Discussion, Announcement, or Staff, and optionally make it private to chosen members.',
-          'Group Settings: write community rules (shown to members) and change the join policy any time.',
-          'Moderation tab: approve or deny join requests, and review reported messages.',
-          'Guests reach FestioMe from their Guest Hub — their Festio Pass signs them straight in, no separate account needed.',
+        "id": "org-community",
+        "icon": "💬",
+        "title": "FestioMe: guest community & groups",
+        "badge": "Paid",
+        "img": "/media/help2-org-community.png",
+        "intro": "GuestHub holds event services; FestioMe opens conversations, people, groups and meetups.",
+        "steps": [
+          "Enable FestioMe in Features & Channels and configure event community access. Open the organizer FestioMe workspace to manage groups, channels and moderation.",
+          "Guests enter through their own GuestHub → FestioMe link so the correct event and pass are retained. A copied link from a different event or environment may not authenticate them.",
+          "In guest Chats, use the plus/start-conversation control or More → Browse groups → New group. Choose people from the event and create an invite-only group. Group creation does not automatically invite every attendee.",
+          "Open Meetups, choose the intended group and create a meetup with its title, date/time, location and optional capacity. Members can view meetups and respond. A meetup response does not record venue or session admission.",
+          "Organizer group controls manage join policy, membership, channels and reports. Announcement channels are organizer posts and read-only for ordinary guests. Guests can use message reactions and the emoji picker in permitted conversations.",
+          "If an adult cannot enter, review the guest record and open organizer FestioMe → Settings → Guest chat access. Select Only approved adults and approve only people whose adult status you have confirmed. Do not bypass junior restrictions or use a staff identity as the guest. Confirm the correct event and pass before retrying."
         ],
-        warn: 'FestioMe\'s own Moderation tab does not cover 1:1 guest-to-host direct messages — those are moderated from Communications → Guest Communication instead.',
+        "warn": "Community access, message permissions and guardian pickup authorization are separate. FestioMe needs connectivity; it is not an offline chat system."
       },
       {
         id: 'org-guest-communication', icon: '💌', title: 'Guest Communication: replies & direct messages',
@@ -310,37 +335,40 @@ export const CONTENT = {
         tip: 'Planner\'s Timeline milestones can link to tasks automatically — a milestone\'s linked tasks show up in both places.',
       },
       {
-        id: 'org-planner', icon: '📘', title: 'Planner: budget, vendors & run sheet',
-        badge: 'Paid',
-        img: '/media/help2-planner.png',
-        intro: 'Keep the planning work — budget, vendors, contracts, timeline — next to your guest list instead of scattered across spreadsheets.',
-        steps: [
-          'Guest Communication → Features & messaging → turn on Planner, then Open your planner.',
-          'Budget tab: track allocated vs. actual spend by category.',
-          'Vendors and Procurement tabs: a workspace per vendor for quotes and orders.',
-          'Contracts tab: draft a contract with title and terms, Save draft, then Send — the vendor signs from their own portal link. Status moves through draft → sent → signed, showing who signed and when.',
-          'Timeline tab: add milestones and link tasks to each one (shares the same task list as Team & Tasks) — this is a milestone list, not a Gantt chart.',
-          'Runsheet and Documents tabs: your day-of schedule and shared files in one place.',
+        "id": "org-planner",
+        "icon": "📘",
+        "title": "Planner: budget, vendors & run sheet",
+        "badge": "Paid",
+        "img": "/media/help2-planner.png",
+        "intro": "Keep the planning work — budget, vendors, contracts, timeline — next to your guest list instead of scattered across spreadsheets.",
+        "steps": [
+          "Guest Communication → Features & Channels → turn on Planner, then Open your planner.",
+          "Budget tab: track allocated vs. actual spend by category.",
+          "Vendors and Procurement tabs: a workspace per vendor for quotes and orders.",
+          "Contracts tab: draft a contract with title and terms, Save draft, then Send — the vendor signs from their own portal link. Status moves through draft → sent → signed, showing who signed and when.",
+          "Timeline tab: add milestones and link tasks to each one (shares the same task list as Team & Tasks) — this is a milestone list, not a Gantt chart.",
+          "Runsheet and Documents tabs: your day-of schedule and shared files in one place."
         ],
-        tip: 'Vendor e-signature happens entirely in the vendor\'s own portal view — you don\'t need to chase a separate signing tool.',
+        "tip": "Vendor e-signature happens entirely in the vendor's own portal view — you don't need to chase a separate signing tool."
       },
       {
-        id: 'org-live', icon: '🎤', title: 'Festio Live: quizzes, polls & surveys',
-        badge: 'Paid',
-        intro: 'Live quizzes, polls, ratings, surveys, Q&A, and word clouds — guests join and respond from their own phone, with results on a presenter screen or venue TV.',
-        steps: [
-          'Guest Communication → Features &amp; messaging → turn on Festio Live (requires an Event Pass).',
-          'Open Festio Live from the sidebar. Click + New activity and choose a type: Quiz, Poll, Survey, Rating, Feedback, Q&A, Word Cloud, or Live Voting.',
-          'Add questions: single/multiple choice, true/false, rating, open text, number, ranking, quadrant (2×2 grid), or image click. Quizzes can award points and run a leaderboard.',
-          'Set the activity to Live when you\'re ready to start. Guests can then join and respond in real time.',
-          'Guests join automatically from their Guest Hub — a "Join Festio Live" button appears on their ticket page whenever an activity is live for their event or current session. No app or extra sign-in needed.',
-          'No personal invite links yet, or a broadcast-style audience (e.g. a keynote)? Share a join code or QR instead — guests go to festio.events/live/join and enter the 6-character code, or scan a QR you display on screen.',
-          'Displays tab → create a Display for each TV/projector/presenter screen. Assign it an activity and a scene (live results, leaderboard, word cloud, etc.) and open its link on that screen — it updates in real time.',
-          'For a guided, presenter-paced show (like a live quiz night), use Start guided show — it walks the room through each question with an intro, answering window, reveal, and results automatically.',
-          'For Survey and Feedback activities: once you have responses, use Download report on the Displays tab to get a full PDF — every question, including open-text answers, not just what fits on the TV screen.',
+        "id": "org-live",
+        "icon": "🎤",
+        "title": "Festio Live: activities, Guided Show and display controls",
+        "badge": "Paid",
+        "intro": "Create live quizzes, voting, polls, surveys, ratings, moderated Q&A and word clouds where enabled.",
+        "steps": [
+          "Enable Festio Live for the event and confirm account entitlement. In Activity studio select New activity, enter Type, Title and Description, and add questions/options as appropriate.",
+          "For a Quiz mark the correct answer and configure question timing/scoring. Voting options are candidates or choices; voting has no objectively correct answer. Keep results hidden until the presenter reveals them.",
+          "Guests join from GuestHub or the supported join code/QR route. Only eligible/live activities appear; an open page is not proof the activity is accepting responses.",
+          "Choose an activity and Target display, then Send activity to screen. Use Show welcome / clear activity to remove it from that display.",
+          "For Guided Show configure automation and phase timings, then start the show. Rehearse answering, countdown, answer reveal and the next question. Auto-advance is conditional on automation being enabled; manual Next/Previous controls remain available.",
+          "An answer countdown needs an active timed question and server opening/deadline state. Simply selecting an activity or enabling Q&A does not create a quiz timer. Keep the control screen connected and verify the guest and display views.",
+          "Use Presenter & moderator links for the appropriate staff role. Protect these links. A guest join link is not a moderator link.",
+          "For Ask the Sheikh, follow the separate Q&A procedure. Rehearse two questions from one guest and moderation before making the activity live."
         ],
-        tip: 'Turn on "Moderate text" when creating an open-text, word-cloud, or Q&A activity so you can approve responses before they appear on the public display.',
-        warn: 'Quiz and Poll results are visible to everyone watching the display as soon as you reveal them — don\'t reveal until every guest you\'re expecting has answered.',
+        "tip": "Turn on \"Moderate text\" when creating an open-text, word-cloud, or Q&A activity so you can approve responses before they appear on the public display.",
+        "warn": "Live responses, moderation, display updates and synchronized show controls require connectivity. Do not promise that Q&A automatically advances through fixed correct answers."
       },
       {
         id: 'org-team', icon: '🧑‍🤝‍🧑', title: 'Add your team',
@@ -357,21 +385,21 @@ export const CONTENT = {
         tip: 'Add all check-in staff before the event day. Have them test-login and open the Check-in page the day before so there are no surprises on the day.',
       },
       {
-        id: 'org-checkin', icon: '🎟️', title: 'Check-in day',
-        img: '/media/help2-checkin.png',
-        steps: [
-          'The day before: set the event to Active in Start here. This enables Check-in to process guests.',
-          'Ensure all scanning staff are added to the Team tab and assigned to this event.',
-          'Share the Check-in page with staff. No app install — it runs in any mobile browser.',
-          'Staff open Check-in → choose their gate (or set area + direction manually) → tap Start camera.',
-          'Each guest shows their QR code (from email, SMS, WhatsApp, or their ticket page). Staff point the camera — admission is instant.',
-          'Green = admitted. Yellow = already admitted (duplicate scan). Red = denied (wrong zone, at capacity, or needs an Event Pass).',
-          'For walk-in guests not on the list: Guests tab → Add guest → assign them a ticket type → their QR appears immediately for scanning.',
-          'Results updates in real time — open it on a separate screen to monitor check-ins live.',
-          'After the event: set to Ended to disable further check-ins. Review the full check-in record from the Guests tab.',
+        "id": "org-checkin",
+        "icon": "🎟️",
+        "title": "Check-in day",
+        "img": "/media/help2-checkin.png",
+        "steps": [
+          "Confirm the correct event is Active, staff accounts have event access, and the enabled scanner modes match your operating plan.",
+          "Open Check-in → Convention check-in for general admission. Use Start camera, a pass URL/token, or Manual search when manual check-in is enabled. Zone access, Check-out and Daily attendance are separate actions.",
+          "Read the immediate result popup and Guest guidance panel. Admitted is confirmed; Already admitted is a duplicate outcome; a denial needs its stated reason resolved. Do not treat a cached/offline result as server confirmation.",
+          "Before a planned outage, open Offline check-in readiness → Prepare this scanner while online. Verify the saved event, pass count, readiness and expiry. Follow the Offline preparation and synchronization staff guide.",
+          "For configured juniors, rehearse the authorized guardian flow online. Test both allowed and denied movement, not only a successful admission.",
+          "Use a fictional guest for the rehearsal. Check daily attendance, session entry/exit, denied age eligibility and the admission popup on both a phone and desktop.",
+          "Before ending the event, reconnect each scanner and resolve pending or Needs review records. Review Results and the entry/exit report, then end the event."
         ],
-        tip: 'Test scanning works on at least one device before guests arrive. Scan your own guest entry to confirm the green admitted screen appears.',
-        warn: 'Check-in requires the event to be set to Active. If guests are getting "Event not active" errors, check the event status in Start here.',
+        "tip": "Keep one active browser tab per scanner and test the actual venue connection and camera hardware.",
+        "warn": "Offline preparation supports eligible general admissions only within the saved manifest lifetime. It does not establish offline startup, cross-device duplicate prevention or junior pickup safety."
       },
       {
         id: 'org-dashboard', icon: '📊', title: 'Results',
@@ -440,21 +468,137 @@ export const CONTENT = {
         ],
       },
       {
-        id: 'org-troubleshoot', icon: '🔧', title: 'Troubleshooting',
-        intro: 'Common issues and how to fix them.',
-        steps: [
-          'Guests not receiving invites: check their email/phone in the Guests tab — look for the ⚠️ flag on rows with invalid phone numbers. For email, ask guests to check spam/junk. Resend from the guest row or Invites & RSVP.',
-          'Import shows warnings (amber badge): click the badge to see which rows failed — most common causes are missing country codes on phone numbers, unknown ticket type names, or rows exceeding your plan guest limit.',
-          'Google Sheets sync is red: the share link has expired or the sheet\'s sharing setting changed. Re-share the sheet as "Anyone with the link can view" and paste the new link.',
-          'QR not scanning: ensure the event is set to Active. Check the scanner device has camera permission in browser settings. Try good lighting — the QR needs to be fully visible in frame.',
-          'Guest getting "Already admitted": the QR was used at a previous gate. Check their check-in log (Guest profile) to see where they were scanned. This is normal — just admit them manually if it was an error.',
-          'Area showing Denied: the guest\'s ticket type or tags don\'t permit entry to that area. Check the guest\'s ticket type in their profile and compare with the rules in Entry areas.',
-          'Credits ran out during a bulk send: buy a top-up from Event Setup and resume the send from Invites & RSVP using a no-reply reminder.',
-          'Can\'t see Seating / Venue Access tabs: these features must be turned on in Guest Communication → Features &amp; messaging, and require an Event Pass.',
-          'Staff can\'t see the event in Check-in: they must be added in Team tab AND assigned to this specific event.',
-          'RSVP deadline passed but guests are still submitting: the deadline blocks new RSVPs from the public invite page. You can still add or approve guests manually from Event Setup.',
-          'Guests don\'t see "Join Festio Live" on their ticket page: confirm Festio Live is turned on (Guest Communication → Features &amp; messaging) and that an activity is actually set to Live, not Draft. Share the festio.events/live/join code as a fallback.',
+        "id": "org-conference",
+        "icon": "🎓",
+        "title": "Conference Center: calls, tracks and operational records",
+        "steps": [
+          "Open Conference Center for the selected event. Use Calls & abstracts to enable the intended speaker, abstract, exhibitor or sponsor applications, set the deadline and review the public call link.",
+          "Review submissions and promote accepted people/organizations into the existing Speakers or Partners records. Acceptance alone does not schedule a session.",
+          "Define tracks and finish dated session scheduling in Experience. Coordinate delivery work in Planner and the speaker/partner workspaces.",
+          "Use organization templates to reuse the supported conference setup, then inspect the new event. Integration records describe connections; they are not proof that an external registration platform is synchronizing."
         ],
+        "warn": "Confirm the actual import or integration path before promising automatic data transfer. External registration may remain with the organizer’s current platform."
+      },
+      {
+        "id": "org-website",
+        "icon": "🌐",
+        "title": "Event website: content, FAQs and publication",
+        "steps": [
+          "Open Design Studio → Event website. Select a design and edit the event’s identity, registration details, venue/travel facts, navigation and FAQs.",
+          "Import the published Experience programme where offered, or configure the public schedule. Review every day, room, speaker and link before publishing.",
+          "Use preview to inspect phone and desktop layouts. Save draft does not publish; choose Publish when the content is ready.",
+          "Use Release history to inspect supported prior website releases; unpublishing takes the public website offline until published again. This website workflow is separate from the invite/pass design publisher.",
+          "Keep event FAQ answers factual: registration owner, eligibility, venue, contact route and deadlines must come from the organizer. Never publish personal pass URLs, staff links or guessed speaker details."
+        ]
+      },
+      {
+        "id": "org-giving",
+        "icon": "💚",
+        "title": "Giving Hub, Donation Tracker and finance reconciliation",
+        "steps": [
+          "Open Festio Live → Donations and configure the campaign, goal, enabled payment instructions and donor privacy. Review the public Giving Hub and projector display.",
+          "Distinguish a pledge, a payment awaiting verification and confirmed received funds. Total potential is not the same as confirmed money received.",
+          "Use the finance workspace Payments & pledges to review evidence and confirm or reject contributions with event-admin access. Confirmations are audited.",
+          "Verify public and projector totals after reconciliation. Do not confirm an amount merely because a guest submitted it.",
+          "Gift-list coordination, donations and ticket sales use different workflows. Check the configured channel/payment process before telling a guest that Festio itself processed a payment."
+        ],
+        "warn": "Account-specific refunds, payment disputes and billing decisions require authorized human review."
+      },
+      {
+        "id": "org-materials",
+        "icon": "📑",
+        "title": "Session materials and presenter resources",
+        "steps": [
+          "Open Festio Live → Materials. Add the supported file or link, title and session association. Review who can access the material before release.",
+          "Select the presentation display and test the actual resource there. Verify page movement and blackout controls where supported by the material type.",
+          "Release approved resources to guests only when intended; an uploaded private file should not be assumed visible in GuestHub.",
+          "Keep presenter/display access separate from guest resource links. Rehearse external links and supported formats on the venue equipment."
+        ]
+      },
+      {
+        "id": "org-certificates",
+        "icon": "🏅",
+        "title": "Certificates: eligibility, issuance and verification",
+        "steps": [
+          "Open Festio Live → Certificates. Create or select a certificate template and configure the supported eligibility rules and design.",
+          "Use a fictional eligible guest for a test issuance. Confirm the rendered identity, event details and public verification link before batch issuance.",
+          "Review issued records and use supported revocation controls when a certificate should no longer be valid. Check the public verification page after a change.",
+          "Do not interpret a certificate as evidence of attendance beyond the actual eligibility rules and recorded data."
+        ],
+        "warn": "Public verification links expose the intended certificate details. Review those details and eligibility before issuing."
+      },
+      {
+        "id": "org-academy",
+        "icon": "📚",
+        "title": "Academy: assignments, practical evidence and versioned learning",
+        "steps": [
+          "Open Academy and select the correct organization. Lessons are filtered by the learner’s role; managers have additional setup and management procedures.",
+          "Complete each lesson’s steps, answer the quiz and submit practical evidence when requested. Passing a quiz is distinct from manager approval of practical work.",
+          "Authorized managers can assign learning, review evidence, manage due dates and inspect progress. Use reminders only for the intended recipients.",
+          "Curriculum version 3 contains the October 2026 operational updates. Earlier version-2 records remain historical; a version change does not mean those learners completed the new material.",
+          "Coordinate reassignment and release review with the training owner. Do not reset or delete historical progress simply to refresh documentation."
+        ]
+      },
+      {
+        "id": "org-troubleshoot",
+        "icon": "🔧",
+        "title": "Troubleshooting",
+        "intro": "Common issues and how to fix them.",
+        "steps": [
+          "Guests not receiving invites: check their email/phone in the Guests tab — look for the ⚠️ flag on rows with invalid phone numbers. For email, ask guests to check spam/junk. Resend from the guest row or Invites & RSVP.",
+          "Import shows warnings (amber badge): click the badge to see which rows failed — most common causes are missing country codes on phone numbers, unknown ticket type names, or rows exceeding your plan guest limit.",
+          "Google Sheets sync is red: the share link has expired or the sheet's sharing setting changed. Re-share the sheet as \"Anyone with the link can view\" and paste the new link.",
+          "QR not scanning: ensure the event is set to Active. Check the scanner device has camera permission in browser settings. Try good lighting — the QR needs to be fully visible in frame.",
+          "Already admitted: inspect the existing admission record. Do not bypass duplicate protection; an authorized lead must correct a mistaken record through the normal admission controls.",
+          "Area showing Denied: the guest's ticket type or tags don't permit entry to that area. Check the guest's ticket type in their profile and compare with the rules in Entry areas.",
+          "Credits ran out during a bulk send: buy a top-up from Event Setup and resume the send from Invites & RSVP using a no-reply reminder.",
+          "Can't see Seating / Venue Access tabs: these features must be turned on in Guest Communication → Features & Channels, and require an Event Pass.",
+          "Staff can't see the event in Check-in: they must be added in Team tab AND assigned to this specific event.",
+          "RSVP deadline passed but guests are still submitting: the deadline blocks new RSVPs from the public invite page. You can still add or approve guests manually from Event Setup.",
+          "Guests don't see \"Join Festio Live\" on their ticket page: confirm Festio Live is turned on (Guest Communication → Features & Channels) and that an activity is actually set to Live, not Draft. Share the festio.events/live/join code as a fallback."
+        ]
+      },
+      {
+        "id": "org-programme",
+        "icon": "🗓️",
+        "title": "Multi-day timetable: rooms, speakers and age groups",
+        "intro": "Publish a usable event timetable from dated Experience sessions and timed programme segments.",
+        "steps": [
+          "Open Experience and the event’s active workflow. Configure each session’s date, start/end time, room, speaker and audience/age eligibility; enable the Live Program feature where required.",
+          "Publish the intended workflow and open a test guest’s GuestHub → Programme. The timetable shows all configured days with valid start/end times, not just the first three days.",
+          "Select each day and search by session, room, speaker or age group. Undated, disabled or invalid-duration sessions do not appear. Missing rooms display Room to be announced; missing speakers need organizer input.",
+          "Confirm event timezone and all days on a phone and desktop. A visible session is not proof that every guest meets its admission rules.",
+          "Create and title separate moderated Q&A activities for different speakers/sessions. Timetable speaker names do not automatically create or route Q&A queues."
+        ],
+        "warn": "Timetable viewing is online. Publication does not prove conflict-free staffing, live capacity or guest eligibility; rehearse those separately."
+      },
+      {
+        "id": "org-qna",
+        "icon": "❓",
+        "title": "Ask the Sheikh: multiple questions and speaker queues",
+        "intro": "Use one moderated Q&A activity per Sheikh or session so questions reach the intended queue.",
+        "steps": [
+          "In Activity studio create Type Q&A and a distinct title containing the speaker/session. Enable Moderate text before it is public.",
+          "Open Presenter & moderator links and distribute the appropriate staff link securely. Keep guest join links separate.",
+          "Set the activity Live. Guests can filter Questions & answers only and search by activity/session title before opening the intended Q&A.",
+          "After submitting, guests use Ask another question to submit again. Q&A is not a one-answer-only quiz.",
+          "Moderators approve eligible questions before public display, then use Feature, Answered or Dismiss as appropriate. Rehearse the display to confirm unapproved questions stay private.",
+          "Close or clear the activity when the session ends. Do not assume a countdown or automatic correct-answer reveal applies to free-text Q&A."
+        ]
+      },
+      {
+        "id": "org-junior",
+        "icon": "🛡️",
+        "title": "Junior Platform: authorized guardians and handoffs",
+        "intro": "Configure who may accompany a junior through protected zone movements and check-out.",
+        "steps": [
+          "Open Venue Access → Junior operations. Enable guardian verification for configured juniors and set the guardian designation scope.",
+          "Choose the junior, authorized guardian and relationship; save the authorization. Review whether each entry is Admin-authorized, Confirmed or Pending guardian confirmation.",
+          "At the scanner, attempt the junior’s zone entry/exit or check-out. When Guardian required appears, scan the authorized guardian’s pass.",
+          "If manual verification is enabled, staff can check the person’s identity and select the displayed authorized guardian. This records staff verification; it must not be described as a QR verification.",
+          "Review the entry/exit report with the guardian, operator and outcome. Configure each junior’s authorization; the setting alone does not create an authorization for every child."
+        ],
+        "warn": "Guardian handoffs remain online. A name on a cached list, an age-group override or an unrelated adult pass cannot authorize a pickup."
       },
     ],
   },
@@ -480,19 +624,20 @@ export const CONTENT = {
         tip: 'Do a test scan the day before. Your organiser can add themselves as a guest — scan their QR to confirm the green admitted screen appears.',
       },
       {
-        id: 'staff-scan', icon: '📷', title: 'Check guests in',
-        img: '/media/help2-checkin.png',
-        steps: [
-          'Open Check-in on your phone or tablet. No app download needed.',
-          'Select your event from the list.',
-          'If the event uses Gates, select your gate (e.g. "Main Entrance"). This sets your zone and direction automatically.',
-          'If using manual area entry: pick the area you\'re standing at and direction (Entry / Exit).',
-          'Tap Start camera. Point the camera at the guest\'s QR code — it reads instantly without pressing any button.',
-          'Hold the phone steady and ensure good lighting. The QR code must be fully within the camera frame.',
-          'After each scan the screen resets automatically, ready for the next guest within a second.',
-          'If a guest\'s phone screen is dim: ask them to increase brightness. A printed QR works just as well.',
+        "id": "staff-scan",
+        "icon": "📷",
+        "title": "Check guests in",
+        "img": "/media/help2-checkin.png",
+        "steps": [
+          "Open Check-in, select the assigned Active event and choose Convention check-in for general admission.",
+          "Tap Start camera and allow camera access, or paste the guest’s pass URL/QR token. Manual search is available when the event enables manual check-in.",
+          "Hold the QR fully in frame. Read the result popup and Guest guidance before allowing the guest through. Do not rely on color alone.",
+          "Already admitted means the guest already has an admission record; inspect the record rather than admitting them again. Send unresolved denials to the authorized event lead.",
+          "Use Zone access to enter/exit a configured zone; use Daily attendance for today’s attendance or a configured session; use Check-out for convention departure.",
+          "If offline, continue only when this device has a valid prepared manifest and explicitly reports Check-in queued offline. Follow the offline staff procedure before reconnecting or closing the scanner."
         ],
-        tip: 'If a QR is not working, ask the organiser to look up the guest in Guests and confirm their invitation or ticket code.',
+        "tip": "A printed QR can be scanned. Keep a separate staffed lookup path for guests without a pass.",
+        "warn": "Do not promise a fixed scan time. Camera permission, lighting, connection and event rules affect the result."
       },
       {
         id: 'staff-results', icon: 'ℹ️', title: 'Understanding scan results',
@@ -508,42 +653,76 @@ export const CONTENT = {
         ],
       },
       {
-        id: 'staff-zones', icon: '🚪', title: 'Zone scanning & gates',
-        img: '/media/help2-checkin.png',
-        steps: [
-          'If the event has Entry areas enabled, Check-in shows an Area/Gate picker before you start.',
-          'Gate mode (recommended): select your named gate once (e.g. "VIP Lounge Door"). The zone and direction are pre-configured — every scan automatically enforces the rules for that gate.',
-          'Manual mode: pick a zone (e.g. Main Hall) and direction (Entry or Exit) yourself. Change it if you move to a different gate.',
-          'The scan result shows "Allowed" (green) or "Denied" (red) plus the live occupancy count for that zone.',
-          'Denied reasons shown on screen: "Wrong zone for ticket type", "Tag not permitted here", "Zone at capacity".',
-          'A guest\'s first allowed Entry scan anywhere in the venue also counts as their event check-in — no separate check-in scan needed.',
-          'Exit scans are optional — they help track who is still inside the venue.',
-          'Live occupancy is shown below the scan result — you can see if a zone is filling up.',
+        "id": "staff-zones",
+        "icon": "🚪",
+        "title": "Zone scanning & gates",
+        "img": "/media/help2-checkin.png",
+        "steps": [
+          "Choose Zone access, then the intended zone and Check in to zone or the exit direction. If using a configured gate, confirm its zone and direction.",
+          "Allowed or Denied reflects the ticket, tag, admission, capacity and guardian rules applicable to that movement. Read the reason before continuing.",
+          "When separate convention admission is enabled, admit the guest to the event first. Do not assume a zone entry always performs general admission.",
+          "For configured junior handoffs, scan the authorized guardian’s pass or use permitted staff verification after checking their identity. Pending or unrelated guardian authorizations must not be accepted.",
+          "Record exits whenever occupancy and pickup tracking are required. Do not treat the general event Check-out control as a substitute for selecting the intended zone exit.",
+          "Use Venue Access → Junior operations → Entry and exit report to review allowed/denied movements and the verified guardian."
         ],
-        tip: 'If you\'re covering multiple gates, stay on Gate mode and switch your gate selection each time you move — don\'t try to use Manual mode for a fast-moving door.',
+        "tip": "If you're covering multiple gates, stay on Gate mode and switch your gate selection each time you move — don't try to use Manual mode for a fast-moving door.",
+        "warn": "Plan zone and junior handoff operations online. Disconnected stations cannot share current occupancy or guardian authorization."
       },
       {
-        id: 'staff-experience', icon: '🧭', title: 'Running an Experience workflow',
-        intro: 'If the organizer has set up an Experience workflow, check-in is just the first step — you may also mark consent, seating, souvenirs, or session attendance.',
-        steps: [
-          'Each guest\'s Festio Pass page shows their current step in the workflow — what\'s done and what\'s next.',
-          'Consent (if required) can only be signed after the guest is checked in — if a guest asks to sign before arrival, let them know it opens right after their first scan.',
-          'Mark a step complete from the guest\'s pass page as they go through it — souvenir pickup, badge issued, seated, etc.',
-          'If a step won\'t complete, check whether it depends on an earlier step (like consent) that hasn\'t happened yet — direct the guest through steps in order.',
-        ],
+        "id": "staff-experience",
+        "icon": "🧭",
+        "title": "Running an Experience workflow",
+        "intro": "If the organizer has set up an Experience workflow, check-in is just the first step — you may also mark consent, seating, souvenirs, or session attendance.",
+        "steps": [
+          "Each guest's Festio Pass page shows their current step in the workflow — what's done and what's next.",
+          "Consent (if required) can only be signed after the guest is checked in — if a guest asks to sign before arrival, let them know it opens right after their first scan.",
+          "Mark a step complete from the guest's pass page as they go through it — souvenir pickup, badge issued, seated, etc.",
+          "If a step won't complete, check whether it depends on an earlier step (like consent) that hasn't happened yet — direct the guest through steps in order.",
+          "A consent reminder does not override the current pass-form rule: consent opens after admission. Rehearse dependencies so a required pre-admission step cannot deadlock the journey."
+        ]
       },
       {
-        id: 'staff-tips', icon: '💡', title: 'Tips for a smooth check-in',
-        steps: [
-          'Keep your phone charged — bring a power bank for all-day events.',
-          'Use a phone holder or lanyard so your hands are free to manage the queue.',
-          'Brief other staff before opening: agree on what to do if a QR is denied or a guest can\'t find their ticket.',
-          'For large events with queues: open multiple check-in stations and assign a separate area/gate to each — parallel scanning dramatically reduces wait times.',
-          'If the camera freezes: close and reopen the Check-in tab. You don\'t lose any data.',
-          'Guests who can\'t find their QR: ask them to check their confirmation email/SMS/WhatsApp. If still missing, direct them to the organiser desk for lookup in Guests.',
-          'Manual lookup: ask the organiser to use Guests or the ticket code lookup to confirm the guest before entry.',
-          'Noisy lighting (direct sunlight, flashing lights): tilt the guest\'s screen slightly towards you or ask them to cup their hand over it to reduce glare.',
+        "id": "staff-tips",
+        "icon": "💡",
+        "title": "Tips for a smooth check-in",
+        "steps": [
+          "Charge devices, provide backup power and rehearse camera permissions and readable QR codes under venue lighting.",
+          "Assign staff to events, agree the admission/zone/daily/session mode for each station, and nominate a lead for denied entries.",
+          "Before an outage select Prepare this scanner, confirm its expiry and use one active browser tab per device.",
+          "Keep the prepared page open. Do not reload, sign out, clear browser data or change devices while local admissions are pending.",
+          "For a missing pass use Manual search when enabled; otherwise direct the guest to the organizer desk. Never create an extra guest merely to bypass a denial.",
+          "After reconnecting check pending counts and Needs review records. Server revalidation, not the initial blue offline popup, determines final acceptance."
+        ]
+      },
+      {
+        "id": "staff-offline",
+        "icon": "📶",
+        "title": "Offline preparation and synchronization",
+        "intro": "Use a prepared scanner for eligible general admissions during a short connectivity outage.",
+        "steps": [
+          "While online and signed into the assigned Active event, open Check-in → Offline check-in readiness → Prepare this scanner. Confirm readiness, event, saved-pass count and expiry.",
+          "The version-2 manifest expires 30 minutes after download. It must match the selected event. Required admission workflow steps, section admission or a live seating decision can block offline admission.",
+          "Keep this browser page open and use one active tab per scanner. QR and manual convention admission can use eligible saved guests; manual lookup requires the event’s manual-check-in permission.",
+          "Read Check-in queued offline as a local saved record, not server acceptance. Same-device repeats are detected; another disconnected device cannot see this admission yet.",
+          "Reconnect and let synchronization run, or choose Sync / retry saved check-ins. Acknowledged admissions are removed from the pending queue; server rejection remains as Needs review.",
+          "Open Review saved check-ins, resolve the stated reason with an authorized lead and retry. Keep the page and browser data until every record is reconciled.",
+          "If storage fails, the manifest expires or the scanner says reconnect, stop offline admission. Follow the organizer’s outage procedure rather than bypassing the error."
         ],
+        "warn": "Offline cold start/reload, daily/session attendance, convention check-out and junior handoffs are not supported. Live consent, capacity and multiple disconnected devices need special planning; no venue-wide duplicate guarantee exists offline."
+      },
+      {
+        "id": "staff-attendance",
+        "icon": "📆",
+        "title": "Daily attendance and session entry/exit",
+        "intro": "General admission, daily presence and session attendance are separate records.",
+        "steps": [
+          "Enable Daily attendance in Venue Access → Junior operations if required. A guest must already be admitted before today’s attendance can be recorded.",
+          "In Check-in choose Daily attendance, select the daily or session action, and use the camera/pass field or Manual search with the corresponding mode.",
+          "Daily attendance records one mark for the guest on the event-local date. Repeating it must report the existing mark rather than creating another. It does not perform general admission.",
+          "For a session select the correct session and entry or exit action. Server checks still enforce admission, age eligibility, time window and capacity.",
+          "An authorized supervisor may use Override and record entry for an age-eligibility exception with a reason. This does not bypass admission, session timing or capacity and is not a guardian-pickup override.",
+          "Review attendance and entry/exit records after the rehearsal. These actions require a connection."
+        ]
       },
     ],
   },
@@ -581,7 +760,7 @@ export const CONTENT = {
         id: 'guest-ticket', icon: '🎟️', title: 'Your ticket & QR code',
         steps: [
           'Once your RSVP is confirmed, you\'ll receive a confirmation email (and/or SMS/WhatsApp) with your personal QR code.',
-          'On the day: show this QR at the entrance — staff will scan it with their phone camera. It\'s instant.',
+          'On the day: show this QR at the entrance — staff will scan it with their phone camera. Wait for the scanner’s result before entering.',
           'You can also find your ticket by reopening the invite link — your QR is always there.',
           'The QR is personal and unique to you. Don\'t share it with anyone else.',
           'If the event uses zones (e.g. VIP areas): your ticket type controls which areas you can enter. If you\'re denied at a gate, speak to the organiser.',
@@ -660,6 +839,31 @@ export const CONTENT = {
           'I need to cancel — return to your invite link and change your RSVP to "Can\'t make it". Contact the host if you\'re past the deadline.',
           'I have a dietary requirement — if there\'s no option on the RSVP form, add a note in the "special requests" field or contact the host directly.',
         ],
+      },
+      {
+        "id": "guest-programme",
+        "icon": "🗓️",
+        "title": "Find your timetable and ask a speaker",
+        "steps": [
+          "Open your personal GuestHub and choose Programme. Select the day and search by session, room, speaker or age group.",
+          "Check the event timezone and the latest room information before travelling to a session. A listed session may still have age, capacity or admission requirements.",
+          "For questions open Festio Live, select Questions & answers only, search the speaker/session title and open the matching Ask the Sheikh activity.",
+          "Submit your question; it may wait for moderator approval. Use Ask another question to send an additional question to the same activity.",
+          "Use Need help? or Communications in GuestHub to contact the event organizer. Your personal pass remains the route for admission, not a chat message."
+        ]
+      },
+      {
+        "id": "guest-community",
+        "icon": "💬",
+        "title": "FestioMe chats, groups and meetups",
+        "steps": [
+          "Open FestioMe from your own GuestHub to retain the correct event and pass. Chats is the conversation workspace; Back to GuestHub returns to event services.",
+          "Choose an event chat or permitted direct message. Use the emoji picker or reactions; organizer announcement channels are read-only for ordinary guests.",
+          "Use the Chats plus button or More → Browse groups → New group to select event members and create an invite-only conversation.",
+          "Open Meetups and select the group to see or create gatherings. Check date/time, location and capacity before responding. A meetup RSVP is not a session or gate check-in.",
+          "If access is denied or your pass is not found, return through the correct GuestHub and ask the organizer to review your access. Junior restrictions and adult approvals still apply."
+        ],
+        "warn": "Do not share a personal GuestHub/pass link as a public community invitation. Chat and meetup updates require connectivity."
       },
     ],
   },

@@ -222,3 +222,16 @@ async def test_compact_transcript_keeps_recent_turns_when_local_unavailable(monk
     assert "turn 0" not in compact
     assert "turn 11" in compact
     assert len(compact.splitlines()) == 8
+
+
+@pytest.mark.parametrize("question, expected", [
+    ("offline preparation manifest expiry saved check-ins", "Offline preparation and synchronization"),
+    ("Junior Platform authorized guardian handoffs", "Junior Platform: authorized guardians and handoffs"),
+    ("daily attendance session entry exit", "Daily attendance and session entry/exit"),
+    ("Ask the Sheikh multiple questions speaker queues", "Ask the Sheikh: multiple questions and speaker queues"),
+    ("broadcast ticket type queued delivered recipients", "Broadcast an update"),
+])
+def test_current_operating_questions_retrieve_exact_procedure(question, expected):
+    text, titles = main._relevant_knowledge(question)
+    assert expected in titles
+    assert text

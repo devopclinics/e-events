@@ -49,15 +49,18 @@ export const INTERNAL_DOCS = [
 ]
 
 export const PDFS = [
+  { title: 'Current operating reference — printable PDF', description: 'October 2026 scanner, attendance, guardian, timetable, Q&A, community and broadcast procedures; generated from the current reference.', href: '/media/festio-current-operations.pdf', filename: 'festio-current-operations.pdf', type: 'PDF' },
+  { title: 'Current operating reference — October 2026', description: 'Verified scanner preparation, offline limits, daily/session attendance, guardian handoffs, timetables, speaker Q&A, Guided Show, FestioMe and broadcast procedures. Read alongside historical decks.', href: '/media/festio-current-operations.html', filename: 'festio-current-operations.html', type: 'HTML' },
+
   {
-    title: 'NCNMO Platform 2026 — Full Presentation (40 slides)',
-    description: 'Complete Platform 2026 presentation: who Festio is for, the needs, the complete Festio platform, guest journey, ID card, Junior handoff, day-by-day flows, live demo screens, Knack comparison, RFID roadmap, staffing, readiness, rollout, and what NCNMO needs to provide. The first 25 slides are the main deck; the rest is appendix.',
+    title: 'NCNMO Platform 2026 — Full Presentation (40 slides + current supplement)',
+    description: 'Complete Platform 2026 presentation: who Festio is for, the needs, the complete Festio platform, guest journey, ID card, Junior handoff, day-by-day flows, live demo screens, Knack comparison, RFID roadmap, staffing, readiness, rollout, and what NCNMO needs to provide. The original first 25 slides are the main deck; the rest is appendix. Read the October 2026 supplement first for current operating limits.',
     href: '/media/ncnmo-platform-2026-full-deck.pdf',
     filename: 'ncnmo-platform-2026-full-deck.pdf',
     type: 'PDF',
   },
   {
-    title: 'NCNMO Platform 2026 — Short Presentation (14 slides)',
+    title: 'NCNMO Platform 2026 — Short Presentation (14 slides + current supplement)',
     description: 'Short version of the Platform 2026 presentation: who Festio is for, the eight needs, the complete Festio platform, Festio in action, guest journey, ID card with QR on the back, Junior guardian handoff, convention-on-a-page, live dashboards, what is ready today, rollout, and next steps.',
     href: '/media/ncnmo-platform-2026-short-deck.pdf',
     filename: 'ncnmo-platform-2026-short-deck.pdf',

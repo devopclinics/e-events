@@ -166,3 +166,15 @@ on alerts for unattended operations.
   handling routes genuine questions to a human job rather than silently returning.
 - Do not delete Chatwoot data or Redis queues as a rollback method.
 
+
+
+## October 2026 knowledge and operational verification
+
+- Regenerate the support KB and Media Library copies from `frontend/src/guideContent.mjs`; the generated files must match before release.
+- Prepare a staging scanner online; test valid and expired manifests, QR/manual local admission, a duplicate, storage failure, reconnect and a rejected record that remains Needs review. Do not use production guests or send unapproved provider messages.
+- Rehearse online guardian selection/QR authorization, pending authorization denial, daily event-local attendance and session age/time/capacity checks. An age override must not bypass guardian authorization.
+- Verify every programme day, room/speaker search, two submissions to one moderated Q&A, correct speaker queue, and timed Guided Show answering/reveal/next/previous.
+- Test FestioMe personal GuestHub entry, invite-only group membership, meetup response and read-only announcements.
+- Inspect ticket-type broadcast recipients, empty selection, credits/consent and final delivery records. Queued is not delivered.
+- Check desktop/mobile views; hardware, venue network, multi-device outage behavior and approved provider delivery remain separate evidence gates.
+- Deploy/restart the support-service and support-worker with the refreshed KB. A frontend build alone does not update AI retrieval. Use the knowledge hash to distinguish cached answers from the new release.

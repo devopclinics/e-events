@@ -72,3 +72,13 @@ that the retrieval change improves the evaluation set without increasing sensiti
 - Did the knowledge hash/cache namespace change after regeneration?
 - Were tests added for misspellings, paraphrases, follow-ups, and unsafe near-matches?
 
+
+## Synchronized outputs and release checklist
+
+Run `node frontend/scripts/gen-operations-reference.mjs`, `node support-service/scripts/build_knowledge_base.mjs`, then the frontend build (which generates `/guide.html`). Run `npm run check:knowledge` and `npm run check:help-content` from frontend. These checks ensure public instructions/warnings survive generation, the support and Media Library copies match, and operator topics stay out of the public guide.
+
+Academy content is independently versioned in `backend/app/training_catalog.py`; curriculum version 3 retains historical version-2 records but requires a deliberate new-version assignment/training review. Never delete old progress to refresh wording. Setup Guide recipe text is separate from readiness logic.
+
+Review the current operating reference, website FAQs, Knowledge Transfer captions, Media Library links and event PDFs together. Treat dated plans and comparison decks as historical proposals; do not rewrite a historical test result as if a later release had already been tested. Add a dated current supplement and preserve the prior file. Speaker schedules, candidate lists, legal consent wording and event FAQ data still require the event owner.
+
+Deploy documentation-bearing frontend, backend (Academy), support-service and support-worker together after staging review. A frontend deployment alone does not refresh the support worker's loaded knowledge base. No documentation edit authorizes an external test broadcast.

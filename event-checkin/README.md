@@ -421,3 +421,8 @@ docker compose up -d --build
 
 # Database schema is auto-updated on backend startup (SQLAlchemy create_all)
 ```
+
+
+## Current operating documentation (October 2026)
+
+The maintained procedures are in `frontend/src/guideContent.mjs` (repository paths are relative to event-checkin), the generated Help/guide and `/media/festio-current-operations.html`. Offline scanner manifests are version 2 with a 30-minute UTC expiry; queued local admission is not server confirmation. Guest Programme responses include room, speaker and age groups. Speaker Q&A, Guided Show automation, chat membership and broadcast delivery have distinct authorization/lifecycle rules. Consult the knowledge inventory before changing or deploying documentation.

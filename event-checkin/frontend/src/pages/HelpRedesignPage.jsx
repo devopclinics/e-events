@@ -55,11 +55,11 @@ function TopicAccordion({ topic, query }) {
       </summary>
       <div className="rd-path-body">
         <div className="rd-path-body-inner">
-          {topic.image && (
-            <a className="hp-shot" href={topic.image} target="_blank" rel="noreferrer">
-              <img src={topic.image} alt={`${topic.title} screenshot`} loading="lazy" />
+          {(topic.imgs || (topic.img || topic.image ? [topic.img || topic.image] : [])).map(src => (
+            <a key={src} className="hp-shot" href={src} target="_blank" rel="noreferrer">
+              <img src={src} alt={`${topic.title} illustrative screenshot; follow the current written procedure`} loading="lazy" />
             </a>
-          )}
+          ))}
           {hasBoth && <div className="hp-eyebrow">Setup <span>— follow in order</span></div>}
           {topic.steps && topic.steps.length > 0 && (
             <ol className="hp-steps">

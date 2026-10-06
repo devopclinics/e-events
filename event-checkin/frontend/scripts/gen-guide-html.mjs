@@ -2,6 +2,7 @@
 // CONTENT the SPA uses, so search engines / curl / AI fetch tools can read the
 // guide without executing JavaScript. Run after `vite build` (see package.json).
 import { writeFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { CONTENT } from '../src/guideContent.mjs'
 
 const esc = (s) => String(s)
@@ -11,12 +12,17 @@ const ROLES = ['organizer', 'staff', 'guest']  // operator guide stays internal
 
 function topicHtml(t) {
   const imgs = t.imgs || (t.img ? [t.img] : [])
-  const steps = t.steps.map((s) => `<li>${esc(s)}</li>`).join('\n')
+  const steps = (t.steps || []).map((s) => `<li>${esc(s)}</li>`).join('\n')
   const figs = imgs.map((src) =>
     `<img src="${esc(src)}" alt="${esc(t.title)}" loading="lazy" />`).join('\n')
   return `<section id="${esc(t.id)}">
   <h3>${esc(t.icon || '')} ${esc(t.title)}</h3>
+  ${t.badge ? `<p><strong>${esc(t.badge)}</strong></p>` : ''}
+  ${t.intro ? `<p>${esc(t.intro)}</p>` : ''}
   <ol>${steps}</ol>
+  ${(t.capabilities || []).map(c => `<h4>${esc(c.title)}</h4><p>${esc(c.body)}</p>`).join('\n')}
+  ${t.tip ? `<p><strong>Tip:</strong> ${esc(t.tip)}</p>` : ''}
+  ${t.warn ? `<p><strong>Important:</strong> ${esc(t.warn)}</p>` : ''}
   ${figs}
 </section>`
 }
@@ -65,5 +71,6 @@ ${body}
 </body>
 </html>`
 
-writeFileSync(new URL('../dist/guide.html', import.meta.url), html)
-console.log('Wrote dist/guide.html (%d bytes)', html.length)
+const output = process.argv[2] ? resolve(process.argv[2]) : new URL('../dist/guide.html', import.meta.url)
+writeFileSync(output, html)
+console.log('Wrote public guide (%d bytes)', html.length)

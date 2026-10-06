@@ -155,6 +155,7 @@ export default function TrainingPage() {
         <h2><span className="lesson-icon-lg">{selected.icon}</span>{selected.title}</h2>
         <p className="lesson-objective">{selected.objective}</p>
         <img src={selected.image_url} alt={`${selected.title} training guide`} />
+        <p className="lesson-objective">Illustration for context. Follow the current written workflow below when controls differ. <a href="/media/festio-current-operations.html" target="_blank" rel="noreferrer">Current operating reference</a></p>
         <section className="section-card card-why"><h3><span>💡</span>Why it matters</h3><p>{selected.why_it_matters}</p></section>
         <section className="section-card card-before"><h3><span>🧾</span>Before you begin</h3><ul>{selected.prerequisites.map(x => <li key={x}>{x}</li>)}</ul></section>
         <section className="section-card card-workflow"><h3><span>🛠️</span>Guided workflow</h3><ol>{selected.steps.map(x => <li key={x}>{x}</li>)}</ol></section>

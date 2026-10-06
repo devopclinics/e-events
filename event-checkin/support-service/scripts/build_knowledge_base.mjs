@@ -13,10 +13,12 @@ const ROLES = ['organizer', 'staff', 'guest', 'operator']
 
 function topicMarkdown(t) {
   const lines = [`### ${t.title}`, '']
+  if (t.badge) lines.push(`Availability: ${t.badge}`, '')
   if (t.intro) lines.push(t.intro, '')
   if (t.steps?.length) {
     lines.push(...t.steps.map((s, i) => `${i + 1}. ${s}`), '')
   }
+  for (const c of t.capabilities || []) lines.push(`#### ${c.title}`, '', c.body, '')
   if (t.tip) lines.push(`Tip: ${t.tip}`, '')
   if (t.warn) lines.push(`Warning: ${t.warn}`, '')
   return lines.join('\n')

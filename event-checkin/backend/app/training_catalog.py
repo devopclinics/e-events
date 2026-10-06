@@ -6,7 +6,8 @@ with each other instead of drifting into separately-maintained descriptions.
 """
 
 COURSE_KEY = "festio-platform-foundations"
-COURSE_VERSION = 2
+COURSE_VERSION = 3
+# Version 3 adds verified operational guidance; existing version-2 records are not deleted.
 
 ALL_ROLES = {"owner", "admin", "staff"}
 _MANAGER_ROLES = {"owner", "admin"}  # lessons about configuring the product, not running it day-of
@@ -128,7 +129,7 @@ LESSON_CONTENT = {
             "Review the value/outcomes guide image and note the four outcome categories: accurate guest data, no double-booking, live event-day visibility, and reduced manual admin.",
             "Trace one guarantee end to end: 'a seat can't be double-booked' -- find where this is enforced (Seating tab capacity, and again at check-in denial).",
             "Trace 'live event-day visibility' -- open Results during an active event and identify which numbers update automatically without a page reload.",
-            "Identify one manual-admin outcome -- re-importing a guest spreadsheet never creates duplicates, it only fills in missing fields.",
+            "Review a repeat import using stable guest identifiers, inspect warnings and resolve ambiguous matches before committing.",
         ],
         "common_mistakes": [
             "Describing a feature by its tab name instead of the outcome it produces for the organizer",
@@ -138,7 +139,7 @@ LESSON_CONTENT = {
         "practical": "Pick one Festio feature and write one sentence describing the outcome it produces for an organizer, not what the feature is called.",
         "quiz": [
             {"question": "What happens if you re-import a guest spreadsheet that has some guests already loaded?", "options": [
-                "Existing guests are matched and only missing fields are filled in -- no duplicates are created",
+                "Matching uses supplied identifiers; review the preview and warnings for ambiguous rows are created",
                 "Every guest is duplicated", "The import is rejected", "All existing guests are deleted first",
             ], "correct": 0},
             {"question": "How does the Results page get its live numbers during an active event?", "options": [
@@ -543,7 +544,7 @@ LESSON_CONTENT = {
         "steps": [
             "Start here, Download template, fill it in, and Upload guest file -- column names match flexibly regardless of case or spacing.",
             "For live sync, paste a Google Sheets or OneDrive share link and either import once or set a sync interval while the event is Active; watch the sync badge (green, amber, red).",
-            "Confirm re-importing never creates duplicates -- it only fills in missing phone numbers, ticket types, addresses, or tags for guests who already exist.",
+            "Review import matching and warnings before re-importing; stable identifiers are needed to recognize existing guests. Do not assume every spreadsheet is duplicate-proof.",
             "Guests tab, click any guest to review their RSVP status, contact info, ticket type, tags, seat assignment, order choices, and check-in history.",
         ],
         "common_mistakes": [
@@ -554,7 +555,7 @@ LESSON_CONTENT = {
         "practical": "Import a small test guest list with one row missing a country code, and note what warning appears.",
         "quiz": [
             {"question": "What happens when you re-import a guest list that already has some guests loaded?", "options": [
-                "Existing guests are matched and only missing fields are filled in -- no duplicates", "All guests are duplicated",
+                "Matching uses supplied identifiers; review the preview and warnings for ambiguous rows", "All guests are duplicated",
                 "The whole list is replaced", "Only new guests are kept, old ones deleted",
             ], "correct": 0},
             {"question": "What does an amber sync badge mean?", "options": [
@@ -563,60 +564,85 @@ LESSON_CONTENT = {
             ], "correct": 0},
         ],
     },
-    "guest-communication": {
-        "icon": "📨",
-        "roles": _MANAGER_ROLES,
-        "objective": "Distinguish Event Updates, Guest Chat, Message Host, and FestioMe groups, and enable only the ones an event needs.",
-        "why_it_matters": "These four channels have different audiences and privacy expectations -- mixing them up can leak a private guest message into a public group, which is a real trust problem, not just a UX slip.",
-        "steps": [
-            "Open Guest Communication for the event and review Event Updates, Guest Chat, Guest posting, and Message Host one at a time.",
-            "Use Event Updates for host-to-guest announcements, choosing the intended audience -- attending, declined, checked-in, not checked-in -- before publishing.",
-            "Use Guest Chat for a shared conversation, and turn Guest posting off if guests should read but not post.",
-            "Use Message Host for private guest questions -- replies belong to that guest's private thread and must never be copied into Guest Chat or a FestioMe group.",
-        ],
-        "common_mistakes": [
-            "Copying a private Message Host reply into a public announcement or Guest Chat while troubleshooting",
-            "Turning off a communication module and assuming it also disables RSVP, QR tickets, or Check-in -- it must not, and should be tested",
-            "Not choosing an audience before publishing an Event Update, sending it to guests it wasn't meant for",
-        ],
-        "practical": "Open one eligible and one ineligible test guest link in separate sessions after changing a communication toggle, and confirm only the intended module changed.",
-        "quiz": [
-            {"question": "Where do private guest questions belong?", "options": [
-                "Message Host -- a private thread, never copied into Guest Chat or a group", "Guest Chat",
-                "A FestioMe group", "Event Updates",
-            ], "correct": 0},
-            {"question": "Turning off a Guest Communication module should never also disable which of these?", "options": [
-                "RSVP, QR tickets, or Check-in", "Guest Chat", "Event Updates", "FestioMe groups",
-            ], "correct": 0},
-        ],
-    },
-    "festiohub": {
-        "icon": "💬",
-        "objective": "Explain what FestioHub is, what's on it automatically, and how the separate FestioMe community layer connects to it.",
-        "why_it_matters": "Guests and organizers often confuse the always-on personal FestioHub with the optional FestioMe community -- knowing the difference prevents promising a feature that isn't turned on.",
-        "steps": [
-            "Confirm every guest's pass includes a personal FestioHub link automatically -- their QR code, seating details, order choices, event updates, and a message thread to the team -- nothing to configure.",
-            "FestioMe (top navigation) is the optional event community -- announcements, photos, and groups -- separate from the always-on personal hub.",
-            "Create a group in FestioMe and set its privacy: open to all guests, join-on-request, or private (selected members only).",
-            "Confirm guests reach the community from a link on their FestioHub, and that push notifications work for guests who allow them, even with the page closed.",
-        ],
-        "common_mistakes": [
-            "Telling a guest to set up their FestioHub -- it's automatic, there's nothing to configure",
-            "Assuming FestioMe groups exist by default -- the organizer has to create the community first",
-            "Posting logistics as an SMS broadcast, spending credits, instead of a free FestioMe announcement",
-        ],
-        "practical": "Create one FestioMe group with join-on-request privacy in a training event, and confirm where a guest sees the request-to-join option from their hub.",
-        "quiz": [
-            {"question": "Does a guest need to do anything to get their personal FestioHub?", "options": [
-                "No -- it's included automatically with their pass", "They must request access",
-                "It only exists for Experience events", "They must download an app",
-            ], "correct": 0},
-            {"question": "What's the difference between FestioHub and FestioMe?", "options": [
-                "FestioHub is each guest's automatic personal hub; FestioMe is the optional community the organizer creates",
-                "They are the same feature", "FestioMe is automatic, FestioHub must be created", "FestioHub is only for staff",
-            ], "correct": 0},
-        ],
-    },
+    'guest-communication': {'icon': '📨',
+     'roles': {'owner', 'admin'},
+     'objective': 'Distinguish Event Updates, Guest Chat, Message Host, and FestioMe groups, and enable only the ones '
+                  'an event needs.',
+     'why_it_matters': 'These four channels have different audiences and privacy expectations -- mixing them up can '
+                       'leak a private guest message into a public group, which is a real trust problem, not just a '
+                       'UX slip.',
+     'steps': ['Open Guest Communication and the broadcast composer. Select the correct event before selecting '
+               'recipients.',
+               'Choose an audience filter or explicit guests. Select recipients by ticket type selects a snapshot of '
+               'the loaded guests, such as Teachers or Volunteers; review the selected names and count. An empty '
+               'ticket-type selection must not be treated as All guests.',
+               'Write the message and select the enabled email, SMS or WhatsApp channels. Check contact details, '
+               'applicable consent and the credit estimate before sending.',
+               'Review the message and recipients, then confirm the send. Queued means accepted for background '
+               'processing, not delivered. Check delivery records for final channel status and failures.',
+               'Use Scheduler for a later update. Dynamic audiences are evaluated when sent; frozen audiences '
+               'preserve the selected recipient set. Review event timezone, timing and status before scheduling.',
+               'Resolve the reason for failed delivery before retrying. Do not resend to everyone merely because some '
+               'recipients failed.'],
+     'common_mistakes': ['Sent messages cannot be recalled. Do not promise delivery when a job is only queued. '
+                         'Provider/network availability and messaging consent still apply.'],
+     'practical': 'On staging select a Teachers ticket-type audience and inspect the recipient list, then select an '
+                  'empty audience and confirm it does not become All guests. Do not send without an approved test '
+                  'recipient.',
+     'quiz': [{'question': 'Does Queued prove a WhatsApp broadcast was delivered?',
+               'options': ['No. Check the final provider delivery status',
+                           'Yes, to every selected guest',
+                           'Yes, even without a valid phone number',
+                           'Only for administrators'],
+               'correct': 0},
+              {'question': 'What does Select recipients by ticket type select?',
+               'options': ['A snapshot of matching loaded guests that must be reviewed',
+                           'All guests if there are no matches',
+                           'Every future registrant automatically',
+                           'Only users with staff accounts'],
+               'correct': 0}]},
+    'festiohub': {'icon': '💬',
+     'objective': "Explain what FestioHub is, what's on it automatically, and how the separate FestioMe community "
+                  'layer connects to it.',
+     'why_it_matters': 'Guests and organizers often confuse the always-on personal FestioHub with the optional '
+                       "FestioMe community -- knowing the difference prevents promising a feature that isn't turned "
+                       'on.',
+     'steps': ['Open your personal GuestHub and choose Programme. Select the day and search by session, room, speaker '
+               'or age group.',
+               'Check the event timezone and the latest room information before travelling to a session. A listed '
+               'session may still have age, capacity or admission requirements.',
+               'For questions open Festio Live, select Questions & answers only, search the speaker/session title and '
+               'open the matching Ask the Sheikh activity.',
+               'Submit your question; it may wait for moderator approval. Use Ask another question to send an '
+               'additional question to the same activity.',
+               'Use Need help? or Communications in GuestHub to contact the event organizer. Your personal pass '
+               'remains the route for admission, not a chat message.',
+               'Open FestioMe from your own GuestHub to retain the correct event and pass. Chats is the conversation '
+               'workspace; Back to GuestHub returns to event services.',
+               'Choose an event chat or permitted direct message. Use the emoji picker or reactions; organizer '
+               'announcement channels are read-only for ordinary guests.',
+               'Use the Chats plus button or More → Browse groups → New group to select event members and create an '
+               'invite-only conversation.',
+               'Open Meetups and select the group to see or create gatherings. Check date/time, location and capacity '
+               'before responding. A meetup RSVP is not a session or gate check-in.',
+               'If access is denied or your pass is not found, return through the correct GuestHub and ask the '
+               'organizer to review your access. Junior restrictions and adult approvals still apply.'],
+     'common_mistakes': ['Do not share a personal GuestHub/pass link as a public community invitation. Chat and '
+                         'meetup updates require connectivity.'],
+     'practical': 'Create one FestioMe group with join-on-request privacy in a training event, and confirm where a '
+                  'guest sees the request-to-join option from their hub.',
+     'quiz': [{'question': 'Can a guest submit more than one Ask the Sheikh question?',
+               'options': ['Yes, use Ask another question in the correct live Q&A',
+                           'No, it is always limited to one',
+                           'Only by creating another guest',
+                           'Only by entering a quiz'],
+               'correct': 0},
+              {'question': 'Does a visible timetable session guarantee entry?',
+               'options': ['No, admission, age, capacity and time rules still apply',
+                           'Yes, for all guests',
+                           'Yes, even while offline',
+                           'Only if it has a room name'],
+               'correct': 0}]},
     "public-pages": {
         "icon": "🌐",
         "roles": _MANAGER_ROLES,
@@ -757,60 +783,129 @@ LESSON_CONTENT = {
             ], "correct": 0},
         ],
     },
-    "checkin-scanner": {
-        "icon": "🎟️",
-        "objective": "Run day-of check-in correctly: activate the event, assign staff, scan guests, and read every scan result color correctly.",
-        "why_it_matters": "Check-in is the single highest-stakes, most time-pressured screen in the whole product -- a misread result color at a busy door creates a line and a frustrated guest.",
-        "steps": [
-            "The day before: set the event to Active in Start here -- check-in will not process guests otherwise.",
-            "Confirm all scanning staff are added to Team and assigned to this specific event.",
-            "Staff open Check-in, choose their gate (or set area and direction manually), and tap Start camera -- no app install needed, camera access must be granted.",
-            "Read results correctly: green means admitted, yellow means already admitted (a duplicate scan, not necessarily an error), red means denied -- wrong zone, at capacity, table/section full, or needs an Event Pass.",
-        ],
-        "common_mistakes": [
-            "Leaving the event on Draft on the day, so every scan is refused with 'Event not active'",
-            "Treating a yellow 'Already admitted' result as an error requiring override, instead of checking when and where it was first scanned",
-            "Overriding a red denial manually instead of sending the guest to the organizer desk for resolution",
-        ],
-        "practical": "Set a training event to Active, add yourself as staff, and scan one test guest, confirming the green admitted screen and the corresponding Results update.",
-        "quiz": [
-            {"question": "What does a yellow 'Already admitted' scan result mean?", "options": [
-                "The QR was already scanned before -- check when and where, it's often fine such as moving between zones",
-                "The guest is denied entry", "The event is not active", "The scanner is offline",
-            ], "correct": 0},
-            {"question": "What must be true before Check-in will process any guest?", "options": [
-                "The event must be set to Active", "The event must have Ticket sales on",
-                "All guests must have RSVP'd by email", "The organizer must be logged in at the same time",
-            ], "correct": 0},
-        ],
-    },
-    "guest-experience": {
-        "icon": "🧭",
-        "objective": "Build a post-admission Experience workflow with dependent steps -- consent, souvenir, room assignment, sessions -- and run a guest through it.",
-        "why_it_matters": "Experience adds real operational complexity after check-in -- getting step dependencies wrong either blocks guests who should be able to proceed, or lets a step happen out of order, such as a souvenir handed out before consent is signed.",
-        "steps": [
-            "Sidebar, Features & messaging, turn on Experience, then create or clone a workflow -- keep it Draft while editing, only one workflow Published at a time.",
-            "Add steps in the order staff should follow -- Main check-in, Consent, Badge pickup, Souvenir, Room assignment, Session attendance -- and set Step dependencies, e.g. Souvenir depends on Consent.",
-            "For multi-room seating, create the room's table group in Seating first, then set a Room assignment step to 'Separate seat for this step' with a unique assignment scope -- this doesn't replace the guest's main event seat.",
-            "Publish the workflow, then run one test guest through every step end to end before sending it live.",
-        ],
-        "common_mistakes": [
-            "Publishing a workflow without running a test guest through every dependency first",
-            "Assuming a scoped Experience room assignment replaces the guest's main seat -- it doesn't, they're independent",
-            "Manually completing a session-attendance step before its check-in window opens, bypassing the time gate the organizer set",
-        ],
-        "practical": "Build a two-step workflow, Consent depends on Main check-in, in a training event, and run one test guest through both steps in order.",
-        "quiz": [
-            {"question": "Does a scoped Experience room assignment replace a guest's main event seat?", "options": [
-                "No -- they're independent; a guest can have a main seat plus separate scoped seats", "Yes, it overwrites the main seat",
-                "Only if Seating is turned off", "Only for session steps",
-            ], "correct": 0},
-            {"question": "What blocks a session-attendance step from being completed early?", "options": [
-                "Its configured check-in window, which staff can't bypass by tapping Complete early", "Nothing, staff can always complete any step",
-                "The event must be Ended first", "It requires a platform superadmin",
-            ], "correct": 0},
-        ],
-    },
+    'checkin-scanner': {'icon': '🎟️',
+     'objective': 'Distinguish general admission, daily attendance, session movements, guardian handoffs and locally '
+                  'queued offline admissions.',
+     'why_it_matters': 'Check-in is the single highest-stakes, most time-pressured screen in the whole product -- a '
+                       'misread result color at a busy door creates a line and a frustrated guest.',
+     'steps': ['Open Check-in, select the assigned Active event and choose Convention check-in for general admission.',
+               'Tap Start camera and allow camera access, or paste the guest’s pass URL/QR token. Manual search is '
+               'available when the event enables manual check-in.',
+               'Hold the QR fully in frame. Read the result popup and Guest guidance before allowing the guest '
+               'through. Do not rely on color alone.',
+               'Already admitted means the guest already has an admission record; inspect the record rather than '
+               'admitting them again. Send unresolved denials to the authorized event lead.',
+               'Use Zone access to enter/exit a configured zone; use Daily attendance for today’s attendance or a '
+               'configured session; use Check-out for convention departure.',
+               'If offline, continue only when this device has a valid prepared manifest and explicitly reports '
+               'Check-in queued offline. Follow the offline staff procedure before reconnecting or closing the '
+               'scanner.',
+               'While online and signed into the assigned Active event, open Check-in → Offline check-in readiness → '
+               'Prepare this scanner. Confirm readiness, event, saved-pass count and expiry.',
+               'The version-2 manifest expires 30 minutes after download. It must match the selected event. Required '
+               'admission workflow steps, section admission or a live seating decision can block offline admission.',
+               'Keep this browser page open and use one active tab per scanner. QR and manual convention admission '
+               'can use eligible saved guests; manual lookup requires the event’s manual-check-in permission.',
+               'Read Check-in queued offline as a local saved record, not server acceptance. Same-device repeats are '
+               'detected; another disconnected device cannot see this admission yet.',
+               'Reconnect and let synchronization run, or choose Sync / retry saved check-ins. Acknowledged '
+               'admissions are removed from the pending queue; server rejection remains as Needs review.',
+               'Open Review saved check-ins, resolve the stated reason with an authorized lead and retry. Keep the '
+               'page and browser data until every record is reconciled.',
+               'If storage fails, the manifest expires or the scanner says reconnect, stop offline admission. Follow '
+               'the organizer’s outage procedure rather than bypassing the error.',
+               'Enable Daily attendance in Venue Access → Junior operations if required. A guest must already be '
+               'admitted before today’s attendance can be recorded.',
+               'In Check-in choose Daily attendance, select the daily or session action, and use the camera/pass '
+               'field or Manual search with the corresponding mode.',
+               'Daily attendance records one mark for the guest on the event-local date. Repeating it must report the '
+               'existing mark rather than creating another. It does not perform general admission.',
+               'For a session select the correct session and entry or exit action. Server checks still enforce '
+               'admission, age eligibility, time window and capacity.',
+               'An authorized supervisor may use Override and record entry for an age-eligibility exception with a '
+               'reason. This does not bypass admission, session timing or capacity and is not a guardian-pickup '
+               'override.',
+               'Review attendance and entry/exit records after the rehearsal. These actions require a connection.',
+               'Open Venue Access → Junior operations. Enable guardian verification for configured juniors and set '
+               'the guardian designation scope.',
+               'Choose the junior, authorized guardian and relationship; save the authorization. Review whether each '
+               'entry is Admin-authorized, Confirmed or Pending guardian confirmation.',
+               'At the scanner, attempt the junior’s zone entry/exit or check-out. When Guardian required appears, '
+               'scan the authorized guardian’s pass.',
+               'If manual verification is enabled, staff can check the person’s identity and select the displayed '
+               'authorized guardian. This records staff verification; it must not be described as a QR verification.',
+               'Review the entry/exit report with the guardian, operator and outcome. Configure each junior’s '
+               'authorization; the setting alone does not create an authorization for every child.'],
+     'common_mistakes': ['Do not promise a fixed scan time. Camera permission, lighting, connection and event rules '
+                         'affect the result.',
+                         'Offline cold start/reload, daily/session attendance, convention check-out and junior '
+                         'handoffs are not supported. Live consent, capacity and multiple disconnected devices need '
+                         'special planning; no venue-wide duplicate guarantee exists offline.',
+                         'Guardian handoffs remain online. A name on a cached list, an age-group override or an '
+                         'unrelated adult pass cannot authorize a pickup.'],
+     'practical': 'On staging with fictional guests, prepare one scanner, queue eligible general admission offline, '
+                  'reconnect and verify synchronization. Separately rehearse online guardian denial and session age '
+                  'eligibility. Do not send external messages.',
+     'quiz': [{'question': 'What does Check-in queued offline establish?',
+               'options': ['This device saved a pending admission; the server must revalidate it',
+                           'Every station now knows the guest is admitted',
+                           'Guardian pickup is authorized',
+                           'The saved list never expires'],
+               'correct': 0},
+              {'question': 'Can a junior handoff proceed from a cached guardian name during an outage?',
+               'options': ['No. Guardian handoffs require connectivity and valid authorization',
+                           'Yes, any adult can approve',
+                           'Yes, an age override approves pickup',
+                           'Yes, if the name matches'],
+               'correct': 0}]},
+    'guest-experience': {'icon': '🧭',
+     'objective': 'Build a post-admission Experience workflow with dependent steps -- consent, souvenir, room '
+                  'assignment, sessions -- and run a guest through it.',
+     'why_it_matters': 'Experience adds real operational complexity after check-in -- getting step dependencies wrong '
+                       'either blocks guests who should be able to proceed, or lets a step happen out of order, such '
+                       'as a souvenir handed out before consent is signed.',
+     'steps': ['Guest Communication → Features & Channels → turn on Experience, then open Experience settings.',
+               'Workflow tab: start from a template (VIP Dinner Guest Journey, Conference Registration, Wedding '
+               'Reception, Simple Check-in) or build your own from steps like check-in, consent, seating assignment, '
+               'meal selection, souvenir, badge, room assignment, session attendance, or feedback.',
+               'Only one workflow can be live per event at a time. Publish makes it active; to change a published '
+               'workflow you Clone it first, then publish the clone.',
+               'Consent tab: guests sign consent from their Festio Pass page — this only becomes available after '
+               "they've checked in, so don't make an earlier step depend on consent being signed first.",
+               "Guests tab, Feedback tab, and Analytics tab track each guest's progress through the workflow and "
+               'completion rates per step.',
+               'Inbound Automations and Messages let you react to step completion (e.g. a message once a guest is '
+               'seated).',
+               'Open Experience and the event’s active workflow. Configure each session’s date, start/end time, room, '
+               'speaker and audience/age eligibility; enable the Live Program feature where required.',
+               'Publish the intended workflow and open a test guest’s GuestHub → Programme. The timetable shows all '
+               'configured days with valid start/end times, not just the first three days.',
+               'Select each day and search by session, room, speaker or age group. Undated, disabled or '
+               'invalid-duration sessions do not appear. Missing rooms display Room to be announced; missing speakers '
+               'need organizer input.',
+               'Confirm event timezone and all days on a phone and desktop. A visible session is not proof that every '
+               'guest meets its admission rules.',
+               'Create and title separate moderated Q&A activities for different speakers/sessions. Timetable speaker '
+               'names do not automatically create or route Q&A queues.'],
+     'common_mistakes': ['Step ordering matters: the default "welcome pack" preset requires consent before souvenir '
+                         "pickup, but consent can't be signed until after check-in — putting a consent-dependent step "
+                         'earlier than check-in will silently block guests from completing it.',
+                         'Timetable viewing is online. Publication does not prove conflict-free staffing, live '
+                         'capacity or guest eligibility; rehearse those separately.'],
+     'practical': 'Build a two-step workflow, Consent depends on Main check-in, in a training event, and run one test '
+                  'guest through both steps in order.',
+     'quiz': [{'question': "Does a scoped Experience room assignment replace a guest's main event seat?",
+               'options': ["No -- they're independent; a guest can have a main seat plus separate scoped seats",
+                           'Yes, it overwrites the main seat',
+                           'Only if Seating is turned off',
+                           'Only for session steps'],
+               'correct': 0},
+              {'question': 'What blocks a session-attendance step from being completed early?',
+               'options': ["Its configured check-in window, which staff can't bypass by tapping Complete early",
+                           'Nothing, staff can always complete any step',
+                           'The event must be Ended first',
+                           'It requires a platform superadmin'],
+               'correct': 0}]},
     "task-management": {
         "icon": "✅",
         "objective": "Use the per-event Tasks board and My Tasks to run team coordination work, distinct from guest data.",
@@ -976,64 +1071,108 @@ LESSON_CONTENT = {
             ], "correct": 0},
         ],
     },
-    "festio-live": {
-        "icon": "🎙️",
-        "objective": "Set up and operate Festio Live so guests can join an event's polls, quizzes, Q&A, feedback, and moderated live activities from their phones.",
-        "why_it_matters": "Festio Live turns a one-way programme into measurable participation while keeping the organizer in control of what is open, displayed, and retained in the event results.",
-        "steps": [
-            "Open the event's Experience area, confirm the intended experience is synced to Festio Live, and verify the event and audience before opening participation.",
-            "Create or review the required live activities -- poll, quiz, Q&A, feedback, or another supported interaction -- including clear instructions and the correct open and close state.",
-            "Share the guest participation link or QR code and test it in a private browser as a guest before presenting it to the room.",
-            "Use the control room to open, pause, moderate, display, and close each activity; use the projector view only for content that is ready for the audience.",
-            "After the activity closes, review responses and the available event insight so the programme team can act on participation and feedback.",
-        ],
-        "common_mistakes": [
-            "Assuming an Experience sync automatically opens every activity -- verify the activity in the Festio Live control room",
-            "Sharing the organizer or projector URL instead of the guest participation link",
-            "Opening Q&A without assigning a moderator to review submissions before display",
-            "Skipping a rehearsal of the guest phone, control room, and projector views before the session",
-        ],
-        "practical": "In a safe training event, create one poll and one moderated Q&A, join through the guest link, submit a response, display an approved item, close both activities, and verify the results.",
-        "quiz": [
-            {"question": "Which link should attendees receive for a Festio Live activity?", "options": [
-                "The guest participation link or QR code", "The organizer control-room link",
-                "The projector link", "The Academy lesson link",
-            ], "correct": 0},
-            {"question": "What should happen before a live Q&A is shown to the audience?", "options": [
-                "A moderator should review and approve submissions according to the event's process", "Every submission should appear automatically",
-                "The event must be archived", "Guests must be given admin access",
-            ], "correct": 0},
-        ],
-    },
-    "festiome-community": {
-        "icon": "🫂",
-        "objective": "Configure and verify FestioMe as the event community space where approved guests can discover people, join relevant conversations, and continue engagement around the programme.",
-        "why_it_matters": "A useful event community needs deliberate access, audience, privacy, and moderation settings; simply enabling the feature does not prove that the right guests can see the right space.",
-        "steps": [
-            "Enable FestioMe for a safe training event and configure the intended community or group for that event's audience.",
-            "Review who should have access, including age and privacy rules, before adding or inviting participants; keep junior safeguarding requirements separate from adult networking.",
-            "Open the guest's FestioMe entry point from their authorized event or pass link, then verify the community appears for an eligible participant.",
-            "Create a welcome post or conversation prompt, test participant discovery and interaction, and confirm an organizer can moderate the content.",
-            "Use FestioMe for community conversation while keeping formal programme updates in the event's configured announcement or broadcast channel.",
-        ],
-        "common_mistakes": [
-            "Assuming enabling FestioMe automatically gives every guest access without checking audience eligibility",
-            "Treating a general event announcement feed as the same thing as a FestioMe community conversation",
-            "Including junior attendees in adult discovery or networking without the event's safeguarding and privacy rules",
-            "Testing only as an organizer and never confirming the direct guest experience",
-        ],
-        "practical": "Enable FestioMe in a safe training event, admit one eligible test participant, open the community through that guest's link, post a welcome message, and verify the organizer moderation controls.",
-        "quiz": [
-            {"question": "What proves FestioMe is ready for guests?", "options": [
-                "An eligible test guest can open the event community from their authorized guest journey", "The organizer can see the FestioMe menu",
-                "The event has at least one session", "A public social-media link has been posted",
-            ], "correct": 0},
-            {"question": "How should junior participants be handled in FestioMe?", "options": [
-                "Apply the event's safeguarding, audience, and privacy rules before enabling discovery or community access", "Place them in adult networking by default",
-                "Give guardians organizer accounts", "Publish their personal details on badges",
-            ], "correct": 0},
-        ],
-    },
+    'festio-live': {'icon': '🎙️',
+     'objective': "Set up and operate Festio Live so guests can join an event's polls, quizzes, Q&A, feedback, and "
+                  'moderated live activities from their phones.',
+     'why_it_matters': 'Festio Live turns a one-way programme into measurable participation while keeping the '
+                       'organizer in control of what is open, displayed, and retained in the event results.',
+     'steps': ['Enable Festio Live for the event and confirm account entitlement. In Activity studio select New '
+               'activity, enter Type, Title and Description, and add questions/options as appropriate.',
+               'For a Quiz mark the correct answer and configure question timing/scoring. Voting options are '
+               'candidates or choices; voting has no objectively correct answer. Keep results hidden until the '
+               'presenter reveals them.',
+               'Guests join from GuestHub or the supported join code/QR route. Only eligible/live activities appear; '
+               'an open page is not proof the activity is accepting responses.',
+               'Choose an activity and Target display, then Send activity to screen. Use Show welcome / clear '
+               'activity to remove it from that display.',
+               'For Guided Show configure automation and phase timings, then start the show. Rehearse answering, '
+               'countdown, answer reveal and the next question. Auto-advance is conditional on automation being '
+               'enabled; manual Next/Previous controls remain available.',
+               'An answer countdown needs an active timed question and server opening/deadline state. Simply '
+               'selecting an activity or enabling Q&A does not create a quiz timer. Keep the control screen connected '
+               'and verify the guest and display views.',
+               'Use Presenter & moderator links for the appropriate staff role. Protect these links. A guest join '
+               'link is not a moderator link.',
+               'For Ask the Sheikh, follow the separate Q&A procedure. Rehearse two questions from one guest and '
+               'moderation before making the activity live.',
+               'In Activity studio create Type Q&A and a distinct title containing the speaker/session. Enable '
+               'Moderate text before it is public.',
+               'Open Presenter & moderator links and distribute the appropriate staff link securely. Keep guest join '
+               'links separate.',
+               'Set the activity Live. Guests can filter Questions & answers only and search by activity/session '
+               'title before opening the intended Q&A.',
+               'After submitting, guests use Ask another question to submit again. Q&A is not a one-answer-only quiz.',
+               'Moderators approve eligible questions before public display, then use Feature, Answered or Dismiss as '
+               'appropriate. Rehearse the display to confirm unapproved questions stay private.',
+               'Close or clear the activity when the session ends. Do not assume a countdown or automatic '
+               'correct-answer reveal applies to free-text Q&A.'],
+     'common_mistakes': ['Live responses, moderation, display updates and synchronized show controls require '
+                         'connectivity. Do not promise that Q&A automatically advances through fixed correct '
+                         'answers.'],
+     'practical': 'In a training event submit two questions from one guest to a moderated speaker Q&A, approve one '
+                  'and verify its display; then rehearse a separate timed quiz through answering, reveal, next and '
+                  'previous.',
+     'quiz': [{'question': 'How should separate Sheikh question queues be configured?',
+               'options': ['Create distinctly named moderated Q&A activities per speaker/session',
+                           'Rename the guest’s pass',
+                           'Use one quiz correct answer',
+                           'The timetable creates all queues automatically'],
+               'correct': 0},
+              {'question': 'When does Guided Show automatically move through phases?',
+               'options': ['When automation and valid timings are configured and the show is running',
+                           'Whenever any Q&A is created',
+                           'While all controls are offline',
+                           'After the first guest opens GuestHub'],
+               'correct': 0}]},
+    'festiome-community': {'icon': '🫂',
+     'objective': 'Configure and verify FestioMe as the event community space where approved guests can discover '
+                  'people, join relevant conversations, and continue engagement around the programme.',
+     'why_it_matters': 'A useful event community needs deliberate access, audience, privacy, and moderation settings; '
+                       'simply enabling the feature does not prove that the right guests can see the right space.',
+     'steps': ['Enable FestioMe in Features & Channels and configure event community access. Open the organizer '
+               'FestioMe workspace to manage groups, channels and moderation.',
+               'Guests enter through their own GuestHub → FestioMe link so the correct event and pass are retained. A '
+               'copied link from a different event or environment may not authenticate them.',
+               'In guest Chats, use the plus/start-conversation control or More → Browse groups → New group. Choose '
+               'people from the event and create an invite-only group. Group creation does not automatically invite '
+               'every attendee.',
+               'Open Meetups, choose the intended group and create a meetup with its title, date/time, location and '
+               'optional capacity. Members can view meetups and respond. A meetup response does not record venue or '
+               'session admission.',
+               'Organizer group controls manage join policy, membership, channels and reports. Announcement channels '
+               'are organizer posts and read-only for ordinary guests. Guests can use message reactions and the emoji '
+               'picker in permitted conversations.',
+               'If an adult cannot enter, review organizer FestioMe → Settings → Guest chat access. Select Only approved adults and approve people whose adult status you have confirmed. '
+               'Do not bypass junior restrictions or use a staff identity as the guest. Confirm the correct event and '
+               'pass before retrying.',
+               'Open FestioMe from your own GuestHub to retain the correct event and pass. Chats is the conversation '
+               'workspace; Back to GuestHub returns to event services.',
+               'Choose an event chat or permitted direct message. Use the emoji picker or reactions; organizer '
+               'announcement channels are read-only for ordinary guests.',
+               'Use the Chats plus button or More → Browse groups → New group to select event members and create an '
+               'invite-only conversation.',
+               'Open Meetups and select the group to see or create gatherings. Check date/time, location and capacity '
+               'before responding. A meetup RSVP is not a session or gate check-in.',
+               'If access is denied or your pass is not found, return through the correct GuestHub and ask the '
+               'organizer to review your access. Junior restrictions and adult approvals still apply.'],
+     'common_mistakes': ['Community access, message permissions and guardian pickup authorization are separate. '
+                         'FestioMe needs connectivity; it is not an offline chat system.',
+                         'Do not share a personal GuestHub/pass link as a public community invitation. Chat and '
+                         'meetup updates require connectivity.'],
+     'practical': 'Use fictional adult guests to enter from GuestHub, create an invite-only group with chosen event '
+                  'members, create/view a meetup and verify ordinary guests cannot post in an announcement channel.',
+     'quiz': [{'question': 'Does joining a meetup record venue admission?',
+               'options': ['No, meetup responses and scanner attendance are separate',
+                           'Yes, in every zone',
+                           'Only if the meetup has a capacity',
+                           'Yes, it approves guardian pickup'],
+               'correct': 0},
+              {'question': 'What should a guest use to open the correct event community?',
+               'options': ['Their personal GuestHub → FestioMe link',
+                           'Another guest’s pass',
+                           'An administrator’s login',
+                           'A different environment’s saved link'],
+               'correct': 0}]},
 }
 
 

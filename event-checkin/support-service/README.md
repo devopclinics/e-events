@@ -169,3 +169,8 @@ shows queue age/depth, dead letters, cache rate, routing/provider activity,
 timeouts, retries, and failures. Alert rules cover dead letters, sustained
 backlog, old jobs, and repeated local-model timeouts. Alert delivery currently
 uses a local staging receiver until an external destination is configured.
+
+
+## Current operating documentation (October 2026)
+
+The maintained procedures are in `frontend/src/guideContent.mjs` (repository paths are relative to event-checkin), the generated Help/guide and `/media/festio-current-operations.html`. Offline scanner manifests are version 2 with a 30-minute UTC expiry; queued local admission is not server confirmation. Guest Programme responses include room, speaker and age groups. Speaker Q&A, Guided Show automation, chat membership and broadcast delivery have distinct authorization/lifecycle rules. Consult the knowledge inventory before changing or deploying documentation.

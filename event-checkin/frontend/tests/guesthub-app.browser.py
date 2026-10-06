@@ -27,6 +27,8 @@ session=dict(step_id='session1',title='Faith, family & community',starts_at=iso(
 journey=dict(experience_enabled=True,steps=[],next_steps=[],total_count=0,completed_count=0,consent=dict(required=False,signed=False,form=None),menu_enabled=True,menu_selectable=True,menu_has_choices=False,program=dict(enabled=True,days=[dict(date=now.date().isoformat(),label='Today',segments=[session])],current_segments=[],next_segments=[session]))
 feedback=dict(forms=[dict(step_id='feedback1',title='Convention feedback',submitted=False,can_edit=True,questions=[dict(id='q1',type='text',label='What worked well?',required=True)])])
 state=dict(event=event,hub=hub,journey=journey,feedback=feedback,hub_status=200,preview=False)
+menu_categories=[dict(id='breakfast',name='Breakfast',day_label='Day 1',selection_type='single',is_required=True,items=[dict(id='eggs',name='Eggs',description='Contains eggs'),dict(id='oats',name='Oats')]),dict(id='sides',name='Sides',day_label='Day 1',selection_type='multi',is_required=True,min_selections=1,max_selections=2,items=[dict(id='fruit',name='Fruit'),dict(id='toast',name='Toast')]),dict(id='dinner',name='Dinner combination',day_label='Day 2',selection_type='combo',is_required=True,items=[],combinations=[dict(id='rice-set',name='Rice and vegetables',items=[],description='Vegetarian')])]
+state['meal_tickets']={token:dict(status='admitted',guest=dict(id=id,meal_served=False),event=dict(menu_enabled=True,status='active'),menu_locked=False,menu_categories=copy.deepcopy(menu_categories),guest_choices={}) for token,id in [('demo-parent-qr','parent'),('demo-child-qr','child')]}
 errors=[];posts=[];unexpected=[];checks=[]
 def check(name,value=True):
     assert value,name
@@ -39,6 +41,9 @@ def intercept(route):
     data={}; status=200
     if route.request.method=='POST':
         posts.append(dict(path=p,body=route.request.post_data_json))
+        if p.endswith('/menu'):
+            if state.get('meal_failure'):return route.fulfill(status=400,content_type='application/json',body=json.dumps({'detail':'Your meal has been served — selection is locked'}))
+            token=p.split('/')[-2];state['meal_tickets'][token]['guest_choices']=route.request.post_data_json
         if '/forms/' in p and p.endswith('/submit'):
             if state.get('form_failure'): return route.fulfill(status=503,content_type='application/json',body=json.dumps({'detail':'Not submitted. Please reconnect and try again.'}))
             state['forms'][0]['status']='complete';state['forms'][0]['receipt_id']='receipt1';state['forms'][0]['can_submit']=False
@@ -47,6 +52,9 @@ def intercept(route):
         elif '/messages/direct' in p:state['hub']['direct_messages'].append(dict(id='m1',sender_type='guest',body=route.request.post_data_json['body']))
         elif '/feedback' in p:state['feedback']['forms'][0]['submitted']=True
         data={'ok':True}
+    elif p.endswith('/ticket') and state.get('meal_load_failure'):status=503;data=dict(detail='Temporarily unavailable')
+    elif p.endswith('/ticket') and p.startswith('/api/scan/'):data=state['meal_tickets'].get(p.split('/')[-2],dict(status='invalid'))
+    elif p.endswith('/consent'):data=dict(required=False)
     elif '/form-receipts/' in p:data=dict(id='receipt1',form=state['forms'][0],guest_name='Sara Idris',signer_name='Amina Idris',relationship='parent',answers={'contact':'555-0100'},signature_text='Amina Idris',signed_at='2026-10-06T12:00:00')
     elif p.endswith('/forms/me'):data=dict(forms=state.get('forms',[]))
     elif p.endswith('/app-party'):data=dict(viewer_id='parent',members=[{**state['hub']['guest'],'status':'Checked in','status_at':iso(now)},child],as_of=iso(now))
@@ -80,6 +88,37 @@ with sync_playwright() as pw:
     check('three prominent services',page.locator('.service-nav a').count()==3)
     check('theme matches Design Studio',page.locator('.fh-event-app').evaluate('(e)=>getComputedStyle(e).getPropertyValue("--green")').strip()=='#124b3c')
     page.screenshot(path=str(OUT/'desktop-home.png'),full_page=True)
+    go('pass');page.get_by_role('link',name='Meals',exact=True).click()
+    page.get_by_role('heading',name='Meals for Amina Idris').wait_for();page.get_by_role('radio',name='Eggs').wait_for()
+    check('meals stay inside GuestHub',page.url.endswith('#/meals?member=parent') and page.locator('.fh-event-app').count()==1 and len(context.pages)==1)
+    check('required meals prevent incomplete save',page.get_by_role('button',name='Save Selection',exact=True).is_disabled())
+    page.get_by_role('radio',name='Eggs').check();page.get_by_role('checkbox',name='Fruit').check()
+    page.get_by_role('button',name='Day 2',exact=True).click();page.get_by_role('radio',name='Rice and vegetables').check()
+    page.get_by_role('button',name='Save Selection',exact=True).click();page.get_by_text('Meal selection saved.',exact=False).wait_for()
+    check('saved meals retain single multi and combination choices',state['meal_tickets']['demo-parent-qr']['guest_choices']==dict(single={'breakfast':'eggs'},multi={'sides':['fruit']},combo={'dinner':'rice-set'}))
+    check('saved status and update action shown',page.get_by_text('Selected',exact=True).count()==1 and page.get_by_role('button',name='Update Selection',exact=True).count()==1)
+    page.screenshot(path=str(OUT/'desktop-meals.png'),full_page=True)
+    page.get_by_role('button',name='Back to GuestHub',exact=False).click();check('meal back returns to previous pass', '#/pass' in page.url)
+    page.go_forward();page.get_by_role('button',name='Update Selection',exact=True).wait_for();page.get_by_role('radio',name='Eggs').wait_for();check('saved meals survive navigation',page.get_by_role('radio',name='Eggs').is_checked())
+    page.locator('#meal-member').select_option('child');page.get_by_role('heading',name='Meals for Sara Idris').wait_for();page.get_by_role('radio',name='Eggs').wait_for()
+    check('party member has separate meal choices',not page.get_by_role('radio',name='Eggs').is_checked())
+    page.get_by_role('radio',name='Oats').check();page.get_by_role('checkbox',name='Fruit').check();page.get_by_role('button',name='Day 2',exact=True).click();page.get_by_role('radio',name='Rice and vegetables').check()
+    state['meal_failure']=True;page.get_by_role('button',name='Save Selection',exact=True).click();page.get_by_role('alert').filter(has_text='selection is locked').wait_for();check('save rejection preserves choices without success',page.get_by_text('Meal selection saved.',exact=False).count()==0 and page.get_by_role('radio',name='Rice and vegetables').is_checked())
+    state['meal_failure']=False;page.get_by_role('button',name='Save Selection',exact=True).click();page.get_by_text('Meal selection saved.',exact=False).wait_for();check('authorized child saves to own pass',state['meal_tickets']['demo-child-qr']['guest_choices']['single']['breakfast']=='oats')
+    page.set_viewport_size(dict(width=390,height=844));page.screenshot(path=str(OUT/'phone-meals.png'),full_page=True);check('meals fit phone',page.evaluate('document.documentElement.scrollWidth<=innerWidth'))
+    state['meal_tickets']['demo-child-qr']['guest']['meal_served']=True;page.get_by_role('button',name='Refresh meal status').click();page.get_by_role('heading',name='Meal collected',exact=True).wait_for();check('collected meals cannot be edited',page.locator('.app-meals button[type=submit]').count()==0)
+    state['meal_tickets']['demo-child-qr']['guest']['meal_served']=False;state['meal_tickets']['demo-child-qr']['menu_locked']=True;page.get_by_role('button',name='Refresh meal status').click();page.get_by_role('heading',name='Meal selection unlocks at check-in').wait_for();check('check-in gate retained')
+    state['meal_tickets']['demo-child-qr']['menu_locked']=False
+    page.set_viewport_size(dict(width=1440,height=1050));go('pass');page.locator('#app-member').select_option('child');page.get_by_role('link',name='Meals',exact=True).click();page.locator('#meal-member').wait_for();check('meal entry preserves selected party member',page.locator('#meal-member').input_value()=='child')
+    page.goto(BASE+'/r/demo-token#/meals?member=untrusted');page.get_by_role('heading',name='Meals for Amina Idris').wait_for();check('untrusted member cannot choose arbitrary pass',page.locator('#meal-member').input_value()=='parent')
+    state['meal_load_failure']=True;page.get_by_role('button',name='Refresh meal status').click();page.get_by_role('button',name='Retry meals',exact=True).wait_for();check('meal read failure offers retry')
+    state['meal_load_failure']=False;page.get_by_role('button',name='Retry meals',exact=True).click();page.get_by_role('button',name='Update Selection',exact=True).wait_for()
+    page.evaluate('window.dispatchEvent(new Event("offline"))')
+    # Browser offline state is authoritative; emulate it with Playwright.
+    context.set_offline(True);page.wait_for_timeout(150);check('offline selections cannot be submitted',page.get_by_role('button',name='Update Selection',exact=True).is_disabled());context.set_offline(False);page.wait_for_timeout(150)
+    page.goto(BASE+'/scan/demo-parent-qr#orders');page.get_by_role('button',name='Update Selection',exact=True).wait_for();check('standalone pass retains meal selector',page.get_by_role('radio',name='Eggs').is_checked());page.get_by_role('radio',name='Oats').check();page.get_by_role('button',name='Update Selection',exact=True).click();page.get_by_text('Selection updated!',exact=False).wait_for();check('standalone meal selection still saves',state['meal_tickets']['demo-parent-qr']['guest_choices']['single']['breakfast']=='oats')
+    page.goto(BASE+'/r/demo-token#/home');page.locator('.greeting').wait_for()
+    check('viewing and selecting meals never performs admission',not any(x['path'] in ['/api/scan/demo-parent-qr','/api/scan/demo-child-qr'] for x in posts))
     go('programme');page.get_by_role('button',name='Faith, family').click();page.locator('dialog[open]').wait_for()
     page.go_back();check('Back closes session',page.locator('dialog[open]').count()==0)
     page.go_forward();page.locator('dialog[open]').wait_for();check('Forward restores session')

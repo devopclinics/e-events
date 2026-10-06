@@ -128,3 +128,10 @@ test('latest authoritative party status supersedes stale hub checkout after reen
   assert.equal(rows[0].checked_out, false);
   assert.equal(rows[0].is_self, true);
 });
+
+test('meal navigation stays in GuestHub and required meal actions open it', () => {
+  assert.equal(guestServices({}, {guest:{qr_token:'secret'}}, {menu_enabled:true})[0].href, '#/meals');
+  const route=readAppRoute(appHash({screen:'meals',member:'child'}));
+  assert.equal(route.screen,'meals'); assert.equal(route.member,'child');
+  assert.equal(requiredActions({steps:[{id:'m',type:'meal_selection',required:true,actionable:true,status:'pending'}]}, {})[0].screen,'meals');
+});

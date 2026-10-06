@@ -1658,3 +1658,24 @@
 }
 
 .fh-event-app .pass-details { flex-wrap: wrap; gap: 14px; }
+
+/* Reuse the pass meal controls within the event's application theme. */
+.fh-event-app .app-meals fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.fh-event-app .meal-person { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+.fh-event-app .meal-person h2 { font-size: 18px; }
+.fh-event-app .meal-selection .meal-picker { border: 1px solid var(--line); border-radius: 15px; box-shadow: none; background: white; }
+.fh-event-app .meal-selection .meal-picker-heading { background: var(--green); color: var(--on-primary); }
+.fh-event-app .meal-selection .meal-picker-heading p { color: var(--on-primary); font-size: 13px; }
+.fh-event-app .meal-selection form { background: white; color: var(--ink); }
+.fh-event-app .meal-selection form [class*="text-"] { color: var(--ink); font-size: 13px; }
+.fh-event-app .meal-selection form [data-meal-option] { border-color: var(--line); background: white; color: var(--ink); box-shadow: none; transform: none; min-height: 48px; }
+.fh-event-app .meal-selection form [data-selected="true"] { border-color: var(--green); background: var(--mint); }
+.fh-event-app .meal-selection input { accent-color: var(--green); }
+.fh-event-app .meal-selection button { min-height: 44px; }
+.fh-event-app .meal-selection form button[type="submit"],
+.fh-event-app .meal-selection form button[aria-pressed="true"] { background: var(--green); color: var(--on-primary); }
+.fh-event-app .meal-selection form button[aria-pressed="false"] { background: var(--mint); color: var(--green); }
+.fh-event-app .meal-selection form [role="alert"] { color: #a12222; }
+.fh-event-app .meal-selection form [role="status"] { color: #145c3e; background: var(--mint); padding: 12px; border-radius: 8px; }
+.fh-event-app .app-service-link[aria-current="page"] { border-color: var(--green); background: var(--mint); }
+.fh-event-app .app-meals > .small { margin-top: 18px; }

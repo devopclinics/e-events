@@ -1,4 +1,4 @@
-export const APP_SCREENS = ['home', 'programme', 'pass', 'inbox', 'more', 'party', 'experience', 'feedback', 'resources', 'communications', 'venue', 'profile'];
+export const APP_SCREENS = ['home', 'programme', 'pass', 'inbox', 'more', 'party', 'experience', 'feedback', 'resources', 'communications', 'venue', 'profile', 'meals'];
 export function readAppRoute(hash = '') {
   const [path, query] = hash.replace(/^#\/?/, '').split('?');
   const params = new URLSearchParams(query);
@@ -37,7 +37,7 @@ export function requiredActions(journey, guest) {
   for (const step of journey?.steps || []) if (step.required && step.actionable && !['completed', 'overridden', 'skipped'].includes(step.status) && step.type !== 'consent') actions.push({
     id: step.id,
     title: step.title,
-    screen: 'experience'
+    screen: step.type === 'meal_selection' ? 'meals' : 'experience'
   });
   return actions;
 }
@@ -81,6 +81,6 @@ export function guestServices(event, hub, journey, visible = () => true) {
     id: 'meal',
     title: 'Meals',
     icon: 'meal',
-    href: hub?.guest?.qr_token ? `/scan/${encodeURIComponent(hub.guest.qr_token)}#orders` : ''
+    href: hub?.guest?.qr_token ? '#/meals' : ''
   }].filter(Boolean);
 }

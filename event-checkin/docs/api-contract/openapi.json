@@ -515,6 +515,43 @@
         "title": "AssignmentRequest",
         "type": "object"
       },
+      "Authority": {
+        "properties": {
+          "active": {
+            "default": true,
+            "title": "Active",
+            "type": "boolean"
+          },
+          "guest_id": {
+            "title": "Guest Id",
+            "type": "string"
+          },
+          "relationship": {
+            "enum": [
+              "parent",
+              "legal_guardian"
+            ],
+            "title": "Relationship",
+            "type": "string"
+          },
+          "signer_guest_id": {
+            "title": "Signer Guest Id",
+            "type": "string"
+          },
+          "verified": {
+            "title": "Verified",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "guest_id",
+          "signer_guest_id",
+          "relationship",
+          "verified"
+        ],
+        "title": "Authority",
+        "type": "object"
+      },
       "Body_import_contacts_csv_api_organizations_me_contact_lists__list_id__contacts_csv_post": {
         "properties": {
           "file": {
@@ -2621,6 +2658,106 @@
           "count"
         ],
         "title": "DashboardTimelinePoint",
+        "type": "object"
+      },
+      "Definition": {
+        "additionalProperties": false,
+        "properties": {
+          "audience_kind": {
+            "default": "everyone",
+            "enum": [
+              "everyone",
+              "adults",
+              "juniors"
+            ],
+            "title": "Audience Kind",
+            "type": "string"
+          },
+          "body": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "conditions": {
+            "additionalProperties": true,
+            "title": "Conditions",
+            "type": "object"
+          },
+          "kind": {
+            "default": "consent",
+            "enum": [
+              "consent",
+              "information"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/Question"
+            },
+            "maxItems": 30,
+            "title": "Questions",
+            "type": "array"
+          },
+          "required": {
+            "default": true,
+            "title": "Required",
+            "type": "boolean"
+          },
+          "signer_policy": {
+            "default": "adult_or_guardian",
+            "enum": [
+              "adult_or_guardian",
+              "guardian"
+            ],
+            "title": "Signer Policy",
+            "type": "string"
+          },
+          "step_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Id"
+          },
+          "timing": {
+            "default": "before_arrival",
+            "enum": [
+              "before_arrival",
+              "after_admission"
+            ],
+            "title": "Timing",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "zone_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zone Id"
+          }
+        },
+        "required": [
+          "title",
+          "body"
+        ],
+        "title": "Definition",
         "type": "object"
       },
       "DemoRequestCreate": {
@@ -16625,6 +16762,52 @@
         "title": "QaChecklistSubmissionOut",
         "type": "object"
       },
+      "Question": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "pattern": "^[a-z][a-z0-9_]{0,39}$",
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 30,
+            "title": "Options",
+            "type": "array"
+          },
+          "required": {
+            "default": false,
+            "title": "Required",
+            "type": "boolean"
+          },
+          "type": {
+            "default": "text",
+            "enum": [
+              "text",
+              "textarea",
+              "select",
+              "checkbox"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label"
+        ],
+        "title": "Question",
+        "type": "object"
+      },
       "QuizSubmission": {
         "properties": {
           "answers": {
@@ -18387,6 +18570,117 @@
           "reason"
         ],
         "title": "RevokeRequest",
+        "type": "object"
+      },
+      "SaveForm": {
+        "additionalProperties": false,
+        "properties": {
+          "audience_kind": {
+            "default": "everyone",
+            "enum": [
+              "everyone",
+              "adults",
+              "juniors"
+            ],
+            "title": "Audience Kind",
+            "type": "string"
+          },
+          "body": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "conditions": {
+            "additionalProperties": true,
+            "title": "Conditions",
+            "type": "object"
+          },
+          "expected_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Version"
+          },
+          "kind": {
+            "default": "consent",
+            "enum": [
+              "consent",
+              "information"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/Question"
+            },
+            "maxItems": 30,
+            "title": "Questions",
+            "type": "array"
+          },
+          "required": {
+            "default": true,
+            "title": "Required",
+            "type": "boolean"
+          },
+          "signer_policy": {
+            "default": "adult_or_guardian",
+            "enum": [
+              "adult_or_guardian",
+              "guardian"
+            ],
+            "title": "Signer Policy",
+            "type": "string"
+          },
+          "step_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Id"
+          },
+          "timing": {
+            "default": "before_arrival",
+            "enum": [
+              "before_arrival",
+              "after_admission"
+            ],
+            "title": "Timing",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "zone_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zone Id"
+          }
+        },
+        "required": [
+          "title",
+          "body"
+        ],
+        "title": "SaveForm",
         "type": "object"
       },
       "ScanCheckoutRequest": {
@@ -20436,6 +20730,47 @@
           }
         },
         "title": "SubGroupUpdate",
+        "type": "object"
+      },
+      "SubmitForm": {
+        "additionalProperties": false,
+        "properties": {
+          "accepted": {
+            "default": false,
+            "title": "Accepted",
+            "type": "boolean"
+          },
+          "answers": {
+            "additionalProperties": true,
+            "title": "Answers",
+            "type": "object"
+          },
+          "guardian_attestation": {
+            "default": false,
+            "title": "Guardian Attestation",
+            "type": "boolean"
+          },
+          "guest_id": {
+            "title": "Guest Id",
+            "type": "string"
+          },
+          "revision_id": {
+            "title": "Revision Id",
+            "type": "string"
+          },
+          "signer_name": {
+            "maxLength": 255,
+            "minLength": 2,
+            "title": "Signer Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "guest_id",
+          "revision_id",
+          "signer_name"
+        ],
+        "title": "SubmitForm",
         "type": "object"
       },
       "SubtaskCreate": {
@@ -28613,6 +28948,104 @@
         ]
       }
     },
+    "/api/events/{event_id}/consent-authorities": {
+      "get": {
+        "operationId": "list_authorities_api_events__event_id__consent_authorities_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Authorities",
+        "tags": [
+          "event-forms"
+        ]
+      },
+      "put": {
+        "operationId": "grant_authority_api_events__event_id__consent_authorities_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Authority"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Grant Authority",
+        "tags": [
+          "event-forms"
+        ]
+      }
+    },
     "/api/events/{event_id}/dashboard": {
       "get": {
         "operationId": "get_dashboard_api_events__event_id__dashboard_get",
@@ -33932,6 +34365,613 @@
         "summary": "Make Share Links",
         "tags": [
           "floor-plan"
+        ]
+      }
+    },
+    "/api/events/{event_id}/form-options": {
+      "get": {
+        "operationId": "form_options_api_events__event_id__form_options_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Form Options",
+        "tags": [
+          "event-forms"
+        ]
+      }
+    },
+    "/api/events/{event_id}/form-people": {
+      "get": {
+        "operationId": "form_people_api_events__event_id__form_people_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Q",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Form People",
+        "tags": [
+          "event-forms"
+        ]
+      }
+    },
+    "/api/events/{event_id}/form-receipts/{receipt_id}": {
+      "get": {
+        "operationId": "receipt_api_events__event_id__form_receipts__receipt_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "receipt_id",
+            "required": true,
+            "schema": {
+              "title": "Receipt Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Receipt",
+        "tags": [
+          "event-forms"
+        ]
+      }
+    },
+    "/api/events/{event_id}/form-records": {
+      "get": {
+        "operationId": "records_api_events__event_id__form_records_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "history",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "History",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Records",
+        "tags": [
+          "event-forms"
+        ]
+      }
+    },
+    "/api/events/{event_id}/forms": {
+      "get": {
+        "operationId": "list_forms_api_events__event_id__forms_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Forms",
+        "tags": [
+          "event-forms"
+        ]
+      },
+      "post": {
+        "operationId": "create_form_api_events__event_id__forms_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Definition"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Form",
+        "tags": [
+          "event-forms"
+        ]
+      }
+    },
+    "/api/events/{event_id}/forms/me": {
+      "get": {
+        "operationId": "my_forms_api_events__event_id__forms_me_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "My Forms",
+        "tags": [
+          "event-forms"
+        ]
+      }
+    },
+    "/api/events/{event_id}/forms/{form_id}": {
+      "delete": {
+        "operationId": "archive_form_api_events__event_id__forms__form_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "form_id",
+            "required": true,
+            "schema": {
+              "title": "Form Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Archive Form",
+        "tags": [
+          "event-forms"
+        ]
+      },
+      "put": {
+        "operationId": "revise_form_api_events__event_id__forms__form_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "form_id",
+            "required": true,
+            "schema": {
+              "title": "Form Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Revise Form",
+        "tags": [
+          "event-forms"
+        ]
+      }
+    },
+    "/api/events/{event_id}/forms/{form_id}/publish": {
+      "post": {
+        "operationId": "publish_form_api_events__event_id__forms__form_id__publish_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "form_id",
+            "required": true,
+            "schema": {
+              "title": "Form Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "title": "Version",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Publish Form",
+        "tags": [
+          "event-forms"
+        ]
+      }
+    },
+    "/api/events/{event_id}/forms/{form_id}/submit": {
+      "post": {
+        "operationId": "submit_form_api_events__event_id__forms__form_id__submit_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "form_id",
+            "required": true,
+            "schema": {
+              "title": "Form Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Form",
+        "tags": [
+          "event-forms"
         ]
       }
     },

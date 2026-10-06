@@ -39,10 +39,16 @@ def intercept(route):
     data={}; status=200
     if route.request.method=='POST':
         posts.append(dict(path=p,body=route.request.post_data_json))
+        if '/forms/' in p and p.endswith('/submit'):
+            if state.get('form_failure'): return route.fulfill(status=503,content_type='application/json',body=json.dumps({'detail':'Not submitted. Please reconnect and try again.'}))
+            state['forms'][0]['status']='complete';state['forms'][0]['receipt_id']='receipt1';state['forms'][0]['can_submit']=False
+            return route.fulfill(content_type='application/json',body=json.dumps({'receipt_id':'receipt1','status':'complete'}))
         if '/consent/sign' in p: state['journey']['consent']['signed']=True
         elif '/messages/direct' in p:state['hub']['direct_messages'].append(dict(id='m1',sender_type='guest',body=route.request.post_data_json['body']))
         elif '/feedback' in p:state['feedback']['forms'][0]['submitted']=True
         data={'ok':True}
+    elif '/form-receipts/' in p:data=dict(id='receipt1',form=state['forms'][0],guest_name='Sara Idris',signer_name='Amina Idris',relationship='parent',answers={'contact':'555-0100'},signature_text='Amina Idris',signed_at='2026-10-06T12:00:00')
+    elif p.endswith('/forms/me'):data=dict(forms=state.get('forms',[]))
     elif p.endswith('/app-party'):data=dict(viewer_id='parent',members=[{**state['hub']['guest'],'status':'Checked in','status_at':iso(now)},child],as_of=iso(now))
     elif p.startswith('/api/invite/token/'):data=dict(event=state['event'],guest=state['hub']['guest'],already_responded=True,deadline_passed=False,pending_guardian_confirmations=[])
     elif p.endswith('/guest-hub'):
@@ -89,6 +95,23 @@ with sync_playwright() as pw:
     go('more');page.get_by_role('button',name='Feedback Share').click();page.locator('main textarea, main input').first.fill('Clear directions');page.get_by_role('button',name='Submit feedback').click();page.get_by_text('Thank you—your feedback has been recorded.').wait_for();check('existing feedback submits')
     state['journey']['consent']=dict(required=True,signed=False,form=dict(id='consent1',title='Youth consent',body='Demo consent text',version=1))
     load();page.get_by_role('button',name='Review next steps').click();page.get_by_placeholder('Type your full name to sign Youth consent').fill('Amina Idris');page.get_by_role('button',name='Sign & agree').click();page.get_by_text('Signed ✓',exact=True).wait_for();check('original consent handler submits')
+    # Real bundled UI, isolated API fixtures: no live signatures or messages.
+    state['forms']=[dict(id='f1',revision_id='r1',version=1,title='Junior Platform participation',body='Draft demonstration terms.',guest_id='child',guest_name='Sara Idris',on_behalf=True,status='pending',required=True,timing='before_arrival',can_submit=True,kind='consent',questions=[dict(key='contact',label='Contact telephone',type='text',required=True)])]
+    load();page.get_by_role('button',name='Review next steps').click();page.locator('.event-forms summary').click()
+    page.get_by_label('Contact telephone').fill('555-0100');page.get_by_label('Your full name',exact=True).fill('Amina Idris')
+    page.get_by_label('I am the authorized parent').check();page.get_by_label('I have read this form').check()
+    state['form_failure']=True;page.get_by_role('button',name='Sign and submit',exact=True).click();page.get_by_role('alert').filter(has_text='Not submitted').wait_for()
+    check('failed submission retains entries',page.get_by_label('Your full name',exact=True).input_value()=='Amina Idris' and not page.get_by_role('heading',name='Submission received').count())
+    state['form_failure']=False;page.get_by_role('button',name='Sign and submit',exact=True).click();page.get_by_role('heading',name='Submission received').wait_for()
+    check('guardian submission and original receipt visible','Sara Idris' in page.locator('.form-receipt').inner_text() and 'Invalid Date' not in page.locator('.form-receipt').inner_text())
+    check('receipt can print',page.get_by_role('button',name='Print / save a copy').count()==1)
+    page.screenshot(path=str(OUT/'guardian-form-receipt.png'),full_page=True)
+    page.get_by_role('button',name='Close receipt').click();page.get_by_role('button',name='View signed / submitted copy').click();page.get_by_role('heading',name='Submission received').wait_for();check('completed receipt reopens')
+    state['forms']=[];load()
+    page.evaluate("""()=>{const e=new Event('beforeinstallprompt',{cancelable:true});e.prompt=async()=>{window.installInvoked=true};e.userChoice=Promise.resolve({outcome:'accepted'});window.dispatchEvent(e)}""")
+    page.get_by_role('button',name='Install Festio',exact=True).click();check('install follows user click',page.evaluate('window.installInvoked===true'))
+    page.evaluate("window.dispatchEvent(new Event('appinstalled'))");check('installed app hides install prompt',page.get_by_role('complementary',name='Install event app').count()==0)
+    page.evaluate("localStorage.removeItem('festio:app-install-dismissed')");load();page.get_by_role('button',name='Not now',exact=True).click();load();check('install dismissal survives reload',page.get_by_role('button',name='Not now',exact=True).count()==0)
     context.set_default_timeout(8000)
     page.set_viewport_size(dict(width=390,height=844));load();page.screenshot(path=str(OUT/'phone-home.png'),full_page=True)
     metrics=page.evaluate('''()=>{const root=document.querySelector('.fh-event-app');const visible=e=>e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden';return {overflow:document.documentElement.scrollWidth>innerWidth,smallText:[...root.querySelectorAll('*')].filter(e=>visible(e)&&[...e.childNodes].some(n=>n.nodeType===3&&n.textContent.trim())&&parseFloat(getComputedStyle(e).fontSize)<12).map(e=>e.textContent),smallTargets:[...root.querySelectorAll('button,a')].filter(e=>visible(e)&&(e.getBoundingClientRect().height<44||e.getBoundingClientRect().width<44)).map(e=>e.textContent),header:root.querySelector('.topbar').getBoundingClientRect().height,bottom:root.querySelector('.bottom-nav').getBoundingClientRect().height}}''')

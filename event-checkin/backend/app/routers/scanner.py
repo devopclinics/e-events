@@ -1519,6 +1519,11 @@ async def scan_qr_zone(
     elif not denied and not latest_movement and direction == "out":
         denied = True
         deny_reason = "Guest has no recorded entry to this zone"
+    if not denied and direction == "in":
+        from ..services.event_forms import missing_requirements
+        missing_forms = await missing_requirements(event, guest, db, zone_id=zone.id)
+        if missing_forms:
+            denied, deny_reason = True, "Complete required forms: " + ", ".join(missing_forms)
     if not denied and direction == "in" and zone.capacity:
         if await zone_occupancy(zone.id, db) >= zone.capacity:
             denied, deny_reason = True, "Zone is at capacity"

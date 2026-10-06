@@ -2906,3 +2906,55 @@ class DonationStatusHistory(Base):
     actor_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+# Independent, versioned forms; legacy consent records remain untouched.
+class EventForm(Base):
+    __tablename__ = "event_forms"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id", ondelete="CASCADE"), index=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    published_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class EventFormRevision(Base):
+    __tablename__ = "event_form_revisions"
+    __table_args__ = (UniqueConstraint("form_id", "version", name="uq_event_form_revision"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    form_id: Mapped[str] = mapped_column(String(36), ForeignKey("event_forms.id", ondelete="CASCADE"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    definition: Mapped[dict] = mapped_column(JSON)
+    created_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class EventFormSubmission(Base):
+    __tablename__ = "event_form_submissions"
+    __table_args__ = (UniqueConstraint("revision_id", "guest_id", name="uq_event_form_submission"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    revision_id: Mapped[str] = mapped_column(String(36), ForeignKey("event_form_revisions.id", ondelete="CASCADE"), index=True)
+    guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id", ondelete="CASCADE"), index=True)
+    signer_guest_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("guests.id", ondelete="SET NULL"), nullable=True)
+    signer_name: Mapped[str] = mapped_column(String(255))
+    relationship: Mapped[str] = mapped_column(String(40))
+    answers: Mapped[dict] = mapped_column(JSON)
+    accepted: Mapped[bool] = mapped_column(Boolean)
+    signature_text: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    signed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class EventConsentAuthority(Base):
+    __tablename__ = "event_consent_authorities"
+    __table_args__ = (UniqueConstraint("event_id", "guest_id", "signer_guest_id", name="uq_event_consent_authority"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id", ondelete="CASCADE"), index=True)
+    guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id", ondelete="CASCADE"), index=True)
+    signer_guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id", ondelete="CASCADE"), index=True)
+    relationship: Mapped[str] = mapped_column(String(40))
+    approved_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

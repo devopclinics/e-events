@@ -115,6 +115,14 @@ export interface AssignUserRequest {
   user_id: string
 }
 
+export interface Authority {
+  active?: boolean
+  guest_id: string
+  relationship: 'parent' | 'legal_guardian'
+  signer_guest_id: string
+  verified: boolean
+}
+
 export interface Body_import_contacts_csv_api_organizations_me_contact_lists__list_id__contacts_csv_post {
   file: string
 }
@@ -504,6 +512,20 @@ export interface DashboardStats {
 export interface DashboardTimelinePoint {
   count: number
   label: string
+}
+
+export interface Definition {
+  audience_kind?: 'everyone' | 'adults' | 'juniors'
+  body: string
+  conditions?: Record<string, unknown>
+  kind?: 'consent' | 'information'
+  questions?: (Question)[]
+  required?: boolean
+  signer_policy?: 'adult_or_guardian' | 'guardian'
+  step_id?: (string) | null
+  timing?: 'before_arrival' | 'after_admission'
+  title: string
+  zone_id?: (string) | null
 }
 
 export interface DemoRequestCreate {
@@ -2672,6 +2694,14 @@ export interface QaChecklistSubmissionOut {
   user_agent?: (string) | null
 }
 
+export interface Question {
+  key: string
+  label: string
+  options?: (string)[]
+  required?: boolean
+  type?: 'text' | 'textarea' | 'select' | 'checkbox'
+}
+
 export interface QuizSubmission {
   answers: (number)[]
 }
@@ -2933,6 +2963,21 @@ export interface RSVPTokenSubmit {
   sms_consent?: boolean
   status?: 'confirmed' | 'declined'
   whatsapp_consent?: boolean
+}
+
+export interface SaveForm {
+  audience_kind?: 'everyone' | 'adults' | 'juniors'
+  body: string
+  conditions?: Record<string, unknown>
+  expected_version?: (number) | null
+  kind?: 'consent' | 'information'
+  questions?: (Question)[]
+  required?: boolean
+  signer_policy?: 'adult_or_guardian' | 'guardian'
+  step_id?: (string) | null
+  timing?: 'before_arrival' | 'after_admission'
+  title: string
+  zone_id?: (string) | null
 }
 
 export interface ScanCheckoutRequest {
@@ -3200,6 +3245,15 @@ export interface SubGroupUpdate {
   name?: (string) | null
   rules?: (string) | null
   visibility?: ('listed' | 'unlisted') | null
+}
+
+export interface SubmitForm {
+  accepted?: boolean
+  answers?: Record<string, unknown>
+  guardian_attestation?: boolean
+  guest_id: string
+  revision_id: string
+  signer_name: string
 }
 
 export interface SubtaskCreate {

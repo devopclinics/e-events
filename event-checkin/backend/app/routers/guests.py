@@ -17,6 +17,8 @@ from sqlalchemy import or_
 from . import broadcast
 from ..models import (
     ConsentSignature,
+    EventFormSubmission,
+    EventConsentAuthority,
     EmailDeliveryEvent,
     Event,
     EventMessage,
@@ -2275,6 +2277,9 @@ async def delete_guest_cascade(event_id: str, guest_id: str, background_tasks: B
     await db.execute(delete(FeedbackSubmission).where(FeedbackSubmission.guest_id == guest_id))
     await db.execute(delete(ExperienceEvent).where(ExperienceEvent.guest_id == guest_id))
     await db.execute(delete(ConsentSignature).where(ConsentSignature.guest_id == guest_id))
+    await db.execute(delete(EventFormSubmission).where(EventFormSubmission.guest_id == guest_id))
+    await db.execute(EventFormSubmission.__table__.update().where(EventFormSubmission.signer_guest_id == guest_id).values(signer_guest_id=None))
+    await db.execute(delete(EventConsentAuthority).where(or_(EventConsentAuthority.guest_id == guest_id, EventConsentAuthority.signer_guest_id == guest_id)))
     await db.execute(delete(ScanEvent).where(ScanEvent.guest_id == guest_id))
     await db.execute(delete(GuestTagLink).where(GuestTagLink.guest_id == guest_id))
     await db.execute(delete(GuestShipment).where(GuestShipment.guest_id == guest_id))

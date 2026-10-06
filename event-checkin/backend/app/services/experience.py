@@ -69,6 +69,12 @@ async def complete_guest_step(
     if not await step_applies_to_guest(step, guest, db):
         raise ExperienceCompletionError("Step does not apply to this guest")
 
+    if step.type == "session_attendance":
+        from .event_forms import missing_requirements
+        missing = await missing_requirements(event, guest, db, step_id=step.id)
+        if missing:
+            raise ExperienceCompletionError("Complete required forms: " + ", ".join(missing))
+
     await sync_guest_progress(event.id, guest.id, db)
     await db.flush()
     progress = await db.scalar(

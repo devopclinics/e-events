@@ -1,3 +1,4 @@
+import EventFormsAdmin from '../components/forms/EventFormsAdmin';
 import { Fragment, useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import RedesignShell, { Icon, Modal, ConfirmDialog, ChannelPreviewFrame } from './redesign/RedesignShell'
@@ -1613,6 +1614,7 @@ export default function ExperienceRedesignPage() {
         </div>
       )}
 
+      {activeTab === 'Consent' && <EventFormsAdmin eventId={currentEventId} />}
       {activeTab === 'Consent' && (
         <div className="rd-wide-grid">
           <div className="rd-panel">

@@ -1,0 +1,9 @@
+.app-theme-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:18px 0}
+.app-theme-options .app-theme-choice{display:flex;flex-direction:column;align-items:stretch;text-align:left;padding:12px;border:1px solid var(--line,#cbd8d0);border-radius:14px;background:var(--white,#fff);color:var(--ink,#18372f);cursor:pointer;min-height:170px;font:inherit}
+.app-theme-options .app-theme-choice[aria-pressed=true]{border:2px solid var(--green,#124b3c);padding:11px;box-shadow:0 0 0 2px var(--mint,#e5f3ec)}
+.app-theme-options .app-theme-choice:focus-visible{outline:3px solid var(--gold,#d6b45e);outline-offset:3px}
+.app-theme-options .app-theme-choice strong{font-size:15px;margin:12px 0 4px}
+.app-theme-options .app-theme-choice small{font-size:13px;line-height:1.5;color:var(--muted,#60736b)}
+.app-theme-sample{height:86px;border:1px solid;display:flex;gap:10px;border-radius:9px;overflow:hidden}
+.app-theme-sample>i{width:24%;flex-shrink:0}.app-theme-sample>span{display:grid;flex:1;grid-template-columns:1fr 1fr;gap:6px;padding:10px 10px 10px 0}
+.app-theme-sample b{grid-column:1/-1;border-radius:5px}.app-theme-sample em{border:1px solid;border-radius:5px}

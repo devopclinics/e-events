@@ -16,7 +16,7 @@
 .fh-event-app {
   margin: 0;
   color: var(--ink);
-  background: #e9eeea;
+  background: var(--canvas);
   font-family: ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   font-size: 15px;
   line-height: 1.5
@@ -81,7 +81,7 @@
   grid-template-columns: 208px minmax(0,1fr);
   min-height: 820px;
   background: var(--bg);
-  border: 1px solid #cad8ce;
+  border: 1px solid var(--line);
   border-radius: 24px;
   overflow: hidden;
   box-shadow: 0 22px 70px #18362b15
@@ -129,7 +129,7 @@
 }
 .fh-event-app .side-nav button.active {
   background: #ffffff16;
-  color: white;
+  color: var(--on-primary);
   box-shadow: inset 3px 0 var(--gold)
 }
 .fh-event-app .count {
@@ -156,7 +156,7 @@
 }
 .fh-event-app .side-bottom button {
   background: #ffffff13;
-  color: white;
+  color: var(--on-primary);
   padding: 11px;
   border: 1px solid #ffffff25;
   border-radius: 9px;
@@ -173,7 +173,7 @@
   display: flex;
   align-items: center;
   gap: 13px;
-  background: white;
+  background: var(--white);
   border-bottom: 1px solid var(--line)
 }
 .fh-event-app .event-mark {
@@ -181,8 +181,8 @@
   height: 43px;
   display: grid;
   place-items: center;
-  border: 1px solid #d7cba5;
-  background: #f9f4e5;
+  border: 1px solid var(--line);
+  background: var(--warm-bg);
   color: var(--green);
   border-radius: 12px;
   font-size: 14px;
@@ -207,7 +207,7 @@
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  background: white;
+  background: var(--white);
   border: 1px solid var(--line);
   display: grid;
   place-items: center;
@@ -230,7 +230,7 @@
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: #ede6d3;
+  background: var(--warm-bg);
   color: var(--green);
   font-size: 12px;
   font-weight: 750
@@ -249,7 +249,7 @@
   letter-spacing: .12em;
   font-size: 12px;
   font-weight: 800;
-  color: #7c632f
+  color: var(--warm-ink)
 }
 .fh-event-app .greeting {
   display: flex;
@@ -271,14 +271,14 @@
   font-size: 12px;
   font-weight: 700;
   background: var(--mint);
-  color: #28664e;
+  color: var(--green);
   padding: 6px 10px;
   white-space: nowrap
 }
 .fh-event-app .hero {
   background: var(--green);
   border-radius: 19px;
-  color: white;
+  color: var(--on-primary);
   padding: 23px;
   position: relative;
   overflow: hidden
@@ -322,7 +322,7 @@
 .fh-event-app .primary {
   border-radius: 10px;
   background: var(--green);
-  color: white;
+  color: var(--on-primary);
   padding: 12px 17px;
   display: inline-flex;
   align-items: center;
@@ -338,7 +338,7 @@
 }
 .fh-event-app .secondary {
   border: 1px solid var(--line);
-  background: white;
+  background: var(--white);
   border-radius: 10px;
   padding: 11px 15px;
   min-height: 44px;
@@ -373,7 +373,7 @@
   gap: 9px
 }
 .fh-event-app .quick {
-  background: white;
+  background: var(--white);
   border: 1px solid var(--line);
   padding: 15px 6px 12px;
   border-radius: 14px;
@@ -395,20 +395,20 @@
   color: var(--green)
 }
 .fh-event-app .gold {
-  background: #faf0d6;
-  color: #8c6c23
+  background: var(--warm-bg);
+  color: var(--warm-ink)
 }
 .fh-event-app .lilac {
-  background: #eeeafa;
-  color: #65538b
+  background: var(--lilac-bg);
+  color: var(--lilac-ink)
 }
 .fh-event-app .blue {
-  background: #e8eff9;
-  color: #466797
+  background: var(--blue-bg);
+  color: var(--blue-ink)
 }
 .fh-event-app .card {
   border: 1px solid var(--line);
-  background: white;
+  background: var(--white);
   border-radius: 15px;
   padding: 18px
 }
@@ -472,8 +472,8 @@
   margin-bottom: 12px
 }
 .fh-event-app .date-art {
-  background: #f4edda;
-  border: 1px solid #e8dfc6;
+  background: var(--warm-bg);
+  border: 1px solid var(--line);
   border-radius: 13px;
   padding: 18px;
   text-align: center;
@@ -505,7 +505,7 @@
   gap: 10px;
   align-items: center;
   padding: 10px 0;
-  border-bottom: 1px solid #edf0e9;
+  border-bottom: 1px solid var(--line);
   font-size: 12px
 }
 .fh-event-app .person:last-of-type {
@@ -521,7 +521,7 @@
   text-align: left
 }
 .fh-event-app .help-card {
-  background: #e9f1e9!important
+  background: var(--mint)!important
 }
 .fh-event-app .help-card p {
   font-size: 12px;
@@ -530,7 +530,7 @@
 }
 .fh-event-app .footer-note {
   font-size: 12px;
-  color: #76877b;
+  color: var(--muted);
   margin-top: 18px
 }
 .fh-event-app .bottom-nav {
@@ -555,7 +555,7 @@
   flex: 1;
   min-width: 56px;
   border: 1px solid var(--line);
-  background: white;
+  background: var(--white);
   border-radius: 11px;
   padding: 9px 8px;
   font-size: 12px
@@ -567,14 +567,14 @@
 }
 .fh-event-app .day.active {
   background: var(--green);
-  color: white;
+  color: var(--on-primary);
   border-color: var(--green)
 }
 .fh-event-app .search {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: white;
+  background: var(--white);
   padding: 0 13px;
   border: 1px solid var(--line);
   border-radius: 10px
@@ -602,25 +602,25 @@
 }
 .fh-event-app .notice {
   padding: 13px 15px;
-  background: #f8f1de;
-  border: 1px solid #ecdfba;
+  background: var(--warm-bg);
+  border: 1px solid var(--line);
   border-radius: 11px;
   font-size: 12px;
-  color: #685527;
+  color: var(--warm-ink);
   margin-top: 16px
 }
 .fh-event-app .pass-card {
   border-radius: 20px;
   overflow: hidden;
   border: 1px solid var(--line);
-  background: white;
+  background: var(--white);
   text-align: center;
   max-width: 440px;
   margin: auto
 }
 .fh-event-app .pass-top {
   background: var(--green);
-  color: white;
+  color: var(--on-primary);
   padding: 24px
 }
 .fh-event-app .pass-top h2 {
@@ -654,7 +654,7 @@
   place-items: center
 }
 .fh-event-app .qr-art strong {
-  background: white;
+  background: var(--white);
   border: 2px solid #173d30;
   transform: rotate(-12deg);
   padding: 10px;
@@ -665,7 +665,7 @@
   display: flex;
   justify-content: space-between;
   text-align: left;
-  border-top: 1px dashed #cddbcf;
+  border-top: 1px dashed var(--line);
   padding: 16px 0;
   margin-top: 18px;
   font-size: 12px
@@ -683,7 +683,7 @@
   padding: 12px;
   margin: 0 0 18px;
   border: 1px solid var(--line);
-  background: white;
+  background: var(--white);
   border-radius: 10px;
   color: var(--ink)
 }
@@ -764,7 +764,7 @@
   padding: 28px;
   text-align: center;
   color: var(--muted);
-  background: white;
+  background: var(--white);
   border: 1px dashed var(--line);
   border-radius: 12px
 }
@@ -810,7 +810,7 @@
 .fh-event-app .dialog-body textarea {
   width: 100%;
   min-height: 110px;
-  border: 1px solid #cbdacf;
+  border: 1px solid var(--line);
   border-radius: 10px;
   padding: 12px;
   color: var(--ink);
@@ -834,7 +834,7 @@
   left: 50%;
   transform: translateX(-50%);
   background: var(--deep);
-  color: white;
+  color: var(--on-primary);
   padding: 12px 20px;
   border-radius: 12px;
   z-index: 10;
@@ -968,7 +968,7 @@
     bottom: 0;
     left: 0;
     right: 0;
-    background: #fffffff5;
+    background: var(--white);
     backdrop-filter: blur(14px);
     border-top: 1px solid var(--line);
     padding: 8px 8px calc(9px + env(safe-area-inset-bottom));
@@ -981,7 +981,7 @@
     align-items: center;
     justify-content: center;
     background: transparent;
-    color: #738477;
+    color: var(--muted);
     font-size: 12px;
     min-height: 48px;
     border-radius: 10px
@@ -993,7 +993,7 @@
   }
   .fh-event-app .bottom-nav button[data-go=pass] svg {
     background: var(--green);
-    color: white;
+    color: var(--on-primary);
     padding: 7px;
     width: 36px;
     height: 36px;
@@ -1070,22 +1070,22 @@
   margin-top: 17px
 }
 .fh-event-app .hero.attention {
-  background: #fff3d8;
-  border: 1px solid #e2c273;
+  background: var(--warm-bg);
+  border: 1px solid var(--gold);
   color: #4d3b18
 }
 .fh-event-app .hero.attention .eyebrow {
-  color: #80601d
+  color: var(--warm-ink)
 }
 .fh-event-app .hero.attention p,.fh-event-app .hero.attention small {
-  color: #705626
+  color: var(--warm-ink)
 }
 .fh-event-app .hero.attention .primary {
   background: #71521b;
-  color: white
+  color: var(--on-primary)
 }
 .fh-event-app .up-next {
-  background: white;
+  background: var(--white);
   border: 1px solid var(--line);
   border-left: 4px solid var(--gold);
   border-radius: 15px;
@@ -1146,7 +1146,7 @@
   margin-bottom: 17px
 }
 .fh-event-app .inbox-filters button {
-  background: white;
+  background: var(--white);
   border: 1px solid var(--line);
   padding: 10px 14px;
   min-height: 44px;
@@ -1155,20 +1155,20 @@
 }
 .fh-event-app .inbox-filters button.active {
   background: var(--green);
-  color: white;
+  color: var(--on-primary);
   border-color: var(--green)
 }
 .fh-event-app .message-type {
   display: block;
   font-size: 12px;
   font-weight: 750;
-  color: #57716a;
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: .05em;
   margin-bottom: 6px
 }
 .fh-event-app .message-type.actions {
-  color: #866019
+  color: var(--warm-ink)
 }
 .fh-event-app .toast {
   z-index: 20
@@ -1233,7 +1233,7 @@
   grid-auto-columns: minmax(0,1fr);
   gap: 10px;
   padding: 12px 30px;
-  background: #fff;
+  background: var(--white);
   border-bottom: 1px solid var(--line);
   position: sticky;
   top: 0;
@@ -1246,7 +1246,7 @@
   min-width: 0;
   min-height: 52px;
   padding: 9px 13px;
-  background: #f8faf7;
+  background: var(--bg);
   border: 1px solid var(--line);
   border-radius: 12px;
   text-align: left;
@@ -1261,7 +1261,7 @@
   margin-left: auto
 }
 .fh-event-app .service-nav button:hover {
-  border-color: #98b4a1;
+  border-color: var(--line);
   background: var(--mint)
 }
 @media(max-width:700px) {
@@ -1357,7 +1357,7 @@
   text-align: left
 }
 .fh-event-app .pickup-note p {
-  color: #705626;
+  color: var(--warm-ink);
   margin: 8px 0 12px
 }
 .fh-event-app .person {
@@ -1526,7 +1526,7 @@
   gap: 10px;
   min-height: 52px;
   padding: 9px 13px;
-  background: #f8faf7;
+  background: var(--bg);
   border: 1px solid var(--line);
   border-radius: 12px;
   font-size: 13px;
@@ -1550,7 +1550,7 @@
   height: 220px;
   max-width: 100%;
   margin: 20px auto;
-  background: white;
+  background: #ffffff;
   padding: 12px
 }
 .fh-event-app .app-update {
@@ -1596,7 +1596,7 @@
   z-index: 3
 }
 .fh-event-app .app-service-link:hover {
-  border-color: #98b4a1
+  border-color: var(--line)
 }
 @media(max-width:700px) {
   .fh-event-app {
@@ -1654,7 +1654,7 @@
   color: #4d3b18
 }
 .fh-event-app .hero.attention .primary {
-  color: white
+  color: var(--on-primary)
 }
 
 .fh-event-app .pass-details { flex-wrap: wrap; gap: 14px; }
@@ -1663,19 +1663,19 @@
 .fh-event-app .app-meals fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .fh-event-app .meal-person { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
 .fh-event-app .meal-person h2 { font-size: 18px; }
-.fh-event-app .meal-selection .meal-picker { border: 1px solid var(--line); border-radius: 15px; box-shadow: none; background: white; }
+.fh-event-app .meal-selection .meal-picker { border: 1px solid var(--line); border-radius: 15px; box-shadow: none; background: var(--white); }
 .fh-event-app .meal-selection .meal-picker-heading { background: var(--green); color: var(--on-primary); }
 .fh-event-app .meal-selection .meal-picker-heading p { color: var(--on-primary); font-size: 13px; }
-.fh-event-app .meal-selection form { background: white; color: var(--ink); }
+.fh-event-app .meal-selection form { background: var(--white); color: var(--ink); }
 .fh-event-app .meal-selection form [class*="text-"] { color: var(--ink); font-size: 13px; }
-.fh-event-app .meal-selection form [data-meal-option] { border-color: var(--line); background: white; color: var(--ink); box-shadow: none; transform: none; min-height: 48px; }
+.fh-event-app .meal-selection form [data-meal-option] { border-color: var(--line); background: var(--white); color: var(--ink); box-shadow: none; transform: none; min-height: 48px; }
 .fh-event-app .meal-selection form [data-selected="true"] { border-color: var(--green); background: var(--mint); }
 .fh-event-app .meal-selection input { accent-color: var(--green); }
 .fh-event-app .meal-selection button { min-height: 44px; }
 .fh-event-app .meal-selection form button[type="submit"],
 .fh-event-app .meal-selection form button[aria-pressed="true"] { background: var(--green); color: var(--on-primary); }
 .fh-event-app .meal-selection form button[aria-pressed="false"] { background: var(--mint); color: var(--green); }
-.fh-event-app .meal-selection form [role="alert"] { color: #a12222; }
-.fh-event-app .meal-selection form [role="status"] { color: #145c3e; background: var(--mint); padding: 12px; border-radius: 8px; }
+.fh-event-app .meal-selection form [role="alert"] { color: var(--error-ink); }
+.fh-event-app .meal-selection form [role="status"] { color: var(--green); background: var(--mint); padding: 12px; border-radius: 8px; }
 .fh-event-app .app-service-link[aria-current="page"] { border-color: var(--green); background: var(--mint); }
 .fh-event-app .app-meals > .small { margin-top: 18px; }

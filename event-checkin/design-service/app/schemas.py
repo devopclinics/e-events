@@ -40,6 +40,7 @@ class PublicTheme(BaseModel):
     pass_options: dict = Field(default_factory=dict)
     hub_layout: dict = Field(default_factory=dict)
     hub_style: str = "wallet-pass"
+    guest_app_theme: str = "event"
     page_config: dict = Field(default_factory=dict)
 
 

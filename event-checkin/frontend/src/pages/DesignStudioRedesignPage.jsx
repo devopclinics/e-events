@@ -5,6 +5,8 @@ import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
 import { api } from '../api'
 import './DesignStudioRedesignPage.css'
+import AppearanceChoices from '../components/guesthub/AppearanceChoices'
+import { validAppTheme } from '../components/guesthub/appearance.mjs'
 import { CertificatesWorkspace } from '../components/live/LiveContentWorkspace'
 
 const TABS = ['Templates', 'GuestHub', 'Flyer', 'Event Page', 'Festio Pass', 'FestioHub', 'Certificates', 'Email Preview', 'Publish']
@@ -822,6 +824,7 @@ export default function DesignStudioRedesignPage() {
   const [selectedFlyerTplId, setSelectedFlyerTplId] = useState('')
   const [coverBusy, setCoverBusy] = useState(false)
   const [renderBusy, setRenderBusy] = useState(false)
+  const [guestAppTheme, setGuestAppTheme] = useState('event')
   const [hubStyle, setHubStyle] = useState(HUB_STYLES[0].id)
   const [hubStyleBusy, setHubStyleBusy] = useState(false)
   const [hubCategory, setHubCategory] = useState('All')
@@ -870,6 +873,7 @@ export default function DesignStudioRedesignPage() {
       setColors({ ...DEFAULT_COLORS, ...(saved.theme_config?.colors || {}) })
       setFontPairing(saved.theme_config?.fontPairing || FONT_OPTIONS[0].id)
       setPassOptions({ ...DEFAULT_PASS_OPTIONS, ...(saved.theme_config?.passOptions || {}) })
+      setGuestAppTheme(validAppTheme(saved.theme_config?.guestAppTheme))
       setHubStyle(saved.theme_config?.hubStyle || HUB_STYLES[0].id)
       setFlyerTextScale(saved.asset_config?.flyer_text_scale ?? 1)
       setFlyerSettings({ ...DEFAULT_FLYER_SETTINGS, ...(saved.asset_config?.flyer_settings || {}) })
@@ -1007,7 +1011,7 @@ export default function DesignStudioRedesignPage() {
     return {
       selected_template_id: design?.selected_template_id || activeTemplate?.id || null,
       selected_flyer_template_id: selectedFlyerTplId || null,
-      theme_config: { ...(design?.theme_config || {}), colors, fontPairing, passOptions, hubStyle },
+      theme_config: { ...(design?.theme_config || {}), colors, fontPairing, passOptions, hubStyle, guestAppTheme },
       wording_config: wordingOverridesOnly(wording),
       asset_config: {
         ...(design?.asset_config || {}),
@@ -1079,6 +1083,7 @@ export default function DesignStudioRedesignPage() {
       pass_options: passOptions,
       page_config: pageSections,
       hub_style: hubStyle,
+      guest_app_theme: guestAppTheme,
     }
   }
 
@@ -1129,7 +1134,7 @@ export default function DesignStudioRedesignPage() {
     }, delay)
     return () => clearTimeout(eventPagePreviewTimerRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, eventId, activeTemplate?.id, colors, fontPairing, wording, passOptions, pageSections, hubStyle,
+  }, [tab, eventId, activeTemplate?.id, colors, fontPairing, wording, passOptions, pageSections, hubStyle, guestAppTheme,
       design?.asset_config?.cover_image_url, design?.asset_config?.flyer_image_url])
 
   async function saveFlyerAndPassSettings() {
@@ -1307,7 +1312,7 @@ export default function DesignStudioRedesignPage() {
       const expectedWording = payload.wording_config || {}
       const wordingMismatch = Object.entries(expectedWording).some(([key, value]) => live?.wording?.[key] !== value)
       const colorMismatch = Object.entries(colors).some(([key, value]) => live?.colors?.[key]?.toLowerCase() !== value?.toLowerCase())
-      if (wordingMismatch || colorMismatch || live?.hub_style !== hubStyle) {
+      if (wordingMismatch || colorMismatch || live?.hub_style !== hubStyle || validAppTheme(live?.guest_app_theme) !== guestAppTheme) {
         throw new Error('The design was saved, but the live verification did not match. Nothing was reported as published; please retry.')
       }
       lastSavedPayloadRef.current = JSON.stringify(payload)
@@ -1750,6 +1755,7 @@ export default function DesignStudioRedesignPage() {
 
       {tab === 'GuestHub' && (
         <div className="rd-wide-grid">
+          <div className="rd-panel" style={{gridColumn:'1 / -1'}}><div className="rd-panel-head"><h3>Event App appearance</h3><p>Set the default look for the Event App GuestHub layout.</p></div><div className="rd-panel-body"><AppearanceChoices value={guestAppTheme} onChange={setGuestAppTheme} colors={colors} /><p className="rd-hint">Applies throughout GuestHub, including Programme, Pass, Meals and Forms & Consent. Changes save to your design draft; use Publish to make them live. Guests can choose a personal appearance on their device. Other GuestHub layouts keep their existing design.</p></div></div>
           <div className="rd-panel">
             <div className="rd-panel-head"><h3>GuestHub templates</h3><p>One look for the whole guest experience — RSVP page and FestioHub together</p></div>
             <div className="rd-panel-body">

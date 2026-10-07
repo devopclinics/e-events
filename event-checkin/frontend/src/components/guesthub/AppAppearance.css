@@ -1,0 +1,32 @@
+/* Palette tokens cover every Event App route, including embedded legacy services. */
+.fh-event-app[data-appearance]{background:var(--canvas);color:var(--ink);color-scheme:var(--scheme)}
+.fh-event-app[data-appearance] .sidebar{background:var(--deep);color:var(--on-sidebar)}
+.fh-event-app[data-appearance] .sidebar :is(button,small,p,b,.wordmark){color:var(--on-sidebar)}
+.fh-event-app[data-appearance] .sidebar .side-bottom p{color:var(--sidebar-muted)}
+.fh-event-app[data-appearance] :is(.hero,.pass-top){background:var(--hero-bg);color:var(--on-hero)}
+.fh-event-app[data-appearance] .hero p,.fh-event-app[data-appearance] .hero-foot small{color:var(--hero-muted)}
+.fh-event-app[data-appearance] :is(.hero,.pass-top) .eyebrow{color:var(--gold)}
+.fh-event-app[data-appearance] :is(.date-art,.event-mark,.avatar){background:var(--warm-bg);border-color:var(--line);color:var(--warm-ink)}
+.fh-event-app[data-appearance] .help-card{background:var(--mint)!important}
+.fh-event-app[data-appearance] .appearance-panel h2{font-size:22px;margin-bottom:8px}
+.fh-event-app[data-appearance] .appearance-panel>p{color:var(--muted);font-size:14px;line-height:1.6}
+.fh-event-app[data-appearance] .appearance-panel [role=status]{color:var(--green);background:var(--mint);padding:12px;border-radius:10px;margin:14px 0}
+.fh-event-app[data-appearance] .topbar>div:nth-child(2){min-width:0;flex:1}
+.fh-event-app[data-appearance] .top-actions{flex-shrink:0}
+.fh-event-app[data-appearance] .topbar .event-name{overflow-wrap:anywhere}
+.fh-event-app[data-appearance] .app-service-panel [style*="background"]{background:var(--white)!important;border-color:var(--line)!important}
+.fh-event-app[data-appearance] .app-service-panel [style*="color"],.fh-event-app[data-appearance] .app-service-panel [class*="text-slate"]{color:var(--ink)!important}
+.fh-event-app[data-appearance] .app-service-panel :is(input,textarea,select){background:var(--white)!important;color:var(--ink)!important;border-color:var(--line)!important}
+.fh-event-app[data-appearance] .app-service-panel button{background:var(--mint)!important;color:var(--green)!important;border-color:var(--line)!important}
+.fh-event-app[data-appearance] :is(input,textarea)::placeholder{color:var(--muted);opacity:.85}
+.fh-event-app[data-appearance] .form-receipt{background:var(--white)}
+.fh-event-app[data-appearance] .event-forms .forms-item-body{background:var(--white)}
+.fh-event-app[data-appearance] .event-forms input[type=checkbox]{accent-color:var(--green)}
+.fh-event-app[data-appearance] :is(.meal-selection form,.vm-attendee,.vm-attendee .member-select,.vm-dialog){background:var(--white);color:var(--ink)}
+.fh-event-app[data-appearance] .app-pass-qr{background:#ffffff;color-scheme:light}
+.fh-event-app[data-appearance=dark] .vm-artwork{filter:brightness(.88)}
+@media(max-width:700px){.fh-event-app[data-appearance] .top-actions{gap:4px}.fh-event-app[data-appearance] .event-sub{font-size:12px}.fh-event-app[data-appearance] .app-theme-options{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media print{.fh-event-app[data-appearance] .form-receipt{--ink:#18372f;--muted:#60736b;--green:#124b3c;color:#18372f;background:#fff}}
+.fh-event-app[data-appearance] .hero.attention{background:var(--warm-bg);color:var(--warm-ink)}
+.fh-event-app[data-appearance] .hero.attention :is(p,small,.eyebrow){color:var(--warm-ink)}
+.fh-event-app[data-appearance] .hero .primary{background:var(--gold);color:#203c2d}

@@ -32,13 +32,13 @@
 .fh-event-app .forms-item summary::-webkit-details-marker{display:none}
 .fh-event-app .forms-item summary:focus-visible{outline-offset:-4px}
 .fh-event-app .forms-item summary span{margin-top:0}
-.fh-event-app .forms-symbol{display:grid;place-items:center;flex-shrink:0;width:48px;height:48px;border-radius:14px;background:#faf0d6;color:#755714;font-size:24px!important}
+.fh-event-app .forms-symbol{display:grid;place-items:center;flex-shrink:0;width:48px;height:48px;border-radius:14px;background:var(--warm-bg);color:var(--warm-ink);font-size:24px!important}
 .fh-event-app .forms-item-heading{flex:1;min-width:0}
 .fh-event-app .forms-item-heading strong{display:block;font-size:18px;line-height:1.4;margin:5px 0;overflow-wrap:anywhere}
 .fh-event-app .forms-recipient{color:var(--muted);font-size:14px!important}
 .fh-event-app .forms-item-action{text-align:right;flex-shrink:0}
-.fh-event-app .forms-status{display:inline-block!important;padding:5px 10px;border-radius:20px;background:#fff3d8;color:#795710;font-size:12px!important;font-weight:650}
-.fh-event-app .forms-status.is-unavailable{background:#eef1f3;color:#51616a}
+.fh-event-app .forms-status{display:inline-block!important;padding:5px 10px;border-radius:20px;background:var(--warm-bg);color:var(--warm-ink);font-size:12px!important;font-weight:650}
+.fh-event-app .forms-status.is-unavailable{background:var(--bg);color:var(--muted)}
 .fh-event-app .forms-symbol.is-complete,.fh-event-app .forms-status.is-complete{background:var(--mint);color:var(--green)}
 .fh-event-app .forms-open{display:block;margin-top:10px!important;color:var(--green);font-weight:650;font-size:13px!important}
 .fh-event-app .forms-open span{display:inline}
@@ -88,7 +88,7 @@
  .fh-event-app .form-receipt{padding:20px}
 }
 
-.fh-event-app .forms-progress progress{appearance:none;border:0;border-radius:8px;overflow:hidden;background:#c6d9ce}
-.fh-event-app .forms-progress progress::-webkit-progress-bar{background:#c6d9ce;border-radius:8px}
+.fh-event-app .forms-progress progress{appearance:none;border:0;border-radius:8px;overflow:hidden;background:var(--line)}
+.fh-event-app .forms-progress progress::-webkit-progress-bar{background:var(--line);border-radius:8px}
 .fh-event-app .forms-progress progress::-webkit-progress-value{background:var(--green);border-radius:8px}
 .fh-event-app .forms-progress progress::-moz-progress-bar{background:var(--green);border-radius:8px}

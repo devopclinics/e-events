@@ -28,6 +28,8 @@ router = APIRouter(prefix="/api/v1/design")
 
 HUB_MODULES = {"guest_pass", "next_action", "activity_progress", "live_program", "festiome", "messages"}
 HUB_DEFAULT_TABS = {"pass", "activity", "program", "messages", "activity_when_actionable"}
+GUEST_APP_THEMES = {"event", "light", "dark", "gold", "ocean"}
+
 HUB_STYLES = {
     "wallet-pass", "card-dashboard", "story-feed", "timeline", "minimal-list",
     "noir-couture", "bloom-editorial", "electric-rave", "linen-gold", "celestial-midnight",
@@ -199,6 +201,8 @@ def put_event_design(event_id: str, body: EventDesignIn, x_org_id: str | None = 
         raise HTTPException(400, "unknown selected_flyer_template_id")
     data = body.model_dump(exclude_unset=True, exclude_none=True)
     theme = data.get("theme_config")
+    if isinstance(theme, dict) and "guestAppTheme" in theme and (not isinstance(theme["guestAppTheme"], str) or theme["guestAppTheme"] not in GUEST_APP_THEMES):
+        raise HTTPException(422, "Unknown Event App appearance")
     if isinstance(theme, dict) and "hubLayout" in theme:
         theme["hubLayout"] = validate_hub_layout(theme.get("hubLayout"))
     if x_org_id:
@@ -224,7 +228,10 @@ def _resolve(event_id: str, *, published_only: bool = False) -> tuple[dict, dict
     design = load_design(event_id) or {}
     if published_only:
         if not design.get("is_published"):
-            return default_template(), design, True
+            # Legacy branding can be used before publication; the new app
+            # appearance remains a draft until the organizer publishes it.
+            public_design = {**design, "theme_config": {**design.get("theme_config", {}), "guestAppTheme": "event"}}
+            return default_template(), public_design, True
         design = design.get("published_snapshot") or design
     tpl = get_template(design.get("selected_template_id") or "") if design else None
     if not tpl:
@@ -287,6 +294,7 @@ def public_theme(
         pass_options=design.get("theme_config", {}).get("passOptions", {}),
         hub_layout=hub_layout,
         hub_style=design.get("theme_config", {}).get("hubStyle") if design.get("theme_config", {}).get("hubStyle") in HUB_STYLES else "wallet-pass",
+        guest_app_theme=design.get("theme_config", {}).get("guestAppTheme") if isinstance(design.get("theme_config", {}).get("guestAppTheme"), str) and design.get("theme_config", {}).get("guestAppTheme") in GUEST_APP_THEMES else "event",
         page_config=design.get("page_config", {}),
     )
 

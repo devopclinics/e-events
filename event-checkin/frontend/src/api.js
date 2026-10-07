@@ -616,7 +616,9 @@ export const api = {
   designTemplates: (query = '') => req('GET', `/v1/design/templates${query}`),
   getEventDesign: (eventId) => req('GET', `/events/${eventId}/design`),
   saveEventDesign: (eventId, data) => req('PUT', `/events/${eventId}/design`, data),
-  publishEventDesign: (eventId) => req('POST', `/events/${eventId}/design/publish`),
+  publishEventDesign: (eventId, data = {}) => req('POST', `/events/${eventId}/design/publish`, data),
+  designVersions: (eventId) => req('GET', `/events/${eventId}/design/versions`),
+  restoreDesignVersion: (eventId, data) => req('POST', `/events/${eventId}/design/restore`, data),
   designOutputs: (eventId) => req('GET', `/events/${eventId}/design/outputs`),
   // capabilities gates hub_layout module visibility server-side too (not just
   // in the render logic here) -- pass the event's real feature flags so a
@@ -632,11 +634,11 @@ export const api = {
       cache: 'no-store',
     }).then((r) => (r.ok ? r.json() : Promise.reject(new Error('Design theme unavailable'))))
   },
-  uploadDesignAsset: (eventId, file) => {
+  uploadDesignAsset: (eventId, file, { attachToDesign = true } = {}) => {
     const fd = new FormData()
     fd.append('file', file)
     return getToken().then((token) =>
-      fetch(`${BASE}/events/${eventId}/design/assets`, {
+      fetch(`${BASE}/events/${eventId}/design/assets?attach_to_design=${attachToDesign}`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: fd,

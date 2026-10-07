@@ -70,14 +70,14 @@ async def put_design(event_id: str, body: dict = Body(...), db: AsyncSession = D
 
 
 @router.post("/{event_id}/design/publish")
-async def publish_design(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
+async def publish_design(event_id: str, body: dict = Body(default={}), db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
     assert_feature_allowed(event, "design_publish")
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
-            r = await c.post(f"{DESIGN_URL}/api/v1/design/events/{event_id}/publish", headers=_headers())
+            r = await c.post(f"{DESIGN_URL}/api/v1/design/events/{event_id}/publish", json=body, headers=_headers())
         return _passthrough(r)
     except httpx.RequestError:
         raise HTTPException(503, _UNAVAILABLE)
@@ -94,7 +94,7 @@ async def list_outputs(event_id: str, db: AsyncSession = Depends(get_db), _: Use
 
 
 @router.post("/{event_id}/design/assets")
-async def upload_asset(event_id: str, file: UploadFile = File(...),
+async def upload_asset(event_id: str, file: UploadFile = File(...), attach_to_design: bool = True,
                        db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
     org = await _org_id(event_id, db)
     data = await file.read()
@@ -102,6 +102,7 @@ async def upload_asset(event_id: str, file: UploadFile = File(...),
         async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
             r = await c.post(
                 f"{DESIGN_URL}/api/v1/design/events/{event_id}/assets",
+                params={"attach_to_design": str(attach_to_design).lower()},
                 files={"file": (file.filename or "upload", data, file.content_type or "application/octet-stream")},
                 headers=_headers(org),
             )
@@ -123,5 +124,25 @@ async def render_flyer(event_id: str, body: dict = Body(default={}),
         return Response(content=r.content, status_code=r.status_code,
                         media_type=r.headers.get("content-type", "application/octet-stream"),
                         headers=headers)
+    except httpx.RequestError:
+        raise HTTPException(503, _UNAVAILABLE)
+
+
+@router.get("/{event_id}/design/versions")
+async def design_versions(event_id: str, _: User = Depends(require_paid_event_admin)):
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
+            r = await c.get(f"{DESIGN_URL}/api/v1/design/events/{event_id}/versions", headers=_headers())
+        return _passthrough(r)
+    except httpx.RequestError:
+        raise HTTPException(503, _UNAVAILABLE)
+
+
+@router.post("/{event_id}/design/restore")
+async def restore_design_version(event_id: str, body: dict = Body(...), _: User = Depends(require_paid_event_admin)):
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
+            r = await c.post(f"{DESIGN_URL}/api/v1/design/events/{event_id}/restore", json=body, headers=_headers())
+        return _passthrough(r)
     except httpx.RequestError:
         raise HTTPException(503, _UNAVAILABLE)

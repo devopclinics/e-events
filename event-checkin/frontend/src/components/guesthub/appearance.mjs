@@ -29,6 +29,9 @@ export function appearanceTokens(id, colors = {}) {
     const hex = value => /^#[0-9a-f]{6}$/i.test(value || '');
     if (hex(colors.primary)) tokens['--green'] = tokens['--deep'] = colors.primary;
     if (hex(colors.accent)) tokens['--gold'] = colors.accent;
+    if (hex(colors.background)) tokens['--bg'] = tokens['--canvas'] = colors.background;
+    if (hex(colors.surface)) tokens['--white'] = colors.surface;
+    if (hex(colors.text)) tokens['--ink'] = colors.text;
     tokens['--on-sidebar'] = tokens['--sidebar-muted'] = contrastText(tokens['--deep']);
   }
   tokens['--on-primary'] = contrastText(tokens['--green']);

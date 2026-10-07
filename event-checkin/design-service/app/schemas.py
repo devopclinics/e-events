@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 class EventDesignIn(BaseModel):
     """What the admin UI saves. All optional so partial updates are cheap."""
+    expected_revision: int | None = Field(default=None, ge=0)
     selected_template_id: str | None = None
     selected_flyer_template_id: str | None = None
     # Free-form but bounded config blobs (colors/fonts, wording, asset refs).
@@ -20,6 +21,8 @@ class EventDesignIn(BaseModel):
 class EventDesignOut(EventDesignIn):
     event_id: str
     organization_id: str | None = None
+    revision: int = 0
+    published_snapshot: dict | None = None
     is_published: bool = False
     published_version: int | None = None
     updated_at: datetime | None = None
@@ -34,6 +37,8 @@ class PublicTheme(BaseModel):
     font_pairing: str
     button_style: str
     layout: dict
+    logo_image_url: str | None = None
+    image_settings: dict = Field(default_factory=dict)
     cover_image_url: str | None = None
     flyer_image_url: str | None = None
     wording: dict = Field(default_factory=dict)
@@ -45,6 +50,8 @@ class PublicTheme(BaseModel):
 
 
 class EmailTheme(BaseModel):
+    logo_image_url: str | None = None
+    image_settings: dict = Field(default_factory=dict)
     """Payload the messaging service pulls to style emails (with fallback)."""
     event_id: str
     brand_name: str = "Festio"
@@ -64,7 +71,18 @@ class PublishResult(BaseModel):
     published_at: datetime
 
 
+class PublishRequest(BaseModel):
+    expected_revision: int | None = Field(default=None, ge=0)
+
+
+class RestoreRequest(BaseModel):
+    version: int = Field(ge=1)
+    expected_revision: int = Field(ge=0)
+
+
 class RenderRequest(BaseModel):
+    image_settings: dict | None = None
+    font_pairing: str | None = None
     size: str = "portrait"          # square | story | portrait | a5 | a4
     format: str | None = None       # png | pdf (auto: pdf for a5/a4, else png)
     template_id: str | None = None

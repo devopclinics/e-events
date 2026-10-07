@@ -79,6 +79,8 @@ def _theme_colors(theme: dict | None) -> dict:
 
 
 def _theme_cover_url(theme: dict | None) -> str:
+    if (theme or {}).get("image_settings", {}).get("surfaces", {}).get("email") is False:
+        return ""
     return (theme or {}).get("flyer_image_url") or (theme or {}).get("cover_image_url") or ""
 
 
@@ -491,6 +493,8 @@ def _festio_email_shell(inner: str, *, title: str | None = None,
     footer = _html.escape(footer_reason or "You are receiving this email because you are connected to this event.")
     c = _theme_colors(theme)
     cover = _theme_cover_url(theme)
+    logo = (theme or {}).get("logo_image_url")
+    logo_block = ('<tr><td style="padding:18px 28px;"><img src="' + _html.escape(logo, quote=True) + '" alt="Event logo" width="72" style="max-height:64px;width:auto;max-width:140px;" /></td></tr>') if logo else ""
     cover_block = (
         '<tr><td>'
         f'<img src="{_html.escape(cover, quote=True)}" alt="" width="600" '
@@ -520,7 +524,7 @@ def _festio_email_shell(inner: str, *, title: str | None = None,
         f'<h1 style="font-family:Arial,Helvetica,sans-serif;color:{c["primary"]};font-size:28px;'
         f'line-height:34px;margin:8px 0 0 0;font-weight:800;">{safe_title}</h1>'
         '</td></tr>'
-        f'{cover_block}'
+        f'{logo_block}{cover_block}'
         '<tr><td style="font-family:Arial,Helvetica,sans-serif;color:#172033;'
         'font-size:15px;line-height:24px;padding:28px;">'
         f'{inner}'
@@ -907,7 +911,7 @@ async def send_invite_email(
     venue_html = _html.escape(venue_name or "Venue details coming soon.")
     if venue_address:
         venue_html += f'<br><span style="font-weight:400;color:#64748b;">{_html.escape(venue_address)}</span>'
-    event_image_url = _abs_url(checkin_base_url, _theme_cover_url(theme) or event_image)
+    event_image_url = _abs_url(checkin_base_url, _theme_cover_url(theme) or event_image) if (theme or {}).get("image_settings", {}).get("surfaces", {}).get("email") is not False else ""
     calendar_url = _calendar_link(event_name, event_date, venue_text if venue_name or venue_address else "")
     directions_url = (
         "https://www.google.com/maps/search/?api=1&query=" + quote_plus(venue_text)

@@ -1,3 +1,4 @@
+import { readDraftPreview } from '../components/design-studio/model.mjs'
 import ProgrammeAudience from '../components/guesthub/ProgrammeAudience';
 import { filterProgramme } from '../components/guesthub/programmeAudience.mjs';
 import { useState, useEffect, useCallback, useRef } from 'react'
@@ -1946,6 +1947,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
 
   async function sendMessage(e) {
     e.preventDefault()
+    if (previewMock) { setError('Design preview. No message was sent.'); return }
     if (!message.trim()) return
     setSending(true)
     try {
@@ -1962,6 +1964,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
 
   async function sendChat(e) {
     e.preventDefault()
+    if (previewMock) { setError('Design preview. No message was sent.'); return }
     if (!chatMessage.trim()) return
     setSendingChat(true)
     try {
@@ -1976,7 +1979,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
     }
   }
 
-  if ((!accessToken && !speakersVisible) || hidden) return null
+  if ((!accessToken && !speakersVisible && !previewMock) || hidden) return null
   if (appLayout && !hub) return <EventApp event={event} hub={null} failure={hubFailure} onRetry={() => setHubRetry(n => n + 1)} onViewEvent={onViewEvent} designTheme={designTheme} />
   // A failed or slow pass lookup must never masquerade as a pending guest in
   // the legacy companion layout. Keep the selected layout while recovering.
@@ -3208,7 +3211,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-function JourneyInviteShell({ event, tone, designTheme, title, dateLabel, timeLabel, venue, host, hostWebsite, rsvpPanel, paidTicketsAvailable, setPaidTicketsAvailable, hasGuestHub, guestHubToken, confirmed, freshConfirmation, completeFlow = false }) {
+function JourneyInviteShell({ event, tone, designTheme, title, dateLabel, timeLabel, venue, host, hostWebsite, rsvpPanel, paidTicketsAvailable, setPaidTicketsAvailable, hasGuestHub, guestHubToken, confirmed, freshConfirmation, completeFlow = false, previewMock = false }) {
   const [completeScreen, setCompleteScreen] = useState(hasGuestHub && !freshConfirmation ? 'hub' : freshConfirmation ? 'confirmed' : 'event')
   useEffect(() => { if (freshConfirmation) setCompleteScreen('confirmed') }, [freshConfirmation])
   const eventState = hasGuestHub ? 'Your event home' : 'Registration'
@@ -3282,14 +3285,14 @@ function JourneyInviteShell({ event, tone, designTheme, title, dateLabel, timeLa
         ) : completeFlow && completeScreen === 'confirmed' ? (
           <div className="complete-confirmation"><FlowTopBar event={event} /><div className="complete-confirmation-body"><i>✓</i><h2>You’re Registered!</h2><p>Your registration for {title} is confirmed.</p><div className="complete-confirm-details"><span><b>Name</b>{freshConfirmation?.first_name || 'Guest'}</span><span><b>Registration status</b>Confirmed</span><span><b>Date</b>{dateLabel}</span><span><b>Venue</b>{event.venue_name || 'To be announced'}</span></div><button type="button" className="complete-primary" onClick={() => setCompleteScreen('hub')}>Open My GuestHub →</button>{freshConfirmation?.qr_token && <a className="complete-secondary-link" href={`/scan/${freshConfirmation.qr_token}`}>▦ View My Pass</a>}</div></div>
         ) : hasGuestHub && (!completeFlow || completeScreen === 'hub') ? (
-          <GuestHub key={`${event.id}:${guestHubToken}`} event={event} accessToken={guestHubToken} designTheme={designTheme} confirmed={confirmed} onViewEvent={completeFlow ? () => setCompleteScreen('event') : undefined} />
+          <GuestHub key={`${event.id}:${guestHubToken}`} event={event} accessToken={guestHubToken} designTheme={designTheme} previewMock={previewMock} confirmed={confirmed} onViewEvent={completeFlow ? () => setCompleteScreen('event') : undefined} />
         ) : (
           <div className={`journey-registration-stage ${completeFlow ? 'complete-registration-stage' : ''}`}>
             {completeFlow && <FlowTopBar event={event} onHome={() => setCompleteScreen('event')} />}
             <header>{completeFlow && <button type="button" className="complete-back" onClick={() => setCompleteScreen('event')}>← Event details</button>}<span>{completeFlow ? 'REGISTRATION' : 'STEP 1 OF 4'}</span><h2>{completeFlow ? 'Complete your registration' : 'Let’s get you ready'}</h2><p>Confirm your attendance. Your personal GuestHub and Festio Pass will be created after registration.</p>{!completeFlow && hostWebsite && <a href={hostWebsite} target="_blank" rel="noopener noreferrer" className="journey-about-link">Learn more about this event ↗</a>}</header>
             {!completeFlow && journeyEventActions}
-            <div className={completeFlow ? 'complete-ticket-checkout' : ''}><PublicTicketCheckout eventId={event.id} tone={tone} onAvailabilityChange={setPaidTicketsAvailable} /></div>
-            {rsvpPanel && paidTicketsAvailable === false && <section id="rsvp" className={`journey-rsvp-panel ${completeFlow ? 'complete-rsvp-panel' : ''}`}>{rsvpPanel}</section>}
+            {!previewMock && <div className={completeFlow ? 'complete-ticket-checkout' : ''}><PublicTicketCheckout eventId={event.id} tone={tone} onAvailabilityChange={setPaidTicketsAvailable} /></div>}
+            {rsvpPanel && (previewMock || paidTicketsAvailable === false) && <section id="rsvp" className={`journey-rsvp-panel ${completeFlow ? 'complete-rsvp-panel' : ''}`}>{rsvpPanel}</section>}
           </div>
         )}
       </main>
@@ -3301,7 +3304,7 @@ export default function InvitePage() {
   const { eventId, token, rsvpToken } = useParams()
   const tokenMode = !!token
   const rsvpLinkMode = !!rsvpToken
-  const [event, setEvent] = useState(null)
+  const [eventRecord, setEvent] = useState(null)
   const [guest, setGuest] = useState(null)
   const [tokenMeta, setTokenMeta] = useState({ deadline_passed: false, already_responded: false })
   const [designTheme, setDesignTheme] = useState(null)
@@ -3310,6 +3313,15 @@ export default function InvitePage() {
   const [confirmed, setConfirmed] = useState(null)
   const [paidTicketsAvailable, setPaidTicketsAvailable] = useState(null)
   const isStudioPreview = new URLSearchParams(window.location.search).get('studio-preview') === '1'
+
+  const previewSurface = new URLSearchParams(window.location.search).get('studio-surface') || 'hub'
+  const experience = designTheme?.page_config?.experience || {}
+  const event = eventRecord && {...eventRecord,
+    ...(designTheme?.wording?.eventTitle ? {name:designTheme.wording.eventTitle} : {}),
+    ...(designTheme?.logo_image_url ? {logo_url: designTheme.logo_image_url} : {}),
+    ...(['classic','companion','journey','complete','app'].includes(experience.guestHubLayout) ? {guest_hub_layout: experience.guestHubLayout} : {}),
+    ...(['current','welcome'].includes(experience.rsvpLayout) ? {rsvp_landing_layout: experience.rsvpLayout} : {}),
+    ...(isStudioPreview && previewSurface === 'pass' ? {guest_hub_layout:'app'} : {})}
 
   // Anonymous shared/open links can't know who you are on load, so we remember a
   // prior RSVP in this browser and show an "already RSVP'd" message instead of
@@ -3363,6 +3375,8 @@ export default function InvitePage() {
     }
     let cancelled = false
     if (isStudioPreview) {
+      const scoped = readDraftPreview(new URLSearchParams(window.location.search).get('studio-key'), event.id)
+      if (scoped) { setDesignTheme(scoped); return () => { cancelled = true } }
       try {
         const raw = sessionStorage.getItem(`festio:design-preview:${event.id}`)
         const preview = raw ? JSON.parse(raw) : null
@@ -3464,7 +3478,7 @@ export default function InvitePage() {
   // Design Studio's FestioHub preview has no real guest/RSVP to derive a
   // token from — show the Hub anyway, with GuestHub's own preview-mock data,
   // so a hub_style choice is actually visible before publishing.
-  const hasGuestHub = !!guestHubToken || isStudioPreview
+  const hasGuestHub = isStudioPreview ? previewSurface !== 'rsvp' : !!guestHubToken
   const primaryTarget = hasGuestHub ? 'guest-hub' : paidTicketsAvailable ? 'tickets' : 'rsvp'
   const primaryLabel = hasGuestHub ? 'Open FestioHub' : paidTicketsAvailable ? 'Get Tickets' : 'Confirm My RSVP'
 
@@ -3555,13 +3569,14 @@ export default function InvitePage() {
     )
   }
 
+  if (isStudioPreview) rsvpPanel = <div className="rounded-2xl border p-6">Design preview. Registration and ticket purchases are disabled here.</div>
   if (event.rsvp_landing_layout === 'welcome' && !hasGuestHub) {
     return <WelcomeLanding event={event} title={title} dateLabel={dateLabel} timeLabel={timeLabel}
       venue={venue} host={host} hostWebsite={hostWebsite} about={about} designTheme={designTheme}
       deadline={deadline} returningGuest={!!prior || tokenMeta.already_responded}
-      registration={<>
-        <PublicTicketCheckout eventId={event.id} tone={tone} onAvailabilityChange={setPaidTicketsAvailable} />
-        {paidTicketsAvailable === false && rsvpPanel}
+      registration={isStudioPreview ? rsvpPanel : <>
+        {!isStudioPreview && <PublicTicketCheckout eventId={event.id} tone={tone} onAvailabilityChange={setPaidTicketsAvailable} />}
+        {(isStudioPreview || paidTicketsAvailable === false) && rsvpPanel}
       </>} />
   }
   if (event.guest_hub_layout === 'app' && hasGuestHub) {
@@ -3570,6 +3585,7 @@ export default function InvitePage() {
   if (['journey', 'complete', 'app'].includes(event.guest_hub_layout)) {
     return (
       <JourneyInviteShell
+        previewMock={isStudioPreview}
         event={event}
         tone={tone}
         designTheme={designTheme}
@@ -3889,11 +3905,9 @@ export default function InvitePage() {
             need a prompt to go register externally on their own page. The
             public /tickets marketplace and the direct ticket link are
             untouched -- this only affects this personal confirmation view. */}
-        {!hasGuestHub && (
-          <PublicTicketCheckout eventId={event.id} tone={tone} onAvailabilityChange={setPaidTicketsAvailable} />
-        )}
+        {!hasGuestHub && !isStudioPreview && <PublicTicketCheckout eventId={event.id} tone={tone} onAvailabilityChange={setPaidTicketsAvailable} />}
 
-        {rsvpPanel && (paidTicketsAvailable === false || tokenMode) && (
+        {rsvpPanel && (isStudioPreview || paidTicketsAvailable === false || tokenMode) && (
           <section id="rsvp" className="scroll-mt-6 py-9">
             <div className="mx-auto w-full max-w-[680px] rounded-[1.65rem] border border-white/15 bg-white p-5 text-slate-950 shadow-2xl shadow-black/30 sm:p-8">
               {rsvpPanel}

@@ -7,3 +7,6 @@
 .rsvp-welcome .rw-attendance{display:flex;gap:10px}.rsvp-welcome .rw-attendance>button{flex:1;padding:10px;border-radius:10px;min-height:44px}.rsvp-welcome .rw-attendance>button>div:first-child{font-size:13px}.rsvp-welcome .rw-attendance>button>div:nth-child(2){display:none}.rsvp-welcome .guided-registration-steps button{font-size:12px}.rsvp-welcome .guided-step-heading span{font-size:12px}
 
 .rsvp-welcome .rw-recovery-names{margin-bottom:18px}.rsvp-welcome .rw-recovery-names summary{cursor:pointer;font-size:14px;min-height:44px;padding:8px 0}.rsvp-welcome .rw-recovery-success{background:#eef6f0;border:1px solid var(--rw-line);padding:16px;border-radius:12px}.rsvp-welcome .rw-recovery-success p{margin:12px 0}.rsvp-welcome dialog form>.rw-btn{width:100%}
+
+.rsvp-welcome h1,.rsvp-welcome h2{font-family:var(--rw-heading-font,Georgia,serif)}
+.rsvp-welcome .rw-site,.rsvp-welcome .rw-topbar,.rsvp-welcome .rw-section{background:var(--rw-surface,#fff)}

@@ -61,7 +61,7 @@ const ExperienceRedesignPage = lazy(() => import('./pages/ExperienceRedesignPage
 const CheckinRedesignPage = lazy(() => import('./pages/CheckinRedesignPage'))
 const SuperadminRedesignPage = lazy(() => import('./pages/SuperadminRedesignPage'))
 const MediaRedesignPage = lazy(() => import('./pages/MediaRedesignPage'))
-const DesignStudioRedesignPage = lazy(() => import('./pages/DesignStudioRedesignPage'))
+const DesignStudioRedesignPage = lazy(() => import('./pages/DesignStudioWorkspace'))
 const EventResultsRedesignPage = lazy(() => import('./pages/EventResultsRedesignPage'))
 const FestioMeRedesignPage = lazy(() => import('./pages/FestioMeRedesignPage'))
 const PlannerRedesignPage = lazy(() => import('./pages/PlannerRedesignPage'))

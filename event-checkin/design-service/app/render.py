@@ -122,6 +122,12 @@ def build_flyer_html(ctx: dict, size_key: str) -> str:
     contact = " · ".join(x for x in [phone, email] if x)
     photo_boost = 1.12 if rotate else 1
     photo_style = f"background-image:url('{_css_url(cover)}');background-position:{pos_x}% {pos_y}%;background-size:{zoom}% auto;transform:rotate({rotate}deg) scale({photo_boost});transform-origin:center;" if cover else ""
+    image_settings = ctx.get("imageSettings") or {}
+    if cover and image_settings.get("fit") in ("contain", "cover"):
+        fit = image_settings["fit"]
+        placement = image_settings.get("position", "center")
+        placement = placement if placement in ("center", "top", "bottom", "left", "right") else "center"
+        photo_style = f"background-image:url('{_css_url(cover)}');background-position:{placement};background-size:{fit};background-repeat:no-repeat;"
     full_bg_style = "background-image:linear-gradient(90deg, rgba(0,0,0,.76), rgba(0,0,0,.24));" if cover else ""
 
     return f"""<!doctype html><html><head><meta charset="utf-8"><style>

@@ -441,6 +441,7 @@ export default function ScanAutoPage() {
   const passOpts = { showTable: true, showSeat: true, showHubButton: true, ...(designTheme?.pass_options || {}) }
   const guestHubToken = guest?.invite_token || guest?.qr_token || token
   const showGuestHubButton = Boolean(guestHubToken && (passOpts.showHubButton || event?.experience_enabled || event?.guest_hub_layout === 'app'))
+  const logoImage = designTheme?.logo_image_url || event?.logo_url
   const coverImage = designTheme?.flyer_image_url || designTheme?.cover_image_url || ''
   const qrImageUrl = `/api/scan/${token}/qr.png`
   const checkoutQrImageUrl = `/api/scan/${token}/checkout-qr.png`
@@ -459,6 +460,7 @@ export default function ScanAutoPage() {
     <div className="app-shell min-h-screen flex items-center justify-center p-4 py-10" style={passBackground(colors)}>
       {/* Ticket card */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-sm overflow-hidden">
+        {logoImage && <div className="bg-white p-3"><img src={logoImage} alt={`${eventName} logo`} style={{height:42,maxWidth:160,objectFit:"contain",margin:"auto"}} /></div>}
 
         {/* Header strip */}
         <div

@@ -918,13 +918,14 @@ export default function DesignStudioRedesignPage() {
           format: 'png',
           template_id: selectedFlyerTplId || undefined,
           colors,
+          font_pairing: fontPairing,
           wording,
           cover_image_url: design?.asset_config?.cover_image_url || undefined,
           image_position: imagePosition,
           text_scale: flyerTextScale,
           qr_enabled: flyerSettings.qr,
           qr_position: flyerSettings.qrPosition,
-          qr_data: flyerSettings.qr && flyerSettings.rsvpLink ? `https://festio.events/invite/${eventId}` : null,
+          qr_data: flyerSettings.qr ? `${window.location.origin}/invite/${eventId}` : null,
           preview: true,
         }, { download: false })
         if (flyerPreviewObjectUrlRef.current) URL.revokeObjectURL(flyerPreviewObjectUrlRef.current)
@@ -1266,13 +1267,14 @@ export default function DesignStudioRedesignPage() {
         format: fmt || (['a5', 'a4'].includes(flyerSettings.size) ? 'pdf' : 'png'),
         template_id: selectedFlyerTplId || undefined,
         colors,
+        font_pairing: fontPairing,
         wording,
         cover_image_url: design?.asset_config?.cover_image_url || undefined,
         image_position: imagePosition,
         text_scale: flyerTextScale,
         qr_enabled: flyerSettings.qr,
         qr_position: flyerSettings.qrPosition,
-        qr_data: flyerSettings.qr && flyerSettings.rsvpLink ? `https://festio.events/invite/${eventId}` : null,
+        qr_data: flyerSettings.qr ? `${window.location.origin}/invite/${eventId}` : null,
       })
       if (useAsCover && result?.outputUrl) {
         const saved = await api.saveEventDesign(eventId, {
@@ -1319,7 +1321,7 @@ export default function DesignStudioRedesignPage() {
       setDesign({ ...saved, ...result })
       setSaveStatus('saved')
       setPublishState('success')
-      setOutputs(await api.designOutputs(eventId).catch(() => outputs))
+      setOutputs((await api.designOutputs(eventId).catch(() => ({outputs}))).outputs || [])
     } catch (e) {
       setSaveStatus('error')
       setSaveError(e.message || 'Design could not be published')

@@ -12,6 +12,9 @@ import subprocess
 import tempfile
 import uuid
 
+from ..schemas import PublishRequest, RestoreRequest
+from ..store import RevisionConflict, restore_design
+
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, Response
 
@@ -187,6 +190,8 @@ def get_event_design(event_id: str):
         wording_config=d.get("wording_config", {}),
         asset_config=d.get("asset_config", {}),
         page_config=d.get("page_config", {}),
+        revision=int(d.get("revision") or 0),
+        published_snapshot=d.get("published_snapshot"),
         is_published=bool(d.get("is_published")),
         published_version=d.get("published_version"),
         updated_at=d.get("updated_at"),
@@ -207,19 +212,46 @@ def put_event_design(event_id: str, body: EventDesignIn, x_org_id: str | None = 
         theme["hubLayout"] = validate_hub_layout(theme.get("hubLayout"))
     if x_org_id:
         data["organization_id"] = x_org_id
-    saved = save_design(event_id, data)
+    expected = data.pop("expected_revision", None)
+    try:
+        saved = save_design(event_id, data, expected)
+    except RevisionConflict as e:
+        raise HTTPException(409, str(e))
     return get_event_design(event_id)
 
 
 @router.post("/events/{event_id}/publish", response_model=PublishResult, dependencies=[Depends(require_internal)])
-def publish(event_id: str):
-    d = publish_design(event_id)
+def publish(event_id: str, body: PublishRequest = PublishRequest()):
+    try:
+        d = publish_design(event_id, body.expected_revision)
+    except RevisionConflict as e:
+        raise HTTPException(409, str(e))
     return PublishResult(
         event_id=event_id,
         is_published=True,
         published_version=d["published_version"],
         published_at=d["published_at"],
     )
+
+
+@router.get("/events/{event_id}/versions", dependencies=[Depends(require_internal)])
+def versions(event_id: str):
+    d = load_design(event_id) or {}
+    rows = [{"version": v["version"], "published_at": v.get("published_at")} for v in d.get("published_versions", [])]
+    if not rows and d.get("published_snapshot"):
+        rows = [{"version": d.get("published_version", 1), "published_at": d.get("published_at")}]
+    return {"versions": rows}
+
+
+@router.post("/events/{event_id}/restore", response_model=EventDesignOut, dependencies=[Depends(require_internal)])
+def restore(event_id: str, body: RestoreRequest):
+    try:
+        restore_design(event_id, body.version, body.expected_revision)
+    except RevisionConflict as e:
+        raise HTTPException(409, str(e))
+    except KeyError:
+        raise HTTPException(404, "Published version not found")
+    return get_event_design(event_id)
 
 
 # ── Theme payloads (with fallback to the default family) ───────────────────────
@@ -230,7 +262,8 @@ def _resolve(event_id: str, *, published_only: bool = False) -> tuple[dict, dict
         if not design.get("is_published"):
             # Legacy branding can be used before publication; the new app
             # appearance remains a draft until the organizer publishes it.
-            public_design = {**design, "theme_config": {**design.get("theme_config", {}), "guestAppTheme": "event"}}
+            baseline = design.get("public_baseline", design)
+            public_design = {**baseline, "theme_config": {**baseline.get("theme_config", {}), "guestAppTheme": "event"}}
             return default_template(), public_design, True
         design = design.get("published_snapshot") or design
     tpl = get_template(design.get("selected_template_id") or "") if design else None
@@ -288,6 +321,8 @@ def public_theme(
         font_pairing=design.get("theme_config", {}).get("fontPairing", tpl["fontPairing"]),
         button_style=design.get("theme_config", {}).get("buttonStyle", tpl["buttonStyle"]),
         layout=tpl["layout"],
+        logo_image_url=assets.get("logo_image_url"),
+        image_settings=assets.get("image_settings", {}),
         cover_image_url=assets.get("cover_image_url"),
         flyer_image_url=assets.get("flyer_image_url"),
         wording=design.get("wording_config", {}),
@@ -306,6 +341,8 @@ def email_theme(event_id: str):
     assets = design.get("asset_config", {})
     return EmailTheme(
         event_id=event_id,
+        logo_image_url=assets.get("logo_image_url"),
+        image_settings=assets.get("image_settings", {}),
         primary_color=colors["primary"],
         accent_color=colors["accent"],
         background_color=colors["background"],
@@ -318,13 +355,16 @@ def email_theme(event_id: str):
 
 # ── Asset uploads (validated) + safe file serving ────────────────────────────
 @router.post("/events/{event_id}/assets", dependencies=[Depends(require_internal)])
-async def upload_asset(event_id: str, file: UploadFile = File(...), asset_type: str = "image"):
+async def upload_asset(event_id: str, file: UploadFile = File(...), asset_type: str = "image", attach_to_design: bool = True):
     data = await file.read()
     try:
         meta = save_upload(event_id, file.filename or "upload", data, asset_type)
     except UploadError as e:
         raise HTTPException(400, str(e))
-    # Record the asset ref on the event design so the editor can list them.
+    # The guided editor attaches the asset in its revision-checked draft save.
+    if not attach_to_design:
+        return meta
+    # Preserve legacy upload behaviour for existing editors.
     d = load_design(event_id) or {}
     assets = d.get("asset_config", {})
     lib = assets.get("library", [])
@@ -364,12 +404,14 @@ async def render_event_flyer(event_id: str, body: RenderRequest):
     colors = {**tpl["defaultColors"], **(design.get("theme_config", {}).get("colors", {})), **(body.colors or {})}
     wording = {**design.get("wording_config", {}), **(body.wording or {})}
     assets = design.get("asset_config", {})
+    image_settings = body.image_settings if body.image_settings is not None else assets.get("image_settings", {})
     ctx = {
         "template": tpl,
         "colors": colors,
-        "fontPairing": tpl["fontPairing"],
+        "fontPairing": body.font_pairing or design.get("theme_config", {}).get("fontPairing") or tpl["fontPairing"],
         "wording": wording,
-        "coverImageUrl": body.cover_image_url or assets.get("cover_image_url"),
+        "coverImageUrl": (body.cover_image_url if "cover_image_url" in body.model_fields_set else assets.get("cover_image_url")) if image_settings.get("surfaces", {}).get("flyer", True) else None,
+        "imageSettings": image_settings,
         "imagePosition": body.image_position or assets.get("image_position", {}),
         "textScale": body.text_scale or assets.get("flyer_text_scale", 1),
         "qr": {"enabled": body.qr_enabled and bool(body.qr_data), "position": body.qr_position, "data": body.qr_data},

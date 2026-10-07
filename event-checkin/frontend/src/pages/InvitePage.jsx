@@ -12,6 +12,7 @@ import { eventBrandingKey, eventBrandingStyle } from '../lib/eventBranding.mjs'
 import './GuestHubThemes.css'
 import PublicTicketCheckout from '../components/PublicTicketCheckout'
 import EventApp from '../components/guesthub/EventApp'
+import WelcomeLanding from '../components/invite/WelcomeLanding'
 
 // ── Invite page helpers ───────────────────────────────────────────────────────
 
@@ -567,7 +568,7 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {}, guidedFlow =
     }
   })
   const [smsConsent, setSmsConsent] = useState(false)
-  const [choice, setChoice] = useState('')
+  const [choice, setChoice] = useState(event.rsvp_landing_layout === 'welcome' ? 'yes' : '')
   const [answers, setAnswers] = useState({})
   const emptyInvitee = () => ({ first_name: '', last_name: '', relationship: '', phone: '', email: '', guest_type: 'Invited Guest', age_group: '', notes: '', is_junior: false, pickup_authorized_by_invitee_indices: [] })
   const [invitees, setInvitees] = useState([])
@@ -715,16 +716,16 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {}, guidedFlow =
 
   return (
     <div className="gh-panel space-y-5">
-      <div>
+      {event.rsvp_landing_layout !== 'welcome' && <div>
         <h2 className="text-2xl font-extrabold text-slate-950">{multiInvitee ? (dWording.multiInviteeHeading || 'Register yourself and your guests') : 'Will you be attending?'}</h2>
         <p className="mt-2 text-sm leading-relaxed text-slate-500">
           {multiInvitee
             ? (dWording.multiInviteeSubheading || `Complete your registration to receive an individual Festio Pass for every registered attendee${event.rsvp_require_approval ? ', pending review' : ''}.`)
             : 'Let the host know so they can prepare your spot and Festio Pass.'}
         </p>
-      </div>
+      </div>}
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className={`grid gap-3 sm:grid-cols-2 ${event.rsvp_landing_layout === 'welcome' ? 'rw-attendance' : ''}`}>
         <button
           type="button"
           onClick={() => setChoice('yes')}
@@ -3549,11 +3550,20 @@ export default function InvitePage() {
             This event is at capacity — RSVPs below join the waitlist and we'll notify you if a spot opens up.
           </div>
         )}
-        <RSVPForm event={event} theme={theme} onConfirmed={handleConfirmed} tone={tone} dWording={dWording} guidedFlow={['complete', 'app'].includes(event.guest_hub_layout)} />
+        <RSVPForm event={event} theme={theme} onConfirmed={handleConfirmed} tone={tone} dWording={dWording} guidedFlow={event.rsvp_landing_layout === 'welcome' || ['complete', 'app'].includes(event.guest_hub_layout)} />
       </div>
     )
   }
 
+  if (event.rsvp_landing_layout === 'welcome' && !hasGuestHub) {
+    return <WelcomeLanding event={event} title={title} dateLabel={dateLabel} timeLabel={timeLabel}
+      venue={venue} host={host} hostWebsite={hostWebsite} about={about} designTheme={designTheme}
+      deadline={deadline} returningGuest={!!prior || tokenMeta.already_responded}
+      registration={<>
+        <PublicTicketCheckout eventId={event.id} tone={tone} onAvailabilityChange={setPaidTicketsAvailable} />
+        {paidTicketsAvailable === false && rsvpPanel}
+      </>} />
+  }
   if (event.guest_hub_layout === 'app' && hasGuestHub) {
     return <GuestHub event={event} accessToken={guestHubToken} designTheme={designTheme} previewMock={isStudioPreview} confirmed={!!confirmed || tokenMeta.already_responded} onViewEvent={() => { window.location.assign(publicInviteUrl(event)) }} />
   }

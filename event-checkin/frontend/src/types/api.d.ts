@@ -775,6 +775,7 @@ export interface EventBrief {
   registry_enabled?: boolean
   registry_message?: (string) | null
   registry_token?: (string) | null
+  rsvp_landing_layout?: ('current' | 'welcome') | null
   seat_term?: (string) | null
   seating_enabled?: boolean
   seating_term?: (string) | null
@@ -931,6 +932,7 @@ export interface EventOut {
   rsvp_invitee_email_required?: boolean
   rsvp_invitee_phone_required?: boolean
   rsvp_invitee_type_options?: ((string)[]) | null
+  rsvp_landing_layout?: ('current' | 'welcome') | null
   rsvp_multi_invitee_enabled?: boolean
   rsvp_multi_invitee_limit?: number
   rsvp_multi_invitee_limit_rules?: (Record<string, number>) | null
@@ -1847,6 +1849,7 @@ export interface InvitePageOut {
   rsvp_invitee_email_required?: boolean
   rsvp_invitee_phone_required?: boolean
   rsvp_invitee_type_options?: ((string)[]) | null
+  rsvp_landing_layout?: ('current' | 'welcome') | null
   rsvp_multi_invitee_enabled?: boolean
   rsvp_multi_invitee_limit?: number
   rsvp_multi_invitee_limit_rules?: (Record<string, number>) | null
@@ -1890,6 +1893,7 @@ export interface InviteSettingsUpdate {
   rsvp_invitee_email_required?: (boolean) | null
   rsvp_invitee_phone_required?: (boolean) | null
   rsvp_invitee_type_options?: ((string)[]) | null
+  rsvp_landing_layout?: ('current' | 'welcome') | null
   rsvp_multi_invitee_enabled?: (boolean) | null
   rsvp_multi_invitee_limit?: (number) | null
   rsvp_multi_invitee_limit_rules?: (Record<string, number>) | null
@@ -2034,6 +2038,7 @@ export interface MemberRoleUpdate {
 export interface MenuCategoryCreate {
   day_label?: (string) | null
   display_only?: boolean
+  guest_visible?: (boolean) | null
   is_required?: boolean
   max_selections?: (number) | null
   min_selections?: number
@@ -2047,6 +2052,7 @@ export interface MenuCategoryOut {
   day_label?: (string) | null
   display_only?: boolean
   event_id: string
+  guest_visible?: boolean
   id: string
   is_required?: boolean
   items?: (MenuItemOut)[]

@@ -659,6 +659,8 @@ class Event(Base):
     # one consolidated Event Details block, conditional modules). Per-event
     # and organizer-selectable so existing events are never silently switched.
     guest_hub_layout: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Independent public RSVP presentation; NULL preserves every existing layout.
+    rsvp_landing_layout: Mapped[str | None] = mapped_column(String(20), nullable=True)
     # Invite distribution mode:
     #   "open"   — shared /e/{event_id} link; anyone with it can RSVP.
     #   "closed" — invitation-only; each guest gets a unique /r/{invite_token}

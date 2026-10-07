@@ -4496,6 +4496,21 @@
             ],
             "title": "Registry Token"
           },
+          "rsvp_landing_layout": {
+            "anyOf": [
+              {
+                "enum": [
+                  "current",
+                  "welcome"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rsvp Landing Layout"
+          },
           "seat_term": {
             "anyOf": [
               {
@@ -5577,6 +5592,21 @@
               }
             ],
             "title": "Rsvp Invitee Type Options"
+          },
+          "rsvp_landing_layout": {
+            "anyOf": [
+              {
+                "enum": [
+                  "current",
+                  "welcome"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rsvp Landing Layout"
           },
           "rsvp_multi_invitee_enabled": {
             "default": false,
@@ -11736,6 +11766,21 @@
             ],
             "title": "Rsvp Invitee Type Options"
           },
+          "rsvp_landing_layout": {
+            "anyOf": [
+              {
+                "enum": [
+                  "current",
+                  "welcome"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rsvp Landing Layout"
+          },
           "rsvp_multi_invitee_enabled": {
             "default": false,
             "title": "Rsvp Multi Invitee Enabled",
@@ -12201,6 +12246,21 @@
               }
             ],
             "title": "Rsvp Invitee Type Options"
+          },
+          "rsvp_landing_layout": {
+            "anyOf": [
+              {
+                "enum": [
+                  "current",
+                  "welcome"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rsvp Landing Layout"
           },
           "rsvp_multi_invitee_enabled": {
             "anyOf": [
@@ -12982,6 +13042,17 @@
             "title": "Display Only",
             "type": "boolean"
           },
+          "guest_visible": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guest Visible"
+          },
           "is_required": {
             "default": false,
             "title": "Is Required",
@@ -13053,6 +13124,11 @@
           "event_id": {
             "title": "Event Id",
             "type": "string"
+          },
+          "guest_visible": {
+            "default": true,
+            "title": "Guest Visible",
+            "type": "boolean"
           },
           "id": {
             "title": "Id",

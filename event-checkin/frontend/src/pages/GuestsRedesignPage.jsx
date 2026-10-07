@@ -708,6 +708,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
   const [showCalendar, setShowCalendar] = useState(true)
   const [showConfetti, setShowConfetti] = useState(true)
   const [hubLayout, setHubLayout] = useState('classic')
+  const [landingLayout, setLandingLayout] = useState('current')
   const [categorySeating, setCategorySeating] = useState({})
   const [newCategory, setNewCategory] = useState('')
   const [inviteeTypeOptions, setInviteeTypeOptions] = useState([])
@@ -881,6 +882,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
     setShowShare(event.invite_share_enabled !== false)
     setShowCalendar(event.invite_add_to_calendar_enabled !== false)
     setShowConfetti(event.rsvp_confetti_enabled !== false)
+    setLandingLayout(event.rsvp_landing_layout === 'welcome' ? 'welcome' : 'current')
     setHubLayout(['companion', 'journey', 'complete', 'app'].includes(event.guest_hub_layout) ? event.guest_hub_layout : 'classic')
   }, [event])
 
@@ -925,6 +927,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
         invite_add_to_calendar_enabled: showCalendar,
         rsvp_confetti_enabled: showConfetti,
         guest_hub_layout: hubLayout,
+        rsvp_landing_layout: landingLayout,
       })
       await onEventChanged()
       notify('RSVP settings saved')
@@ -1113,6 +1116,22 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
                 </label>
               </div>
             ))}
+            <fieldset style={{ border: 0, padding: 0, margin: '20px 0' }}>
+              <legend style={{ fontSize: 14, fontWeight: 700 }}>RSVP landing page</legend>
+              <p style={{ fontSize: 13, margin: '5px 0 10px' }}>Choose the welcome page guests see before registration. Your GuestHub layout below stays separate.</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+                {[
+                  ['current', 'Current layout', 'Keep the RSVP page provided by your existing layout.'],
+                  ['welcome', 'Welcome', 'Spacious event overview, colourful highlights, travel details and a clear registration action.'],
+                ].map(([value, label, description]) => (
+                  <label key={value} style={{ padding: 15, border: '1px solid var(--rr-border, #cbd8cf)', borderRadius: 12, cursor: 'pointer', ...(landingLayout === value ? { boxShadow: '0 0 0 2px var(--rr-accent, #0b3b2e)' } : {}) }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 9, fontWeight: 700 }}><input type="radio" name="rsvp-landing-layout" value={value} checked={landingLayout === value} onChange={() => setLandingLayout(value)} />{label}</span>
+                    <span style={{ display: 'block', fontSize: 13, marginTop: 7 }}>{description}</span>
+                  </label>
+                ))}
+              </div>
+              <p style={{ fontSize: 12, marginTop: 10 }}>Save display settings, then open your public RSVP link to view the selected page.</p>
+            </fieldset>
             <div className="rr-section-title" style={{ margin: '18px 0 8px' }}>
               <div><h2 style={{ fontSize: 12 }}>Guest Hub layout</h2><p>Which FestioHub your guests see after they RSVP</p></div>
             </div>

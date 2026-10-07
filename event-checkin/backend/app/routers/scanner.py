@@ -549,6 +549,7 @@ async def view_ticket(qr_token: str, db: AsyncSession = Depends(get_db)):
     event = await db.get(Event, guest.event_id)
     event_brief = EventBrief(
         guest_hub_layout=event.guest_hub_layout,
+        rsvp_landing_layout=event.rsvp_landing_layout,
         name=event.name,
         couples_name=event.couples_name,
         event_date=event.event_date,

@@ -195,6 +195,7 @@ class EventOut(BaseModel):
     partner_enabled: bool = False
     reminders_enabled: bool = False
     guest_hub_layout: Optional[str] = None
+    rsvp_landing_layout: Optional[Literal["current", "welcome"]] = None
     purchased_addons: Optional[list[str]] = None
     festiome_enabled: bool = False
     festiome_id: Optional[str] = None
@@ -2468,6 +2469,7 @@ class ScanResult(BaseModel):
 
 class EventBrief(BaseModel):
     guest_hub_layout: Optional[str] = None
+    rsvp_landing_layout: Optional[Literal["current", "welcome"]] = None
     name: str
     couples_name: str
     event_date: datetime
@@ -2718,6 +2720,7 @@ class InviteSettingsUpdate(BaseModel):
     invite_cover_image: Optional[str] = None
     logo_url: Optional[str] = None
     guest_hub_layout: Optional[Literal["classic", "companion", "journey", "complete", "app"]] = None
+    rsvp_landing_layout: Optional[Literal["current", "welcome"]] = None
     invite_mode: Optional[Literal["open", "closed"]] = None
     rsvp_deadline: Optional[datetime] = None
     event_time_tbd: Optional[bool] = None
@@ -2777,6 +2780,7 @@ class InvitePageOut(BaseModel):
     engagement_enabled: bool = False
     guest_hub_v2: bool = True
     guest_hub_layout: Optional[str] = None
+    rsvp_landing_layout: Optional[Literal["current", "welcome"]] = None
     rsvp_collect_phone: bool
     rsvp_collect_email: bool
     rsvp_email_required: bool = True

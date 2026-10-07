@@ -5,3 +5,7 @@
 .studio-flyer-controls{padding-bottom:24px}.studio-flyer-layouts{display:grid;gap:8px;margin-top:16px}.studio-flyer-mini{width:30px;height:42px;flex:none;border:1px solid #bbc8b9;background:linear-gradient(#f8f4e9 45%,#184b3a 45% 70%,#f8f4e9 70%);border-radius:3px}.studio-flyer-mini.brand-led{background:linear-gradient(#184b3a 75%,#d9bd75 75%)}.studio-flyer-mini.artwork-only{background:linear-gradient(135deg,#e8eddf,#b9cbb8)}.studio-flyer-downloads{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}.studio-flyer-controls summary{cursor:pointer;min-height:44px;padding-top:14px}.studio-flyer-controls input:not([type=file]),.studio-flyer-controls select{min-width:0;width:100%}.studio-flyer-controls input[type=checkbox]{width:20px}.studio-flyer-controls .studio-images{margin-top:20px}.studio-flyer-preview img{max-height:900px;object-fit:contain}
 
 .studio-flyer-layouts .studio-layout>span:last-child{margin-left:0}.studio-flyer-preview img{max-height:680px}@media(min-width:761px){.studio-flyer-preview img{max-height:max(350px,calc(100vh - 250px))}}
+
+/* The website editor stays reachable from every guided step and preview surface. */
+.studio-heading-actions{flex-wrap:wrap}.studio-v2 .studio-heading .studio-heading-actions .studio-website-button{white-space:nowrap;min-height:48px;border-color:var(--s-green);color:var(--s-green)}
+@media(max-width:760px){.studio-heading{flex-wrap:wrap}.studio-heading-actions{width:100%;flex-direction:row;justify-content:flex-start;align-items:center;gap:8px}.studio-heading-actions button{min-height:48px}}

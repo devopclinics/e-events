@@ -405,12 +405,19 @@ async def render_event_flyer(event_id: str, body: RenderRequest):
     wording = {**design.get("wording_config", {}), **(body.wording or {})}
     assets = design.get("asset_config", {})
     image_settings = body.image_settings if body.image_settings is not None else assets.get("image_settings", {})
+    flyer_settings = body.flyer_settings if body.flyer_settings is not None else assets.get("flyer_settings", {})
+    composition = body.composition or ("artwork-only" if flyer_settings.get("artworkOnly") else flyer_settings.get("composition", "legacy"))
+    if composition not in ("legacy", "editorial", "brand-led", "artwork-only"):
+        raise HTTPException(400, "Unknown flyer composition")
     ctx = {
+        "composition": composition,
+        "flyerSettings": flyer_settings,
+        "logoImageUrl": body.logo_image_url if "logo_image_url" in body.model_fields_set else assets.get("logo_image_url"),
         "template": tpl,
         "colors": colors,
-        "fontPairing": body.font_pairing or design.get("theme_config", {}).get("fontPairing") or tpl["fontPairing"],
+        "fontPairing": body.font_pairing or (flyer_settings.get("fontPairing") if flyer_settings.get("fontPairing") != "event" else None) or ("classic-serif" if composition != "legacy" and not flyer_settings.get("fontPairing") else None) or design.get("theme_config", {}).get("fontPairing") or tpl["fontPairing"],
         "wording": wording,
-        "coverImageUrl": (body.cover_image_url if "cover_image_url" in body.model_fields_set else assets.get("cover_image_url")) if image_settings.get("surfaces", {}).get("flyer", True) else None,
+        "coverImageUrl": (body.cover_image_url if "cover_image_url" in body.model_fields_set else (assets.get("artwork_image_url") or assets.get("cover_image_url") if composition == "artwork-only" else assets.get("cover_image_url"))) if composition == "artwork-only" or image_settings.get("surfaces", {}).get("flyer", True) else None,
         "imageSettings": image_settings,
         "imagePosition": body.image_position or assets.get("image_position", {}),
         "textScale": body.text_scale or assets.get("flyer_text_scale", 1),
@@ -418,8 +425,12 @@ async def render_event_flyer(event_id: str, body: RenderRequest):
     }
     try:
         content = await render_flyer(ctx, size, fmt, settings.render_timeout_seconds)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     except Exception as e:  # rendering must never 500 the studio hard
-        raise HTTPException(502, f"render failed: {e}")
+        if "The flyer text is too long" in str(e):
+            raise HTTPException(400, "The flyer text is too long for this format. Shorten the title or details, or choose a larger format.")
+        raise HTTPException(502, "The flyer could not be rendered. Check that its images are available and try again.")
 
     media = "application/pdf" if fmt == "pdf" else "image/png"
     # Live-preview renders (Design Studio calling this on every edit) must not

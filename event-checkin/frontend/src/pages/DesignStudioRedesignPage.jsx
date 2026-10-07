@@ -1,3 +1,4 @@
+import {flyerRequest, FLYER_LAYOUTS} from '../components/design-studio/flyerModel.mjs';
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import RedesignShell, { Icon, Modal } from './redesign/RedesignShell'
@@ -894,54 +895,36 @@ export default function DesignStudioRedesignPage() {
     setSaveError('')
   }, [eventId])
 
-  // a5/a4 are print-only sizes (design-service serves them as PDF, never
-  // PNG) — there's no honest way to show those inline, so the live preview
-  // only covers the three PNG-native sizes and says so for the other two.
-  const flyerPreviewSupported = ['square', 'story', 'portrait'].includes(flyerSettings.size)
-  const artworkOnly = !!flyerSettings.artworkOnly
+  // The new renderer supports PNG previews of print compositions as well as PDFs.
+  const flyerPreviewSupported = ['square', 'story', 'portrait', 'a4', 'a5'].includes(flyerSettings.size)
+  const artworkOnly = !!flyerSettings.artworkOnly || flyerSettings.composition === 'artwork-only'
+  const flyerBody = (preview, format) => flyerRequest({draft:{...design,selected_flyer_template_id:selectedFlyerTplId,wording_config:wordingOverridesOnly(wording),asset_config:{...design?.asset_config,flyer_settings:flyerSettings,image_position:imagePosition,flyer_text_scale:flyerTextScale}},event:event||{},theme:{colors,font_pairing:fontPairing},eventId,origin:window.location.origin,preview,format})
 
   useEffect(() => {
     if (tab !== 'Flyer' || !eventId || !flyerPreviewSupported) return undefined
-    if (artworkOnly) {
-      setFlyerPreviewError('')
-      setFlyerPreviewLoading(false)
-      setFlyerPreviewUrl(design?.asset_config?.cover_image_url || '')
-      return undefined
-    }
+    let cancelled = false
     clearTimeout(flyerPreviewTimerRef.current)
     flyerPreviewTimerRef.current = setTimeout(async () => {
       setFlyerPreviewLoading(true)
+      setFlyerPreviewUrl('')
       setFlyerPreviewError('')
       try {
-        const { blob } = await api.renderFlyer(eventId, {
-          size: flyerSettings.size,
-          format: 'png',
-          template_id: selectedFlyerTplId || undefined,
-          colors,
-          font_pairing: fontPairing,
-          wording,
-          cover_image_url: design?.asset_config?.cover_image_url || undefined,
-          image_position: imagePosition,
-          text_scale: flyerTextScale,
-          qr_enabled: flyerSettings.qr,
-          qr_position: flyerSettings.qrPosition,
-          qr_data: flyerSettings.qr ? `${window.location.origin}/invite/${eventId}` : null,
-          preview: true,
-        }, { download: false })
+        const { blob } = await api.renderFlyer(eventId, flyerBody(true, 'png'), { download: false })
+        if (cancelled) return
         if (flyerPreviewObjectUrlRef.current) URL.revokeObjectURL(flyerPreviewObjectUrlRef.current)
         const url = URL.createObjectURL(blob)
         flyerPreviewObjectUrlRef.current = url
         setFlyerPreviewUrl(url)
       } catch (e) {
-        setFlyerPreviewError(e.message || 'Live preview is temporarily unavailable — the download buttons still render the real file.')
+        if (!cancelled) setFlyerPreviewError(e.message || 'Live preview is temporarily unavailable — the download buttons still render the real file.')
       } finally {
-        setFlyerPreviewLoading(false)
+        if (!cancelled) setFlyerPreviewLoading(false)
       }
     }, 900)
-    return () => clearTimeout(flyerPreviewTimerRef.current)
+    return () => { cancelled = true; clearTimeout(flyerPreviewTimerRef.current) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, eventId, flyerPreviewSupported, flyerSettings.size, flyerSettings.qr, flyerSettings.qrPosition, flyerSettings.rsvpLink,
-      selectedFlyerTplId, colors, wording, imagePosition, flyerTextScale, artworkOnly, design?.asset_config?.cover_image_url])
+      selectedFlyerTplId, colors, wording, imagePosition, flyerTextScale, artworkOnly, design?.asset_config, flyerSettings, fontPairing, event])
 
   useEffect(() => () => { if (flyerPreviewObjectUrlRef.current) URL.revokeObjectURL(flyerPreviewObjectUrlRef.current) }, [])
 
@@ -1247,38 +1230,14 @@ export default function DesignStudioRedesignPage() {
     if (!eventId || renderBusy) return
     setRenderBusy(true)
     try {
-      if (artworkOnly) {
-        const artworkUrl = design?.asset_config?.cover_image_url
-        if (!artworkUrl) throw new Error('Upload the finished flyer image first.')
-        const saved = await api.saveEventDesign(eventId, {
-          asset_config: { ...(design?.asset_config || {}), flyer_settings: flyerSettings, flyer_image_url: artworkUrl },
-        })
-        setDesign(saved)
-        if (useAsCover) await api.updateInviteSettings(eventId, { invite_cover_image: artworkUrl })
-        notify(useAsCover ? 'Uploaded artwork applied directly — no template overlay' : 'Uploaded artwork saved as the flyer')
-        return
-      }
       await api.saveEventDesign(eventId, {
         wording_config: wordingOverridesOnly(wording),
-        asset_config: { ...(design?.asset_config || {}), image_position: imagePosition, flyer_text_scale: flyerTextScale },
+        asset_config: { ...(design?.asset_config || {}), image_position: imagePosition, flyer_text_scale: flyerTextScale, flyer_settings: flyerSettings },
       })
-      const result = await api.renderFlyer(eventId, {
-        size: flyerSettings.size,
-        format: fmt || (['a5', 'a4'].includes(flyerSettings.size) ? 'pdf' : 'png'),
-        template_id: selectedFlyerTplId || undefined,
-        colors,
-        font_pairing: fontPairing,
-        wording,
-        cover_image_url: design?.asset_config?.cover_image_url || undefined,
-        image_position: imagePosition,
-        text_scale: flyerTextScale,
-        qr_enabled: flyerSettings.qr,
-        qr_position: flyerSettings.qrPosition,
-        qr_data: flyerSettings.qr ? `${window.location.origin}/invite/${eventId}` : null,
-      })
+      const result = await api.renderFlyer(eventId, flyerBody(false, useAsCover ? 'png' : fmt || undefined))
       if (useAsCover && result?.outputUrl) {
         const saved = await api.saveEventDesign(eventId, {
-          asset_config: { ...(design?.asset_config || {}), image_position: imagePosition, cover_image_url: result.outputUrl, flyer_image_url: result.outputUrl },
+          asset_config: { ...(design?.asset_config || {}), image_position: imagePosition, flyer_settings: flyerSettings, cover_image_url: result.outputUrl, flyer_image_url: result.outputUrl },
         })
         setDesign(saved)
         await api.updateInviteSettings(eventId, { invite_cover_image: result.outputUrl })
@@ -1477,7 +1436,7 @@ export default function DesignStudioRedesignPage() {
         <div className="ds-flyer-layout">
           <div className="ds-flyer-col">
             <div className="rd-panel">
-              <div className="rd-panel-head"><h3>Flyer template</h3></div>
+              <div className="rd-panel-head"><h3>Flyer composition</h3></div><div className="rd-panel-body"><label className="rd-field-label" htmlFor="flyer-composition">Composition</label><select id="flyer-composition" className="rr-select" value={artworkOnly?'artwork-only':flyerSettings.composition||'legacy'} onChange={e=>setFlyerSettings(v=>({...v,composition:e.target.value,artworkOnly:e.target.value==='artwork-only'}))}>{Object.entries(FLYER_LAYOUTS).map(([id,[name]])=><option value={id} key={id}>{name}</option>)}</select><a href="/design-studio-redesign?surface=flyer">Open guided flyer editor →</a><p>Original template choices below apply to the Existing template composition.</p></div>
               <div className="rd-panel-body ds-flyer-tpl-row">
                 {templates.filter((t) => (t.surfaces || []).includes('Flyer')).map((t) => (
                   <button key={t.id} className={`ds-flyer-tpl-chip ${selectedFlyerTplId === t.id ? 'active' : ''}`} onClick={() => selectFlyerTemplate(t.id)}>{t.name}</button>
@@ -1515,7 +1474,7 @@ export default function DesignStudioRedesignPage() {
                   ))}
                 </div>
                 <label className="rd-field-label" style={{ marginTop: 10 }}>Font pairing</label>
-                <select className="rr-select" value={fontPairing} onChange={(e) => setFontPairing(e.target.value)}>
+                <select className="rr-select" value={fontPairing} onChange={(e) => {setFontPairing(e.target.value);setFlyerSettings(v=>({...v,fontPairing:e.target.value}))}}>
                   {FONT_OPTIONS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
                 </select>
                 <label className="rd-field-label" style={{ marginTop: 8 }}>Flyer text size</label>
@@ -1537,7 +1496,7 @@ export default function DesignStudioRedesignPage() {
                 </div>
                 <div className="rd-toggle-row" style={{ marginTop: 8 }}>
                   <span style={{ fontSize: 12, fontWeight: 600 }}>Use uploaded image as complete flyer<br /><small style={{ fontWeight: 400 }}>No template shapes or text overlay</small></span>
-                  <label className="rd-switch"><input type="checkbox" checked={artworkOnly} onChange={(e) => setFlyerSettings((v) => ({ ...v, artworkOnly: e.target.checked }))} /><span className="track" /><span className="knob" /></label>
+                  <label className="rd-switch"><input type="checkbox" checked={artworkOnly} onChange={(e) => setFlyerSettings((v) => ({ ...v, artworkOnly: e.target.checked, composition: e.target.checked?'artwork-only':'editorial' }))} /><span className="track" /><span className="knob" /></label>
                 </div>
                 <div className="rd-toggle-row"><span style={{ fontSize: 12, fontWeight: 600 }}>Show RSVP link text</span>
                   <label className="rd-switch"><input type="checkbox" checked={flyerSettings.rsvpLink} onChange={(e) => setFlyerSettings((v) => ({ ...v, rsvpLink: e.target.checked }))} /><span className="track" /><span className="knob" /></label>

@@ -655,7 +655,10 @@ export const api = {
       },
       body: JSON.stringify(body),
     })
-    if (!res.ok) throw new Error('Render failed — Design Studio may be busy or unavailable.')
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}))
+      throw new Error(typeof error.detail === 'string' ? error.detail : 'Render failed — Design Studio may be busy or unavailable.')
+    }
     const outputUrl = res.headers.get('X-Design-Output-Url')
     const blob = await res.blob()
     if (download) {

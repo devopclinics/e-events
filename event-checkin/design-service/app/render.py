@@ -8,6 +8,8 @@ import base64
 import html as _html
 import io
 
+from .flyer_modern import build_modern_flyer, FIT_SCRIPT, SIZES as MODERN_SIZES
+
 import qrcode
 from playwright.async_api import async_playwright
 
@@ -51,6 +53,8 @@ def _text(w: dict, key: str, fallback: str = "") -> str:
 
 def build_flyer_html(ctx: dict, size_key: str) -> str:
     """ctx: {template, colors, fontPairing, wording, coverImageUrl, imagePosition, qr}."""
+    if ctx.get("composition") in ("editorial", "brand-led", "artwork-only"):
+        return build_modern_flyer(ctx, size_key, qr_data_uri, _FONTS)
     c = ctx.get("colors", {})
     bg = c.get("background", "#0B1220"); surface = c.get("surface", "#111827")
     primary = c.get("primary", "#D4AF37"); accent = c.get("accent", "#14B8A6")
@@ -252,6 +256,20 @@ async def render_flyer(ctx: dict, size_key: str, fmt: str, timeout_s: int = 30) 
     async with async_playwright() as p:
         browser = await p.chromium.launch(args=["--no-sandbox", "--disable-dev-shm-usage"])
         try:
+            modern = ctx.get("composition") in ("editorial", "brand-led", "artwork-only")
+            if modern:
+                w, h = MODERN_SIZES.get(size_key, MODERN_SIZES["portrait"])
+                page = await browser.new_page(viewport={"width": w, "height": h}, device_scale_factor=1)
+                await page.set_content(html, wait_until="load", timeout=timeout_s * 1000)
+                await page.evaluate("Promise.all(Array.from(document.images).map(i => i.decode()))")
+                await page.evaluate(FIT_SCRIPT)
+                if fmt == "pdf":
+                    width, height = PDF_SIZES.get(size_key, (f"{w}px", f"{h}px"))
+                    # Scale the identical 1080px composition to physical paper dimensions.
+                    factor = float(width[:-2]) * 96 / 25.4 / w if width.endswith("mm") else 1
+                    await page.add_style_tag(content=f".poster{{zoom:{factor}}}")
+                    return await page.pdf(width=width, height=height, print_background=True)
+                return await page.screenshot(clip={"x": 0, "y": 0, "width": w, "height": h})
             if fmt == "pdf":
                 width, height = PDF_SIZES.get(size_key, PDF_SIZES["a5"])
                 page = await browser.new_page()

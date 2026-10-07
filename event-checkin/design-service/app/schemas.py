@@ -81,6 +81,9 @@ class RestoreRequest(BaseModel):
 
 
 class RenderRequest(BaseModel):
+    composition: str | None = None
+    flyer_settings: dict | None = None
+    logo_image_url: str | None = None
     image_settings: dict | None = None
     font_pairing: str | None = None
     size: str = "portrait"          # square | story | portrait | a5 | a4

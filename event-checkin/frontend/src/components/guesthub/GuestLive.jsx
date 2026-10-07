@@ -10,7 +10,7 @@ const Icon = ({name}) => <svg viewBox="0 0 24 24" aria-hidden="true" dangerously
 const types = {quiz:['Quiz','star'],q_and_a:['Q&A','mic'],poll:['Poll','people'],voting:['Audience vote','star'],survey:['Survey','file'],feedback:['Feedback','star'],word_cloud:['Word cloud','chat'],rating:['Rating','star']};
 const statusLabel = a => a.status === 'live' ? 'Live now' : a.status === 'scheduled' ? 'Opens later' : a.status === 'paused' ? 'Paused' : a.joinable ? 'Review results' : 'Closed';
 
-export default function GuestLive({eventId,passToken,guestName,route,offline,onNavigate,onProgramme}) {
+export default function GuestLive({eventId,passToken,guestName,programmeSessions=[],time,route,offline,onNavigate,onProgramme}) {
   const [session,setSession] = useState(null);
   const [rows,setRows] = useState(null);
   const [error,setError] = useState('');
@@ -18,6 +18,7 @@ export default function GuestLive({eventId,passToken,guestName,route,offline,onN
   const [retry,setRetry] = useState(0);
   const [search,setSearch] = useState('');
   const [questionsOnly,setQuestionsOnly] = useState(false);
+  const [filtersOpen,setFiltersOpen] = useState(false);
   const [run,setRun] = useState(null);
   const navigateRef = useRef(onNavigate);
   navigateRef.current = onNavigate;
@@ -93,9 +94,10 @@ export default function GuestLive({eventId,passToken,guestName,route,offline,onN
   },[session?.token,offline,route.activity,route.follow]);
 
   const retryLoad=useCallback(()=>setRetry(n=>n+1),[]);
-  const activity=rows?.find(a=>a.id===route.activity && (!route.session || a.session_id===route.session));
+  const contextualRows=rows?.map(a=>{const s=programmeSessions.find(s=>s.step_id===a.session_id);return {...a,session_title:a.session_title||s?.title,speaker:a.speaker||s?.speaker,room:a.room||s?.room,starts_at:a.starts_at||s?.starts_at}});
+  const activity=contextualRows?.find(a=>a.id===route.activity && (!route.session || a.session_id===route.session));
   const open=a=>onNavigate({activity:a.id,...(a.session_id?{session:a.session_id}:{})});
-  const matches=(rows || []).filter(a=>(!questionsOnly || a.type==='q_and_a') && `${a.title} ${a.session_title || ''}`.toLowerCase().includes(search.trim().toLowerCase()));
+  const matches=(contextualRows || []).filter(a=>(!questionsOnly || a.type==='q_and_a') && `${a.title} ${a.session_title || ''} ${a.speaker || ''}`.toLowerCase().includes(search.trim().toLowerCase()));
   const featured=matches.find(a=>a.joinable && a.status==='live' && a.type!=='q_and_a');
   const qa=matches.find(a=>a.joinable && a.status==='live' && a.type==='q_and_a');
   const remaining=matches.filter(a=>a!==featured && a!==qa);
@@ -103,23 +105,25 @@ export default function GuestLive({eventId,passToken,guestName,route,offline,onN
     const [label,ic]=types[a.type] || ['Activity','live'];
     return <article className={`gl-${kind}`} key={a.id}>
       <span className="gl-art"><Icon name={ic}/></span><span className="gl-status">{label} · {statusLabel(a)}</span>
-      <h2>{a.title}</h2>{a.session_title && <p className="gl-session">{a.session_title}</p>}
+      <h2>{a.title}</h2>{a.session_title && <p className="gl-session">{a.session_title}</p>}{(a.speaker||a.room||a.starts_at)&&<p className="gl-session">{[a.speaker,a.room,a.starts_at&&time?.(a.starts_at)].filter(Boolean).join(' · ')}</p>}
       {kind!=='row' && <p>{a.description || (a.type==='q_and_a'?'Ask your questions in this session’s conversation.':'Take part with the community, right here in GuestHub.')}</p>}
-      <button className={kind==='feature'?'primary':'text-button'} disabled={!a.joinable || offline || !!error} onClick={()=>open(a)}>{a.joinable ? a.type==='q_and_a'?'Open session Q&A →':a.status==='live'?a.type==='quiz'?'Join the quiz →':'Open activity →':statusLabel(a)+' →' : statusLabel(a)}</button>
+      <button className={kind==='feature'?'primary':'text-button'} disabled={!a.joinable || offline || !!error} onClick={()=>open(a)}>{a.joinable ? a.type==='q_and_a'?(a.status==='live'?'Open session Q&A →':'View questions →'):a.status==='paused'?'View paused activity →':a.status==='live'?a.type==='quiz'?'Join the quiz →':'Open activity →':statusLabel(a)+' →' : statusLabel(a)}</button>
     </article>;
   }
   return <section className="guest-live" aria-label="Festio Live">
     {route.activity ? <div className="gl-crumb"><button className="text-button" onClick={()=>onNavigate({})}>← Live Activities</button><span>Inside GuestHub</span></div> : null}
-    <header className="gl-heading"><div><span className="eyebrow">{route.activity?'FESTIO LIVE':'YOUR VOICE. YOUR COMMUNITY.'}</span><h1>{route.activity ? activity?.title || 'Live activity' : 'Be part of the moment.'}</h1><p>{route.activity ? activity?.session_title || 'Your event activity' : 'Ask a question, share your perspective, join the fun.'}</p></div>{!route.activity && <span className="gl-status">● Festio Live</span>}</header>
+    <header className="gl-heading"><div><span className="eyebrow">{route.activity?'FESTIO LIVE':'YOUR VOICE. YOUR COMMUNITY.'}</span><h1>{route.activity ? activity?.title || 'Live activity' : 'Live Activities'}</h1><p>{route.activity ? activity?.session_title || 'Event-wide activity' : 'Join an activity or read the latest questions.'}</p></div>{!route.activity && <span className="gl-status">{rows?.filter(a=>a.status==='live').length || 0} open now</span>}</header>
+    {route.activity && <p className="gl-session">{[activity?.speaker,activity?.room,activity?.starts_at&&time?.(activity.starts_at)].filter(Boolean).join(' · ')}{!activity?.session_id && 'This activity is open at event level; no programme session has been linked.'}</p>}
     {error && <div className="notice" role="alert">{error} <button className="text-button" onClick={retryLoad} disabled={offline}>Try again</button></div>}
     {offline && <p className="notice">Reconnect to send a response. Unsent responses are not queued.</p>}
     {!session || rows===null ? !error && <p role="status" className="card">{offline?'Connect to load Live Activities.':'Connecting to your event activities…'}</p> : route.activity ? <>
       {activity?.session_id && <button className="text-button gl-programme-link" onClick={()=>onProgramme(activity.session_id)}>View programme session →</button>}
       {route.follow==='1' && <p className="gl-follow" role="status">Following the guided show{run?.current_step?.title ? ` · ${run.current_step.title}` : ''}. The host controls the next activity.</p>}
-      {activity?.joinable ? <div className="gl-activity-layout"><Suspense fallback={<p role="status">Loading activity…</p>}><ActivityView key={activity.id} embedded offline={offline} guestToken={session.token} activityId={activity.id} onBack={()=>onNavigate({})}/></Suspense><aside className="gl-info"><Icon name="people"/><h3>Your participation</h3><p>{guestName || 'Your personal guest access'}</p><p>{activity.type==='q_and_a'?'You can ask more than one question. This session has its own question queue.':'The host controls question timing and when results are shared.'}</p><button className="text-button" onClick={()=>onProgramme(activity.session_id)}>Back to programme →</button></aside></div> : <div className="card" role="status"><h2>{activity?statusLabel(activity):'Activity unavailable'}</h2><p>{activity?'The organizer has not opened this activity for responses.':'This activity is not available to your guest access right now.'}</p><button className="text-button" disabled={offline} onClick={retryLoad}>Refresh activities</button></div>}
+      {activity?.joinable ? <div className="gl-activity-layout"><Suspense fallback={<p role="status">Loading activity…</p>}><ActivityView key={activity.id} embedded offline={offline} guestToken={session.token} activityId={activity.id} onBack={()=>onNavigate({})}/></Suspense><aside className="gl-info"><Icon name="people"/><h3>Your participation</h3><p>{guestName || 'Your personal guest access'}</p><p>{activity.type==='q_and_a'?'You can ask more than one question while Q&A is open. Questions stay in this activity’s queue.':'The host controls question timing and when results are shared.'}</p><button className="text-button" onClick={()=>onProgramme(activity.session_id)}>Back to programme →</button></aside></div> : <div className="card" role="status"><h2>{activity?statusLabel(activity):'Activity unavailable'}</h2><p>{activity?'The organizer has not opened this activity for responses.':'This activity is not available to your guest access right now.'}</p><button className="text-button" disabled={offline} onClick={retryLoad}>Refresh activities</button></div>}
     </> : <>
       {run && <section className="gl-show"><span className="eyebrow">GUIDED SHOW · {run.status}</span><h2>{run.current_step?.title || 'The next moment will begin shortly'}</h2><p>{run.status==='paused'?'The presenter has paused the show.':'Follow the presenter as new activities open.'}</p><button className="primary" disabled={offline || !!error || !run.active_activity_id} onClick={()=>onNavigate({activity:run.active_activity_id,follow:'1'})}>{run.active_activity_id?'Join guided show →':'Waiting for the next activity'}</button></section>}
-      {rows.length>0 && <div className="gl-filters"><label>Find a speaker, session or activity<input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search activities…"/></label><label className="gl-filter-toggle"><input type="checkbox" checked={questionsOnly} onChange={e=>setQuestionsOnly(e.target.checked)}/>Questions &amp; answers only</label></div>}
+      {rows.length>0 && <button className="secondary gl-filter-button" aria-expanded={filtersOpen} onClick={()=>setFiltersOpen(v=>!v)}>Search & filter activities</button>}
+      {rows.length>0 && <div className={`gl-filters ${filtersOpen?'is-open':''}`}><label>Find an activity, session or listed speaker<input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search activities…"/></label><label className="gl-filter-toggle"><input type="checkbox" checked={questionsOnly} onChange={e=>setQuestionsOnly(e.target.checked)}/>Questions &amp; answers only</label></div>}
       {upcomingError && <p role="status" className="notice">{upcomingError} <button className="text-button" onClick={retryLoad}>Retry</button></p>}
       {(featured || qa) && <div className={`gl-lead ${!featured || !qa?'gl-single':''}`}>{featured&&card(featured,'feature')}{qa&&card(qa,'qa')}</div>}
       {!!remaining.length && <><h2 className="gl-section-title">More ways to take part</h2><div className="gl-grid">{remaining.map(a=>card(a))}</div></>}

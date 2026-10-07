@@ -568,6 +568,7 @@ function QnaPanel({ guestToken, activityId, activityStatus, offline = false }) {
 
   return (
     <div className="grid gap-3">
+      {activityStatus !== 'live' && <p role="status" className="rounded-xl border p-4 text-sm">{activityStatus==='paused'?'Questions are paused by the organizer. You can read existing questions.':'This Q&A has ended. You can read the questions shared during the session.'}</p>}
       {activityStatus === 'live' && (
         <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
           <p className="mb-3 text-sm font-semibold text-slate-600 dark:text-slate-300">Ask as many questions as you need while Q&amp;A is open. A moderator reviews each question before it is public.</p>
@@ -584,10 +585,10 @@ function QnaPanel({ guestToken, activityId, activityStatus, offline = false }) {
       )}
       <div className="grid gap-2">
         {items === null ? <p className="text-sm text-slate-600 dark:text-slate-300">Loading…</p> : items.length === 0 ? (
-          <p className="text-sm text-slate-600 dark:text-slate-300">No questions yet — be the first to ask.</p>
+          <p className="text-sm text-slate-600 dark:text-slate-300">{activityStatus==='live'?'No questions yet — be the first to ask.':'No questions have been shared yet.'}</p>
         ) : items.map((q) => (
           <div key={q.id} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
-            <button type="button" onClick={() => upvote(q.id)} disabled={q.upvoted_by_me || q.status === 'pending'} aria-label={q.status === 'pending' ? 'Awaiting moderation' : `Upvote question; ${q.upvote_count} votes`}
+            <button type="button" onClick={() => upvote(q.id)} disabled={activityStatus !== 'live' || q.upvoted_by_me || q.status === 'pending'} aria-label={q.status === 'pending' ? 'Awaiting moderation' : `Upvote question; ${q.upvote_count} votes`}
               className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border-2 text-xs font-extrabold ${q.upvoted_by_me ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900' : 'border-slate-200 text-slate-700 dark:border-slate-700 dark:text-white'}`}>
               ▲ {q.upvote_count}
             </button>
@@ -766,7 +767,8 @@ export function ActivityView({ guestToken, activityId, onBack, embedded = false,
       </div>
       {error && error.code !== 'FESTIO_LIVE_UNAVAILABLE' && <div role="alert" className="rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-700 dark:bg-rose-950 dark:text-rose-200">{error.message || error}</div>}
 
-      <fieldset disabled={offline} className="live-response-fields grid min-w-0 gap-3 border-0 p-0 m-0">
+      <fieldset disabled={offline || activity.status !== 'live'} className="live-response-fields grid min-w-0 gap-3 border-0 p-0 m-0">
+      {activity.status==='paused' && ['survey','feedback'].includes(activity.type) && <p role="status">The organizer has paused submissions. Your saved answers have not changed.</p>}
       {activity.type === 'q_and_a' ? (
         !guided || ['answering', 'results', 'complete'].includes(showPhase)
           ? <QnaPanel guestToken={guestToken} activityId={activityId} activityStatus={activity.status} offline={offline} />

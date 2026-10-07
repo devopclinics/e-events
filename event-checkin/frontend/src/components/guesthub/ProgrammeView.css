@@ -4,3 +4,14 @@
 
 .fh-event-app .workspace.workspace-programme{display:block;max-width:none}.fh-event-app .pg-art{align-self:start;height:100px}.fh-event-app .pg-clock small{overflow-wrap:normal}
 @media(max-width:700px){.fh-event-app .pg-art{height:35px}.fh-event-app .pg-clock small:last-child{display:none}}
+.fh-event-app .pg-refine{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin:16px 0}
+.fh-event-app .pg-refine label{display:grid;gap:5px;font-size:13px;flex:1;min-width:150px}
+.fh-event-app .pg-refine select{min-height:44px;max-width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--white);color:var(--ink)}
+.fh-event-app .pg-time-group{border:1px solid var(--line);background:var(--white);border-radius:14px;scroll-margin-top:100px;min-width:0}
+.fh-event-app .pg-time-group summary{cursor:pointer;padding:16px;min-height:56px;color:var(--ink);font-size:14px;overflow-wrap:anywhere}
+.fh-event-app .pg-time-group summary span{margin-left:12px;color:var(--muted)}
+.fh-event-app .pg-time-sessions{display:grid;gap:12px;padding:8px 12px 16px}
+.fh-event-app .pg-time-group .pg-slot{grid-template-columns:1fr}
+.fh-event-app .pg-time-group .pg-stamp{display:none}
+.fh-event-app .pg-time-group .pg-slot:before{display:none}
+@media(max-width:700px){.fh-event-app .pg-heading{align-items:flex-start}.fh-event-app .pg-clock{min-width:70px}.fh-event-app .pg-time-group summary span{display:block;margin:6px 0 0}.fh-event-app .pg-refine label{min-width:130px}.fh-event-app .pg-refine .secondary{width:100%}}

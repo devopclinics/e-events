@@ -72,3 +72,21 @@
 .fh-event-app .gh-live-participation button.live-option[aria-pressed=true]{background:var(--mint);color:var(--green);border-color:var(--green)}
 .fh-event-app .gh-live-participation .live-option-letter{display:grid;place-items:center;width:30px;height:30px;flex:none;border:1px solid var(--line);border-radius:8px;background:var(--white);font-size:12px}
 .fh-event-app .gh-live-participation :is([class~="bg-slate-200"],[class~="bg-slate-100"]){background-color:var(--line)}
+/* Keep the response engine's current status visible as it changes over SSE. */
+.fh-event-app .gh-live-participation>div:nth-child(2){display:block}
+.fh-event-app .gh-live-participation>div:nth-child(2)>div:first-child{display:none}
+.fh-event-app .gl-filter-button{display:none}
+.fh-event-app .gl-session{font-size:13px;color:var(--muted);margin:8px 0 16px}
+@media(max-width:700px){
+ .fh-event-app .gl-heading{margin-bottom:12px}
+ .fh-event-app .gl-heading .eyebrow{display:none}
+ .fh-event-app .gl-heading h1{font-size:28px;margin:0 0 7px}
+ .fh-event-app .gl-heading>.gl-status{margin-top:8px}
+ .fh-event-app .gl-filter-button{display:flex;min-height:44px;margin:10px 0 14px}
+ .fh-event-app .gl-filters:not(.is-open){display:none}
+ .fh-event-app .gl-feature{min-height:210px;padding:20px}
+ .fh-event-app .gl-feature h2{font-size:24px;margin:14px 0 8px}
+ .fh-event-app .gl-feature .primary{margin-top:14px}
+ .fh-event-app .gl-feature .gl-art{width:36px;height:36px;right:12px;top:68px;box-shadow:none}
+ .fh-event-app .gl-feature .gl-art svg{width:22px;height:22px}
+}

@@ -35,7 +35,7 @@ export default function GuestMeals({ member, members, enabled, previewMock, onMe
   const collected = !!ticket?.guest?.meal_served;
   return <section className="app-meals" aria-label="Meal selection">
     {partyError && <p role="status" className="notice">{partyError}</p>}
-    <div className="vm-attendee"><span className="vm-avatar" aria-hidden="true">{(member?.name || 'Guest').split(' ').map(n => n[0]).slice(0, 2).join('')}</span><div><label htmlFor="meal-member">Choosing meals for</label>
+    <div className="vm-attendee"><span className="vm-avatar" aria-hidden="true">{(member?.name || 'Guest').split(' ').map(n => n[0]).slice(0, 2).join('')}</span><div><label htmlFor="meal-member">{informationOnly ? 'Meals for' : 'Choosing meals for'}</label>
     <select id="meal-member" className="member-select" value={member?.id || ''} disabled={saving} onChange={e => onMember(e.target.value)}>
       {members.filter(m => m.qr_token).map(m => <option key={m.id} value={m.id}>{m.name}{m.is_self ? ' · You' : ''}</option>)}
     </select></div></div>

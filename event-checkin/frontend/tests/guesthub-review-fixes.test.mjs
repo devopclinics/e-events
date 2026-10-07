@@ -1,0 +1,12 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { startsIn,groupSessions,timezoneLabel } from '../src/components/guesthub/programmeView.mjs';
+import {offlineExpiry,offlineDocument} from '../src/components/guesthub/offlinePass.mjs';
+import {requiredActions,readAppRoute} from '../src/components/guesthub/appModel.mjs';
+const now=Date.parse('2026-10-07T12:00:00Z');
+test('countdowns scale from minutes to days',()=>{assert.equal(startsIn(new Date(now+10*60000).toISOString(),now),'Starts in 10 minutes');assert.equal(startsIn(new Date(now+3*3600000).toISOString(),now),'Starts in 3 hours');assert.equal(startsIn('2026-12-24T12:00:00Z',now),'Starts in 78 days')});
+test('time groups collect parallel sessions without dropping any',()=>{const rows=[{starts_at:'2026-12-24T12:00:00Z',id:1},{starts_at:'2026-12-24T11:00:00Z',id:2},{starts_at:'2026-12-24T12:00:00Z',id:3}];assert.deepEqual(groupSessions(rows).map(g=>g.sessions.map(s=>s.id)),[[2],[1,3]])});
+test('timezone names stay readable without changing time calculations',()=>{assert.match(timezoneLabel('America/Indiana/Indianapolis',now),/Eastern.*Indianapolis/);assert.equal(timezoneLabel('not-a-zone',now),'not-a-zone')});
+test('offline copies expire within seven days or one day after event end',()=>{assert.equal(offlineExpiry({},now),now+7*86400000);assert.equal(offlineExpiry({event_end_date:new Date(now+86400000).toISOString()},now),now+2*86400000)});
+test('offline document never injects names into HTML or executable script',()=>{const doc=offlineDocument([{name:'</script><img onerror=alert(1)>',eventName:'Unsafe < event'}],'https://example.test/r/pass');assert.equal((doc.match(/<script>/g)||[]).length,1);assert(!doc.includes('<img onerror'));assert(doc.includes('\\u003c'));assert(doc.includes('textContent'));assert(!doc.includes('/api/'))});
+test('operational required actions go to the checklist while meals retain their route',()=>{assert.equal(readAppRoute('#/checklist').screen,'checklist');assert.equal(requiredActions({consent:{required:true,signed:false}}, {admitted:true})[0].screen,'checklist')});

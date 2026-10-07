@@ -205,7 +205,7 @@ with sync_playwright() as pw:
     state['hub']['guest']['admitted']=False
     state['journey']['consent']['signed']=False
     load();check('before arrival does not request native consent',page.locator('.hero').inner_text().find('Review next steps')<0)
-    page.goto(BASE+'/r/demo-token?case='+str(time.time_ns())+'#/experience');page.get_by_text('Check in with event staff before signing.').wait_for();check('native consent remains admission gated',page.get_by_role('button',name='Sign & agree').count()==0)
+    page.goto(BASE+'/r/demo-token?case='+str(time.time_ns())+'#/checklist');page.get_by_text('Check in with event staff before signing.').wait_for();check('native consent remains admission gated',page.get_by_role('button',name='Sign & agree').count()==0)
     state['hub']['guest']['admitted']=True
     state['event']['event_end_date']=iso(now-timedelta(minutes=1))
     load();check('closing state takes priority over stale actions','Thank you for attending' in page.locator('.hero').inner_text())
@@ -233,15 +233,19 @@ with sync_playwright() as pw:
         elif layout=='classic':
             page.get_by_role('tab',name='Program').first.click()
         select=page.get_by_role('combobox',name='Show programme for').first
-        select.wait_for()
+        if layout!='app':select.wait_for()
         def shown(text): return text in page.locator('body').inner_text()
         check(layout+' defaults to own and shared',shown('Adult learning circle') and shown('Community gathering') and not shown('Junior discovery hour'))
-        select.select_option('child');check(layout+' child programme',shown('Junior discovery hour') and shown('Community gathering') and not shown('Adult learning circle'))
-        select.select_option('all');check(layout+' all programmes',shown('Junior discovery hour') and shown('Adult learning circle'))
+        if layout=='app':page.get_by_role('button',name='My family',exact=True).click()
+        else:select.select_option('child')
+        check(layout+' child programme',shown('Junior discovery hour') and shown('Community gathering') and not shown('Adult learning circle'))
+        if layout=='app':page.get_by_role('button',name='All programmes',exact=True).click()
+        else:select.select_option('all')
+        check(layout+' all programmes',shown('Junior discovery hour') and shown('Adult learning circle'))
         check(layout+' audience selector fits phone',page.evaluate('document.documentElement.scrollWidth<=innerWidth'))
         if layout=='app':page.screenshot(path=str(OUT/'phone-programme-audiences.png'),full_page=True)
     check('no browser runtime errors',not errors)
-    (OUT/'validation.json').write_text(json.dumps(dict(browser=engine,browser_version=browser.version,checks=checks,phone_metrics=metrics,errors=errors,isolated_post_paths=[p['path'] for p in posts],unmatched_fixture_requests=sorted(set(unexpected)),limitations=['Automated browser engine and viewport testing; no physical-device or branded Apple Safari testing','All API responses isolated fixtures; no staging or production mutations','Offline credential persistence remains disabled']),indent=2))
+    (OUT/'validation.json').write_text(json.dumps(dict(browser=engine,browser_version=browser.version,checks=checks,phone_metrics=metrics,errors=errors,isolated_post_paths=[p['path'] for p in posts],unmatched_fixture_requests=sorted(set(unexpected)),limitations=['Automated browser engine and viewport testing; no physical-device or branded Apple Safari testing','All API responses isolated fixtures; no staging or production mutations','Offline pass persistence is covered by the separate real-service-worker suite']),indent=2))
     print(json.dumps(dict(passed=len(checks),metrics=metrics,errors=errors,unexpected=sorted(set(unexpected))),indent=2))
     browser.close()
 server.shutdown()

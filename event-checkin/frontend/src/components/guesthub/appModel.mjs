@@ -1,4 +1,4 @@
-export const APP_SCREENS = ['home', 'programme', 'pass', 'inbox', 'more', 'party', 'experience', 'feedback', 'resources', 'communications', 'venue', 'profile', 'meals', 'appearance', 'live'];
+export const APP_SCREENS = ['home', 'programme', 'pass', 'inbox', 'more', 'party', 'experience', 'feedback', 'resources', 'communications', 'venue', 'profile', 'meals', 'appearance', 'live', 'checklist'];
 export function readAppRoute(hash = '') {
   const [path, query] = hash.replace(/^#\/?/, '').split('?');
   const params = new URLSearchParams(query);
@@ -35,12 +35,12 @@ export function requiredActions(journey, guest) {
   if (guest?.admitted && journey?.consent?.required && !journey.consent.signed) actions.push({
     id: 'consent',
     title: `Complete ${journey.consent.form?.title || 'your consent form'}`,
-    screen: 'experience'
+    screen: 'checklist'
   });
   for (const step of journey?.steps || []) if (step.required && step.actionable && !['completed', 'overridden', 'skipped'].includes(step.status) && step.type !== 'consent') actions.push({
     id: step.id,
     title: step.title,
-    screen: step.type === 'meal_selection' ? 'meals' : 'experience'
+    screen: step.type === 'meal_selection' ? 'meals' : 'checklist'
   });
   return actions;
 }

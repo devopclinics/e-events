@@ -12,7 +12,9 @@ export function dayHighlights(sessions, now) {
   const sorted = [...sessions].sort((a,b)=>asTime(a.starts_at)-asTime(b.starts_at));
   const current = sorted.filter(s=>sessionLive(s,now));
   const future = sorted.filter(s=>asTime(s.starts_at)>now);
-  return {current, featured:current[0] || future[0] || sorted[0], next:current.length ? future[0] : future[1]};
+  const featured=current[0] || future[0] || sorted[0];
+  const next=future.find(s=>asTime(s.starts_at)>asTime(featured?.starts_at));
+  return {current,featured,next};
 }
 export const activityLabels = {quiz:'Join quiz',q_and_a:'Ask a question',voting:'Cast your vote',poll:'Answer poll',survey:'Open survey',feedback:'Share feedback',form:'Review form'};
 export function activityHref(eventId, token, activity) {
@@ -22,3 +24,21 @@ export function activityHref(eventId, token, activity) {
 export function readSavedSessions(key) {
   try {const list=JSON.parse(localStorage.getItem(key)||'[]');return Array.isArray(list)?list.filter(x=>typeof x==='string').slice(0,1000):[];}catch{return [];}
 }
+export function startsIn(value, now=Date.now()) {
+ const minutes=Math.ceil((asTime(value)-now)/60000);
+ if(minutes<=0)return 'In progress';
+ if(minutes<60)return `Starts in ${minutes} ${minutes===1?'minute':'minutes'}`;
+ const hours=Math.ceil(minutes/60);
+ if(hours<24)return `Starts in ${hours} ${hours===1?'hour':'hours'}`;
+ const days=Math.ceil(minutes/1440);return `Starts in ${days} ${days===1?'day':'days'}`;
+}
+export function timezoneLabel(zone, now=Date.now()) {
+ try {const name=new Intl.DateTimeFormat('en-US',{timeZone:zone,timeZoneName:'longGeneric'}).formatToParts(now).find(p=>p.type==='timeZoneName')?.value;const city=zone.split('/').pop().replaceAll('_',' ');return `${name||zone}${name&&name!==city?` (${city})`:''}`;}catch{return zone;}
+}
+export function groupSessions(sessions) {
+ const groups=new Map();
+ [...sessions].sort((a,b)=>asTime(a.starts_at)-asTime(b.starts_at)).forEach(s=>{const key=String(asTime(s.starts_at));if(!groups.has(key))groups.set(key,[]);groups.get(key).push(s)});
+ return [...groups].map(([key,sessions])=>({key,sessions,starts_at:sessions[0].starts_at}));
+}
+export const programmeRoom=s=>s.room||s.location||'Room to be announced';
+export const programmeGroups=s=>s.age_groups?.length?s.age_groups:[s.title?.match(/\bGroup\s+[A-Za-z0-9]+\b/i)?.[0]||'Shared / other'];

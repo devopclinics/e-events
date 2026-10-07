@@ -61,7 +61,7 @@ class Fact(BaseModel):
 class FeatureSection(BaseModel):
     id: str = Field(min_length=1, max_length=60)
     kicker: str = Field(default="", max_length=80)
-    title: str = Field(min_length=1, max_length=160)
+    title: str = Field(default="", max_length=160)
     summary: str = Field(default="", max_length=1200)
     image_url: HttpUrl | None = None
 

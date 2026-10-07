@@ -172,6 +172,13 @@ async def publish(event_id: str, body: PublishRequest, db: AsyncSession = Depend
         raise HTTPException(404, "Website not configured")
     check_revision(site, body.expected_revision)
     if body.content is not None: site.draft = body.content.model_dump(mode="json")
+    # Drafts can contain unfinished sections without blocking unrelated edits.
+    # Empty placeholders do not render; meaningful unfinished content needs a title.
+    for index, section in enumerate(site.draft.get("feature_sections") or []):
+        unfinished = not str(section.get("title") or "").strip()
+        meaningful = bool(str(section.get("summary") or "").strip() or section.get("image_url") or section.get("facts") or section.get("action"))
+        if section.get("enabled", True) and unfinished and meaningful:
+            raise HTTPException(422, f"In Content sections, add a title to feature section {index + 1}, or turn off Show section, before publishing.")
     version = (await db.scalar(select(func.max(Release.version)).where(Release.site_id == site.id)) or 0) + 1
     release = Release(site_id=site.id, version=version, snapshot={"family": site.template_family, "content": site.draft}, published_by=body.published_by)
     db.add(release); await db.flush(); site.published_release_id = release.id

@@ -181,3 +181,5 @@
 .ews-template-collection .ews-template-card strong{font-size:15px}.ews-template-collection .ews-template-card p{font-size:12px;line-height:1.5}.ews-template-collection .ews-template-card em{font-size:10px}.ews-template-collection .ews-template-card button{font-size:12px;min-height:44px;padding:9px 12px}.ews-template-collection .ews-template-actions{flex-wrap:wrap}
 
 .ews-featured-note{background:var(--surface,#f2f6ef);border:1px solid #ceddce;border-radius:12px;padding:16px;margin:18px 0}.ews-featured-note p{font-size:14px;margin:8px 0}.ews-session .ews-feature-toggle{display:flex;align-items:center;gap:10px;min-height:48px;flex-wrap:wrap;padding:8px 0}.ews-session .ews-feature-toggle input{width:20px;height:20px;min-height:20px;flex:none}.ews-feature-toggle small{font-size:12px;color:#526958}
+
+.ews-programme-save{position:sticky;top:-22px;z-index:2;display:flex;flex-wrap:wrap;gap:8px;padding:12px 0;background:var(--surface);border-bottom:1px solid var(--line)}.ews-studio .ews-programme-save button{min-height:44px;font-size:12px}@media(max-width:900px){.ews-programme-save{top:-16px}}

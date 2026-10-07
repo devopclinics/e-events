@@ -109,6 +109,30 @@ class WebsiteEditorTests(unittest.IsolatedAsyncioTestCase):
   current=await self.get();site=await self.put({**self.body,'expected_revision':current['revision']})
   await self.post('publish',site['revision'])
   self.assertIn('data-template="modern-professional"',(await self.c.get('/site/demo-site')).text)
+ async def test_unfinished_feature_draft_preview_save_and_publication(self):
+  for family in ['atrium','community','modern-professional']:
+   section={'id':'unfinished','title':'','kicker':'Featured programme','enabled':True,'summary':''}
+   current=await self.c.get('/internal/sites/a')
+   rev=current.json()['revision'] if current.status_code==200 else 'new'
+   body={**self.body,'template_family':family,'expected_revision':rev,'content':{**self.body['content'],'sessions':[{'title':'Chosen highlight','featured':True}],'feature_sections':[section]}}
+   preview=await self.c.post('/internal/sites/a/render-preview',json=body)
+   self.assertEqual(preview.status_code,200,preview.text);self.assertNotIn('id="unfinished"',preview.json()['html'])
+   saved=await self.put(body);self.assertEqual(saved['content']['feature_sections'][0]['title'],'')
+   self.assertTrue(saved['content']['sessions'][0]['featured'])
+   self.assertEqual((await self.post('publish',saved['revision'])).status_code,200)
+   live=(await self.c.get('/site/demo-site')).text;self.assertIn('Chosen highlight',live);self.assertNotIn('id="unfinished"',live)
+   section['summary']='Keep this draft text';section['title']='   '
+   current=await self.get();saved=await self.put({**body,'expected_revision':current['revision']})
+   result=await self.post('publish',saved['revision']);self.assertEqual(result.status_code,422)
+   self.assertIn('Content sections',result.json()['detail']);self.assertIn('feature section 1',result.json()['detail'])
+   self.assertEqual((await self.c.get('/site/demo-site')).text,live)
+   self.assertEqual((await self.get())['content']['feature_sections'][0]['summary'],'Keep this draft text')
+   section['enabled']=False;saved=await self.put({**body,'expected_revision':saved['revision']})
+   self.assertEqual((await self.post('publish',saved['revision'])).status_code,200)
+   section.update(enabled=True,title='Finished section');current=await self.get();saved=await self.put({**body,'expected_revision':current['revision']})
+   self.assertEqual((await self.post('publish',saved['revision'])).status_code,200)
+   live=(await self.c.get('/site/demo-site')).text;self.assertIn('Finished section',live);self.assertIn('Keep this draft text',live)
+
  async def test_restore_cross_site_forbidden(self):
   a=await self.put();release=(await self.post('publish',a['revision'])).json();b=await self.put({**self.body,'slug':'other-site'},'b')
   self.assertEqual((await self.post('restore/'+release['release_id'],b['revision'],'b')).status_code,404)

@@ -135,7 +135,7 @@ def render_modern(content, family, *, preview=False):
         speakers='<section class="content-section" id="speakers">'+section_heading('Speakers','The organizer will publish the confirmed speaker lineup here.')+'</section>'
     features=[]
     for f in content.get('feature_sections') or []:
-        if not f.get('enabled',True):continue
+        if not f.get('enabled',True) or not str(f.get('title') or '').strip():continue
         image=safe_url(f.get('image_url'));media=f'<img src="{image}" alt="" loading="lazy">' if image else '<div class="feature-art" aria-hidden="true">✦</div>'
         features.append(f'<section class="feature content-section" id="{e(f.get("id") or "")}"><div>{section_heading(f.get("title") or "", "", f.get("kicker") or "")}<p>{e(f.get("summary") or "")}</p><div class="facts">{facts_markup(f.get("facts"))}</div>{link(f.get("action"))}</div>{media}</section>')
     connections=[]

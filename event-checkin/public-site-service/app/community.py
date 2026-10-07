@@ -254,7 +254,7 @@ def exhibitors_markup(exhibitors):
 
 
 def feature_markup(section, index):
-    if not section.get("enabled", True):
+    if not section.get("enabled", True) or not str(section.get("title") or "").strip():
         return ""
     image = safe_url(section.get("image_url"))
     facts = section.get("facts") or []

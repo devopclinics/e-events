@@ -1,4 +1,4 @@
-export const APP_SCREENS = ['home', 'programme', 'pass', 'inbox', 'more', 'party', 'experience', 'feedback', 'resources', 'communications', 'venue', 'profile', 'meals', 'appearance'];
+export const APP_SCREENS = ['home', 'programme', 'pass', 'inbox', 'more', 'party', 'experience', 'feedback', 'resources', 'communications', 'venue', 'profile', 'meals', 'appearance', 'live'];
 export function readAppRoute(hash = '') {
   const [path, query] = hash.replace(/^#\/?/, '').split('?');
   const params = new URLSearchParams(query);
@@ -7,12 +7,14 @@ export function readAppRoute(hash = '') {
     member: params.get('member') || '',
     session: params.get('session') || '',
     day: params.get('day') || '',
-    ...(params.get('form') ? {form:params.get('form')} : {})
+    ...(params.get('form') ? {form:params.get('form')} : {}),
+    ...(params.get('activity') ? {activity:params.get('activity')} : {}),
+    ...(params.get('follow') === '1' ? {follow:'1'} : {})
   };
 }
 export function appHash(route) {
   const params = new URLSearchParams();
-  for (const key of ['member', 'session', 'day', 'form']) if (route[key]) params.set(key, route[key]);
+  for (const key of ['member', 'session', 'day', 'form', 'activity', 'follow']) if (route[key]) params.set(key, route[key]);
   return `#/${APP_SCREENS.includes(route.screen) ? route.screen : 'home'}${params.size ? `?${params}` : ''}`;
 }
 export function asTime(value) {

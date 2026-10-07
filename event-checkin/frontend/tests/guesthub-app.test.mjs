@@ -135,3 +135,11 @@ test('meal navigation stays in GuestHub and required meal actions open it', () =
   assert.equal(route.screen,'meals'); assert.equal(route.member,'child');
   assert.equal(requiredActions({steps:[{id:'m',type:'meal_selection',required:true,actionable:true,status:'pending'}]}, {})[0].screen,'meals');
 });
+
+test('embedded live routes retain activity scope and explicit guided follow without credentials', () => {
+  const hash=appHash({screen:'live',activity:'quiz1',session:'session1',follow:'1',pass:'SECRET'});
+  const route=readAppRoute(hash);
+  assert.equal(route.screen,'live');assert.equal(route.activity,'quiz1');assert.equal(route.session,'session1');assert.equal(route.follow,'1');
+  assert.equal(hash.includes('SECRET'),false);
+  assert.equal(readAppRoute('#/live?follow=unexpected').follow,undefined);
+});

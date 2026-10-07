@@ -3,15 +3,15 @@ import { icons } from './icons.mjs';
 import { asTime } from './appModel.mjs';
 import { sessionKind, sessionLive, dayHighlights, activityLabels, activityHref } from './programmeView.mjs';
 const Icon=({name})=><svg aria-hidden="true" viewBox="0 0 24 24" dangerouslySetInnerHTML={{__html:name==='book'?'<path d="M12 5v16M12 5C8 2 4 3 2 4v15c4-2 7-1 10 2 3-3 6-4 10-2V4c-2-1-6-2-10 1ZM5 8l4 1m-4 3 4 1m6-4 4-1m-4 5 4-1"/>':icons[name]||icons.calendar}}/>;
-export function SessionActivities({session, activities=[], forms=[], eventId, token, onForm, disabled=false}) {
+export function SessionActivities({session, activities=[], forms=[], eventId, token, onForm, onActivity, disabled=false}) {
  const linked=activities.filter(a=>a.session_id===session.step_id);
  const linkedForms=forms.filter(f=>f.step_id===session.step_id);
  if(!linked.length&&!linkedForms.length)return null;
  return <div className="pg-activities" aria-label={`Activities for ${session.title}`}>{linked.map(a=>{
   const live=a.status==='live',label=activityLabels[a.type]||'Open activity',status=live?'Live now':a.status==='scheduled'?'Opens later':a.status==='paused'?'Paused':'Closed';
-  const content=<><span><strong>{label}</strong><small>{a.title}</small></span><span className="pg-activity-status">{live?'● ':''}{status}{live?' ↗':''}</span></>;
+  const content=<><span><strong>{label}</strong><small>{a.title}</small></span><span className="pg-activity-status">{live?'● ':''}{status}{live?(onActivity?' →':' ↗'):''}</span></>;
   const href=disabled?'':activityHref(eventId,token,a);
-  return href?<a className="pg-activity is-live" key={a.id} href={href}>{content}</a>:<button className="pg-activity" key={a.id} disabled>{content}</button>;
+  return href?<a className="pg-activity is-live" key={a.id} href={onActivity ? `#/live?${new URLSearchParams({activity:a.id,session:a.session_id})}` : href} onClick={onActivity ? e=>{e.preventDefault();onActivity(a)} : undefined}>{content}</a>:<button className="pg-activity" key={a.id} disabled>{content}</button>;
  })}{linkedForms.map(f=><button className="pg-activity" key={f.id+f.guest_id} onClick={()=>onForm(f)} disabled={disabled}><span><strong>{f.kind==='consent'?'Review consent':'Review form'}</strong><small>{f.title} · {f.guest_name}</small></span><span className="pg-activity-status">{f.status==='complete'?'Completed':'Review'} →</span></button>)}</div>;
 }
 export default function ProgrammeView({days,selectedDay,timeline,now,zone,time,date,onDay,onSession,audienceControl,search,onSearch,saved,onSave,activityProps,activityError,onRetry,bookmarkNotice}) {

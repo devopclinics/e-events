@@ -13,7 +13,7 @@ function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-function LiveUnavailableState({ onRetry, backHref = '/' }) {
+function LiveUnavailableState({ onRetry, onBack, backHref = '/' }) {
   return (
     <div role="alert" className="rounded-2xl border border-amber-200 bg-white p-6 text-center shadow-sm dark:border-amber-900 dark:bg-slate-900">
       <div className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-amber-100 text-xl dark:bg-amber-950" aria-hidden="true">↻</div>
@@ -21,13 +21,13 @@ function LiveUnavailableState({ onRetry, backHref = '/' }) {
       <p className="mt-2 text-sm font-medium text-slate-600 dark:text-slate-300">We're having trouble connecting to this live activity. Please try again shortly.</p>
       <div className="mt-5 grid gap-2 sm:grid-cols-2">
         <button type="button" onClick={onRetry} className="min-h-12 rounded-xl bg-teal-400 px-4 py-2.5 text-sm font-extrabold text-slate-950">Retry</button>
-        <a href={backHref} className="grid min-h-12 place-items-center rounded-xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-extrabold text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-white">Back to Event</a>
+        <a href={backHref} onClick={onBack ? e => { e.preventDefault(); onBack(); } : undefined} className="grid min-h-12 place-items-center rounded-xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-extrabold text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-white">Back to Event</a>
       </div>
     </div>
   )
 }
 
-function QuestionTimer({ question, deadlineAt }) {
+function QuestionTimer({ question, deadlineAt, onExpiry }) {
   const calculate = () => {
     if (question.time_limit_seconds && question.config?.opened_at) {
       const elapsed = (Date.now() - new Date(question.config.opened_at).getTime()) / 1000
@@ -38,12 +38,14 @@ function QuestionTimer({ question, deadlineAt }) {
   }
   const [remaining, setRemaining] = useState(calculate)
   useEffect(() => {
-    if (remaining == null) return undefined
+    setRemaining(calculate())
+    if (calculate() == null) return undefined
     const interval = setInterval(() => setRemaining(calculate()), 500)
     return () => clearInterval(interval)
-  }, [question.id, deadlineAt]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [question.id, question.time_limit_seconds, question.config?.opened_at, deadlineAt]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { onExpiry?.(remaining === 0) }, [remaining, onExpiry])
   if (remaining == null) return null
-  return <div role="timer" aria-live="polite" className={`mt-2 text-xs font-extrabold ${remaining <= 5 ? 'text-rose-600' : 'text-slate-600 dark:text-slate-300'}`}>{remaining}s remaining</div>
+  return <div role="timer" aria-live="off" className={`live-question-timer mt-2 text-xs font-extrabold ${remaining <= 5 ? 'text-rose-600' : 'text-slate-600 dark:text-slate-300'}`}>{remaining}s remaining</div>
 }
 
 // Live-updates over SSE when the ticket mints cleanly; a plain interval keeps
@@ -122,10 +124,10 @@ function OptionQuestion({ question, onAnswer, busy, alreadyAnswered, draftMode, 
   }
   return (
     <div className="grid gap-2">
-      {question.options.map((opt) => (
+      {question.options.map((opt, optionIndex) => (
         <button key={opt.id} type="button" aria-pressed={selected.includes(opt.id)} onClick={() => toggle(opt.id)}
-          className={`min-h-12 rounded-xl border-2 px-4 py-2.5 text-left text-sm font-bold transition ${selected.includes(opt.id) ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900' : 'border-slate-200 bg-white text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-white'}`}>
-          {opt.label}
+          className={`live-option min-h-12 rounded-xl border-2 px-4 py-2.5 text-left text-sm font-bold transition ${selected.includes(opt.id) ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900' : 'border-slate-200 bg-white text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-white'}`}>
+          <span className="live-option-letter hidden" aria-hidden="true">{String.fromCharCode(65 + optionIndex)}</span><span>{opt.label}</span>
         </button>
       ))}
       {!draftMode && (
@@ -386,7 +388,7 @@ function SurveyIntro({ activity, onStart }) {
   )
 }
 
-function SurveyForm({ activity, rules, draftAnswersFromServer, completedAt, onAutosave, onComplete, busy }) {
+function SurveyForm({ activity, rules, draftAnswersFromServer, completedAt, onAutosave, onComplete, busy, embedded = false }) {
   const [draft, setDraft] = useState(() => draftAnswersFromServer || {})
   const [submitted, setSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -457,7 +459,7 @@ function SurveyForm({ activity, rules, draftAnswersFromServer, completedAt, onAu
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-8 text-center dark:border-emerald-800 dark:bg-emerald-950">
         <div className="text-2xl font-extrabold text-emerald-900 dark:text-emerald-100">Thank You</div>
         <p className="mt-3 text-sm font-bold text-emerald-800 dark:text-emerald-200">Jazakum Allahu Khairan for sharing your feedback.</p>
-        <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">Your input will help the MBF planning committee build an even better Summit experience, in sha Allah.</p>
+        <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">{embedded ? 'Your input will help the organizing team improve future events.' : 'Your input will help the MBF planning committee build an even better Summit experience, in sha Allah.'}</p>
       </div>
     )
   }
@@ -499,6 +501,7 @@ function SurveyForm({ activity, rules, draftAnswersFromServer, completedAt, onAu
 }
 
 function QuestionCard({ question, index, onAnswer, busy, alreadyAnswered, draftMode, draftValue, onDraftChange, missing, deadlineAt }) {
+  const [expired, setExpired] = useState(false)
   const isOptionType = ['single_choice', 'true_false', 'yes_no', 'multiple_choice'].includes(question.question_type)
   const isRating = ['rating_5', 'rating_10', 'nps'].includes(question.question_type)
   const isNumber = question.question_type === 'number'
@@ -508,14 +511,15 @@ function QuestionCard({ question, index, onAnswer, busy, alreadyAnswered, draftM
   const isFreeform = !isOptionType && !isRating && !isNumber && !isRanking && !isQuadrant && !isImageClick
   const draftProps = draftMode ? { draftMode: true, draftValue, onDraftChange } : {}
   return (
-    <div id={`question-${question.id}`} className={`rounded-2xl border p-4 ${missing ? 'border-rose-400 bg-rose-50 dark:border-rose-700 dark:bg-rose-950/40' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900'}`}>
+    <div id={`question-${question.id}`} className={`live-question-card rounded-2xl border p-4 ${missing ? 'border-rose-400 bg-rose-50 dark:border-rose-700 dark:bg-rose-950/40' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900'}`}>
       <div className="text-xs font-extrabold uppercase tracking-wide text-slate-600 dark:text-slate-300">
         Question {index + 1}{question.required && <span className="ml-1 text-rose-500" aria-hidden="true">*</span>}
       </div>
       <div className="mt-1 text-base font-extrabold text-slate-900 dark:text-white">{question.prompt}</div>
       {missing && <p role="alert" className="mt-1 text-xs font-bold text-rose-600 dark:text-rose-300">This question needs an answer before you can submit.</p>}
-      <QuestionTimer question={question} deadlineAt={deadlineAt}/>
-      <div className="mt-3">
+      <QuestionTimer question={question} deadlineAt={deadlineAt} onExpiry={draftMode ? undefined : setExpired}/>
+      {expired && !draftMode && <p role="status" className="text-sm text-slate-600">Time is up. Waiting for the host’s next update.</p>}
+      <fieldset disabled={!draftMode && (expired || busy)} className="mt-3 min-w-0 border-0 p-0">
         {isOptionType && <OptionQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} {...draftProps} />}
         {isRating && <RatingQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} {...draftProps} />}
         {isNumber && <NumberQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} {...draftProps} />}
@@ -523,12 +527,12 @@ function QuestionCard({ question, index, onAnswer, busy, alreadyAnswered, draftM
         {isQuadrant && <QuadrantQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} {...draftProps} />}
         {isImageClick && <ImageClickQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} {...draftProps} />}
         {isFreeform && <TextQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} {...draftProps} />}
-      </div>
+      </fieldset>
     </div>
   )
 }
 
-function QnaPanel({ guestToken, activityId, activityStatus }) {
+function QnaPanel({ guestToken, activityId, activityStatus, offline = false }) {
   const [items, setItems] = useState(null)
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
@@ -542,7 +546,7 @@ function QnaPanel({ guestToken, activityId, activityStatus }) {
   useLiveRefresh(guestToken, activityId, load)
 
   async function submit() {
-    if (!text.trim() || busy) return
+    if (!text.trim() || busy || offline || !navigator.onLine) return
     setBusy(true)
     setError('')
     setNotice('')
@@ -556,6 +560,7 @@ function QnaPanel({ guestToken, activityId, activityStatus }) {
     finally { setBusy(false) }
   }
   async function upvote(id) {
+    if (offline || !navigator.onLine) return
     setItems((prev) => prev?.map((q) => q.id === id ? { ...q, upvoted_by_me: true, upvote_count: q.upvoted_by_me ? q.upvote_count : q.upvote_count + 1 } : q))
     try { await api.liveGuestQnaUpvote(guestToken, id); await load() }
     catch (e) { setError(e.message || 'Your vote could not be saved.'); await load() }
@@ -566,7 +571,7 @@ function QnaPanel({ guestToken, activityId, activityStatus }) {
       {activityStatus === 'live' && (
         <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
           <p className="mb-3 text-sm font-semibold text-slate-600 dark:text-slate-300">Ask as many questions as you need while Q&amp;A is open. A moderator reviews each question before it is public.</p>
-          <textarea aria-label="Your question" value={text} onChange={(e) => setText(e.target.value)} rows={2}
+          <textarea aria-label="Your question" disabled={busy || offline} value={text} onChange={(e) => setText(e.target.value)} rows={2}
             className="w-full rounded-xl border-2 border-slate-200 bg-white p-3 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-white"
             placeholder="Ask a question…" />
           <button type="button" disabled={!text.trim() || busy} onClick={submit}
@@ -672,7 +677,7 @@ function GuidedGuestNotice({ phase, activity }) {
   return <div role="status" className="overflow-hidden rounded-2xl border border-violet-200 bg-white shadow-sm dark:border-violet-800 dark:bg-slate-900"><div className="h-2 bg-gradient-to-r from-violet-500 via-fuchsia-500 to-teal-400"/><div className="p-5"><div className="text-xs font-extrabold uppercase tracking-[.16em] text-violet-600 dark:text-violet-300">{activity.title}</div><div className="mt-2 text-xl font-black text-slate-950 dark:text-white">{title}</div><p className="mt-2 text-sm font-semibold text-slate-600 dark:text-slate-300">{message}</p>{activity.config?.show_automation_enabled && <QuestionTimer question={timerQuestion} deadlineAt={activity.config?.show_phase_deadline_at}/>}</div></div>
 }
 
-function ActivityView({ guestToken, activityId, onBack }) {
+export function ActivityView({ guestToken, activityId, onBack, embedded = false, offline = false }) {
   const [state, setState] = useState(null)
   const [busy, setBusy] = useState(false)
   // Survey/feedback only: show the description + a "Start Survey" button
@@ -710,6 +715,7 @@ function ActivityView({ guestToken, activityId, onBack }) {
   useLiveRefresh(guestToken, activityId, load)
 
   async function onAnswer(questionId, payload) {
+    if (offline || !navigator.onLine) { setError('Reconnect before sending a response.'); return null }
     setBusy(true); setError('')
     try {
       if (!idemKeys.current[questionId]) idemKeys.current[questionId] = uid()
@@ -727,6 +733,7 @@ function ActivityView({ guestToken, activityId, onBack }) {
   // Doesn't await/trigger a full reload -- SSE/polling already keeps `state`
   // fresh, and a reload isn't needed for the local draft to stay correct.
   async function autosaveAnswer(questionId, payload) {
+    if (offline || !navigator.onLine) { setError('Reconnect to save your response.'); return false }
     try {
       await api.liveGuestRespond(guestToken, activityId, { question_id: questionId, idempotency_key: uid(), ...payload })
       return true
@@ -734,6 +741,7 @@ function ActivityView({ guestToken, activityId, onBack }) {
   }
 
   async function completeSurvey() {
+    if (offline || !navigator.onLine) { setError('Reconnect to submit your response.'); return null }
     try {
       const result = await api.liveGuestComplete(guestToken, activityId)
       await load()
@@ -741,8 +749,8 @@ function ActivityView({ guestToken, activityId, onBack }) {
     } catch (e) { setError(e); return null }
   }
 
-  if (error?.code === 'FESTIO_LIVE_UNAVAILABLE') return <LiveUnavailableState onRetry={() => { setError(''); load() }} />
-  if (!state) return <p className="text-sm text-slate-600 dark:text-slate-300">Loading…</p>
+  if (error?.code === 'FESTIO_LIVE_UNAVAILABLE') return <LiveUnavailableState onRetry={() => { setError(''); load() }} onBack={embedded ? onBack : undefined} />
+  if (!state) return error ? <div role="alert"><p>{error.message || String(error)}</p><button onClick={() => load()} className="primary">Try again</button><button onClick={onBack} className="text-button">← All activities</button></div> : <p className="text-sm text-slate-600 dark:text-slate-300">Loading…</p>
   const { activity, already_responded_question_ids, my_answers } = state
   const answered = new Set(already_responded_question_ids)
   const currentQuestion = activity.questions.find((question) => question.id === activity.config?.current_question_id)
@@ -750,7 +758,7 @@ function ActivityView({ guestToken, activityId, onBack }) {
   const showPhase = activity.config?.show_phase || 'lobby'
 
   return (
-    <div className="grid gap-4">
+    <div className={embedded ? "gh-live-participation grid gap-4" : "grid gap-4"}>
       <button type="button" onClick={onBack} className="text-left text-xs font-extrabold uppercase tracking-wide text-slate-600 dark:text-slate-300">← All activities</button>
       <div>
         <div className="text-xl font-extrabold text-slate-900 dark:text-white">{activity.title}</div>
@@ -758,16 +766,17 @@ function ActivityView({ guestToken, activityId, onBack }) {
       </div>
       {error && error.code !== 'FESTIO_LIVE_UNAVAILABLE' && <div role="alert" className="rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-700 dark:bg-rose-950 dark:text-rose-200">{error.message || error}</div>}
 
+      <fieldset disabled={offline} className="live-response-fields grid min-w-0 gap-3 border-0 p-0 m-0">
       {activity.type === 'q_and_a' ? (
         !guided || ['answering', 'results', 'complete'].includes(showPhase)
-          ? <QnaPanel guestToken={guestToken} activityId={activityId} activityStatus={activity.status} />
+          ? <QnaPanel guestToken={guestToken} activityId={activityId} activityStatus={activity.status} offline={offline} />
           : <GuidedGuestNotice phase={showPhase} activity={activity}/>
       ) : activity.status === 'closed' || activity.status === 'completed' ? (
         guided && reviewResults ? <ParticipantReview activity={activity} results={reviewResults} myAnswers={my_answers} leaderboard={leaderboard}/> : guided ? <GuidedGuestNotice phase="complete" activity={activity}/> : <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-900">This activity has ended — thanks for joining!</div>
       ) : ['survey', 'feedback'].includes(activity.type) ? (
         !guided || showPhase === 'answering'
           ? (started || state.completed_at
-              ? <SurveyForm activity={activity} rules={state.rules} draftAnswersFromServer={state.draft_answers} completedAt={state.completed_at} onAutosave={autosaveAnswer} onComplete={completeSurvey} busy={busy} />
+              ? <SurveyForm embedded={embedded} activity={activity} rules={state.rules} draftAnswersFromServer={state.draft_answers} completedAt={state.completed_at} onAutosave={autosaveAnswer} onComplete={completeSurvey} busy={busy} />
               : <SurveyIntro activity={activity} onStart={() => setStarted(true)} />)
           : <GuidedGuestNotice phase={showPhase} activity={activity}/>
       ) : (
@@ -783,6 +792,7 @@ function ActivityView({ guestToken, activityId, onBack }) {
         </div>
       )}
 
+      </fieldset>
       {(!guided || showPhase === 'leaderboard') && <Leaderboard entries={leaderboard} />}
     </div>
   )

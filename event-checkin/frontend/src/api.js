@@ -1841,6 +1841,7 @@ export const api = {
     if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.detail || 'That Festio Live code was not found.') }
     return res.json() // { event_id }
   }),
+  liveGuestProgrammeActivities: (guestToken) => liveGuestReq(guestToken, 'GET', '/v1/activities/programme'),
   liveGuestActivities: (guestToken) => liveGuestReq(guestToken, 'GET', '/v1/activities/live'),
   liveGuestCurrentWorkflowRun: (guestToken) => liveGuestReq(guestToken, 'GET', '/v1/events/current-run'),
   liveGuestProgramParticipation: (guestToken) => liveGuestReq(guestToken, 'GET', '/v1/my-program-participation'),

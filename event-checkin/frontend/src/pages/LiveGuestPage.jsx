@@ -855,6 +855,8 @@ export default function LiveGuestPage() {
   const queryEventId = params.get('event') || ''
   const passToken = params.get('pass') || ''
   const sessionId = params.get('session') || ''
+  const requestedActivity = params.get('activity') || ''
+  const openedRequest = useRef('')
   const broadcastMode = !passToken // no personal pass token → QR/broadcast join
   const [resolvedEventId, setResolvedEventId] = useState('')
   const eventId = queryEventId || resolvedEventId
@@ -916,10 +918,14 @@ export default function LiveGuestPage() {
       // of one tile to click through -- was previously gated to sessionId
       // scoping only, but the same reasoning applies whenever there's just
       // one activity, full stop (e.g. a standalone post-event survey).
-      if (scoped.length === 1) setActivityId(scoped[0].id)
+      if (requestedActivity && openedRequest.current !== requestedActivity) {
+        const requested = scoped.find(a => a.id === requestedActivity);
+        if (requested) { setActivityId(requested.id); setError(''); openedRequest.current = requestedActivity; }
+        else { setError('This session activity is not available to your guest access right now.'); }
+      } else if (!requestedActivity && scoped.length === 1) setActivityId(scoped[0].id)
     }
     catch (e) { setError(e) }
-  }, [guestToken, sessionId])
+  }, [guestToken, sessionId, requestedActivity])
   useEffect(() => { loadActivities() }, [loadActivities])
   const loadWorkflow = useCallback(async () => {
     if (!guestToken) return
@@ -934,9 +940,9 @@ export default function LiveGuestPage() {
       // activity that isn't part of the workflow (e.g. an ad-hoc feedback
       // survey during a non-interactive segment like breakfast) got bounced
       // back to the activity list every ~5-10s, losing their place.
-      if (nextRun?.active_activity_id) setActivityId(nextRun.active_activity_id)
+      if (!requestedActivity && !sessionId && nextRun?.active_activity_id) setActivityId(nextRun.active_activity_id)
     } catch { /* workflows may be disabled; existing activity UX remains intact */ }
-  }, [guestToken])
+  }, [guestToken, requestedActivity, sessionId])
   useEffect(() => {
     loadWorkflow()
   }, [guestToken, loadWorkflow])
@@ -972,7 +978,7 @@ export default function LiveGuestPage() {
     <div className={`live-guest-experience live-guest-${guestTheme} min-h-screen px-4 py-8`}>
       <div className="mx-auto max-w-md">
         <div className="mb-6 text-center">
-          {passToken && <a href={`/r/${encodeURIComponent(passToken)}#guest-hub`} className="mb-4 inline-flex min-h-11 items-center rounded-xl border px-4 text-sm font-bold">← Back to GuestHub</a>}
+          {passToken && <a href={`/r/${encodeURIComponent(passToken)}${sessionId ? '#/programme' : '#guest-hub'}`} className="mb-4 inline-flex min-h-11 items-center rounded-xl border px-4 text-sm font-bold">← Back to GuestHub</a>}
           <div className="live-guest-brand text-xs font-extrabold uppercase tracking-[0.2em]">Festio Live</div>
         </div>
         {error?.code === 'FESTIO_LIVE_UNAVAILABLE' && <LiveUnavailableState onRetry={() => { setError(''); setActivities(null); if (guestToken) loadActivities(); else setRetryNonce((value) => value + 1) }} backHref={passToken ? `/scan/${encodeURIComponent(passToken)}/hub` : '/'} />}

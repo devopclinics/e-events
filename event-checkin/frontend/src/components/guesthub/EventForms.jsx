@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../api';
 import './EventForms.css';
-export default function EventForms({ eventId, token, items = [], error, loading, refresh }) {
+export default function EventForms({ eventId, token, items = [], error, loading, refresh, focusForm, focusMember }) {
   const [drafts, setDrafts] = useState({});
   const [busy, setBusy] = useState('');
   const [failure, setFailure] = useState('');
@@ -10,6 +10,14 @@ export default function EventForms({ eventId, token, items = [], error, loading,
   const [filter, setFilter] = useState('all');
   const receiptRef = useRef(null);
   useEffect(() => { if (receipt) receiptRef.current?.focus(); }, [receipt]);
+  useEffect(() => {
+    if (!focusForm) return;
+    const target=items.find(item=>item.id===focusForm&&(!focusMember||item.guest_id===focusMember));
+    if (!target) return;
+    setPerson(target.guest_id); setFilter('all');
+    const frame=requestAnimationFrame(()=>{const el=document.getElementById(`event-form-${target.id}-${target.guest_id}`);if(el){el.open=true;el.scrollIntoView({block:'start'});el.querySelector('summary')?.focus();}});
+    return ()=>cancelAnimationFrame(frame);
+  }, [focusForm, focusMember, items]);
   const people = [...new Map(items.map(item => [item.guest_id, item.guest_name])).entries()];
   const selectedPerson = people.some(([id]) => id === person) ? person : 'all';
   const scoped = items.filter(item => selectedPerson === 'all' || item.guest_id === selectedPerson);
@@ -50,7 +58,7 @@ export default function EventForms({ eventId, token, items = [], error, loading,
       {!visible.length && <p className="forms-state">No forms match this view. Choose another person or select All forms.</p>}
     </>}
     {visible.map(item => { const key = `${item.revision_id}:${item.guest_id}`, draft = drafts[key] || {};
-      return <details className="card forms-item" key={key}><summary>
+      return <details className="card forms-item" id={`event-form-${item.id}-${item.guest_id}`} key={key}><summary>
         <span className={`forms-symbol ${item.status === 'complete' ? 'is-complete' : ''}`} aria-hidden="true">{item.status === 'complete' ? '✓' : item.kind === 'consent' ? '✎' : '≡'}</span>
         <span className="forms-item-heading"><span className="forms-kicker">{item.kind === 'consent' ? 'Consent form' : 'Information form'} · {item.required ? 'Required' : 'Optional'}</span><strong>{item.title}</strong><span className="forms-recipient">For {item.guest_name}{item.on_behalf ? ' · Parent / guardian' : ''}</span></span>
         <span className="forms-item-action"><span className={`forms-status ${item.status === 'complete' ? 'is-complete' : !item.can_submit ? 'is-unavailable' : ''}`}>{item.status === 'complete' ? 'Completed' : !item.can_submit ? 'Not available yet' : 'To complete'}</span><span className="forms-open">{item.status === 'complete' ? 'View submission' : 'Review form'} <span aria-hidden="true">⌄</span></span></span>

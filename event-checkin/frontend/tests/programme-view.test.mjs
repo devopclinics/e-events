@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {dayHighlights,activityHref,readSavedSessions} from '../src/components/guesthub/programmeView.mjs';
+import {appHash,readAppRoute} from '../src/components/guesthub/appModel.mjs';
+const now=Date.parse('2026-12-24T15:30:00Z');
+const first={step_id:'a',starts_at:'2026-12-24T15:00:00Z',ends_at:'2026-12-24T16:00:00Z'};
+test('overlapping sessions remain current and next is actually upcoming',()=>{const parallel={...first,step_id:'b'},next={step_id:'c',starts_at:'2026-12-24T17:00:00Z',ends_at:'2026-12-24T18:00:00Z'};assert.equal(dayHighlights([next,first,parallel],now).current.length,2);assert.equal(dayHighlights([next,first,parallel],now).next,next)});
+test('closed activities never generate response links',()=>{for(const status of ['scheduled','closed','paused','completed'])assert.equal(activityHref('e','token',{id:'a',session_id:'s',status}),'')});
+test('links preserve exact activity event and guest',()=>{const link=activityHref('e','a+b',{id:'q',session_id:'s',status:'live'});const p=new URL(link,'https://festio.events').searchParams;assert.equal(p.get('pass'),'a+b');assert.equal(p.get('activity'),'q');assert.equal(p.get('session'),'s');assert.equal(p.get('event'),'e')});
+test('malformed or inaccessible bookmark storage fails safely',()=>{global.localStorage={getItem:()=>'{bad'};assert.deepEqual(readSavedSessions('test'),[]);global.localStorage={getItem:()=>{throw Error('blocked')}};assert.deepEqual(readSavedSessions('test'),[])});
+test('target consent route retains authorized attendee and exact form',()=>{const route={screen:'experience',member:'g',form:'f'};assert.equal(readAppRoute(appHash(route)).form,'f');assert.equal(readAppRoute(appHash(route)).member,'g')});

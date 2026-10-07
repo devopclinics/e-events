@@ -128,7 +128,7 @@ with sync_playwright() as pw:
     page.goto(BASE+'/scan/demo-parent-qr#orders');page.get_by_role('button',name='Update Selection',exact=True).wait_for();check('standalone pass retains meal selector',page.get_by_role('radio',name='Eggs').is_checked());page.get_by_role('radio',name='Oats').check();page.get_by_role('button',name='Update Selection',exact=True).click();page.get_by_text('Selection updated!',exact=False).wait_for();check('standalone meal selection still saves',state['meal_tickets']['demo-parent-qr']['guest_choices']['single']['breakfast']=='oats')
     page.goto(BASE+'/r/demo-token#/home');page.locator('.greeting').wait_for()
     check('viewing and selecting meals never performs admission',not any(x['path'] in ['/api/scan/demo-parent-qr','/api/scan/demo-child-qr'] for x in posts))
-    go('programme');page.get_by_role('button',name='Faith, family').click();page.locator('dialog[open]').wait_for()
+    go('programme');page.get_by_role('button',name='Faith, family & community',exact=True).click();page.locator('dialog[open]').wait_for()
     page.go_back();check('Back closes session',page.locator('dialog[open]').count()==0)
     page.go_forward();page.locator('dialog[open]').wait_for();check('Forward restores session')
     page.get_by_role('button',name='Close session').click();go('pass');page.locator('#app-member').select_option('child')

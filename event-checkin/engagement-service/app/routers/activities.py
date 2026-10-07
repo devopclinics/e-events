@@ -370,6 +370,19 @@ async def list_control_activities(identity: Identity = Depends(current_identity)
     return result
 
 
+@router.get("/activities/programme")
+async def programme_activities(identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Session-linked metadata only. Draft questions/config never leave this view."""
+    rows = (await db.execute(select(EngagementActivity).where(
+        EngagementActivity.event_id == identity.event_id,
+        EngagementActivity.org_id == identity.org_id,
+        EngagementActivity.session_id.is_not(None),
+        EngagementActivity.status.in_(("scheduled", "live", "paused", "closed", "completed")),
+    ).order_by(EngagementActivity.created_at.asc()))).scalars().all()
+    return [{"id": a.id, "session_id": a.session_id, "title": a.title, "type": a.type, "status": a.status}
+            for a in rows if (a.config or {}).get("allow_guest_participation", True) and not _session_denied(a, identity)]
+
+
 @router.get("/activities/live", response_model=list[ActivitySummary])
 async def list_live_activities(identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
     """Guest-visible discovery — what's open to join right now. Staff can hit

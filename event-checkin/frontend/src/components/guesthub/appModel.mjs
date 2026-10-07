@@ -6,12 +6,13 @@ export function readAppRoute(hash = '') {
     screen: APP_SCREENS.includes(path) ? path : 'home',
     member: params.get('member') || '',
     session: params.get('session') || '',
-    day: params.get('day') || ''
+    day: params.get('day') || '',
+    ...(params.get('form') ? {form:params.get('form')} : {})
   };
 }
 export function appHash(route) {
   const params = new URLSearchParams();
-  for (const key of ['member', 'session', 'day']) if (route[key]) params.set(key, route[key]);
+  for (const key of ['member', 'session', 'day', 'form']) if (route[key]) params.set(key, route[key]);
   return `#/${APP_SCREENS.includes(route.screen) ? route.screen : 'home'}${params.size ? `?${params}` : ''}`;
 }
 export function asTime(value) {

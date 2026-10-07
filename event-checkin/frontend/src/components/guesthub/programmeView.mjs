@@ -57,3 +57,14 @@ export function programmePeriods(sessions, zone) {
  const groups=groupSessions(sessions);
  return ['Morning','Afternoon','Evening','Time to be announced'].map(label=>({label,groups:groups.filter(g=>programmePeriod(g.starts_at,zone)===label)})).filter(p=>p.groups.length);
 }
+
+// Visual accents only; these do not alter audience, access or session type.
+export function programmePalette(session) {
+ const text=String(session.category || session.title || '').toLowerCase();
+ if (/meal|break|lunch|dinner|breakfast|snack/.test(text)) return 'meals';
+ if (/prayer|salah|salat/.test(text)) return 'prayer';
+ if (/sport|play|outdoor/.test(text)) return 'sports';
+ if (/junior|child|guardian|pickup|handoff/.test(text)) return 'junior';
+ if (/quran|learning|lecture|workshop|quiz|sheikh|q&a/.test(text)) return 'learning';
+ return 'community';
+}

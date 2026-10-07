@@ -20,8 +20,11 @@ const screenFromHash = () => window.location.hash === '#/rsvp/register' ? 'regis
 export default function WelcomeLanding({ event, title, dateLabel, timeLabel, venue, host, hostWebsite, about, designTheme, registration, deadline, returningGuest }) {
   const [screen, setScreen] = useState(screenFromHash)
   const [recover, setRecover] = useState(false)
-  const [accessLink, setAccessLink] = useState('')
-  const [linkError, setLinkError] = useState('')
+  const [recoveryEmail, setRecoveryEmail] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [recoveryState, setRecoveryState] = useState('idle')
+  const [recoveryError, setRecoveryError] = useState('')
   const dialog = useRef(null)
   const main = useRef(null)
   const wording = designTheme?.wording || {}
@@ -47,14 +50,29 @@ export default function WelcomeLanding({ event, title, dateLabel, timeLabel, ven
   useEffect(() => { window.scrollTo(0, 0); main.current?.focus({ preventScroll: true }) }, [screen])
   useEffect(() => { if (recover) dialog.current?.showModal(); else dialog.current?.close() }, [recover])
   function navigate(next) { window.location.hash = next === 'register' ? '/rsvp/register' : '/rsvp/event'; setScreen(next) }
-  function openGuestHub(e) {
+  async function requestGuestHub(e) {
     e.preventDefault()
+    if (recoveryState === 'sending') return
+    setRecoveryState('sending')
+    setRecoveryError('')
     try {
-      // Do not send a pasted capability to an external site or arbitrary path.
-      const url = new URL(accessLink.trim(), window.location.origin)
-      if (url.origin !== window.location.origin || !/^\/r\/[^/]+\/?$/.test(url.pathname) || url.username || url.password) throw new Error()
-      window.location.assign(url.pathname + url.search + url.hash)
-    } catch { setLinkError('Use the personal GuestHub link from your Festio confirmation email (ending in /r/your-link).') }
+      const response = await fetch(`/api/invite/${encodeURIComponent(event.id)}/recover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: recoveryEmail.trim(), first_name: firstName.trim(), last_name: lastName.trim() }),
+      })
+      if (!response.ok) {
+        const message = response.status === 429 ? 'Please wait a few minutes before requesting another email.'
+          : response.status === 422 ? 'Check your email address and try again.'
+          : response.status === 410 ? 'This event has ended. Contact the organizer for help.'
+          : 'We couldn’t request your link. Please try again in a few minutes.'
+        throw new Error(message)
+      }
+      setRecoveryState('sent')
+    } catch (error) {
+      setRecoveryError(error instanceof TypeError ? 'Unable to connect. Check your connection and try again.' : error.message)
+      setRecoveryState('idle')
+    }
   }
   function scrollTo(id) { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
 
@@ -67,12 +85,33 @@ export default function WelcomeLanding({ event, title, dateLabel, timeLabel, ven
           {showAbout && highlights.length > 0 && <section className="rw-section"><div className="rw-heading"><span className="rw-eyebrow">COME FOR THE EXPERIENCE</span><h2>{wording.aboutHeading || 'Find your moment.'}</h2></div><div className="rw-highlights">{highlights.map((text, i) => <article key={`${i}:${text}`}><span className="rw-tile"><Icon name={['book', 'people', 'star', 'chat'][i % 4]} /></span><h3>{text}</h3></article>)}</div>{moreUrl && <a className="rw-text" href={moreUrl} target="_blank" rel="noopener noreferrer">Learn more about this event ↗</a>}</section>}
           {event.live_program_enabled && <section className="rw-section"><div className="rw-programme"><div><span className="rw-eyebrow">YOUR PROGRAMME</span><h2>Plan the moments that matter.</h2><p>Your personal programme is available in GuestHub after registration. It brings together the sessions and event updates available to you.</p></div><button className="rw-btn" onClick={() => navigate('register')}>Register to view your programme →</button></div></section>}
           <section className="rw-section" id="rw-plan"><div className="rw-heading"><span className="rw-eyebrow">A LITTLE PLANNING GOES A LONG WAY</span><h2>Plan your visit.</h2></div><div className="rw-travel">{showHotel && <article><span className="rw-tile"><Icon name="hotel" /></span><h3>{event.hotel_name || 'Your stay'}</h3><p>{event.hotel_address || 'Explore the organizer’s hotel information.'}</p><a className="rw-text" href={hotelUrl} target="_blank" rel="noopener noreferrer">{wording.hotelButton || 'View hotel information'} ↗</a></article>}{showVenue && <article><span className="rw-tile"><Icon name="pin" /></span><h3>Getting here</h3><p>{venue}</p><a className="rw-text" href={map(event.venue_address || venue)} target="_blank" rel="noopener noreferrer">Open directions ↗</a></article>}{event.rsvp_multi_invitee_enabled && <article><span className="rw-tile"><Icon name="people" /></span><h3>Coming with family?</h3><p>Add each person attending with you. Individual passes depend on confirmation and the event’s registration rules.</p><button className="rw-text" onClick={() => navigate('register')}>Register your party →</button></article>}{event.registry_enabled && event.registry_token && <article><span className="rw-tile"><Icon name="star" /></span><h3>Gift list</h3><p>Explore the organizer’s gifts and ways to support.</p><a className="rw-text" href={`/registry/${encodeURIComponent(event.registry_token)}`}>Open gift list →</a></article>}</div></section>
-          <section className="rw-section rw-bottom"><div><span className="rw-eyebrow">BEFORE YOU REGISTER</span><h2>A few helpful details.</h2>{wording.whoCanAttend && <details open><summary>Who can attend?</summary><p>{wording.whoCanAttend}</p></details>}{(wording.admissionNote || event.admission_note) && <details open><summary>Registration information</summary><p>{wording.admissionNote || event.admission_note}</p></details>}<details><summary>Where will I find my pass?</summary><p>Use your personal GuestHub link after registration is confirmed. Pending approval, waitlisted or declined responses do not grant admission.</p></details>{event.rsvp_multi_invitee_enabled && <details><summary>Can I register my family together?</summary><p>Add each attendee in the Family / Guests step. The organizer’s guest limits, required questions and junior guardian requirements still apply.</p></details>}<details><summary>I already registered. What should I do?</summary><p>Open the personal GuestHub link in your confirmation email. You can also paste that link using My GuestHub above.</p></details></div><aside className="rw-help"><span className="rw-tile"><Icon name="chat" /></span><h2>Need a little help?</h2><p>Use your invitation’s contact details to speak with the organizer about your registration or arrival.</p>{hostWebsite && <a className="rw-btn rw-outline" href={hostWebsite} target="_blank" rel="noopener noreferrer">Visit the organizer’s website ↗</a>}<button className="rw-text" onClick={() => returningGuest ? navigate('register') : setRecover(true)}>Already registered? Open GuestHub →</button></aside></section>
+          <section className="rw-section rw-bottom"><div><span className="rw-eyebrow">BEFORE YOU REGISTER</span><h2>A few helpful details.</h2>{wording.whoCanAttend && <details open><summary>Who can attend?</summary><p>{wording.whoCanAttend}</p></details>}{(wording.admissionNote || event.admission_note) && <details open><summary>Registration information</summary><p>{wording.admissionNote || event.admission_note}</p></details>}<details><summary>Where will I find my pass?</summary><p>Use your personal GuestHub link after registration is confirmed. Pending approval, waitlisted or declined responses do not grant admission.</p></details>{event.rsvp_multi_invitee_enabled && <details><summary>Can I register my family together?</summary><p>Add each attendee in the Family / Guests step. The organizer’s guest limits, required questions and junior guardian requirements still apply.</p></details>}<details><summary>I already registered. What should I do?</summary><p>Open your personal link from your confirmation email, or choose My GuestHub above to request it again using your registration email. Verification is by email only.</p></details></div><aside className="rw-help"><span className="rw-tile"><Icon name="chat" /></span><h2>Need a little help?</h2><p>Use your invitation’s contact details to speak with the organizer about your registration or arrival.</p>{hostWebsite && <a className="rw-btn rw-outline" href={hostWebsite} target="_blank" rel="noopener noreferrer">Visit the organizer’s website ↗</a>}<button className="rw-text" onClick={() => returningGuest ? navigate('register') : setRecover(true)}>Already registered? Open GuestHub →</button></aside></section>
           <section className="rw-closing"><div><h2>We look forward to seeing you.</h2><p>{dateLabel}</p></div><button className="rw-btn" onClick={() => navigate('register')}>{registerLabel}</button></section>
         </>}
       </main><footer className="rw-footer">{title} · Powered by Festio</footer>
       {screen === 'event' && <nav className="rw-mobile-actions" aria-label="Registration actions"><button className="rw-btn rw-outline" onClick={() => returningGuest ? navigate('register') : setRecover(true)}>My GuestHub</button><button className="rw-btn" onClick={() => navigate('register')}>{returningGuest ? 'My RSVP →' : 'Register →'}</button></nav>}
     </div>
-    <dialog ref={dialog} onCancel={() => setRecover(false)} aria-labelledby="rw-dialog-title"><div className="rw-dialog-head"><h2 id="rw-dialog-title">Open your GuestHub</h2><button className="rw-close" aria-label="Close GuestHub dialog" onClick={() => setRecover(false)}>×</button></div><p>Open the personal link in your Festio confirmation email, or paste it below. Keep your personal link private.</p><form onSubmit={openGuestHub}><label htmlFor="rw-access-link">Your personal GuestHub link</label><input id="rw-access-link" type="text" inputMode="url" autoComplete="off" required value={accessLink} onChange={e => { setAccessLink(e.target.value); setLinkError('') }} placeholder="https://festio.events/r/…" />{linkError && <p role="alert">{linkError}</p>}<button className="rw-btn" type="submit">Open My GuestHub →</button></form><p className="rw-small">Can’t find your email? Contact the organizer using your invitation details.</p></dialog>
+    <dialog ref={dialog} onCancel={() => setRecover(false)} aria-labelledby="rw-dialog-title">
+      <div className="rw-dialog-head"><h2 id="rw-dialog-title">Open your GuestHub</h2><button className="rw-close" aria-label="Close GuestHub dialog" onClick={() => setRecover(false)}>×</button></div>
+      {recoveryState === 'sent' ? <div className="rw-recovery-success" role="status">
+        <h3>Check your email</h3><p>If a registration matches, we’ll email its personal GuestHub link to the address saved on it. Check your inbox and spam folder.</p>
+        <p>For a family registration, use the email of the person who registered you.</p>
+        <button className="rw-btn rw-outline" onClick={() => { setRecoveryState('idle'); setRecoveryError('') }}>Use a different email</button>
+      </div> : <>
+        <p>Enter the email used for registration. We’ll send your personal GuestHub link there so you can open it securely.</p>
+        <form onSubmit={requestGuestHub} aria-busy={recoveryState === 'sending'}>
+          <label htmlFor="rw-recovery-email">Registration email</label>
+          <input id="rw-recovery-email" type="email" autoComplete="email" maxLength={255} required value={recoveryEmail} disabled={recoveryState === 'sending'} onChange={e => setRecoveryEmail(e.target.value)} placeholder="you@example.com" />
+          <details className="rw-recovery-names"><summary>Add your name to help find your registration (optional)</summary>
+            <label htmlFor="rw-first-name">First name (optional)</label><input id="rw-first-name" autoComplete="given-name" maxLength={100} value={firstName} disabled={recoveryState === 'sending'} onChange={e => setFirstName(e.target.value)} />
+            <label htmlFor="rw-last-name">Last name (optional)</label><input id="rw-last-name" autoComplete="family-name" maxLength={100} value={lastName} disabled={recoveryState === 'sending'} onChange={e => setLastName(e.target.value)} />
+          </details>
+          {recoveryError && <p role="alert">{recoveryError}</p>}
+          <button className="rw-btn" type="submit" disabled={recoveryState === 'sending'}>{recoveryState === 'sending' ? 'Requesting link…' : 'Email my GuestHub link →'}</button>
+        </form>
+        <p className="rw-small">Verification is by email only. A name alone cannot open GuestHub. For a family registration, use the registrant’s email and name.</p>
+      </>}
+      <p className="rw-small">No access to your registration email? Contact the organizer using your invitation details.</p>
+    </dialog>
   </div>
 }

@@ -2749,6 +2749,18 @@ class InviteSettingsUpdate(BaseModel):
         return v
 
 
+class GuestHubRecoveryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    email: EmailStr
+    first_name: str = Field(default="", max_length=100)
+    last_name: str = Field(default="", max_length=100)
+
+
+class GuestHubRecoveryResponse(BaseModel):
+    message: str
+
+
 class InvitePageOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -14,7 +14,7 @@ class Handler(SimpleHTTPRequestHandler):
  def log_message(self,*a):pass
 server=ThreadingHTTPServer(('127.0.0.1',0),Handler);threading.Thread(target=server.serve_forever,daemon=True).start();BASE=f'http://localhost:{server.server_port}'
 event=dict(id='welcome-demo',name='NCNMO Platform 2026',event_date='2026-12-24T14:00:00Z',event_end_date='2026-12-28T22:00:00Z',timezone='America/Indiana/Indianapolis',description='Five days of faith, family, learning and community.',venue_name='The Westin Indianapolis',venue_address='241 W Washington St, Indianapolis',rsvp_landing_layout='welcome',guest_hub_layout='app',rsvp_token='welcome-link',rsvp_enabled=True,rsvp_collect_email=True,rsvp_collect_phone=True,rsvp_email_required=True,rsvp_phone_required=False,rsvp_multi_invitee_enabled=True,rsvp_multi_invitee_limit=4,invite_mode='open',questions=[],live_program_enabled=True,experience_enabled=False)
-state=dict(event=event,paid=False);posts=[];errors=[];checks=[]
+state=dict(event=event,paid=False,recovery_status=202);recoveries=[];posts=[];errors=[];checks=[]
 def check(name,val=True):
  assert val,name
  checks.append(name)
@@ -24,6 +24,7 @@ def intercept(route):
  if not p.startswith('/api/'):return route.continue_()
  data={}
  if r.method!='GET':
+  if p=='/api/invite/welcome-demo/recover':recoveries.append(r.post_data_json);return route.fulfill(status=state['recovery_status'],json={'message':'If a registration matches, we’ll email its personal GuestHub link to the address saved on it.'})
   if p=='/api/invite/link/welcome-link/rsvp':posts.append(r.post_data_json);return route.fulfill(json=dict(rsvp_status='pending',first_name='Amina'))
   return route.abort()
  if p=='/api/invite/link/welcome-link':data=state['event']
@@ -36,7 +37,15 @@ with sync_playwright() as p:
   page.goto(BASE+'/rsvp/welcome-link',wait_until='networkidle');expect(page.locator('.rsvp-welcome')).to_be_visible()
  start();check('configured highlights',page.get_by_role('heading',name='Quran Competition').is_visible());check('no fictional schedule','Sample themes' not in page.inner_text('body'));check('desktop bounded layout',page.locator('.rw-site').bounding_box()['width']==1180);page.screenshot(path=str(OUT/'Welcome-Desktop.png'),full_page=True)
  page.get_by_role('button',name='Register / RSVP Now →').first.click();expect(page.locator('[data-registration-step=details]')).to_be_visible();check('registration uses hash',page.url.endswith('#/rsvp/register'));page.go_back();expect(page.locator('.rw-hero')).to_be_visible();check('browser back returns to event')
- page.get_by_role('button',name='My GuestHub ↗').click();expect(page.locator('dialog')).to_be_visible();page.get_by_label('Your personal GuestHub link').fill('https://example.org/r/private');page.get_by_role('button',name='Open My GuestHub →',exact=True).click();expect(page.get_by_role('alert')).to_be_visible();check('external credential URL rejected');page.get_by_role('button',name='Close GuestHub dialog').click()
+ page.get_by_role('button',name='My GuestHub ↗').click();expect(page.locator('dialog')).to_be_visible()
+ page.get_by_label('Registration email',exact=True).fill('amina@example.org');page.get_by_text('Add your name to help find your registration (optional)',exact=True).click();page.get_by_label('First name (optional)',exact=True).fill('Amina');page.get_by_label('Last name (optional)',exact=True).fill('Idris')
+ check('email verification only',page.locator('dialog input[type=tel]').count()==0 and page.locator('#rw-access-link').count()==0)
+ page.get_by_role('button',name='Email my GuestHub link →').click();expect(page.get_by_role('heading',name='Check your email',exact=True)).to_be_visible();check('email request uses event and optional names',recoveries==[dict(email='amina@example.org',first_name='Amina',last_name='Idris')]);check('generic success does not claim registration found','If a registration matches' in page.locator('dialog').inner_text());check('recovery stays on public page','/rsvp/' in page.url)
+ page.set_viewport_size({'width':390,'height':844});page.screenshot(path=str(OUT/'Recovery-Email-Success-Phone.png'));page.get_by_role('button',name='Use a different email').click()
+ for status,expected in [(429,'Please wait a few minutes'),(503,'We couldn’t request your link'),(422,'Check your email address'),(410,'This event has ended')]:
+  state['recovery_status']=status;page.get_by_role('button',name='Email my GuestHub link →').click();expect(page.get_by_role('alert')).to_contain_text(expected);check(f'recovery handles {status}');expect(page.get_by_role('button',name='Email my GuestHub link →')).to_be_enabled()
+ state['recovery_status']=202;page.set_viewport_size({'width':320,'height':844});check('recovery dialog fits phone',page.locator('dialog').evaluate('(el)=>el.scrollWidth<=el.clientWidth'));page.screenshot(path=str(OUT/'Recovery-Email-Phone.png'));page.get_by_role('button',name='Close GuestHub dialog').click()
+
  for width in [390,320]:
   page.set_viewport_size({'width':width,'height':844});check(f'no overflow at {width}',page.evaluate('document.documentElement.scrollWidth<=innerWidth'));expect(page.locator('.rw-mobile-actions')).to_be_visible();check(f'mobile visible register at {width}')
  page.set_viewport_size({'width':390,'height':844});page.screenshot(path=str(OUT/'Welcome-Phone.png'),full_page=True);page.get_by_role('button',name='Register →',exact=True).click();expect(page.get_by_placeholder('Jane',exact=True)).to_be_visible();check('mobile first field above fold',page.get_by_placeholder('Jane',exact=True).bounding_box()['y']<650);page.screenshot(path=str(OUT/'Registration-Phone.png'),full_page=True)

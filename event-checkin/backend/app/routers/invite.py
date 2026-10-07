@@ -12,7 +12,7 @@ import logging
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from sqlalchemy import func, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +21,7 @@ from ..database import get_db
 from ..models import Event, Guest, RSVPAnswer, RSVPQuestion, SeatingTable, Shipment, GuestShipment, TableGroup, TableGroupTable, TicketType, ScanEvent, Zone
 from ..schemas import (
     GuestAppPartyOut,
+    GuestHubRecoveryRequest, GuestHubRecoveryResponse,
     InviteGuestPrefill, InvitePageOut, InviteTokenPageOut,
     InviteShippingOut, InviteShipmentNeed, ShippingAddressUpdate,
     RSVPConfirm, RSVPSubmit, RSVPTokenSubmit,
@@ -37,6 +38,7 @@ from .guests import _normalize_phone
 from ..entitlements import assert_within_guest_cap, can_use_paid_channels, last_credit_ledger_id, reserve_message_credit
 from ..services.festiome_outbox import queue_guest_sync
 from ..services.webhook_outbox import queue_webhook_event
+from ..services.guesthub_recovery import allow_recovery, send_recovery_email, RECOVERY_MESSAGE
 
 logger = logging.getLogger(__name__)
 
@@ -766,6 +768,19 @@ async def _submit_multi_invitee_rsvp(
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
+@router.post("/{event_id}/recover", response_model=GuestHubRecoveryResponse, status_code=202)
+async def recover_guesthub(
+    event_id: str, data: GuestHubRecoveryRequest, request: Request,
+    background_tasks: BackgroundTasks, response: Response,
+    db: AsyncSession = Depends(get_db),
+):
+    await _get_public_event(event_id, db)
+    if await allow_recovery(request, event_id, str(data.email)):
+        background_tasks.add_task(send_recovery_email, event_id, data)
+    response.headers["Cache-Control"] = "no-store"
+    return GuestHubRecoveryResponse(message=RECOVERY_MESSAGE)
+
 
 @router.get("/{event_id}", response_model=InvitePageOut)
 async def get_invite_page(event_id: str, db: AsyncSession = Depends(get_db)):

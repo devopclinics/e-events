@@ -1416,6 +1416,16 @@ export interface GuestExperienceProgressOut {
   workflow_id: string
 }
 
+export interface GuestHubRecoveryRequest {
+  email: string
+  first_name?: string
+  last_name?: string
+}
+
+export interface GuestHubRecoveryResponse {
+  message: string
+}
+
 export interface GuestJourneyGuestOut {
   id: string
   name: string

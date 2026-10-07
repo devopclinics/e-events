@@ -44,7 +44,7 @@ def _prune_local(now: float) -> None:
         _local = {}
 
 
-async def _hit(key: str, limit: int, window: int) -> bool:
+async def _hit(key: str, limit: int, window: int, *, fail_closed: bool = False) -> bool:
     """Increment the counter for `key`; return True if still within `limit`."""
     if _REDIS_URL:
         try:
@@ -54,6 +54,9 @@ async def _hit(key: str, limit: int, window: int) -> bool:
                 await r.expire(key, window)
             return count <= limit
         except Exception:
+            if fail_closed:
+                logger.error("redis rate-limit backend unavailable; refusing protected request")
+                raise HTTPException(503, "Please try again in a few minutes.")
             logger.exception("redis rate-limit backend failed; allowing request")
             return True  # fail open
     now = time.time()

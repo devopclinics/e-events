@@ -8738,6 +8738,46 @@
         "title": "GuestExperienceProgressOut",
         "type": "object"
       },
+      "GuestHubRecoveryRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "first_name": {
+            "default": "",
+            "maxLength": 100,
+            "title": "First Name",
+            "type": "string"
+          },
+          "last_name": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Last Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "GuestHubRecoveryRequest",
+        "type": "object"
+      },
+      "GuestHubRecoveryResponse": {
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "GuestHubRecoveryResponse",
+        "type": "object"
+      },
       "GuestJourneyGuestOut": {
         "properties": {
           "id": {
@@ -48070,6 +48110,58 @@
           }
         },
         "summary": "Get Invite Page",
+        "tags": [
+          "invite"
+        ]
+      }
+    },
+    "/api/invite/{event_id}/recover": {
+      "post": {
+        "operationId": "recover_guesthub_api_invite__event_id__recover_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestHubRecoveryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestHubRecoveryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Recover Guesthub",
         "tags": [
           "invite"
         ]

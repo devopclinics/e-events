@@ -59,6 +59,34 @@ class WebsiteEditorTests(unittest.IsolatedAsyncioTestCase):
   r=await self.c.post('/internal/sites/a/render-preview',json=body);self.assertEqual(r.status_code,200,r.text)
   for text in ['Session 349','North entrance','Recover my GuestHub']:self.assertIn(text,r.json()['html'])
   self.assertEqual((await self.c.get('/internal/sites/a')).status_code,404)
+ async def test_imported_long_descriptions_preview_save_publish_and_reload(self):
+  from html import escape
+  from .schemas import Session
+  descriptions = {43: 'A' * 600, 87: 'B' * 601, 121: 'Learning & reflection — ' * 100,
+                  184: 'Detailed programme information. ' * 400,
+                  189: ('Questions & answers <script>alert("unsafe")</script>\n' * 20)}
+  sessions = [{'source_id': str(i), 'title': f'Session {i}',
+               'description': descriptions.get(i, '')} for i in range(200)]
+  self.assertEqual(Session(title='No description').description, '')
+  body = {**self.body, 'content': {**self.body['content'], 'sessions': sessions}}
+  preview = await self.c.post('/internal/sites/a/render-preview', json=body)
+  self.assertEqual(preview.status_code, 200, preview.text)
+  for description in descriptions.values():
+   self.assertIn(escape(description), preview.json()['html'])
+  self.assertNotIn('<script>alert("unsafe")</script>', preview.json()['html'])
+  saved = await self.put(body)
+  self.assertEqual(saved['content']['sessions'], (await self.get())['content']['sessions'])
+  for index, description in descriptions.items():
+   self.assertEqual(saved['content']['sessions'][index]['description'], description)
+  published = await self.post('publish', saved['revision'])
+  self.assertEqual(published.status_code, 200, published.text)
+  live = await self.c.get('/site/demo-site')
+  self.assertEqual(live.status_code, 200)
+  for description in descriptions.values():
+   self.assertIn(escape(description), live.text)
+  self.assertNotIn('<script>alert("unsafe")</script>', live.text)
+  for index, description in descriptions.items():
+   self.assertEqual((await self.get())['content']['sessions'][index]['description'], description)
  async def test_restore_cross_site_forbidden(self):
   a=await self.put();release=(await self.post('publish',a['revision'])).json();b=await self.put({**self.body,'slug':'other-site'},'b')
   self.assertEqual((await self.post('restore/'+release['release_id'],b['revision'],'b')).status_code,404)

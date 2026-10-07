@@ -25,7 +25,8 @@ class Session(BaseModel):
     audience: str = Field(default="", max_length=120)
     track: str = Field(default="", max_length=80)
     speaker: str = Field(default="", max_length=160)
-    description: str = Field(default="", max_length=600)
+    # Match ExperienceStep.description: imported programme text must not be truncated.
+    description: str = ""
     image_url: HttpUrl | None = None
     action_label: str = Field(default="", max_length=60)
     action_url: HttpUrl | None = None

@@ -34,3 +34,22 @@
 .fh-event-app .vm-summary-item>.vm-includes{display:block}
 
 .fh-event-app .vm-item-description{display:block;font-size:12px;color:var(--muted);margin-top:3px}.fh-event-app .vm-dish:has(.vm-includes){min-width:0}
+
+/* Small local illustrations keep menus lively without image downloads. */
+.fh-event-app .vm-artwork{background:linear-gradient(135deg,#ede4cf,#ddcdb0);height:174px;overflow:hidden}
+.fh-event-app .vm-artwork-1{background:linear-gradient(135deg,#e5eddb,#c6d7b9)}
+.fh-event-app .vm-artwork-2{background:linear-gradient(135deg,#f3e2d2,#e2c6b6)}
+.fh-event-app .vm-artwork-3{background:linear-gradient(135deg,#e1ede8,#bcd4cd)}
+.fh-event-app .vm-artwork-4{background:linear-gradient(135deg,#f4ead3,#e6d4a5)}
+.fh-event-app .vm-food-scene{transform-origin:50% 60%;transition:transform .35s ease}
+.fh-event-app .vm-art-steam{opacity:0}
+@media(hover:hover) and (prefers-reduced-motion:no-preference){
+ .fh-event-app .vm-dish:hover .vm-food-scene,.fh-event-app .vm-dish:focus-within .vm-food-scene{transform:translateY(-3px) rotate(-2deg)}
+ .fh-event-app .vm-artwork:is([data-food-art~="rice"],[data-food-art~="white-rice"],[data-food-art~="soup"],[data-food-art~="stew"],[data-food-art~="pasta"]) .vm-art-steam{opacity:.5}
+ .fh-event-app .vm-dish:hover .vm-artwork:is([data-food-art~="rice"],[data-food-art~="white-rice"],[data-food-art~="soup"],[data-food-art~="stew"],[data-food-art~="pasta"]) .vm-art-steam{animation:vm-steam-rise 2.2s ease-in-out 2}
+}
+@keyframes vm-steam-rise{0%,100%{transform:translateY(0);opacity:.3}50%{transform:translateY(-5px);opacity:.8}}
+@media(prefers-reduced-motion:reduce){.fh-event-app .vm-food-scene{transition:none}.fh-event-app .vm-art-steam{animation:none}}
+.fh-event-app .vm-artwork.vm-art-small{height:75px;width:75px}
+.fh-event-app .vm-artwork.vm-art-small svg{width:130%;max-width:none}
+@media(max-width:700px){.fh-event-app .vm-artwork{height:145px}.fh-event-app .vm-artwork.vm-art-small{height:55px;width:55px}.fh-event-app .vm-dish:only-child .vm-artwork{height:180px}}

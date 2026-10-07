@@ -32,7 +32,7 @@ def action(link, cls="button"):
 
 def navigation_markup(content, *, footer=False):
     items = content.get("navigation") or []
-    if not items:
+    if not items and not content.get("navigation_configured"):
         items = [
             {"label": "Programme", "url": "#programme", "enabled": "programme" in set(content.get("visible_sections") or [])},
             {"label": "Venue", "url": content.get("venue_url"), "enabled": bool(content.get("venue_url"))},
@@ -131,29 +131,35 @@ def _programme_date_label(start, end):
     return f"{start_date.strftime('%B')} {start_date.day}, {start_date.year} – {end_date.strftime('%B')} {end_date.day}, {end_date.year}"
 
 
-def countdown_markup(content):
-    """'N days to go' / 'Tomorrow!' badge, matching the same wording and
-    threshold the RSVP page already uses (event.invite_countdown_enabled,
-    InvitePage.jsx) — nothing shown once the event has started, same as
-    there. The public site re-renders per request (60s edge cache), so this
-    is computed fresh here rather than needing any client-side JS, which the
-    strict CSP on this page wouldn't allow anyway."""
+def event_datetime(value, zone="UTC"):
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+    value = str(value or "").strip()
+    if not value: return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return parsed.astimezone(ZoneInfo(zone)) if parsed.tzinfo else parsed.replace(tzinfo=ZoneInfo(zone))
+    except ValueError: pass
+    for fmt in ("%B %d, %Y", "%b %d, %Y", "%m/%d/%Y"):
+        try: return datetime.strptime(value, fmt).replace(tzinfo=ZoneInfo(zone))
+        except ValueError: pass
+    return None
+
+
+def date_label(value, zone="UTC"):
+    parsed = event_datetime(value, zone)
+    return f"{parsed.strftime('%B')} {parsed.day}, {parsed.year}" if parsed else str(value or "")
+
+
+def countdown_markup(content, now=None):
     from datetime import datetime
-    start = str(content.get("start_date") or "").strip()
-    if not start:
-        return ""
-    start_date = None
-    for start_format in ("%B %d, %Y", "%b %d, %Y"):
-        try:
-            start_date = datetime.strptime(start, start_format)
-            break
-        except ValueError:
-            continue
-    if not start_date:
-        return ""
-    days_left = (start_date.date() - datetime.now().date()).days
-    if days_left <= 0:
-        return ""
+    from zoneinfo import ZoneInfo
+    zone = content.get("timezone") or "UTC"
+    start = event_datetime(content.get("start_date"), zone)
+    if not start: return ""
+    now = now or datetime.now(ZoneInfo(zone))
+    days_left = (start.date() - now.astimezone(ZoneInfo(zone)).date()).days
+    if days_left <= 0: return ""
     label = "Tomorrow!" if days_left == 1 else f"{days_left} days to go"
     return f'<span class="countdown-chip">{escape(label)}</span>'
 

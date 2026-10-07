@@ -45,3 +45,10 @@ class Preview(Base):
     snapshot: Mapped[dict] = mapped_column(JSON)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
+
+
+class SiteAddress(Base):
+    """Reserve every address so a previous published URL remains valid."""
+    __tablename__ = "public_site_addresses"
+    slug: Mapped[str] = mapped_column(String(100), primary_key=True)
+    site_id: Mapped[str] = mapped_column(ForeignKey("public_sites.id", ondelete="CASCADE"), index=True)

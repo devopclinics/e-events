@@ -14,6 +14,7 @@ import './GuestHubThemes.css'
 import PublicTicketCheckout from '../components/PublicTicketCheckout'
 import EventApp from '../components/guesthub/EventApp'
 import WelcomeLanding from '../components/invite/WelcomeLanding'
+import GuestHubRecovery from '../components/invite/GuestHubRecovery'
 
 // ── Invite page helpers ───────────────────────────────────────────────────────
 
@@ -3570,6 +3571,7 @@ export default function InvitePage() {
   }
 
   if (isStudioPreview) rsvpPanel = <div className="rounded-2xl border p-6">Design preview. Registration and ticket purchases are disabled here.</div>
+  if (!isStudioPreview && new URLSearchParams(location.search).get('recover') === '1') return <GuestHubRecovery event={event}/>
   if (event.rsvp_landing_layout === 'welcome' && !hasGuestHub) {
     return <WelcomeLanding event={event} title={title} dateLabel={dateLabel} timeLabel={timeLabel}
       venue={venue} host={host} hostWebsite={hostWebsite} about={about} designTheme={designTheme}

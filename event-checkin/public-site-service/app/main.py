@@ -1,18 +1,21 @@
+import hashlib
+import json
 import secrets
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlalchemy import func, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import settings
 from .database import SessionLocal, get_db
-from .models import Preview, Release, Site
+from .models import Preview, Release, Site, SiteAddress
 from .render import render_site
-from .schemas import PublishRequest, SiteUpsert
+from .schemas import PublishRequest, SiteUpsert, RevisionRequest
 
 app = FastAPI(title="Festio Public Sites", version="1.0.0")
 ALLOWED_IMAGES = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
@@ -23,12 +26,28 @@ def require_internal(x_internal_token: str | None = Header(default=None)):
         raise HTTPException(401, "Invalid internal service token")
 
 
+def revision(site: Site):
+    value = {"slug":site.slug,"family":site.template_family,"draft":site.draft,"published":site.published_release_id,"updated":str(site.updated_at)}
+    return hashlib.sha256(json.dumps(value, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def check_revision(site, expected):
+    if expected is None:
+        raise HTTPException(428, "Refresh the website editor before saving. A draft revision is required.")
+    if expected != (revision(site) if site else "new"):
+        raise HTTPException(409, "This website changed in another window. Reload the latest draft before trying again.")
+
+
+async def locked_site(event_id, db):
+    return await db.scalar(select(Site).where(Site.event_id == event_id).with_for_update())
+
+
 async def serialize(site: Site, db: AsyncSession):
     release = await db.get(Release, site.published_release_id) if site.published_release_id else None
     published_snapshot = release.snapshot if release else None
     draft_snapshot = {"family": site.template_family, "content": site.draft}
     return {
-        "event_id": site.event_id, "org_id": site.org_id, "slug": site.slug,
+        "event_id": site.event_id, "org_id": site.org_id, "slug": site.slug, "revision": revision(site),
         "template_family": site.template_family, "content": site.draft,
         "published_release_id": site.published_release_id, "enabled": site.enabled,
         "public_url": f"{settings.public_base_url.rstrip('/')}/site/{site.slug}",
@@ -103,23 +122,42 @@ async def get_site(event_id: str, db: AsyncSession = Depends(get_db)):
 
 @app.put("/internal/sites/{event_id}", dependencies=[Depends(require_internal)])
 async def put_site(event_id: str, body: SiteUpsert, db: AsyncSession = Depends(get_db)):
-    site = await db.scalar(select(Site).where(Site.event_id == event_id))
-    slug_owner = await db.scalar(select(Site).where(Site.slug == body.slug, Site.event_id != event_id))
-    if slug_owner:
-        raise HTTPException(409, "That website address is already in use")
-    if not site:
-        site = Site(event_id=event_id, org_id=body.org_id, slug=body.slug)
-        db.add(site)
-    site.org_id, site.slug, site.template_family, site.draft = body.org_id, body.slug, body.template_family, body.content.model_dump(mode="json")
-    await db.commit(); await db.refresh(site)
+    site = await locked_site(event_id, db)
+    check_revision(site, body.expected_revision)
+    owner = await db.scalar(select(Site).where(Site.slug == body.slug, Site.event_id != event_id))
+    address = await db.get(SiteAddress, body.slug)
+    if owner or (address and (not site or address.site_id != site.id)):
+        raise HTTPException(409, "That website address is already in use or reserved by another website")
+    if site and site.slug != body.slug and site.published_release_id and not body.confirm_slug_change:
+        raise HTTPException(409, "Confirm the address change. The old address will redirect to the new one.")
+    try:
+        if not site:
+            site = Site(event_id=event_id, org_id=body.org_id, slug=body.slug)
+            db.add(site); await db.flush()
+        old_address = await db.get(SiteAddress, site.slug)
+        if not old_address: db.add(SiteAddress(slug=site.slug, site_id=site.id))
+        if body.slug != site.slug and not address: db.add(SiteAddress(slug=body.slug, site_id=site.id))
+        site.org_id, site.slug, site.template_family, site.draft = body.org_id, body.slug, body.template_family, body.content.model_dump(mode="json")
+        site.updated_at = datetime.now(timezone.utc)
+        await db.commit(); await db.refresh(site)
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(409, "The website or address changed in another window. Reload before saving.")
     return await serialize(site, db)
 
 
+@app.post("/internal/sites/{event_id}/render-preview", dependencies=[Depends(require_internal)])
+async def render_preview(event_id: str, body: SiteUpsert):
+    # Validate and render without modifying a draft, release, address or asset.
+    return {"html": render_site(body.content.model_dump(mode="json"), body.template_family, preview=True)}
+
+
 @app.post("/internal/sites/{event_id}/preview", dependencies=[Depends(require_internal)])
-async def create_preview(event_id: str, db: AsyncSession = Depends(get_db)):
-    site = await db.scalar(select(Site).where(Site.event_id == event_id))
+async def create_preview(event_id: str, body: RevisionRequest, db: AsyncSession = Depends(get_db)):
+    site = await locked_site(event_id, db)
     if not site:
         raise HTTPException(404, "Website not configured")
+    check_revision(site, body.expected_revision)
     token = secrets.token_urlsafe(32)
     db.add(Preview(token=token, site_id=site.id, snapshot={"family": site.template_family, "content": site.draft}, expires_at=datetime.now(timezone.utc) + timedelta(hours=24)))
     await db.commit()
@@ -128,9 +166,11 @@ async def create_preview(event_id: str, db: AsyncSession = Depends(get_db)):
 
 @app.post("/internal/sites/{event_id}/publish", dependencies=[Depends(require_internal)])
 async def publish(event_id: str, body: PublishRequest, db: AsyncSession = Depends(get_db)):
-    site = await db.scalar(select(Site).where(Site.event_id == event_id))
+    site = await locked_site(event_id, db)
     if not site:
         raise HTTPException(404, "Website not configured")
+    check_revision(site, body.expected_revision)
+    if body.content is not None: site.draft = body.content.model_dump(mode="json")
     version = (await db.scalar(select(func.max(Release.version)).where(Release.site_id == site.id)) or 0) + 1
     release = Release(site_id=site.id, version=version, snapshot={"family": site.template_family, "content": site.draft}, published_by=body.published_by)
     db.add(release); await db.flush(); site.published_release_id = release.id
@@ -139,10 +179,11 @@ async def publish(event_id: str, body: PublishRequest, db: AsyncSession = Depend
 
 
 @app.post("/internal/sites/{event_id}/unpublish", dependencies=[Depends(require_internal)])
-async def unpublish(event_id: str, db: AsyncSession = Depends(get_db)):
-    site = await db.scalar(select(Site).where(Site.event_id == event_id))
+async def unpublish(event_id: str, body: RevisionRequest, db: AsyncSession = Depends(get_db)):
+    site = await locked_site(event_id, db)
     if not site:
         raise HTTPException(404, "Website not configured")
+    check_revision(site, body.expected_revision)
     if not site.published_release_id:
         raise HTTPException(409, "Website is not currently published")
     site.published_release_id = None
@@ -159,12 +200,26 @@ async def releases(event_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @app.post("/internal/sites/{event_id}/rollback/{release_id}", dependencies=[Depends(require_internal)])
-async def rollback(event_id: str, release_id: str, db: AsyncSession = Depends(get_db)):
-    site = await db.scalar(select(Site).where(Site.event_id == event_id))
+async def rollback(event_id: str, release_id: str, body: RevisionRequest, db: AsyncSession = Depends(get_db)):
+    site = await locked_site(event_id, db)
     release = await db.get(Release, release_id)
     if not site or not release or release.site_id != site.id: raise HTTPException(404, "Release not found")
+    check_revision(site, body.expected_revision)
     site.published_release_id = release.id; await db.commit()
     return {"release_id": release.id, "version": release.version}
+
+
+@app.post("/internal/sites/{event_id}/restore/{release_id}", dependencies=[Depends(require_internal)])
+async def restore_draft(event_id: str, release_id: str, body: RevisionRequest, db: AsyncSession = Depends(get_db)):
+    site = await locked_site(event_id, db)
+    release = await db.get(Release, release_id)
+    if not site or not release or release.site_id != site.id: raise HTTPException(404, "Release not found")
+    check_revision(site, body.expected_revision)
+    site.template_family = release.snapshot["family"]
+    site.draft = release.snapshot["content"]
+    site.updated_at = datetime.now(timezone.utc)
+    await db.commit(); await db.refresh(site)
+    return await serialize(site, db)
 
 
 @app.get("/site-preview/{token}", response_class=HTMLResponse)
@@ -178,6 +233,11 @@ async def preview(token: str, db: AsyncSession = Depends(get_db)):
 async def public_site(slug: str, db: AsyncSession = Depends(get_db)):
     if not settings.enabled: raise HTTPException(404, "Public websites are not enabled")
     site = await db.scalar(select(Site).where(Site.slug == slug, Site.enabled.is_(True)))
+    if not site:
+        address = await db.get(SiteAddress, slug)
+        prior = await db.get(Site, address.site_id) if address else None
+        if prior and prior.enabled and prior.published_release_id:
+            return RedirectResponse(f"/site/{prior.slug}", status_code=308, headers={"Cache-Control":"no-store"})
     if not site or not site.published_release_id: raise HTTPException(404, "Website not published")
     release = await db.get(Release, site.published_release_id)
     if not release: raise HTTPException(404, "Website release unavailable")

@@ -6,8 +6,14 @@ import { useState, useEffect } from 'react'
 const KEY = 'eq.currentEventId'
 let current = localStorage.getItem(KEY) || ''
 const subs = new Set()
+const changeGuards = new Set()
+export function registerEventChangeGuard(guard) {
+  changeGuards.add(guard)
+  return () => changeGuards.delete(guard)
+}
 
 function setCurrent(id) {
+  if ((id || '') !== current && [...changeGuards].some(guard => !guard(id))) return
   current = id || ''
   if (id) localStorage.setItem(KEY, id)
   else localStorage.removeItem(KEY)

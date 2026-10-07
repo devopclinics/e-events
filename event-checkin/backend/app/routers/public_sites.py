@@ -1,7 +1,8 @@
 import httpx
-from datetime import timedelta
+from datetime import timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from urllib.parse import quote_plus
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, Body
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +15,12 @@ from ..services.experience import active_workflow
 from .speakers import ensure_speaker_token
 
 router = APIRouter()
+
+def _event_zone(event):
+    try: return ZoneInfo(event.timezone or "UTC")
+    except (ZoneInfoNotFoundError, ValueError):
+        raise HTTPException(422, "The event timezone is invalid. Update it in Event Setup before continuing.")
+
 
 
 async def _website_connections(event: Event, db: AsyncSession) -> dict:
@@ -37,7 +44,8 @@ async def _website_connections(event: Event, db: AsyncSession) -> dict:
         "speakers": {"label": "Speakers", "url": speakers_url, "available": bool(speakers_url), "source": "Speakers add-on", "configure_url": "/addons-redesign?tab=speakers"},
         "rsvp": {"label": "Register / RSVP", "url": f"{base}/rsvp/{event.rsvp_token}" if event.rsvp_enabled and event.rsvp_token else "", "available": bool(event.rsvp_enabled and event.rsvp_token), "source": "Invites & RSVP", "configure_url": "/guests-redesign?tab=invite"},
         "festio_live": {"label": "Festio Live", "url": live_url, "available": bool(live_url), "source": "Festio Live", "configure_url": "/festio-live-redesign"},
-        "festiome": {"label": "GuestHub", "url": festiome_url, "available": bool(event.festiome_addon_enabled and festiome_url), "source": "GuestHub", "configure_url": "/festiome-redesign"},
+        "guesthub": {"label": "My GuestHub", "url": f"{base}/rsvp/{event.rsvp_token}?recover=1" if event.rsvp_enabled and event.rsvp_token else "", "available": bool(event.rsvp_enabled and event.rsvp_token), "source": "Email-only GuestHub recovery", "configure_url": "/guests-redesign?tab=invite"},
+        "festiome": {"label": "FestioMe", "url": festiome_url, "available": bool(event.festiome_addon_enabled and festiome_url), "source": "FestioMe", "configure_url": "/festiome-redesign"},
         "contact": {"label": "Contact", "url": "", "available": False, "source": "Website settings", "configure_url": "/design-studio-redesign/website"},
     }
     return connections
@@ -71,6 +79,8 @@ async def _website_content_sources(event: Event, db: AsyncSession) -> dict:
             if not step.enabled or not step.is_segment or step.starts_offset_seconds is None:
                 continue
             starts_at = event.event_date + timedelta(seconds=step.starts_offset_seconds)
+            if starts_at.tzinfo is None: starts_at = starts_at.replace(tzinfo=timezone.utc)
+            starts_at = starts_at.astimezone(_event_zone(event))
             config = step.config or {}
             program = config.get("program") or {}
             sessions.append({
@@ -106,8 +116,14 @@ def _resolve_navigation(content: dict, connections: dict) -> dict:
     for raw in result.get("navigation") or []:
         item = dict(raw)
         source = connections.get(item.get("destination_type"))
+        if item.get("destination_type") == "section":
+            allowed = {"#programme": "programme" in result.get("visible_sections", []), "#tracks": "tracks" in result.get("visible_sections", []) and bool(result.get("tracks")), "#speakers": bool(result.get("speakers")), "#venue": bool(result.get("venue") or result.get("venue_facts")), "#registration": bool(result.get("registration_facts")), "#faq": bool(result.get("faqs")), "#contact": bool(contact_email), "#connect": "connect" in result.get("visible_sections", [])}
+            requested = bool(item.get("enabled", True) if item.get("requested_enabled") is None else item["requested_enabled"])
+            item["requested_enabled"] = requested
+            item["enabled"] = requested and allowed.get(item.get("url"), False)
+            source = None
         if source is not None:
-            requested = bool(item.get("requested_enabled", item.get("enabled", True)))
+            requested = bool(item.get("enabled", True) if item.get("requested_enabled") is None else item["requested_enabled"])
             item["requested_enabled"] = requested
             item["url"] = source["url"]
             item["enabled"] = bool(requested and source.get("available"))
@@ -196,39 +212,74 @@ async def website_content_sources(event_id: str, db: AsyncSession = Depends(get_
     return await _website_content_sources(event, db)
 
 
+async def _prepare_website(event, content, db):
+    """Resolve published brand and event-owned facts, never personal guest credentials."""
+    content = dict(content or {})
+    content["publication_features_version"] = 2
+    zone = _event_zone(event)
+    def iso(value):
+        if not value: return ""
+        if value.tzinfo is None: value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(zone).isoformat()
+    connections = await _website_connections(event, db)
+    content.update(event_name=event.name, start_date=iso(event.event_date), end_date=iso(event.event_end_date), timezone=event.timezone or "UTC", venue=event.venue_name or "", venue_address=event.venue_address or "", venue_url=connections["venue"]["url"], guesthub_url=connections["guesthub"]["url"], festiome_url=connections["festiome"]["url"] if connections["festiome"]["available"] else "", festio_live_url=connections["festio_live"]["url"])
+    if content.get("use_event_branding"):
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                response = await client.get(settings.design_service_url.rstrip("/") + f"/api/v1/design/events/{event.id}/public-theme")
+                response.raise_for_status(); theme = response.json()
+        except (httpx.HTTPError, ValueError):
+            raise HTTPException(503, "Published event branding is unavailable. Retry before saving or publishing.")
+        image = theme.get("image_settings") or {}
+        content.update(primary_color=theme["colors"]["primary"], accent_color=theme["colors"]["accent"], font_pairing=theme.get("font_pairing", "modern-sans"), logo_url=theme.get("logo_image_url"), feature_image_url=theme.get("cover_image_url"), hero_image_url=None, image_fit=image.get("fit", "cover"), image_position=image.get("position", "center"), image_alt=image.get("alt", ""))
+    content = _resolve_navigation(content, connections)
+    return _absolute_site_urls(content, event.checkin_base_url or settings.public_base_url or settings.frontend_url)
+
+
 @router.put("/{event_id}/website")
 async def save_website(event_id: str, request: Request, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
     event = await db.get(Event, event_id)
-    if not event:
-        raise HTTPException(404, "Event not found")
-    body = await request.json()
-    body["org_id"] = event.org_id
-    body["content"] = _resolve_navigation(body.get("content") or {}, await _website_connections(event, db))
-    public_base = event.checkin_base_url or settings.public_base_url or settings.frontend_url
-    body["content"] = _absolute_site_urls(body["content"], public_base)
+    if not event: raise HTTPException(404, "Event not found")
+    body = await request.json(); body["org_id"] = event.org_id
+    body["content"] = await _prepare_website(event, body.get("content"), db)
     return await _call("PUT", f"/internal/sites/{event_id}", json=body)
 
 
+@router.post("/{event_id}/website/render-preview")
+async def render_website_preview(event_id: str, request: Request, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+    event = await db.get(Event, event_id)
+    if not event: raise HTTPException(404, "Event not found")
+    body = await request.json(); body["org_id"] = event.org_id
+    # Preview is independent of saving; a not-yet-chosen address is acceptable.
+    body["slug"] = body.get("slug") or "draft-preview"
+    body["content"] = await _prepare_website(event, body.get("content"), db)
+    return await _call("POST", f"/internal/sites/{event_id}/render-preview", json=body)
+
+
 @router.post("/{event_id}/website/preview")
-async def preview_website(event_id: str, _: User = Depends(require_event_admin)):
-    return await _call("POST", f"/internal/sites/{event_id}/preview")
+async def preview_website(event_id: str, body: dict = Body(...), _: User = Depends(require_event_admin)):
+    return await _call("POST", f"/internal/sites/{event_id}/preview", json=body)
 
 
 @router.post("/{event_id}/website/publish")
-async def publish_website(event_id: str, user: User = Depends(require_event_admin), db: AsyncSession = Depends(get_db)):
+async def publish_website(event_id: str, body: dict = Body(...), user: User = Depends(require_event_admin), db: AsyncSession = Depends(get_db)):
     event = await db.get(Event, event_id)
-    if not event:
-        raise HTTPException(404, "Event not found")
+    if not event: raise HTTPException(404, "Event not found")
     draft = await _call("GET", f"/internal/sites/{event_id}")
-    draft["org_id"] = event.org_id
-    draft["content"] = _resolve_navigation(draft.get("content") or {}, await _website_connections(event, db))
-    await _call("PUT", f"/internal/sites/{event_id}", json=draft)
-    return await _call("POST", f"/internal/sites/{event_id}/publish", json={"published_by": user.email})
+    if not body.get("expected_revision") or draft.get("revision") != body["expected_revision"]:
+        raise HTTPException(409, "This website changed. Reload and review before publishing.")
+    content = await _prepare_website(event, draft.get("content"), db)
+    return await _call("POST", f"/internal/sites/{event_id}/publish", json={"published_by": user.email, "expected_revision":draft["revision"], "content":content})
 
 
 @router.post("/{event_id}/website/unpublish")
-async def unpublish_website(event_id: str, _: User = Depends(require_event_admin)):
-    return await _call("POST", f"/internal/sites/{event_id}/unpublish")
+async def unpublish_website(event_id: str, body: dict = Body(...), _: User = Depends(require_event_admin)):
+    return await _call("POST", f"/internal/sites/{event_id}/unpublish", json=body)
+
+
+@router.post("/{event_id}/website/restore/{release_id}")
+async def restore_website(event_id: str, release_id: str, body: dict = Body(...), _: User = Depends(require_event_admin)):
+    return await _call("POST", f"/internal/sites/{event_id}/restore/{release_id}", json=body)
 
 
 @router.get("/{event_id}/website/releases")
@@ -237,5 +288,5 @@ async def website_releases(event_id: str, _: User = Depends(require_event_admin)
 
 
 @router.post("/{event_id}/website/rollback/{release_id}")
-async def rollback_website(event_id: str, release_id: str, _: User = Depends(require_event_admin)):
-    return await _call("POST", f"/internal/sites/{event_id}/rollback/{release_id}")
+async def rollback_website(event_id: str, release_id: str, body: dict = Body(...), _: User = Depends(require_event_admin)):
+    return await _call("POST", f"/internal/sites/{event_id}/rollback/{release_id}", json=body)

@@ -125,7 +125,7 @@ class Track(BaseModel):
 class NavigationItem(BaseModel):
     id: str = Field(min_length=1, max_length=60)
     label: str = Field(min_length=1, max_length=60)
-    destination_type: Literal["section", "speakers", "venue", "rsvp", "festio_live", "festiome", "contact", "custom"] = "custom"
+    destination_type: Literal["section", "speakers", "venue", "rsvp", "festio_live", "festiome", "guesthub", "contact", "custom"] = "custom"
     url: str = Field(default="", max_length=1000)
     enabled: bool = True
     requested_enabled: bool | None = None
@@ -154,6 +154,22 @@ class SiteContent(BaseModel):
     eyebrow: str = Field(default="", max_length=100)
     headline: str = Field(min_length=1, max_length=220)
     summary: str = Field(default="", max_length=1200)
+    timezone: str = "UTC"
+    use_event_branding: bool = False
+    font_pairing: Literal["modern-sans", "classic-serif", "elegant-serif", "display-rounded", "bold-sans"] = "modern-sans"
+    image_fit: Literal["cover", "contain"] = "cover"
+    image_position: Literal["center", "top", "bottom", "left", "right"] = "center"
+    image_alt: str = Field(default="", max_length=300)
+    logo_alt: str = Field(default="Event logo", max_length=180)
+    guesthub_url: HttpUrl | None = None
+    @field_validator("timezone")
+    @classmethod
+    def valid_timezone(cls, value):
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+        try: ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError): raise ValueError("Choose a valid IANA event timezone")
+        return value
+
     start_date: str = Field(default="", max_length=60)
     end_date: str = Field(default="", max_length=60)
     venue: str = Field(default="", max_length=180)
@@ -166,7 +182,7 @@ class SiteContent(BaseModel):
     accent_color: str = "#d88945"
     primary_action: Link | None = None
     secondary_action: Link | None = None
-    sessions: list[Session] = Field(default_factory=list, max_length=120)
+    sessions: list[Session] = Field(default_factory=list, max_length=2000)
     stats: list[Stat] = Field(default_factory=list, max_length=6)
     tracks: list[Track] = Field(default_factory=list, max_length=12)
     highlights: list[str] = Field(default_factory=list, max_length=12)
@@ -190,9 +206,10 @@ class SiteContent(BaseModel):
     festio_live_description: str = Field(default="Participate in live Q&A, polls and activities.", max_length=240)
     festiome_title: str = Field(default="FestioMe", max_length=100)
     festiome_description: str = Field(default="Your personal event hub, pass and programme.", max_length=240)
+    navigation_configured: bool = False
     navigation: list[NavigationItem] = Field(default_factory=list, max_length=20)
 
-    @field_validator("venue_url", "hero_image_url", "feature_image_url", "logo_url", "festio_live_url", "festiome_url", mode="before")
+    @field_validator("venue_url", "hero_image_url", "feature_image_url", "logo_url", "festio_live_url", "festiome_url", "guesthub_url", mode="before")
     @classmethod
     def blank_optional_url_is_none(cls, value):
         return None if value in (None, "") else value
@@ -212,6 +229,8 @@ class SiteContent(BaseModel):
 
 
 class SiteUpsert(BaseModel):
+    expected_revision: str | None = None
+    confirm_slug_change: bool = False
     org_id: str = Field(min_length=1, max_length=64)
     slug: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=100)
     template_family: Literal[
@@ -223,6 +242,11 @@ class SiteUpsert(BaseModel):
     content: SiteContent
 
 
-class PublishRequest(BaseModel):
+class RevisionRequest(BaseModel):
+    expected_revision: str | None = None
+
+
+class PublishRequest(RevisionRequest):
+    content: SiteContent | None = None
     published_by: str = Field(default="system", max_length=120)
 

@@ -1,5 +1,6 @@
 from .community import (
     action,
+    date_label,
     countdown_markup,
     facts_markup,
     feature_markup,
@@ -16,7 +17,7 @@ from html import escape
 from .templates import canonical_template
 
 
-def render_site(content: dict, family: str, *, preview: bool = False) -> str:
+def _render_site(content: dict, family: str, *, preview: bool = False) -> str:
     legacy_family = family
     family = canonical_template(family)
     if legacy_family == "community":
@@ -64,14 +65,16 @@ def render_site(content: dict, family: str, *, preview: bool = False) -> str:
     venue = f'<section id="venue"><div class="eyebrow">Venue &amp; travel</div>{venue_heading}{venue_action}<div class="facts">{venue_facts}</div></section>' if venue_name or venue_address or content.get("venue_facts") else ""
 
     live = action({"label": "Join Festio Live", "url": content.get("festio_live_url")}, "text-link") if content.get("festio_live_url") else ""
-    me = action({"label": "Open GuestHub", "url": content.get("festiome_url")}, "text-link") if content.get("festiome_url") else ""
+    me = action({"label": "Open FestioMe", "url": content.get("festiome_url")}, "text-link") if content.get("festiome_url") else ""
     live_title = e(content.get("festio_live_title") or "Festio Live")
     live_description = e(content.get("festio_live_description") or "Participate in live Q&A, polls and activities.")
-    me_title = e(content.get("festiome_title") or "GuestHub")
-    me_description = e(content.get("festiome_description") or "Your personal event hub, pass and programme.")
+    me_title = e(content.get("festiome_title") or "FestioMe")
+    me_description = e(content.get("festiome_description") or "Chat with the event community.")
     live_panel = f'<div><strong>{live_title}</strong><p>{live_description}</p>{live}</div>' if live else ""
     me_panel = f'<div><strong>{me_title}</strong><p>{me_description}</p>{me}</div>' if me else ""
-    connect = f'<section id="connect" class="connect">{live_panel}{me_panel}</section>' if "connect" in visible and (live or me) else ""
+    hub = action({"label":"Recover my GuestHub", "url":content.get("guesthub_url")}, "text-link")
+    hub_panel = f'<div><strong>My GuestHub</strong><p>Receive your personal link at your registration email.</p>{hub}</div>' if hub else ""
+    connect = f'<section id="connect" class="connect">{live_panel}{me_panel}{hub_panel}</section>' if "connect" in visible and (live or me or hub) else ""
 
     faqs = "".join(f'<details><summary>{e(item.get("question", ""))}</summary><p>{e(item.get("answer", ""))}</p></details>' for item in content.get("faqs") or [])
     faq_section = f'<section id="faq"><div class="eyebrow">Helpful details</div><h2>Frequently asked questions</h2>{faqs}</section>' if faqs else ""
@@ -83,9 +86,12 @@ def render_site(content: dict, family: str, *, preview: bool = False) -> str:
     nav_links = navigation_markup(content)
     footer_links = navigation_markup(content, footer=True)
     family_label = {"conference-programme": "Build your agenda", "programme-showcase": "Explore every track", "immersive": "You are invited", "elegant-countdown": "The countdown is on"}.get(family, "Discover the event")
-    hero_media = f'<div class="hero-visual"><img src="{hero}" alt="" loading="eager"></div>' if hero else '<div class="hero-visual hero-placeholder" aria-hidden="true"><span>✦</span></div>'
+    logo = safe_url(content.get("logo_url"))
+    brand = f'<img class="site-logo" src="{logo}" alt="{e(content.get("logo_alt") or "Event logo")}">' if logo else ""
+    hero_alt = e(content.get("image_alt") or "")
+    hero_media = f'<div class="hero-visual"><img src="{hero}" alt="{hero_alt}" loading="eager"></div>' if hero else '<div class="hero-visual hero-placeholder" aria-hidden="true"><span>✦</span></div>'
     hero_copy = f'<div class="hero-copy"><div class="eyebrow">{eyebrow}</div><h1>{headline}</h1><p class="lead">{summary}</p><div class="meta">{meta}{countdown_markup(content)}</div><div class="actions">{action(content.get("primary_action"))}{action(content.get("secondary_action"), "button outline")}</div></div>'
-    hero_inner = hero_copy if background_hero else hero_copy + hero_media
+    hero_inner = (hero_copy + (f'<span class="site-sr" role="img" aria-label="{hero_alt}"></span>' if hero and hero_alt else "")) if background_hero else hero_copy + hero_media
     section_orders = {
         "conference-programme": (programme, glance, audience, registration, speakers_section, features, venue, connect, faq_section, contact),
         "programme-showcase": (audience, programme, glance, speakers_section, features, venue, connect, registration, faq_section, contact),
@@ -130,7 +136,28 @@ footer{{padding:2rem 5vw;border-top:1px solid #ddd;display:flex;justify-content:
 @media(max-width:900px){{.feature{{grid-template-columns:1fr}}.feature.reverse{{direction:ltr}}}}
 @media(max-width:600px){{nav span,.site-links{{display:none}}.hero{{min-height:70vh}}h1{{font-size:3rem}}}}
 </style></head><body class="{escape(family)}" data-template="{escape(family)}">{preview_bar}
-<nav><b>{name}</b><div class="site-links">{nav_links}</div><span>{escape(family_label)}</span></nav>
+<nav>{brand}<b>{name}</b><div class="site-links">{nav_links}</div><span>{escape(family_label)}</span></nav>
 <header class="hero" style="{image_style}"><div class="hero-inner">{hero_inner}</div></header>
 <main>{main_sections}</main>
 <footer><a href="https://festio.events" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">Powered by Festio</a><div class="footer-links">{footer_links}</div></footer></body></html>'''
+
+
+def render_site(content: dict, family: str, *, preview: bool = False) -> str:
+    content = dict(content)
+    zone = content.get("timezone") or "UTC"
+    for key in ("start_date", "end_date"):
+        content[key] = date_label(content.get(key), zone)
+    html = _render_site(content, family, preview=preview)
+    fonts = {"modern-sans":"system-ui,-apple-system,sans-serif", "classic-serif":"Georgia,serif", "elegant-serif":"Iowan Old Style,Georgia,serif", "display-rounded":"Trebuchet MS,system-ui,sans-serif", "bold-sans":"Segoe UI,system-ui,sans-serif"}
+    font = fonts.get(content.get("font_pairing"), fonts["modern-sans"])
+    fit = content.get("image_fit") if content.get("image_fit") in ("contain", "cover") else "cover"
+    position = content.get("image_position") if content.get("image_position") in ("center", "top", "bottom", "left", "right") else "center"
+    type_style = "body,h1,h2,h3{font-family:"+font+"}" if content.get("font_pairing") else ""
+    style = "<style>"+type_style+"body .hero{background-size:"+fit+";background-position:"+position+";background-repeat:no-repeat}.hero-visual img{object-fit:"+fit+";object-position:"+position+"}.site-logo{max-width:140px;max-height:48px;object-fit:contain}.site-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.modern-professional .hero{background-color:var(--primary)}:focus-visible{outline:3px solid var(--accent);outline-offset:4px}@media(max-width:600px){.site-logo{max-width:90px}nav{flex-wrap:wrap}nav b{overflow-wrap:anywhere;min-width:0}}</style>"
+    if preview:
+        import re
+        def separate_link(match):
+            tag = match.group(0)
+            return tag if "target=" in tag else tag[:-1] + ' target="_blank" rel="noopener">'
+        html = re.sub(r'<a\s[^>]*href="https?://[^>]*>', separate_link, html)
+    return html.replace("</head>", style+"</head>")

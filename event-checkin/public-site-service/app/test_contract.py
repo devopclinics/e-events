@@ -8,7 +8,7 @@ from .templates import TEMPLATE_IDS
 
 class PublicSiteContractTests(unittest.TestCase):
     def sample(self):
-        return {"schema_version": 1, "event_name": "NCNMO <2026>", "headline": "Faith & family", "primary_color": "#0d5c55", "accent_color": "#d88945", "primary_action": {"label": "Register", "url": "https://festio.events/r/demo"}, "sessions": [{"title": "Opening", "time": "9:00 AM"}]}
+        return {"schema_version": 1, "event_name": "NCNMO <2026>", "headline": "Faith & family", "primary_color": "#0d5c55", "accent_color": "#d88945", "primary_action": {"label": "Register", "url": "https://festio.events/r/demo"}, "sessions": [{"featured": True, "title": "Opening", "time": "9:00 AM"}]}
 
     def test_all_template_families_are_distinct_and_escape_content(self):
         pages = [render_site(self.sample(), family) for family in TEMPLATE_IDS]
@@ -100,8 +100,8 @@ class PublicSiteContractTests(unittest.TestCase):
             "programme_title": "Four-day programme",
             "programme_summary": "Choose your day and track.",
             "sessions": [
-                {"day": "Day 1", "date": "2026-12-24", "time": "9:00 AM", "title": "Opening", "track": "Community", "venue": "Main Hall", "audience": "All guests", "speaker": "Dr. Amina"},
-                {"day": "Day 2", "date": "2026-12-25", "time": "10:00 AM", "title": "Junior workshop", "track": "Junior", "venue": "Room A", "audience": "Ages 8–12"},
+                {"featured": True, "day": "Day 1", "date": "2026-12-24", "time": "9:00 AM", "title": "Opening", "track": "Community", "venue": "Main Hall", "audience": "All guests", "speaker": "Dr. Amina"},
+                {"featured": True, "day": "Day 2", "date": "2026-12-25", "time": "10:00 AM", "title": "Junior workshop", "track": "Junior", "venue": "Room A", "audience": "Ages 8–12"},
             ],
             "speakers": [{"name": "Dr. Amina", "title": "Educator", "organization": "NCNMO", "bio": "Community educator", "photo_url": ""}],
             "tracks": [{"title": "Community", "description": "Talks and panels", "color": "#2f5aa8"}, {"title": "Junior", "description": "Kids programme"}],
@@ -262,33 +262,17 @@ class PublicSiteContractTests(unittest.TestCase):
         page = render_site(validated.model_dump(mode="json"), "community")
         self.assertNotIn('class="nav-cta"', page)
 
-    def test_day_and_track_filtering_is_pure_css_no_script(self):
-        """Public pages ship a strict CSP with no script-src (Plan §14 — no
-        custom JS on untrusted public content). Day/track filtering must
-        work via radio inputs + CSS sibling selectors, never <script>."""
+    def test_featured_programmes_need_no_filters_or_javascript(self):
         content = self.sample()
-        content["tracks"] = [
-            {"title": "Community", "description": "Talks", "color": "#2f5aa8"},
-            {"title": "Junior", "description": "Kids programme", "color": "#3d8b4c"},
-        ]
-        content["sessions"] = [
-            {"day": "Day 1", "date": "2026-12-24", "time": "9:00 AM", "title": "Opening", "track": "Community"},
-            {"day": "Day 2", "date": "2026-12-25", "time": "10:00 AM", "title": "Kids workshop", "track": "Junior"},
-        ]
-        validated = SiteContent(**content).model_dump(mode="json")
-        page = render_site(validated, "community")
-        self.assertNotIn("<script", page)
-        self.assertIn('type="radio" name="day-filter" id="day-day-1" class="filter-radio" checked', page)
-        self.assertIn('type="radio" name="track-filter" id="track-community"', page)
-        self.assertIn('for="day-day-1" class="day-tab"', page)
-        self.assertIn('for="track-junior" class="track-pill"', page)
-        self.assertIn('#day-day-1:checked ~ .sessions .session:not([data-day="Day 1"])', page)
-        self.assertIn('#track-community:checked ~ .sessions .session:not([data-track="Community"])', page)
-        self.assertIn('class="site-container nav-inner"', page)
-        self.assertIn('class="site-container hero-inner"', page)
-        self.assertIn('class="session-time"><time>9:00 AM</time>', page)
-        self.assertIn('href="#programme">Explore Programme</a>', page)
-        self.assertLess(page.index('id="programme"'), page.index('id="tracks"'))
+        content["sessions"] = [{"title":"Opening highlight","featured":True,"day":"Day 1","time":"9:00 AM"},{"title":"Unselected session","day":"Day 2"}]
+        for family in [*TEMPLATE_IDS,"community"]:
+            page=render_site(SiteContent(**content).model_dump(mode="json"),family)
+            self.assertIn("Opening highlight",page)
+            self.assertNotIn("Unselected session",page)
+            self.assertNotIn('id="programme-search"',page)
+            self.assertNotIn('name="day-filter"',page)
+            self.assertNotIn('id="programme-more"',page)
+
 
 
 if __name__ == "__main__":

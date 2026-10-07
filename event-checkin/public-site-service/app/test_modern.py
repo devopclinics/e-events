@@ -8,7 +8,7 @@ from .modern import JS, security_policy
 
 class ModernTemplatesTests(unittest.TestCase):
  def sample(self):
-  return SiteContent(event_name='Research & Community',headline='Learn together',start_date='2027-03-05',end_date='2027-03-07',timezone='Europe/London',sessions=[{'title':'A session','description':'Detailed description. '*100,'action_label':'Join quiz','action_url':'https://example.com/quiz','day':'Friday'}],tracks=[{'title':'Adults','description':'A track'}],faqs=[{'question':'Where?','answer':'Main hall'}],exhibitors=[{'name':'A partner','description':'Exhibitor information'}],highlights=['Opening reception'],feature_sections=[{'id':'gala','title':'Gala','summary':'Details','action':{'label':'Reserve','url':'https://example.com/gala'}}]).model_dump(mode='json')
+  return SiteContent(event_name='Research & Community',headline='Learn together',start_date='2027-03-05',end_date='2027-03-07',timezone='Europe/London',sessions=[{'featured':True,'title':'A session','description':'Detailed description. '*100,'action_label':'Join quiz','action_url':'https://example.com/quiz','day':'Friday'}],tracks=[{'title':'Adults','description':'A track'}],faqs=[{'question':'Where?','answer':'Main hall'}],exhibitors=[{'name':'A partner','description':'Exhibitor information'}],highlights=['Opening reception'],feature_sections=[{'id':'gala','title':'Gala','summary':'Details','action':{'label':'Reserve','url':'https://example.com/gala'}}]).model_dump(mode='json')
  def test_all_designs_use_real_content_not_prototype_data(self):
   for family in MODERN_TEMPLATES:
    page=render_site(self.sample(),family)

@@ -16,6 +16,7 @@ def blank_link_is_none(value):
 
 
 class Session(BaseModel):
+    featured: bool = False
     source_id: str = Field(default="", max_length=80)
     day: str = Field(default="", max_length=40)
     date: str = Field(default="", max_length=40)
@@ -185,6 +186,14 @@ class SiteContent(BaseModel):
     primary_action: Link | None = None
     secondary_action: Link | None = None
     sessions: list[Session] = Field(default_factory=list, max_length=2000)
+
+    @field_validator("sessions")
+    @classmethod
+    def limit_featured_sessions(cls, value):
+        if sum(session.featured for session in value) > 6:
+            raise ValueError("Choose up to 6 featured programmes for the website. The full timetable stays in GuestHub.")
+        return value
+
     stats: list[Stat] = Field(default_factory=list, max_length=6)
     tracks: list[Track] = Field(default_factory=list, max_length=12)
     highlights: list[str] = Field(default_factory=list, max_length=12)
@@ -195,8 +204,8 @@ class SiteContent(BaseModel):
     contact_email: str = Field(default="", max_length=180)
     brand_tagline: str = Field(default="", max_length=160)
     footer_tagline: str = Field(default="", max_length=160)
-    programme_title: str = Field(default="Full programme", max_length=160)
-    programme_summary: str = Field(default="Choose a day or track to plan your experience.", max_length=400)
+    programme_title: str = Field(default="Featured programmes", max_length=160)
+    programme_summary: str = Field(default="A few highlights from the event. Open GuestHub for the full timetable.", max_length=400)
     speakers: list[Speaker] = Field(default_factory=list, max_length=80)
     speakers_confirmed: bool = True
     feature_sections: list[FeatureSection] = Field(default_factory=list, max_length=16)

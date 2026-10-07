@@ -9,6 +9,7 @@ from .community import (
     safe_url,
     safe_destination,
     schedule_markup,
+    programme_heading,
     speakers_markup,
     track_colors,
     track_markup,
@@ -45,7 +46,7 @@ def _render_site(content: dict, family: str, *, preview: bool = False) -> str:
 
     programme = ""
     if "programme" in visible:
-        programme = f'<section id="programme"><div class="eyebrow">Programme</div><h2>{e(content.get("programme_title") or "Full programme")}</h2><p>{e(content.get("programme_summary") or "")}</p>{schedule_markup(content)}</section>'
+        programme = f'<section id="programme"><div class="eyebrow">Programme</div><h2>{e(programme_heading(content))}</h2><p>{e(content.get("programme_summary") or "")}</p>{schedule_markup(content)}</section>'
 
     colors = track_colors(content)
     tracks = "".join(track_markup(x, i, colors) for i, x in enumerate(content.get("tracks", [])[:12]))
@@ -144,6 +145,8 @@ footer{{padding:2rem 5vw;border-top:1px solid #ddd;display:flex;justify-content:
 
 def render_site(content: dict, family: str, *, preview: bool = False) -> str:
     content = dict(content)
+    if content.get("programme_summary") == "Choose a day or track to plan your experience.":
+        content["programme_summary"] = "A few highlights from the event. Open GuestHub for the full timetable."
     zone = content.get("timezone") or "UTC"
     for key in ("start_date", "end_date"):
         content[key] = date_label(content.get(key), zone)
@@ -159,6 +162,8 @@ def render_site(content: dict, family: str, *, preview: bool = False) -> str:
     position = content.get("image_position") if content.get("image_position") in ("center", "top", "bottom", "left", "right") else "center"
     type_style = "body,h1,h2,h3{font-family:"+font+"}" if content.get("font_pairing") and (not modern or not content.get("use_template_style", True) or content.get("use_event_branding")) else ""
     style = "<style>"+type_style+"body .hero{background-size:"+fit+";background-position:"+position+";background-repeat:no-repeat}.hero-visual img{object-fit:"+fit+";object-position:"+position+"}.site-logo{max-width:140px;max-height:48px;object-fit:contain}.site-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.modern-professional .hero{background-color:var(--primary)}:focus-visible{outline:3px solid var(--accent);outline-offset:4px}@media(max-width:600px){.site-logo{max-width:90px}nav{flex-wrap:wrap}nav b{overflow-wrap:anywhere;min-width:0}}</style>"
+    if not modern:
+        style += "<style>.programme-handoff{margin-top:28px;padding:24px;border:1px solid var(--border,#dce4db);border-radius:18px}.programme-handoff p{font-size:14px;margin:12px 0 0}.programme-handoff a{white-space:normal;text-align:center}.session-time small{display:block}.session-details summary{cursor:pointer;min-height:44px;padding:10px 0}.session-details p{white-space:pre-line;overflow-wrap:anywhere}</style>"
     if preview:
         import re
         def separate_link(match):

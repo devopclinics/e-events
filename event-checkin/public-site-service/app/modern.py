@@ -1,7 +1,7 @@
 """The approved modern website collection, rendered from the event snapshot.
 
 Only the fixed programme enhancement script executes. Event values are escaped
-as text/attributes; without JavaScript every session and its details remain usable.
+as text/attributes. Only explicitly featured sessions appear on the website.
 """
 from pathlib import Path
 from html import escape as e
@@ -10,7 +10,7 @@ import hashlib
 import json
 import re
 from .templates import MODERN_TEMPLATES
-from .community import safe_url, safe_destination, navigation_markup, facts_markup, event_datetime, date_label
+from .community import safe_url, safe_destination, navigation_markup, facts_markup, event_datetime, date_label, featured_sessions, programme_heading, programme_handoff
 
 ROOT = Path(__file__).parent
 CSS = (ROOT / "modern.css").read_text()
@@ -66,16 +66,9 @@ def artwork(family, content):
 
 
 def programme(content):
-    sessions = content.get("sessions") or []
+    sessions = featured_sessions(content)
     days = list(dict.fromkeys(s.get('date') or s.get('day') or 'Programme' for s in sessions))
-    tracks = list(dict.fromkeys(s.get('track') for s in sessions if s.get('track')))
-    audiences = list(dict.fromkeys(s.get('audience') for s in sessions if s.get('audience')))
     day_names = {key: next((s.get('day') for s in sessions if (s.get('date') or s.get('day') or 'Programme') == key and s.get('day')), date_label(key, content.get('timezone') or 'UTC')) for key in days}
-    options = lambda pairs: ''.join(f'<option value="{e(str(k))}">{e(str(v))}</option>' for k,v in pairs)
-    filters = (f'<div class="filters" data-programme-controls hidden><label>Day<select id="programme-day">{options([(str(i),day_names[d]) for i,d in enumerate(days)])}<option value="all">All days</option></select></label>'
-               f'<label>Activity / track<select id="programme-track"><option value="">All activities</option>{options((t,t) for t in tracks)}</select></label>'
-               f'<label>Audience<select id="programme-audience"><option value="">All audiences</option>{options((a,a) for a in audiences)}</select></label>'
-               '<label class="programme-search">Search programme<input id="programme-search" type="search" placeholder="Session, room, speaker…"></label></div>') if sessions else ''
     palette = ['#b17d42','#6979b9','#409380','#a06c9c','#467c9a']
     track_colors = {t['title']: color(t.get('color'),palette[i%len(palette)]) for i,t in enumerate(content.get('tracks') or [])}
     cards = []
@@ -93,7 +86,8 @@ def programme(content):
     demo = any(str(s.get('description') or '').lstrip().lower().startswith('demo draft:') for s in sessions)
     notice = '<div class="draft-note"><strong>Demo programme</strong><span>Not an approved timetable. Open session details for source notes, assumptions and information awaiting organizer confirmation.</span></div>' if demo else ''
     summary = content.get('programme_summary') or ''
-    return '<section class="programme" id="programme">'+section_heading(content.get('programme_title') or 'Explore the programme',summary,'Your programme')+notice+filters+f'<p class="timezone">Times: {e(content.get("timezone") or "UTC")}</p><div class="sessions">'+(''.join(cards) or '<p class="empty">The programme will appear here when the organizer publishes it.</p>')+'</div><p id="programme-empty" class="empty" hidden>No sessions match. Try another day, audience or search.</p><div class="schedule-foot"><span id="programme-count" role="status"></span><button class="btn secondary" id="programme-more" hidden>Show more sessions</button></div></section>'
+    return '<section class="programme" id="programme">'+section_heading(programme_heading(content),summary,'Event highlights')+notice+(f'<p class="timezone">Times: {e(content.get("timezone") or "UTC")}</p>' if sessions else '')+'<div class="sessions">'+(''.join(cards) or '<p class="empty">Featured programmes will be announced soon.</p>')+'</div>'+programme_handoff(content,'btn')+'</section>'
+
 
 
 def render_modern(content, family, *, preview=False):
@@ -115,7 +109,7 @@ def render_modern(content, family, *, preview=False):
     dates = ' – '.join(dict.fromkeys(x for x in (start,end) if x))
     action_primary = link(content.get('primary_action'))
     secondary = link(content.get('secondary_action'),'btn secondary')
-    if not secondary and 'programme' in visible: secondary = '<a class="btn secondary" href="#programme">Explore the programme</a>'
+    if not secondary and 'programme' in visible: secondary = '<a class="btn secondary" href="#programme">Featured programmes</a>'
     hero_url = safe_url(content.get('feature_image_url') or content.get('hero_image_url'))
     media = f'<img class="uploaded-hero" src="{hero_url}" alt="{e(content.get("image_alt") or "")}">' if hero_url else f'<div aria-hidden="true">{artwork(family,content)}</div>'
     hero = f'<section class="hero" id="home"><div class="hero-copy"><div class="eyebrow">{e(content.get("eyebrow") or content.get("event_name") or "Welcome")}</div><h1>{e(content.get("headline") or content.get("event_name") or "Welcome")}</h1><p class="hero-summary">{e(content.get("summary") or "")}</p><div class="hero-actions">{action_primary}{secondary}</div><div class="hero-meta"><span>{e(dates)}</span><span>{e(content.get("venue") or "")}</span></div></div><div class="hero-visual">{media}</div></section>'
@@ -126,7 +120,7 @@ def render_modern(content, family, *, preview=False):
         cards=[]
         for track in content['tracks']:
             image=safe_url(track.get('image_url'));visual=f'<img src="{image}" alt="" loading="lazy">' if image else e(track.get('icon') or '✦')
-            jump=f'<a class="text-btn" data-track-jump="{e(track.get("title") or "")}" href="#programme">View sessions →</a>' if 'programme' in visible else ''
+            jump=link({"label":"Explore in GuestHub", "url":content.get("guesthub_url")}, "text-btn")
             cards.append(f'<article class="audience-card"><span class="pictogram">{visual}</span><h3>{e(track.get("title") or "")}</h3><p>{e(track.get("description") or "")}</p>{jump}</article>')
         audience='<section class="audiences" id="tracks">'+section_heading('Choose your experience','','Find your connection')+'<div class="audience-grid">'+''.join(cards)+'</div></section>'
     schedule=programme(content) if 'programme' in visible else ''

@@ -54,10 +54,11 @@ class WebsiteEditorTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual((await self.c.put('/internal/sites/a',json=body)).status_code,409)
   await self.put({**body,'confirm_slug_change':True});r=await self.c.get('/site/demo-site');self.assertEqual(r.status_code,308);self.assertEqual(r.headers['location'],'/site/new-address')
   self.assertEqual((await self.c.put('/internal/sites/b',json=self.body)).status_code,409)
- async def test_render_full_programme_without_mutations(self):
-  body={**self.body,'content':{**self.body['content'],'sessions':[{'title':f'Session {i}','day':str(i//80)} for i in range(350)],'faqs':[{'question':'Where?','answer':'North entrance'}],'guesthub_url':'https://example.com/rsvp/demo?recover=1'}}
+ async def test_render_featured_programmes_without_mutations(self):
+  body={**self.body,'content':{**self.body['content'],'sessions':[{'title':f'Session {i}','day':str(i//80),'featured':i==349} for i in range(350)],'faqs':[{'question':'Where?','answer':'North entrance'}],'guesthub_url':'https://example.com/rsvp/demo?recover=1'}}
   r=await self.c.post('/internal/sites/a/render-preview',json=body);self.assertEqual(r.status_code,200,r.text)
-  for text in ['Session 349','North entrance','Recover my GuestHub']:self.assertIn(text,r.json()['html'])
+  for text in ['Session 349','North entrance','View full programme in GuestHub']:self.assertIn(text,r.json()['html'])
+  self.assertNotIn('Session 348',r.json()['html'])
   self.assertEqual((await self.c.get('/internal/sites/a')).status_code,404)
  async def test_imported_long_descriptions_preview_save_publish_and_reload(self):
   from html import escape
@@ -66,7 +67,7 @@ class WebsiteEditorTests(unittest.IsolatedAsyncioTestCase):
                   184: 'Detailed programme information. ' * 400,
                   189: ('Questions & answers <script>alert("unsafe")</script>\n' * 20)}
   sessions = [{'source_id': str(i), 'title': f'Session {i}',
-               'description': descriptions.get(i, '')} for i in range(200)]
+               'description': descriptions.get(i, ''), 'featured':i in descriptions} for i in range(200)]
   self.assertEqual(Session(title='No description').description, '')
   body = {**self.body, 'content': {**self.body['content'], 'sessions': sessions}}
   preview = await self.c.post('/internal/sites/a/render-preview', json=body)

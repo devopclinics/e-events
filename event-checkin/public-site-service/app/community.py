@@ -164,51 +164,31 @@ def countdown_markup(content, now=None):
     return f'<span class="countdown-chip">{escape(label)}</span>'
 
 
+def featured_sessions(content):
+    # Never infer public highlights from import order. Old snapshots have none
+    # selected; keep all source rows saved but render only explicit selections.
+    return [s for s in content.get("sessions") or [] if s.get("featured") is True][:6]
+
+
+def programme_heading(content):
+    value = content.get("programme_title") or ""
+    return "Featured programmes" if value.lower() in ("", "full programme", "explore the programme", "programme") else value
+
+
+def programme_handoff(content, cls="button"):
+    hub = safe_url(content.get("guesthub_url"))
+    if hub:
+        cta = f'<a class="{cls}" href="{hub}">View full programme in GuestHub <span aria-hidden="true">→</span></a>'
+        note = "Already registered? Open your personal GuestHub link, or recover it using your registration email."
+    else:
+        cta = action({"label": "Register to access GuestHub", "url": (content.get("primary_action") or {}).get("url")}, cls)
+        note = "The full timetable is available through your personal GuestHub link after registration."
+    return f'<div class="programme-handoff">{cta}<p>{note}</p></div>'
+
+
 def schedule_markup(content):
-    """Day/track filtering with no JavaScript: public pages ship a strict
-    CSP with no script-src, by design (Plan §14 — no custom JS on untrusted
-    public content). Filtering uses plain radio inputs + the ~ sibling
-    combinator instead — every browser, no CSP exception needed."""
-    sessions = content.get("sessions") or []
-    if not sessions:
-        return '<p class="empty-copy">The full programme will be published here.</p>'
+    sessions = featured_sessions(content)
     colors = track_colors(content)
-    groups = OrderedDict()
-    for session in sessions:
-        day = session.get("day") or session.get("date") or "Programme"
-        groups.setdefault(day, []).append(session)
-    days = list(groups)
-    tracks_in_use = list(dict.fromkeys(s.get("track") for s in sessions if s.get("track")))
-
-    radios = []
-    day_tabs = []
-    for i, day in enumerate(days):
-        day_id = _filter_slug(day, "day")
-        radios.append(f'<input type="radio" name="day-filter" id="{day_id}" class="filter-radio"{" checked" if i == 0 else ""}>')
-        first_date = groups[day][0].get("date", "")
-        date_html = f"<small>{escape(first_date)}</small>" if first_date else ""
-        day_tabs.append(f'<label for="{day_id}" class="day-tab">{escape(day)}{date_html}</label>')
-
-    track_ids = {track: _filter_slug(track, "track") for track in tracks_in_use}
-    radios.append('<input type="radio" name="track-filter" id="track-all" class="filter-radio" checked>')
-    track_pills = ['<label for="track-all" class="track-pill">All tracks</label>']
-    for track in tracks_in_use:
-        radios.append(f'<input type="radio" name="track-filter" id="{track_ids[track]}" class="filter-radio">')
-        track_pills.append(f'<label for="{track_ids[track]}" class="track-pill" style="--track-color:{colors.get(track, "#6b746f")}">{escape(track)}</label>')
-
-    hide_rules, active_rules = [], []
-    for day in days:
-        day_id = _filter_slug(day, "day")
-        hide_rules.append(f'#{day_id}:checked ~ .sessions .session:not([data-day="{escape(day, quote=True)}"])')
-        active_rules.append(f'#{day_id}:checked ~ .schedule-filters label[for="{day_id}"]{{background:var(--green);border-color:var(--green);color:#fff}}')
-    for track in tracks_in_use:
-        track_id = track_ids[track]
-        hide_rules.append(f'#{track_id}:checked ~ .sessions .session:not([data-track="{escape(track, quote=True)}"])')
-        active_rules.append(f'#{track_id}:checked ~ .schedule-filters label[for="{track_id}"]{{background:var(--track-color,var(--rust));border-color:var(--track-color,var(--rust));color:#fff}}')
-    if tracks_in_use:
-        active_rules.append('#track-all:checked ~ .schedule-filters label[for="track-all"]{background:var(--rust);border-color:var(--rust);color:#fff}')
-    filter_style = f'<style>{",".join(hide_rules)}{{display:none}}{"".join(active_rules)}</style>' if hide_rules else ""
-
     cards = []
     for session in sessions:
         day = session.get("day") or session.get("date") or "Programme"
@@ -222,22 +202,18 @@ def schedule_markup(content):
         if session.get("audience"):
             meta_bits.append(f'<span>{PEOPLE_ICON} {escape(session.get("audience"))}</span>')
         speaker = f'<span class="speaker-line">With {escape(session.get("speaker"))}</span>' if session.get("speaker") else ""
-        description = f'<p>{escape(session.get("description"))}</p>' if session.get("description") else ""
+        description = f'<details class="session-details"><summary>Explore session</summary><p>{escape(session.get("description"))}</p></details>' if session.get("description") else ""
         cta = action({"label": session.get("action_label") or "View details", "url": session.get("action_url")}, "session-action") if session.get("action_url") else ""
         tag = f'<span class="session-tag" style="--track-color:{color}">{escape(track)}</span>' if track else ""
         cards.append(
             f'<article class="session" data-day="{escape(day, quote=True)}" data-track="{escape(track, quote=True)}">'
-            f'<div class="session-time"><time>{escape(session.get("time", ""))}</time></div>{thumb}'
+            f'<div class="session-time"><small>{escape(day)}</small><time>{escape(session.get("time", ""))}</time></div>{thumb}'
             f'<div class="session-body">{tag}<h3>{escape(session.get("title", ""))}</h3>'
             f'{description}<div class="session-meta">{"".join(meta_bits)}</div>{speaker}{cta}</div></article>'
         )
 
-    filters = ""
-    if len(days) > 1 or tracks_in_use:
-        day_tabs_html = f'<div class="day-tabs">{"".join(day_tabs)}</div>' if len(days) > 1 else ""
-        track_pills_html = f'<div class="track-pills">{"".join(track_pills)}</div>' if tracks_in_use else ""
-        filters = f'<div class="schedule-filters">{day_tabs_html}{track_pills_html}</div>'
-    return f'{"".join(radios)}{filter_style}{filters}<div class="sessions">{"".join(cards)}</div>'
+    empty = '<p class="empty-copy">Featured programmes will be announced soon.</p>'
+    return f'<div class="sessions">{"".join(cards) or empty}</div>'+programme_handoff(content)
 
 
 def speakers_markup(speakers):
@@ -312,7 +288,7 @@ def render(content, preview=False):
     colors = track_colors(content)
     tracks = "".join(track_markup(x, i, colors) for i, x in enumerate(content.get("tracks", [])[:12]))
     registration = f'<section class="registration" id="registration"><div><div class="eyebrow">Registration</div><h2>Register with confidence</h2><p>Everything guests need to know before completing registration.</p>{action(content.get("primary_action"))}</div><div class="facts">{facts_markup(content.get("registration_facts"))}</div></section>' if content.get("registration_facts") else ""
-    programme = f'<section class="programme" id="programme"><div class="section-head"><div class="eyebrow">Everything happening during {name}</div><h2>{e(content.get("programme_title") or "Programme")}</h2><p>{e(content.get("programme_summary") or "")}</p></div>{schedule_markup(content)}</section>' if "programme" in visible else ""
+    programme = f'<section class="programme" id="programme"><div class="section-head"><div class="eyebrow">Highlights from {name}</div><h2>{e(programme_heading(content))}</h2><p>{e(content.get("programme_summary") or "")}</p></div>{schedule_markup(content)}</section>' if "programme" in visible else ""
     audience = f'<section class="audiences" id="tracks"><div class="section-head"><div class="eyebrow">Programme tracks</div><h2>Choose your experience</h2><p>Choose the programme track most relevant to your work and interests.</p></div><div class="tracks">{tracks}</div></section>' if "tracks" in visible and tracks else ""
     if content.get("speakers_confirmed", True):
         speakers_body = f'<div class="speaker-grid">{speakers_markup(content.get("speakers"))}</div>' if speakers_markup(content.get("speakers")) else ""

@@ -12,7 +12,7 @@ class PublicSiteContractTests(unittest.TestCase):
 
     def test_all_template_families_are_distinct_and_escape_content(self):
         pages = [render_site(self.sample(), family) for family in TEMPLATE_IDS]
-        self.assertEqual(10, len(set(pages)))
+        self.assertEqual(len(TEMPLATE_IDS), len(set(pages)))
         for page in pages:
             self.assertIn("NCNMO &lt;2026&gt;", page)
             self.assertNotIn("NCNMO <2026>", page)
@@ -117,7 +117,7 @@ class PublicSiteContractTests(unittest.TestCase):
             page = render_site(validated, family)
             for expected in ("Four-day programme", "Day 1", "Day 2", "Dr. Amina", "Gala Night", "Parking", "Are children included?", "Participate in live Q&amp;A, polls and activities."):
                 self.assertIn(expected, page, f"missing {expected!r} in {family} render")
-            self.assertNotIn("<script>", page)
+            self.assertNotIn("<script>", page)  # Only the fixed hash-authorized enhancement uses a marked script.
 
     def test_single_day_event_date_does_not_leak_raw_iso_session_date(self):
         """A single-day event whose sessions carry ISO dates (from

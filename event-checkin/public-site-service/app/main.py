@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from .modern import security_policy
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -226,7 +227,7 @@ async def restore_draft(event_id: str, release_id: str, body: RevisionRequest, d
 async def preview(token: str, db: AsyncSession = Depends(get_db)):
     row = await db.get(Preview, token)
     if not row or row.expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc): raise HTTPException(404, "Preview expired")
-    return HTMLResponse(render_site(row.snapshot["content"], row.snapshot["family"], preview=True), headers={"Cache-Control": "private, no-store", "X-Robots-Tag": "noindex"})
+    return HTMLResponse(render_site(row.snapshot["content"], row.snapshot["family"], preview=True), headers={"Cache-Control": "private, no-store", "X-Robots-Tag": "noindex", "Content-Security-Policy": security_policy()})
 
 
 @app.get("/site/{slug}", response_class=HTMLResponse)
@@ -241,5 +242,5 @@ async def public_site(slug: str, db: AsyncSession = Depends(get_db)):
     if not site or not site.published_release_id: raise HTTPException(404, "Website not published")
     release = await db.get(Release, site.published_release_id)
     if not release: raise HTTPException(404, "Website release unavailable")
-    return HTMLResponse(render_site(release.snapshot["content"], release.snapshot["family"]), headers={"Cache-Control": "public, max-age=60, stale-while-revalidate=300", "Content-Security-Policy": "default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; font-src https:; connect-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'", "X-Content-Type-Options": "nosniff"})
+    return HTMLResponse(render_site(release.snapshot["content"], release.snapshot["family"]), headers={"Cache-Control": "public, max-age=60, stale-while-revalidate=300", "Content-Security-Policy": security_policy(), "X-Content-Type-Options": "nosniff"})
 

@@ -157,6 +157,7 @@ class SiteContent(BaseModel):
     summary: str = Field(default="", max_length=1200)
     timezone: str = "UTC"
     use_event_branding: bool = False
+    use_template_style: bool = True
     font_pairing: Literal["modern-sans", "classic-serif", "elegant-serif", "display-rounded", "bold-sans"] = "modern-sans"
     image_fit: Literal["cover", "contain"] = "cover"
     image_position: Literal["center", "top", "bottom", "left", "right"] = "center"
@@ -239,6 +240,8 @@ class SiteUpsert(BaseModel):
         "modern-professional", "clean-elegant", "storytelling", "bold-dynamic",
         "card-friendly", "conference-programme", "split-visual", "immersive",
         "programme-showcase", "elegant-countdown",
+        "atrium", "orbit", "editorial", "spectrum", "horizon",
+        "pathway", "atlas", "assembly", "halo", "mosaic",
     ] = "community"
     content: SiteContent
 

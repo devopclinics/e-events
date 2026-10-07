@@ -87,6 +87,27 @@ class WebsiteEditorTests(unittest.IsolatedAsyncioTestCase):
   self.assertNotIn('<script>alert("unsafe")</script>', live.text)
   for index, description in descriptions.items():
    self.assertEqual((await self.get())['content']['sessions'][index]['description'], description)
+ async def test_modern_template_preview_save_publish_and_legacy_restore(self):
+  from .templates import MODERN_TEMPLATES
+  from .modern import SCRIPT_HASH
+  site=await self.put()
+  await self.post('publish',site['revision'])
+  original=(await self.c.get('/site/demo-site')).text
+  for family in MODERN_TEMPLATES:
+   current=await self.get()
+   body={**self.body,'expected_revision':current['revision'],'template_family':family}
+   preview=await self.c.post('/internal/sites/a/render-preview',json=body)
+   self.assertEqual(preview.status_code,200,preview.text)
+   self.assertIn(f'data-template="{family}"',preview.json()['html'])
+   site=await self.put(body)
+   self.assertEqual((await self.c.get('/site/demo-site')).text,original)
+   self.assertEqual((await self.post('publish',site['revision'])).status_code,200)
+   live=await self.c.get('/site/demo-site');original=live.text
+   self.assertIn(f'data-template="{family}"',live.text)
+   self.assertIn(SCRIPT_HASH,live.headers['content-security-policy'])
+  current=await self.get();site=await self.put({**self.body,'expected_revision':current['revision']})
+  await self.post('publish',site['revision'])
+  self.assertIn('data-template="modern-professional"',(await self.c.get('/site/demo-site')).text)
  async def test_restore_cross_site_forbidden(self):
   a=await self.put();release=(await self.post('publish',a['revision'])).json();b=await self.put({**self.body,'slug':'other-site'},'b')
   self.assertEqual((await self.post('restore/'+release['release_id'],b['revision'],'b')).status_code,404)

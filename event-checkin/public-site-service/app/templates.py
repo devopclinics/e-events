@@ -12,6 +12,10 @@ TEMPLATES = {
     "programme-showcase": {"name": "Programme Showcase", "description": "Tracks-first · Colorful · Discoverable", "hero": "tracks", "programme": "agenda", "section_order": "tracks-first"},
     "elegant-countdown": {"name": "Elegant Countdown", "description": "Refined · Focused · Anticipatory", "hero": "countdown", "programme": "timeline", "section_order": "standard"},
 }
+from pathlib import Path
+import json
+MODERN_TEMPLATES = {item["id"]: item for item in json.loads(Path(__file__).with_name("modern_themes.json").read_text())}
+TEMPLATES.update({key: {"name": item["name"], "description": item["label"], "collection": "modern"} for key, item in MODERN_TEMPLATES.items()})
 LEGACY_ALIASES = {"community": "modern-professional", "conference": "conference-programme", "celebration": "immersive"}
 TEMPLATE_IDS = tuple(TEMPLATES)
 

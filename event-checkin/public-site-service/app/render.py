@@ -14,7 +14,7 @@ from .community import (
     track_markup,
 )
 from html import escape
-from .templates import canonical_template
+from .templates import canonical_template, MODERN_TEMPLATES
 
 
 def _render_site(content: dict, family: str, *, preview: bool = False) -> str:
@@ -147,12 +147,17 @@ def render_site(content: dict, family: str, *, preview: bool = False) -> str:
     zone = content.get("timezone") or "UTC"
     for key in ("start_date", "end_date"):
         content[key] = date_label(content.get(key), zone)
-    html = _render_site(content, family, preview=preview)
+    modern = canonical_template(family) in MODERN_TEMPLATES
+    if modern:
+        from .modern import render_modern
+        html = render_modern(content, canonical_template(family), preview=preview)
+    else:
+        html = _render_site(content, family, preview=preview)
     fonts = {"modern-sans":"system-ui,-apple-system,sans-serif", "classic-serif":"Georgia,serif", "elegant-serif":"Iowan Old Style,Georgia,serif", "display-rounded":"Trebuchet MS,system-ui,sans-serif", "bold-sans":"Segoe UI,system-ui,sans-serif"}
     font = fonts.get(content.get("font_pairing"), fonts["modern-sans"])
     fit = content.get("image_fit") if content.get("image_fit") in ("contain", "cover") else "cover"
     position = content.get("image_position") if content.get("image_position") in ("center", "top", "bottom", "left", "right") else "center"
-    type_style = "body,h1,h2,h3{font-family:"+font+"}" if content.get("font_pairing") else ""
+    type_style = "body,h1,h2,h3{font-family:"+font+"}" if content.get("font_pairing") and (not modern or not content.get("use_template_style", True) or content.get("use_event_branding")) else ""
     style = "<style>"+type_style+"body .hero{background-size:"+fit+";background-position:"+position+";background-repeat:no-repeat}.hero-visual img{object-fit:"+fit+";object-position:"+position+"}.site-logo{max-width:140px;max-height:48px;object-fit:contain}.site-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.modern-professional .hero{background-color:var(--primary)}:focus-visible{outline:3px solid var(--accent);outline-offset:4px}@media(max-width:600px){.site-logo{max-width:90px}nav{flex-wrap:wrap}nav b{overflow-wrap:anywhere;min-width:0}}</style>"
     if preview:
         import re

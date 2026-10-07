@@ -11,3 +11,20 @@ test('malformed or inaccessible bookmark storage fails safely',()=>{global.local
 test('target consent route retains authorized attendee and exact form',()=>{const route={screen:'experience',member:'g',form:'f'};assert.equal(readAppRoute(appHash(route)).form,'f');assert.equal(readAppRoute(appHash(route)).member,'g')});
 
 test('before the event, next skips all sessions at the featured start time',()=>{const parallel={...first,step_id:'parallel'},later={...first,step_id:'later',starts_at:'2026-12-24T17:00:00Z'};assert.equal(dayHighlights([first,parallel,later],now-86400000).next,later);assert.equal(dayHighlights([first,parallel],now-86400000).next,undefined)});
+
+import {programmePeriod,programmePeriods} from '../src/components/guesthub/programmeView.mjs';
+test('programme sections use the event timezone across day boundaries',()=>{
+ assert.equal(programmePeriod('2026-12-25T00:30:00Z','America/Indiana/Indianapolis'),'Evening');
+ assert.equal(programmePeriod('2026-12-24T17:00:00Z','America/Indiana/Indianapolis'),'Afternoon');
+ assert.equal(programmePeriod('2026-12-24T16:59:00Z','America/Indiana/Indianapolis'),'Morning');
+ assert.equal(programmePeriod('2026-07-24T16:00:00Z','America/Indiana/Indianapolis'),'Afternoon');
+ assert.equal(programmePeriod('bad','UTC'),'Time to be announced');
+});
+test('visual periods preserve every parallel session in chronological time groups',()=>{
+ const rows=Array.from({length:80},(_,i)=>({step_id:String(i),starts_at:new Date(Date.UTC(2026,11,24,13,30*Math.floor(i/5))).toISOString()}));
+ const periods=programmePeriods(rows,'America/Indiana/Indianapolis');
+ assert.equal(periods.flatMap(p=>p.groups.flatMap(g=>g.sessions)).length,80);
+ assert.equal(periods.flatMap(p=>p.groups).length,16);
+ assert.deepEqual(periods.map(p=>p.label),['Morning','Afternoon']);
+ assert.equal(periods[0].groups[0].sessions.length,5);
+});

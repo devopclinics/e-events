@@ -135,7 +135,7 @@ with sync_playwright() as pw:
     def load(hash='#/live'):
         page.goto(BASE+'/r/demo-token?case='+str(time.time_ns())+hash);page.locator('.guest-live').wait_for()
     def lobby():
-        page.locator('.service-nav').get_by_role('link',name='Live Activities').click();page.locator('.gl-feature').wait_for()
+        page.locator('.side-nav a:visible, .service-nav a:visible').filter(has_text='Live Activities').click();page.locator('.gl-feature').wait_for()
     def open_activity(aid):
         page.evaluate('(aid)=>{location.hash="/live?activity="+aid}',aid);page.locator('.gl-heading h1').filter(has_text=next(a['title'] for a in state['activities'] if a['id']==aid)).wait_for();page.locator('.gh-live-participation').wait_for()
     load();page.locator('.gl-feature').wait_for();check('live lobby uses actual activity titles','Community knowledge check' in page.locator('.gl-feature').inner_text())

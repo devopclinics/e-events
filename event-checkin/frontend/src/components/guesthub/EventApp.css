@@ -1679,3 +1679,24 @@
 .fh-event-app .meal-selection form [role="status"] { color: var(--green); background: var(--mint); padding: 12px; border-radius: 8px; }
 .fh-event-app .app-service-link[aria-current="page"] { border-color: var(--green); background: var(--mint); }
 .fh-event-app .app-meals > .small { margin-top: 18px; }
+/* Programme refresh: the same routes, with important destinations in view. */
+.fh-event-app .app{overflow:visible;grid-template-columns:224px minmax(0,1fr)}
+.fh-event-app .sidebar{padding:0;border-radius:23px 0 0 23px;display:block;min-width:0}
+.fh-event-app .sidebar-inner{position:sticky;top:0;height:100dvh;max-height:1100px;overflow:auto;scrollbar-width:thin;display:flex;flex-direction:column;padding:26px 16px}
+.fh-event-app .sidebar .wordmark{padding:0 12px;font-size:24px}
+.fh-event-app .sidebar .wordmark small{font-size:12px;letter-spacing:.07em}
+.fh-event-app .nav-caption{padding:20px 12px 8px;font-size:12px;letter-spacing:.1em;color:var(--sidebar-muted)}
+.fh-event-app .side-nav{gap:4px}
+.fh-event-app .side-nav button,.fh-event-app .side-nav .app-service-link{display:flex;align-items:center;gap:10px;border:0;background:transparent;border-radius:10px;min-height:44px;padding:10px 12px;color:var(--on-sidebar);text-align:left;text-decoration:none;font-size:14px;font-weight:500}
+.fh-event-app .side-nav button.active,.fh-event-app .side-nav .app-service-link.active{background:#ffffff16;color:var(--on-sidebar);box-shadow:inset 3px 0 var(--gold);font-weight:700}
+.fh-event-app .side-nav .icon-tile{background:transparent;color:inherit;width:22px;height:22px;min-width:22px;border-radius:0}
+.fh-event-app .side-nav .app-service-link>svg{margin:0}
+.fh-event-app .side-nav .nav-badge,.fh-event-app .service-shortcuts .nav-badge{display:inline-grid;place-items:center;min-width:22px;min-height:22px;border-radius:20px;padding:0 6px;background:var(--gold);color:#3d321d;font-size:12px;font-weight:700;margin-left:auto;flex:none}
+.fh-event-app .sidebar .side-bottom{padding:18px 12px 0;border:0;margin-top:auto}
+.fh-event-app .sidebar .side-bottom button{display:flex;align-items:center;gap:8px;margin-bottom:18px;font-size:13px}
+.fh-event-app .sidebar .side-bottom b,.fh-event-app .sidebar .side-bottom p{font-size:12px}
+.fh-event-app .main-shell>.topbar{border-radius:0 23px 0 0}
+.fh-event-app .service-shortcuts{display:none}
+@media(min-width:701px){.fh-event-app .main-shell>.service-nav{display:none}}
+@media(max-width:1100px) and (min-width:701px){.fh-event-app .app{grid-template-columns:205px minmax(0,1fr)}}
+@media(max-width:700px){.fh-event-app .app{display:block}.fh-event-app .sidebar{display:none}.fh-event-app .main-shell>.topbar{border-radius:0;position:static}.fh-event-app .service-nav{position:static;padding:10px 16px 6px;gap:7px;border-bottom:0}.fh-event-app .service-nav .app-service-link,.fh-event-app .service-nav button{min-height:44px;display:flex;flex-direction:row;justify-content:center;gap:6px;padding:9px 5px;font-size:12px}.fh-event-app .service-nav .icon-tile{height:20px;width:20px;min-width:20px;background:transparent}.fh-event-app .service-nav .icon-tile svg{width:18px;height:18px}.fh-event-app .service-nav .app-service-link>svg{display:none}.fh-event-app .service-shortcuts{display:flex;gap:8px;padding:6px 16px 13px;background:var(--white);border-bottom:1px solid var(--line)}.fh-event-app .service-shortcuts button{min-height:44px;padding:9px 8px;display:flex;justify-content:center;align-items:center;gap:7px;font-size:12px;flex:1;border:1px solid var(--line);background:var(--white);color:var(--ink);border-radius:10px}.fh-event-app .service-shortcuts button.active{background:var(--mint);color:var(--green)}.fh-event-app .service-shortcuts button svg{width:17px;height:17px}.fh-event-app .service-shortcuts .nav-badge{margin-left:0}.fh-event-app .bottom-nav button{font-size:12px}.fh-event-app .workspace{padding-top:20px}}

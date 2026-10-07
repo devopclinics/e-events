@@ -3,6 +3,8 @@ export function sessionKind(session) {
   const category = String(session.category || '').trim();
   const text = (category || session.title || '').toLowerCase();
   if (/meal|break|lunch|dinner|breakfast/.test(text)) return {label:category || 'Break', icon:'meal', tone:'warm'};
+  if (/prayer|salah|salat/.test(text)) return {label:category || 'Prayer', icon:'moon', tone:'mint'};
+  if (/sport|play|outdoor/.test(text)) return {label:category || 'Activities', icon:'star', tone:'warm'};
   if (/junior|child/.test(text)) return {label:category || 'Junior', icon:'star', tone:'warm'};
   if (/quran|learning|lecture|workshop|quiz|sheikh|q&a/.test(text)) return {label:category || 'Learning', icon:'book', tone:'blue'};
   return {label:category || 'Programme', icon:'people', tone:'lilac'};
@@ -42,3 +44,16 @@ export function groupSessions(sessions) {
 }
 export const programmeRoom=s=>s.room||s.location||'Room to be announced';
 export const programmeGroups=s=>s.age_groups?.length?s.age_groups:[s.title?.match(/\bGroup\s+[A-Za-z0-9]+\b/i)?.[0]||'Shared / other'];
+
+// Bucket by the event's local clock, never the viewer's device timezone.
+export function programmePeriod(value, zone) {
+ if (!Number.isFinite(asTime(value))) return 'Time to be announced';
+ let hour;
+ try {hour=Number(new Intl.DateTimeFormat('en-US',{timeZone:zone,hour:'numeric',hourCycle:'h23'}).format(asTime(value)));}
+ catch {hour=new Date(asTime(value)).getUTCHours();}
+ return hour<12?'Morning':hour<17?'Afternoon':'Evening';
+}
+export function programmePeriods(sessions, zone) {
+ const groups=groupSessions(sessions);
+ return ['Morning','Afternoon','Evening','Time to be announced'].map(label=>({label,groups:groups.filter(g=>programmePeriod(g.starts_at,zone)===label)})).filter(p=>p.groups.length);
+}

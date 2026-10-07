@@ -537,7 +537,7 @@ export function RealOrdersContent({ eventId, notify }) {
 
   async function saveCategory(e) {
     e.preventDefault(); setWorking(true); setError('')
-    const payload = { name: clean(form.name).trim(), selection_type: form.selection_type || 'single', display_only: !!form.display_only }
+    const payload = { ...form, name: clean(form.name).trim(), selection_type: form.selection_type || 'single', display_only: !!form.display_only, guest_visible: form.guest_visible !== false }
     try {
       if (form.id) await api.updateMenuCategory(eventId, form.id, payload)
       else await api.createMenuCategory(eventId, payload)
@@ -628,7 +628,7 @@ export function RealOrdersContent({ eventId, notify }) {
     {error && <ErrorRetryState message={error} onRetry={load}/>}
     <div className="rr-section-title"><div><h2>Orders</h2><p>Categories and totals from the live menu contract.</p></div><button className="rr-btn primary" onClick={() => setForm({ name: '', selection_type: 'single', display_only: false })}><Icon name="plus" size={14}/> Category</button></div>
     {!categories.length ? <EmptyState icon="card" title="No order categories" body="Create a category for meals, drinks, gifts, or informational menu items."/> :
-      <div className="ad-order-cats">{categories.map((c) => <div className="rr-panel ad-cat-panel" key={c.id}><div className="ad-cat-panel-head"><div><strong>{clean(c.name, 'Unnamed')}</strong> <span className="ad-selection-badge">{clean(c.selection_type, c.display_only ? 'DISPLAY' : 'SINGLE').toUpperCase()}</span></div>
+      <div className="ad-order-cats">{categories.map((c) => <div className="rr-panel ad-cat-panel" key={c.id}><div className="ad-cat-panel-head"><div><strong>{clean(c.name, 'Unnamed')}</strong> <span className="ad-selection-badge">{clean(c.selection_type, c.display_only ? 'DISPLAY' : 'SINGLE').toUpperCase()}</span>{c.guest_visible === false && <span className="ad-selection-badge">Hidden from guests</span>}</div>
         <div className="ad-actions"><button className="rr-link-btn" onClick={() => setForm(c)}>Edit</button><button className="rr-link-btn" onClick={() => setPendingCategoryDelete(c)}>Delete</button><button className="rr-link-btn" onClick={() => setItemForm({ categoryId: c.id, name: '', description: '' })}>+ Item</button></div></div>
         {rows(c.items).map((it) => <div className="ad-cat-item" key={it.id}><div><strong>{clean(it.name, 'Unnamed item')}</strong><span>{clean(it.description)}</span></div>
           <div className="ad-actions"><button className="rr-link-btn" onClick={() => setItemForm({ ...it, categoryId: c.id, description: clean(it.description) })}>Edit</button><button className="rr-link-btn" onClick={() => setPendingItemDelete(it)}>Delete</button></div></div>)}
@@ -641,6 +641,7 @@ export function RealOrdersContent({ eventId, notify }) {
       {summary.flatMap((c) => rows(c.items).map((it) => <tr key={`${c.id}-${it.id}`}><td>{clean(c.category)}</td><td>{clean(it.name)}</td><td>{Number(it.count) || 0}</td></tr>))}
     </tbody></table>{!summary.length && <p>No selections yet.</p>}</div></div>
     {form && <form className="rr-panel rd-panel-body" onSubmit={saveCategory}><input className="rr-input" required aria-label="Category name" value={form.name || ''} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Category name"/>
+      <label><input type="checkbox" checked={form.guest_visible !== false} onChange={e => setForm({...form,guest_visible:e.target.checked})}/> Visible to guests</label>
       <select className="rr-select" value={form.selection_type || 'single'} onChange={(e) => setForm({ ...form, selection_type: e.target.value })}><option value="single">Single choice</option><option value="multi">Multiple choice</option><option value="combo">Combination</option></select>
       <div className="ad-actions"><button type="button" className="rr-btn secondary" onClick={() => setForm(null)}>Cancel</button><button className="rr-btn primary" disabled={working}>{working ? 'Saving…' : 'Save'}</button></div>
     </form>}

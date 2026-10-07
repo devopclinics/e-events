@@ -2280,6 +2280,7 @@ class MenuCategoryCreate(BaseModel):
     name: str
     day_label: Optional[str] = None
     display_only: bool = False
+    guest_visible: Optional[bool] = None
     sort_order: int = 0
     selection_type: str = "single"  # single|multi|combo
     min_selections: int = 0
@@ -2319,6 +2320,7 @@ class MenuCategoryOut(BaseModel):
     name: str
     day_label: Optional[str] = None
     display_only: bool = False
+    guest_visible: bool = True
     sort_order: int
     selection_type: str = "single"
     min_selections: int = 0

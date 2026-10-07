@@ -32,3 +32,5 @@
 @media(max-width:700px){.fh-event-app .vm-includes{padding:10px}.fh-event-app .vm-includes-compact{padding:0}.fh-event-app .vm-card-tag{max-width:calc(100% - 42px);font-size:12px;line-height:1.3}}
 
 .fh-event-app .vm-summary-item>.vm-includes{display:block}
+
+.fh-event-app .vm-item-description{display:block;font-size:12px;color:var(--muted);margin-top:3px}.fh-event-app .vm-dish:has(.vm-includes){min-width:0}

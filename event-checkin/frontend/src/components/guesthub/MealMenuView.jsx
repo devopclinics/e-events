@@ -1,20 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 import './MealMenuView.css';
 
-const options = c => c.selection_type === 'combo' ? c.combinations || [] : c.items || [];
+const options = c => c.selection_type === 'combo' ? c.combinations || [] : c.display_only ? (c.items?.length ? [{id:c.id, name:c.name, items:c.items, menuOnly:true}] : []) : c.items || [];
+const hasDetails = o => Boolean(o.description?.trim() || o.items?.length);
 const selectedIds = (c, choices) => c.selection_type === 'multi' ? choices.multi[c.id] || [] : [choices[c.selection_type === 'combo' ? 'combo' : 'single'][c.id]].filter(Boolean);
 function Plate({ seed = '', small = false, combination = false }) {
   const tone = [...seed].reduce((n, c) => n + c.charCodeAt(0), 0) % 3;
   return <div className={`vm-art vm-art-${tone} ${small ? 'vm-art-small' : ''}`} aria-hidden="true"><svg viewBox="0 0 280 160"><ellipse cx="143" cy="87" rx="65" ry="57" fill="#173c3012"/><circle cx="140" cy="78" r="59" fill="#fffdf5"/><circle cx="140" cy="78" r="48" fill="#eee9d8"/>{combination ? <><circle cx="126" cy="73" r="22" fill="#d9b577"/><circle cx="158" cy="67" r="15" fill="#9fb58b"/><circle cx="155" cy="98" r="16" fill="#d8a491"/></> : <><circle cx="140" cy="78" r="34" fill={['#d9b577','#9fb58b','#d8a491'][tone]}/><path d="M118 70q22-18 44 0m-47 9q25-18 50 0m-44 9q19-14 38 0" stroke="#ffffff80" strokeWidth="4" fill="none" strokeLinecap="round"/></>}<path d="M53 35v31m6-31v31m6-31v31m-12-5q6 17 12 0m-6 15v45M225 35v86m0-86q-14 9-9 32h9" stroke="#85917d" strokeWidth="3" strokeLinecap="round" fill="none"/></svg></div>;
 }
 function guidance(c) {
-  if (c.display_only) return 'Available on the menu';
+  if (c.display_only) return 'Published food list · No selection is required here.';
   if (c.selection_type === 'multi') return c.max_selections != null ? `Choose ${c.min_selections || 0}–${c.max_selections} options` : c.min_selections ? `Choose at least ${c.min_selections}` : 'Choose your options';
   return c.selection_type === 'combo' ? 'Choose one complete meal combination — all listed items are included.' : 'Choose one meal option';
 }
 function IncludedItems({ option, compact = false }) {
   if (!option.items?.length) return <p className="vm-includes-empty">The organizer hasn’t listed the included items yet.</p>;
-  return <div className={`vm-includes ${compact ? 'vm-includes-compact' : ''}`}><span>Included in this meal</span><ul>{option.items.map((item, index) => <li key={item.menu_item_id || index}><span aria-hidden="true">✓</span><span>{item.quantity > 1 ? `${item.quantity} × ` : ''}{item.name}</span></li>)}</ul></div>;
+  return <div className={`vm-includes ${compact ? 'vm-includes-compact' : ''}`}><span>{option.menuOnly ? 'On this menu' : 'Included in this meal'}</span><ul>{option.items.map((item, index) => <li key={item.menu_item_id || item.id || index}><span aria-hidden="true">✓</span><span>{item.quantity > 1 ? `${item.quantity} × ` : ''}{item.name}{item.description?.trim() && <small className="vm-item-description">{item.description}</small>}</span></li>)}</ul></div>;
 }
 export default function MealMenuView({ categories, menuDay, setMenuDay, choices, initialChoices, onChoose, saving, error, msg, canSubmit, categoryError, submit, hasExistingChoice, allDisplayOnly }) {
   const [view, setView] = useState('menu');
@@ -51,11 +52,11 @@ export default function MealMenuView({ categories, menuDay, setMenuDay, choices,
           <div className="vm-section-title"><div><h2>{active.name}</h2><p>{guidance(active)}</p></div><span className="vm-tag">{active.display_only ? 'Menu only' : active.is_required ? 'Required' : 'Optional'}</span></div>
           {active.selection_type === 'multi' && !active.display_only && <p className="vm-count">{selected(active).length}{active.max_selections != null ? ` of ${active.max_selections}` : ''} selected</p>}
           <div className="vm-grid">{options(active).map(o => {
-            const isSelected = selected(active).includes(o.id);
+            const isSelected = !active.display_only && selected(active).includes(o.id);
             return <article className={`vm-dish ${isSelected ? 'vm-chosen' : ''}`} key={o.id}>
-              <Plate seed={o.id} combination={active.selection_type === 'combo'} /><span className="vm-card-tag">{active.selection_type === 'combo' ? 'Meal combination' : 'Meal option'}</span>{isSelected && <span className="vm-check" aria-hidden="true">✓</span>}
-              <div className="vm-dish-body"><h3>{o.name}</h3>{o.description && <p>{o.description}</p>}{active.selection_type === 'combo' && <IncludedItems option={o} />}
-                <button type="button" className="vm-details" aria-label={`View details for ${o.name}`} onClick={() => setDetail({category: active, option: o})}>{active.selection_type === 'combo' ? 'View combination details' : 'View meal details'}</button>
+              <Plate seed={o.id} combination={active.selection_type === 'combo' || o.menuOnly} /><span className="vm-card-tag">{o.menuOnly ? 'Published menu' : active.selection_type === 'combo' ? 'Meal combination' : 'Meal option'}</span>{isSelected && <span className="vm-check" aria-hidden="true">✓</span>}
+              <div className="vm-dish-body"><h3>{o.name}</h3>{o.description && <p>{o.description}</p>}{(active.selection_type === 'combo' || o.menuOnly) && <IncludedItems option={o} />}
+                {hasDetails(o) && <button type="button" className="vm-details" aria-label={`View details for ${o.name}`} onClick={() => setDetail({category: active, option: o})}>{o.menuOnly ? 'View full menu' : active.selection_type === 'combo' ? 'View combination details' : 'View meal details'}</button>}
                 {!active.display_only && <label className={`vm-pick ${maxed(active, o) || saving ? 'vm-disabled' : ''}`}><input type={active.selection_type === 'multi' ? 'checkbox' : 'radio'} name={`visual-${active.id}`} aria-label={o.name} checked={isSelected} disabled={saving || maxed(active, o)} onChange={() => choose(active, o)} /><span>{isSelected ? '✓ Selected' : active.selection_type === 'combo' ? 'Choose this combination' : active.selection_type === 'multi' ? 'Add to my meal' : 'Choose this meal'}</span></label>}
               </div>
             </article>;
@@ -69,6 +70,6 @@ export default function MealMenuView({ categories, menuDay, setMenuDay, choices,
         {error && <p role="alert" className="vm-error">{error}</p>}{msg && <p role="status" className="vm-confirm">✓ {msg}</p>}
       </form>}
     </div><aside className="vm-summary" aria-label="Meal summary"><div className="vm-summary-heading"><span>YOUR DAY, SORTED</span><h2>{menuDay || 'Your event menu'}</h2><p>Your choices, all in one place.</p></div>{visible.map(c => summary(c))}<p className="vm-summary-note">Choices stay separate for each authorized attendee. Collection is recorded by event staff.</p></aside></div>
-    <dialog className="vm-dialog" ref={dialog} onCancel={() => setDetail(null)} aria-labelledby="vm-detail-title"><div className="vm-dialog-head"><h2 id="vm-detail-title">{detail?.option.name}</h2><button type="button" aria-label="Close menu details" onClick={() => setDetail(null)}>×</button></div>{detail && <div className="vm-dialog-body"><Plate seed={detail.option.id} combination={detail.category.selection_type === 'combo'} />{detail.option.description && <p>{detail.option.description}</p>}{detail.category.selection_type === 'combo' && <IncludedItems option={detail.option} />}<p className="vm-detail-note">For ingredient or dietary questions, contact the organizer.</p>{!detail.category.display_only && <button type="button" className="vm-dialog-choose" disabled={saving || maxed(detail.category, detail.option)} onClick={() => { if (!selected(detail.category).includes(detail.option.id)) choose(detail.category, detail.option); setDetail(null); }}>Choose {detail.category.selection_type === 'combo' ? 'this combination' : 'this meal'}</button>}</div>}</dialog>
+    <dialog className="vm-dialog" ref={dialog} onCancel={() => setDetail(null)} aria-labelledby="vm-detail-title"><div className="vm-dialog-head"><h2 id="vm-detail-title">{detail?.option.name}</h2><button type="button" aria-label="Close menu details" onClick={() => setDetail(null)}>×</button></div>{detail && <div className="vm-dialog-body"><Plate seed={detail.option.id} combination={detail.category.selection_type === 'combo' || detail.option.menuOnly} />{detail.option.description && <p>{detail.option.description}</p>}{(detail.category.selection_type === 'combo' || detail.option.menuOnly) && <IncludedItems option={detail.option} />}<p className="vm-detail-note">For ingredient or dietary questions, contact the organizer.</p>{!detail.category.display_only && <button type="button" className="vm-dialog-choose" disabled={saving || maxed(detail.category, detail.option)} onClick={() => { if (!selected(detail.category).includes(detail.option.id)) choose(detail.category, detail.option); setDetail(null); }}>Choose {detail.category.selection_type === 'combo' ? 'this combination' : 'this meal'}</button>}</div>}</dialog>
   </div>;
 }

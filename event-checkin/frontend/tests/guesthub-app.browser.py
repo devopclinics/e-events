@@ -92,6 +92,7 @@ with sync_playwright() as pw:
     page.get_by_role('heading',name='Meals for Amina Idris').wait_for();page.get_by_role('radio',name='Eggs').wait_for()
     check('meals stay inside GuestHub',page.url.endswith('#/meals?member=parent') and page.locator('.fh-event-app').count()==1 and len(context.pages)==1)
     check('required meals prevent incomplete save',page.get_by_role('button',name='Save Selection',exact=True).is_disabled())
+    check('items without descriptions have no empty details action',page.get_by_role('button',name='View details for Oats',exact=True).count()==0)
     page.get_by_role('radio',name='Eggs').check();page.locator('.vm-categories').get_by_role('button',name='Sides',exact=True).click();page.get_by_role('checkbox',name='Fruit').check()
     page.get_by_role('button',name='Day 2',exact=True).click();check('combination card shows every included item alongside description', '2 × Vegetables' in page.locator('.vm-dish').filter(has_text='Rice and vegetables').inner_text() and 'Vegetarian' in page.locator('.vm-dish').filter(has_text='Rice and vegetables').inner_text());check('combination components are not separate choices',page.locator('.vm-grid input').count()==1);page.get_by_role('radio',name='Rice and vegetables').check()
     page.get_by_role('button',name='Save Selection',exact=True).click();page.get_by_text('Meal selection saved.',exact=False).wait_for()

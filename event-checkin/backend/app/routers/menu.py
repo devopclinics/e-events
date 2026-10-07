@@ -61,6 +61,7 @@ async def _cat_out(cat: MenuCategory, db: AsyncSession) -> MenuCategoryOut:
         name=cat.name,
         day_label=cat.day_label,
         display_only=bool(cat.display_only),
+        guest_visible=cat.guest_visible,
         sort_order=cat.sort_order,
         selection_type=cat.selection_type,
         min_selections=cat.min_selections,
@@ -91,6 +92,7 @@ async def create_category(event_id: str, data: MenuCategoryCreate, db: AsyncSess
         name=data.name,
         day_label=(data.day_label or "").strip() or None,
         display_only=bool(data.display_only),
+        guest_visible=data.guest_visible if data.guest_visible is not None else True,
         sort_order=data.sort_order,
         selection_type=data.selection_type,
         min_selections=data.min_selections,
@@ -114,6 +116,8 @@ async def update_category(event_id: str, category_id: str, data: MenuCategoryCre
     cat.name = data.name
     cat.day_label = (data.day_label or "").strip() or None
     cat.display_only = bool(data.display_only)
+    if data.guest_visible is not None:
+        cat.guest_visible = data.guest_visible
     cat.sort_order = data.sort_order
     cat.selection_type = data.selection_type
     cat.min_selections = data.min_selections

@@ -421,7 +421,7 @@ async def _load_menu(event_id: str, guest_id: str, db: AsyncSession):
        "combo":  {category_id: combination_id}}
     """
     cats = (await db.execute(
-        select(MenuCategory).where(MenuCategory.event_id == event_id).order_by(MenuCategory.sort_order, MenuCategory.name)
+        select(MenuCategory).where(MenuCategory.event_id == event_id, MenuCategory.guest_visible.is_(True)).order_by(MenuCategory.sort_order, MenuCategory.name)
     )).scalars().all()
 
     menu_out = []
@@ -454,6 +454,7 @@ async def _load_menu(event_id: str, guest_id: str, db: AsyncSession):
             selection_type=cat.selection_type,
             min_selections=cat.min_selections,
             max_selections=cat.max_selections,
+            is_required=cat.is_required,
             items=[MenuItemOut(id=i.id, category_id=i.category_id, name=i.name, description=i.description) for i in items],
             combinations=combo_outs,
         ))
@@ -1677,7 +1678,7 @@ async def submit_menu(qr_token: str, body: GuestMenuSubmit, db: AsyncSession = D
 
     # Index this event's categories by id for validation.
     cats = (await db.execute(
-        select(MenuCategory).where(MenuCategory.event_id == guest.event_id)
+        select(MenuCategory).where(MenuCategory.event_id == guest.event_id, MenuCategory.guest_visible.is_(True), MenuCategory.display_only.is_(False))
     )).scalars().all()
     cats_by_id = {c.id: c for c in cats}
 

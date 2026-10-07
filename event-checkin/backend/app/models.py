@@ -1395,6 +1395,7 @@ class MenuCategory(Base):
     day_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
     # Display-only: shown on the ticket as an informational menu (no selection).
     display_only: Mapped[bool] = mapped_column(Boolean, default=False)
+    guest_visible: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     selection_type: Mapped[str] = mapped_column(String(10), default="single")
     min_selections: Mapped[int] = mapped_column(Integer, default=0)

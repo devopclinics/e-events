@@ -3436,6 +3436,7 @@ function MenuPanel({ eventId }) {
         is_required: !!catForm.is_required,
         day_label: (catForm.day_label || '').trim() || null,
         display_only: !!catForm.display_only,
+        guest_visible: catForm.guest_visible !== false,
       }
       if (catForm.id) {
         const updated = await api.updateMenuCategory(eventId, catForm.id, payload)
@@ -3727,6 +3728,7 @@ function MenuPanel({ eventId }) {
               className="w-4 h-4 accent-amber-500" />
             Required
           </label>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={catForm.guest_visible !== false} onChange={e => setCatForm(f => ({...f, guest_visible:e.target.checked}))}/> Visible to guests</label>
           <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-200 select-none cursor-pointer" title="Shown on the ticket as information only — guests make no selection">
             <input type="checkbox"
               checked={!!catForm.display_only}

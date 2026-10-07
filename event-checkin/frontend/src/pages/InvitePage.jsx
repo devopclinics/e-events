@@ -2294,8 +2294,8 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
           {/* Your Experience — only the modules this event actually uses */}
           {hasExperienceModules && (
             <div id="journey-experience" className="mt-3 scroll-mt-4 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
-              <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Your Experience</div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>{appLayout ? 'Check-in consent' : 'Your Experience'}</div>
+              {!appLayout && <div className="mt-3 grid grid-cols-2 gap-2">
                 {passCells.filter((c) => c.l !== 'Status' && c.l !== 'Venue').map((cell) => (
                   <div key={cell.l} className="rounded-xl border p-2.5" style={{ background: tone.panelStrong, borderColor: tone.border }}>
                     <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide" style={{ color: tone.label }}><span aria-hidden="true">{cell.ic}</span>{cell.l}</div>
@@ -2314,7 +2314,8 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
                     <div className="mt-0.5 text-sm font-extrabold">{journey.menu_has_choices ? 'Selected' : journey.menu_selectable ? 'Not yet' : 'Provided'}</div>
                   </div>
                 )}
-              </div>
+              </div>}
+              {appLayout && consent?.signed && <p className="mt-3 font-bold">Signed ✓</p>}
               {appLayout && consent?.form && (
                 <section className="mt-3 rounded-xl border p-3" style={{ borderColor: tone.border }}>
                   <h3 className="font-bold">{consent.form.title}</h3>
@@ -2332,7 +2333,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
                 </form>
               )}
               {signError && <p className="mt-2 text-sm text-amber-400">{signError}</p>}
-              {journey?.menu_selectable && hub?.guest?.qr_token && (
+              {!appLayout && journey?.menu_selectable && hub?.guest?.qr_token && (
                 <a href={`/scan/${encodeURIComponent(hub.guest.qr_token)}#orders`} className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-xl px-4 py-2 text-sm font-extrabold text-slate-950" style={{ background: tone.accent }}>
                   {journey.menu_locked ? 'View order details' : journey.menu_has_choices ? 'View or change order' : 'Choose your order'}
                 </a>

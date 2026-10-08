@@ -1417,6 +1417,7 @@ export interface GuestExperienceProgressOut {
 }
 
 export interface GuestHubRecoveryRequest {
+  destination?: "home" | "programme" | "festiome";
   email: string
   first_name?: string
   last_name?: string

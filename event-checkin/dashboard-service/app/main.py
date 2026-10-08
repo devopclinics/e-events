@@ -21,7 +21,7 @@ from .auth import current_user, require_dashboard_access
 from .config import settings
 from .database import get_db
 from .models import (
-    BroadcastLog, EmailDeliveryEvent, Event, ExperienceStep, ExperienceWorkflow, Guest,
+    Organization, BroadcastLog, EmailDeliveryEvent, Event, ExperienceStep, ExperienceWorkflow, Guest,
     GuestExperienceProgress, GuestMealService, GuestMenuChoice, MealService, MenuCategory,
     MessageCreditLedger, ScanEvent, SeatingTable, TableGroup, TableGroupTable, User, Zone,
 )
@@ -43,6 +43,13 @@ app.add_middleware(
 def utc_now_naive() -> datetime:
     """UTC now in the database's existing naive-UTC representation."""
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+async def available_credits(db, event):
+    if settings.organization_entitlements_v2:
+        org = await db.get(Organization, event.org_id)
+        return (org.message_credit_units or 0) / 10 if org else 0
+    return event.message_credits or 0
 
 
 @app.get("/health")
@@ -807,7 +814,7 @@ async def communication_health(db: AsyncSession, event: Event) -> dict:
         "whatsapp": channel_rates["whatsapp"],
         "mms": channel_rates["mms"],
         "message_delivery": message_delivery,
-        "credits_remaining": event.message_credits,
+        "credits_remaining": await available_credits(db, event),
     }
 
 
@@ -1152,6 +1159,7 @@ async def build_alerts(db: AsyncSession, event: Event) -> list[dict]:
 
     no_contact = await db.scalar(select(func.count()).select_from(Guest).where(
         Guest.event_id == event.id,
+        (Guest.rsvp_guest_type.is_(None) | func.lower(func.trim(Guest.rsvp_guest_type)).notin_([str(value).strip().lower() for value in (event.rsvp_invitee_contact_exempt_types or [])])),
         (Guest.email.is_(None) | (Guest.email == "")),
         (Guest.phone.is_(None) | (Guest.phone == "")),
     )) or 0
@@ -1181,12 +1189,13 @@ async def build_alerts(db: AsyncSession, event: Event) -> list[dict]:
                 "action_url": f"/admin?event={event.id}&tab=seating",
             })
 
-    if event.message_credits <= 20:
+    balance = await available_credits(db, event)
+    if balance <= 20:
         alerts.append({
             "id": "low_credits", "type": "low_credits", "severity": "warning",
             "title": "Message credits running low",
-            "description": f"{event.message_credits} credits left.",
-            "count": event.message_credits, "action_label": "Top up credits",
+            "description": f"{balance:g} credits left in the available wallet.",
+            "count": balance, "action_label": "Top up credits",
             "action_url": f"/admin?event={event.id}&tab=billing",
         })
 

@@ -302,14 +302,14 @@ function BillingTab({ notify, eventId, onBuyPass, onBuyCredits, onBuyAddon }) {
             {addon.description && <p className="rd-hint">{addon.description}</p>}
             <button data-plan-key={addon.key} className={`rr-btn ${purchased ? 'secondary' : 'primary'}`} style={{ width: '100%', justifyContent: 'center' }}
               disabled={!billing.configured || !billing.is_paid || purchased} onClick={() => onBuyAddon(addon)}>
-              {purchased ? 'Enabled for this event' : 'Buy add-on'}
+              {purchased ? 'Included · open setup' : 'Buy add-on'}
             </button>
           </div>
         })}
       </div>
 
       <div className="rr-section-title">
-        <div><h2>Credits by channel</h2><p>Sends and credits spent this billing period</p></div>
+        <div><h2>Credits by channel</h2><p>Recorded messages and credits for this event. Delivery counts update as provider reports arrive.</p></div>
       </div>
       <div className="rr-panel">
         <div className="rd-panel-body">
@@ -321,8 +321,8 @@ function BillingTab({ notify, eventId, onBuyPass, onBuyCredits, onBuyAddon }) {
                   <span className="name">{key.toUpperCase()}</span>
                   <Icon name="arrow" size={12} />
                 </div>
-                <div className="rate">{c.credits}<small>credits</small></div>
-                <div className="foot"><span>{c.sends} sends · View ledger</span></div>
+                <div className="rate">{c.credits ?? '—'}<small>{c.credits == null ? 'see ledger for credits' : 'credits'}</small></div>
+                <div className="foot"><span>{c.sends} recorded messages · View ledger</span></div>
               </button>
             })}
           </div>
@@ -332,7 +332,7 @@ function BillingTab({ notify, eventId, onBuyPass, onBuyCredits, onBuyAddon }) {
       <div className={`rr-panel bl-ledger-panel ${ledgerOpen ? 'open' : ''}`}>
         <button className="bl-ledger-toggle" aria-expanded={ledgerOpen} onClick={() => setLedgerOpen((value) => !value)}>
           <span className="bl-ledger-icon"><Icon name="file" size={16} /></span>
-          <span><strong>Credit ledger</strong><small>Recent spend and top-ups · {Number(billing.ledger?.balance ?? billing.message_credits ?? 0).toLocaleString()} credits available · {ledgerRows.length} entries</small></span>
+          <span><strong>Credit ledger</strong><small>{billing.ledger?.balance_scope === 'organization' ? 'Organization wallet · event activity below' : 'Event wallet and activity'} · {Number(billing.ledger?.balance ?? billing.message_credits ?? 0).toLocaleString()} credits available · {ledgerRows.length} entries</small></span>
           <span className="bl-ledger-toggle-label">{ledgerOpen ? 'Collapse' : 'View activity'} <Icon name="arrow" size={12} /></span>
         </button>
         {ledgerOpen && <div className="rd-panel-body bl-ledger-body">
@@ -371,9 +371,9 @@ function BillingTab({ notify, eventId, onBuyPass, onBuyCredits, onBuyAddon }) {
               <button type="button" className="rr-panel bl-ent-card" key={typeof entry === 'string' ? entry : `${entry.label}-${index}`} onClick={() => openCatalogItem(group, entry)}>
                 <div className="bl-ent-icon"><Icon name={CATALOG_DESTINATIONS[group]?.icon || 'check'} size={16}/></div>
                 <div className="bl-ent-label">{typeof entry === 'string' ? entry : entry.label}</div>
-                {typeof entry === 'object' && entry.usd != null && entry.ngn != null && (
+                {typeof entry === 'object' && entry.amount != null && (
                   <span className="rd-status-chip bl-chip-neutral">
-                    {billingMoney(billing.currency === 'NGN' ? entry.ngn : entry.usd, billing.currency)}
+                    {billingMoney(entry.amount, entry.currency || billing.currency)}
                   </span>
                 )}
                 <span className="bl-ent-action">View details <Icon name="arrow" size={11} /></span>

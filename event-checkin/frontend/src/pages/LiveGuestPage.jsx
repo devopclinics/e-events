@@ -382,7 +382,7 @@ function SurveyIntro({ activity, onStart }) {
       {activity.description && <p className="text-sm text-slate-600 dark:text-slate-300">{activity.description}</p>}
       <button type="button" onClick={onStart}
         className="min-h-14 rounded-xl bg-teal-400 px-4 py-3 text-base font-extrabold text-slate-950 shadow-lg">
-        Start Survey
+        {activity.type === 'feedback' ? 'Start feedback' : 'Start survey'}
       </button>
     </div>
   )
@@ -458,8 +458,8 @@ function SurveyForm({ activity, rules, draftAnswersFromServer, completedAt, onAu
     return (
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-8 text-center dark:border-emerald-800 dark:bg-emerald-950">
         <div className="text-2xl font-extrabold text-emerald-900 dark:text-emerald-100">Thank You</div>
-        <p className="mt-3 text-sm font-bold text-emerald-800 dark:text-emerald-200">Jazakum Allahu Khairan for sharing your feedback.</p>
-        <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">{embedded ? 'Your input will help the organizing team improve future events.' : 'Your input will help the MBF planning committee build an even better Summit experience, in sha Allah.'}</p>
+        <p className="mt-3 text-sm font-bold text-emerald-800 dark:text-emerald-200">Thank you for sharing your response.</p>
+        <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">Your input will help the organizing team improve future events.</p>
       </div>
     )
   }
@@ -494,7 +494,7 @@ function SurveyForm({ activity, rules, draftAnswersFromServer, completedAt, onAu
       {submitError && <p role="alert" className="text-sm font-bold text-rose-600 dark:text-rose-300">{submitError}</p>}
       <button type="button" disabled={submitting} onClick={handleSubmit}
         className="sticky bottom-2 min-h-14 rounded-xl bg-teal-400 px-4 py-3 text-base font-extrabold text-slate-950 shadow-lg disabled:opacity-60">
-        {submitting ? 'Submitting…' : 'Submit Feedback'}
+        {submitting ? 'Submitting…' : activity.type === 'feedback' ? 'Submit feedback' : 'Submit survey'}
       </button>
     </div>
   )

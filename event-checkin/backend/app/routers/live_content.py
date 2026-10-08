@@ -127,7 +127,7 @@ async def sessions(event_id: str, db: AsyncSession = Depends(get_db), _: User = 
     await _event(event_id, db)
     rows = (await db.execute(select(ExperienceStep)
         .join(ExperienceWorkflow, ExperienceWorkflow.id == ExperienceStep.workflow_id)
-        .where(ExperienceWorkflow.event_id == event_id, ExperienceStep.type == "session_attendance",
+        .where(ExperienceWorkflow.event_id == event_id, ExperienceWorkflow.status.in_(("published", "draft")), ExperienceStep.type == "session_attendance",
                ExperienceStep.enabled.is_(True)).order_by(ExperienceStep.sort_order))).scalars().all()
     return [{"id": row.id, "title": row.title, "description": row.description,
              "config": row.config or {}} for row in rows]

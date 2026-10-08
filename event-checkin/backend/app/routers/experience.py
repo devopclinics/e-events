@@ -4,6 +4,7 @@ import io
 from datetime import datetime, timedelta
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from ..services.credit_balance import available_credits, credit_scope
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 from sqlalchemy import delete, func, or_, select
@@ -1516,6 +1517,7 @@ async def reorder_steps(
 async def publish(
     event_id: str,
     workflow_id: str,
+    replace_workflow_id: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_event_admin),
 ):
@@ -1523,6 +1525,7 @@ async def publish(
     if not event:
         raise HTTPException(404, "Event not found")
     _assert_experience_plan(event)
+    await db.execute(select(Event.id).where(Event.id == event_id).with_for_update())
     workflow = await _load_scoped_workflow(event_id, workflow_id, db)
     if workflow.status != "draft":
         raise HTTPException(409, "Only draft workflows can be published")
@@ -1538,7 +1541,16 @@ async def publish(
         .limit(1)
     )
     if existing_published:
-        raise HTTPException(409, f"Unpublish '{existing_published.name}' before publishing another workflow")
+        if replace_workflow_id != existing_published.id:
+            raise HTTPException(409, "Unpublish the existing workflow or explicitly replace the current live version.")
+        existing_published = await _load_scoped_workflow(event_id, existing_published.id, db)
+        existing_published.status = "archived"
+        from ..services.engagement_sync_outbox import queue_workflow_sync
+        queue_workflow_sync(db, event=event, workflow=existing_published, status="archived")
+        db.add(ExperienceEvent(event_id=event_id, workflow_id=existing_published.id, actor_user_id=current_user.id,
+                              event_type="workflow_replaced", source="admin", payload={"replacement_id": workflow.id}))
+    elif replace_workflow_id:
+        raise HTTPException(409, "The expected live workflow is no longer published. Refresh and try again.")
     published = await publish_workflow(workflow, event, db, actor_user_id=current_user.id)
     await queue_announcement(
         db,
@@ -2507,7 +2519,7 @@ async def _feedback_nonresponders(event_id: str, step_id: str, db: AsyncSession)
     return event, step, eligible
 
 
-def _feedback_reminder_preview(event: Event, guests: list[Guest], channels: list[str]) -> dict:
+async def _feedback_reminder_preview(event: Event, guests: list[Guest], channels: list[str], db: AsyncSession) -> dict:
     supported = [c for c in channels if c in {"email", "sms", "whatsapp"}]
     deliverable = {
         "email": sum(1 for g in guests if event.notify_email and g.email),
@@ -2520,7 +2532,7 @@ def _feedback_reminder_preview(event: Event, guests: list[Guest], channels: list
         "nonresponders": len(guests), "channels": supported,
         "deliverable": {c: deliverable[c] for c in supported},
         "paid_channels_available": paid, "credits_required": credits,
-        "credits_available": event.message_credits or 0,
+        "credits_available": await available_credits(db, event) or 0,
     }
 
 
@@ -2530,7 +2542,7 @@ async def feedback_reminder_preview(
     db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin),
 ):
     event, _, guests = await _feedback_nonresponders(event_id, step_id, db)
-    return _feedback_reminder_preview(event, guests, [c.strip().lower() for c in channels.split(",")])
+    return await _feedback_reminder_preview(event, guests, [c.strip().lower() for c in channels.split(",")], db)
 
 
 async def send_feedback_reminders_cascade(
@@ -2574,7 +2586,7 @@ async def send_feedback_reminders_cascade(
         payload={"channels": channels, "queued": queued, "nonresponders": len(guests)},
     ))
     await db.commit()
-    return {"nonresponders": len(guests), "queued": queued, "credits_remaining": event.message_credits or 0}
+    return {"nonresponders": len(guests), "queued": queued, "credits_remaining": await available_credits(db, event) or 0}
 
 
 @router.post("/{event_id}/experience/feedback/{step_id}/reminders")

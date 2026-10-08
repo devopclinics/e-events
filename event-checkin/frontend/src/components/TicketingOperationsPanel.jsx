@@ -51,7 +51,7 @@ export default function TicketingOperationsPanel({eventId, sales, checkoutFields
       <label><b>Create promo code</b><span>Percent or fixed event-currency discount.</span></label>
       <input required placeholder="CODE" value={promo.code} onChange={e=>setPromo({...promo,code:e.target.value.toUpperCase()})}/>
       <select value={promo.kind} onChange={e=>setPromo({...promo,kind:e.target.value})}><option value="percent">Percent</option><option value="fixed">Fixed amount</option></select>
-      <input required type="number" min="0.01" max={promo.kind==='percent'?'100':undefined} step={promo.kind==='percent'?'1':'0.01'} placeholder={promo.kind==='percent'?'10 (%)':'25.00'} value={promo.amount} onChange={e=>setPromo({...promo,amount:e.target.value})}/>
+      <input required type="number" min={promo.kind==='percent'?1:0.01} max={promo.kind==='percent'?'100':undefined} step={promo.kind==='percent'?'1':'0.01'} placeholder={promo.kind==='percent'?'10 (%)':'25.00'} value={promo.amount} onChange={e=>setPromo({...promo,amount:e.target.value})}/>
       <input type="number" min="1" placeholder="Use limit" value={promo.max_uses} onChange={e=>setPromo({...promo,max_uses:e.target.value})}/>
       <button disabled={!!busy}>Create code</button>
     </form>

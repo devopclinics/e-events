@@ -80,7 +80,7 @@ export default function RegisterPage() {
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password)
       await updateProfile(cred.user, { displayName: form.name })
       // Sync with backend (creates the DB record)
-      const token = await cred.user.getIdToken()
+      const token = await cred.user.getIdToken(true)
       await fetch('/api/auth/me', { headers: {
         Authorization: `Bearer ${token}`,
         'X-Festio-Attribution': encodeURIComponent(JSON.stringify({ consent_email: true })),
@@ -97,7 +97,7 @@ export default function RegisterPage() {
     setLoading(true); setError('')
     try {
       const cred = await googleSignIn()
-      const token = await cred.user.getIdToken()
+      const token = await cred.user.getIdToken(true)
       await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
       setPickerRole('official')
     } catch (err) {
@@ -134,7 +134,7 @@ export default function RegisterPage() {
             F
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Create Account</h1>
-          <p className="text-gray-500 dark:text-slate-400 text-sm mt-1">Join Festio as an official</p>
+          <p className="text-gray-500 dark:text-slate-400 text-sm mt-1">Create your organizer account</p>
         </div>
 
         <button onClick={signUpWithGoogle} disabled={loading}
@@ -165,7 +165,7 @@ export default function RegisterPage() {
           </div>
           <div>
             <label htmlFor="register-password" className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Password</label>
-            <input id="register-password" className={field} type="password" value={form.password} onChange={set('password')} required autoComplete="new-password" placeholder="Min. 6 characters" />
+            <input id="register-password" className={field} type="password" value={form.password} onChange={set('password')} required autoComplete="new-password" minLength={6} placeholder="At least 6 characters" />
           </div>
           {error && <p className="text-red-600 text-sm">{error}</p>}
           <button type="submit" disabled={loading}
@@ -174,6 +174,7 @@ export default function RegisterPage() {
           </button>
         </form>
 
+        <p className="text-sm mt-4">Use an email you can access for account recovery. Read our <Link to="/terms">Terms</Link> and <Link to="/privacy">Privacy Policy</Link>.</p>
         <p className="text-center text-sm text-gray-500 dark:text-slate-400 mt-6">
           Already have an account?{' '}
           <Link to="/login" className="text-indigo-600 font-medium hover:underline">Sign in</Link>

@@ -35,8 +35,11 @@ async def test_current_day_is_live_not_upcoming(ctx):
 
 
 async def test_future_scope_has_no_fake_current_occupancy(ctx):
+    future = datetime.now(UTC) + timedelta(days=2)
+    tomorrow = future.date().isoformat()
+    await _set_event(ctx, event_date=future.replace(tzinfo=None), event_end_date=None, timezone="UTC")
     payload = (await ctx.client.get(
-        f"/api/results/events/{ctx.event_id}/analytics/attendance?day=2026-08-02"
+        f"/api/results/events/{ctx.event_id}/analytics/attendance?day={tomorrow}"
     )).json()
     assert payload["occupancy_mode"] == "future"
     assert payload["on_site"] is None

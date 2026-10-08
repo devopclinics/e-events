@@ -5,6 +5,7 @@ without code: see all tenants, comp/credit events, manage operators, edit pricin
 """
 from datetime import datetime, timedelta
 
+from ..services.credit_balance import available_credits, credit_scope
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Body
 from fastapi.responses import HTMLResponse
 from sqlalchemy import select, desc, func, text, delete, update
@@ -113,7 +114,7 @@ async def overview(_: User = Depends(require_superadmin), db: AsyncSession = Dep
         by_org.setdefault(e.org_id, []).append({
             "id": e.id, "name": e.name, "status": e.status,
             "plan_tier": e.plan_tier, "is_paid": e.is_paid,
-            "message_credits": e.message_credits, "guest_cap": e.guest_cap,
+            "message_credits": await available_credits(db, e), "credit_scope": credit_scope(), "guest_cap": e.guest_cap,
         })
     return [
         {
@@ -261,7 +262,7 @@ async def accounts_dashboard(_: User = Depends(require_superadmin), db: AsyncSes
             "event_count": agg.event_count if agg else 0,
             "paid_event_count": agg.paid_event_count if agg else 0,
             "event_types": sorted(types_by_org.get(o.id, [])),
-            "message_credits_remaining": int(agg.credits_remaining) if agg else 0,
+            "message_credits_remaining": (o.message_credit_units or 0) / 10 if settings.organization_entitlements_v2 else (int(agg.credits_remaining) if agg else 0),
             "message_credits_spent": int(spend_by_org.get(o.id, 0)),
             "last_event_at": agg.last_event_at if agg else None,
         })
@@ -569,7 +570,7 @@ async def grant(event_id: str, body: GrantRequest, _: User = Depends(require_sup
     await db.refresh(event)
     return {
         "ok": True, "plan_tier": event.plan_tier, "is_paid": event.is_paid,
-        "guest_cap": event.guest_cap, "message_credits": event.message_credits,
+        "guest_cap": event.guest_cap, "message_credits": await available_credits(db, event), "credit_scope": credit_scope(),
     }
 
 

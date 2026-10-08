@@ -694,11 +694,13 @@ export const api = {
   approveRsvp: (eventId, guestId) => req('POST', `/events/${eventId}/guests/${guestId}/approve`),
   rejectRsvp: (eventId, guestId) => req('POST', `/events/${eventId}/guests/${guestId}/reject`),
   guestQrUrl: (eventId, guestId) => `${BASE}/events/${eventId}/guests/${guestId}/qr.png`,
-  uploadGuests: (eventId, file) => {
+  previewGuestInvites: (eventId, guestIds, force) => req('POST', `/events/${eventId}/guests/send-preview`, { guest_ids: guestIds, force }),
+  uploadGuests: (eventId, file, mapping = {}, preview = false) => {
     const fd = new FormData()
     fd.append('file', file)
+    fd.append('mapping', JSON.stringify(mapping))
     return getToken().then((token) =>
-      fetch(`${BASE}/events/${eventId}/guests/upload`, {
+      fetch(`${BASE}/events/${eventId}/guests/upload?preview=${preview}`,  {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: fd,
@@ -741,7 +743,7 @@ export const api = {
   deleteExperienceStep: (eventId, workflowId, stepId) => req('DELETE', `/events/${eventId}/experience/workflows/${workflowId}/steps/${stepId}`),
   reorderExperienceSteps: (eventId, workflowId, stepIds) =>
     req('POST', `/events/${eventId}/experience/workflows/${workflowId}/steps/reorder`, { step_ids: stepIds }),
-  publishExperienceWorkflow: (eventId, workflowId) => req('POST', `/events/${eventId}/experience/workflows/${workflowId}/publish`),
+  publishExperienceWorkflow: (eventId, workflowId, replaceId = '') => req('POST', `/events/${eventId}/experience/workflows/${workflowId}/publish${replaceId ? `?replace_workflow_id=${encodeURIComponent(replaceId)}` : ''}`),
   unpublishExperienceWorkflow: (eventId, workflowId) => req('POST', `/events/${eventId}/experience/workflows/${workflowId}/unpublish`),
   archiveExperienceWorkflow: (eventId, workflowId) => req('POST', `/events/${eventId}/experience/workflows/${workflowId}/archive`),
   unarchiveExperienceWorkflow: (eventId, workflowId) => req('POST', `/events/${eventId}/experience/workflows/${workflowId}/unarchive`),
@@ -1935,6 +1937,7 @@ export const api = {
   bulkImportProgram: (eventId, workflowId, items) => req('POST', `/setup/${eventId}/program/bulk`, { workflow_id: workflowId, items }),
   checkTeamEmail: (email) => req('POST', `/setup/team/check-email`, { email }),
   getSetupRecommendations: (eventType) => req('GET', `/setup/recommendations?event_type=${encodeURIComponent(eventType || '')}`),
+  eventCreationLimits: () => req('GET', '/events/creation-limits'),
   getSetupProgress: (eventId) => req('GET', `/setup/progress?event_id=${eventId}`),
   setSetupProgress: (eventId, stepKey, status) => req('POST', `/setup/progress`, { event_id: eventId, step_key: stepKey, status }),
   marketingMe: () => marketingReq('GET', '/me'),

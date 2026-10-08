@@ -45,14 +45,18 @@ function money(value, currency = 'USD') {
 
 function fmtDate(value) {
   if (!value) return ''
-  const d = new Date(value)
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T12:00:00`) : new Date(value)
   return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleDateString()
 }
 
 function daysUntil(value) {
   if (!value) return Infinity
-  const d = new Date(value)
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T12:00:00`) : new Date(value)
   if (Number.isNaN(d.getTime())) return Infinity
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const today = new Date()
+    return Math.round((Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()) - Date.UTC(today.getFullYear(),today.getMonth(),today.getDate())) / 86400000)
+  }
   return Math.ceil((d.getTime() - Date.now()) / 86400000)
 }
 
@@ -1217,7 +1221,7 @@ export default function PlannerRedesignPage() {
           </div>
           <label className="rd-field-label">Status</label>
           <select className="rd-field" value={draft.status} onChange={(e) => setDraft({ status: e.target.value })}>
-            {BUDGET_ITEM_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            {BUDGET_ITEM_STATUSES.map((s) => <option key={s} value={s}>{s.replaceAll('_', ' ')}</option>)}
           </select>
           <label className="rd-field-label">Vendor</label>
           <select className="rd-field" value={draft.vendor_id} onChange={(e) => setDraft({ vendor_id: e.target.value })}>
@@ -1264,7 +1268,7 @@ export default function PlannerRedesignPage() {
           </div>
           <label className="rd-field-label">Status</label>
           <select className="rd-field" value={draft.status} onChange={(e) => setDraft({ status: e.target.value })}>
-            {VENDOR_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            {VENDOR_STATUSES.map((s) => <option key={s} value={s}>{s.replaceAll('_', ' ')}</option>)}
           </select>
           <div className="rd-row2">
             <div style={{ flex: 1 }}><label className="rd-field-label">Contact name</label><input className="rd-field" value={draft.contact_name} onChange={(e) => setDraft({ contact_name: e.target.value })} /></div>
@@ -1310,7 +1314,7 @@ export default function PlannerRedesignPage() {
             <div style={{ flex: 1 }}>
               <label className="rd-field-label">Status</label>
               <select className="rd-field" value={draft.status} onChange={(e) => setDraft({ status: e.target.value })}>
-                {MILESTONE_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                {MILESTONE_STATUSES.map((s) => <option key={s} value={s}>{s.replaceAll('_', ' ')}</option>)}
               </select>
             </div>
           </div>
@@ -1423,7 +1427,7 @@ export default function PlannerRedesignPage() {
           </div>
           <label className="rd-field-label">Status</label>
           <select className="rd-field" value={draft.status} onChange={(e) => setDraft({ status: e.target.value })}>
-            {RUNSHEET_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            {RUNSHEET_STATUSES.map((s) => <option key={s} value={s}>{s.replaceAll('_', ' ')}</option>)}
           </select>
           <label className="rd-field-label">Cue</label>
           <input className="rd-field" value={draft.cue} onChange={(e) => setDraft({ cue: e.target.value })} />
@@ -1444,7 +1448,7 @@ export default function PlannerRedesignPage() {
           </select>
           <label className="rd-field-label">Status</label>
           <select className="rd-field" value={draft.status} onChange={(e) => setDraft({ status: e.target.value })}>
-            {DOCUMENT_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            {DOCUMENT_STATUSES.map((s) => <option key={s} value={s}>{s.replaceAll('_', ' ')}</option>)}
           </select>
           <label className="rd-field-label">Expires</label>
           <input className="rd-field" type="date" value={draft.expires_at} onChange={(e) => setDraft({ expires_at: e.target.value })} />

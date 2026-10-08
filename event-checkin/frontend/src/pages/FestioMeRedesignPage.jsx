@@ -449,7 +449,7 @@ export default function FestioMeRedesignPage() {
         <div className="rd-panel">
           <div className="rd-panel-head"><h3>Organizer feed</h3><p>Announcements posted from Guest Communication</p></div>
           <div className="rd-panel-body">
-            <p className="rd-rowlink">Organizer-feed announcements are managed in Guest Communication. FestioMe has no separate organizer feed admin contract.</p>
+            <p className="rd-rowlink">Manage event announcements in Guest Communication. They appear in your guests’ event feed.</p>
           </div>
         </div>
       )}

@@ -82,7 +82,8 @@ async def usable_guardian_candidates(
     guardians = (await db.execute(
         select(Guest).where(Guest.event_id == event.id, Guest.id.in_(usable_ids))
     )).scalars().all()
-    by_id = {guardian.id: guardian for guardian in guardians}
+    from ..services.event_forms import is_junior
+    by_id = {guardian.id: guardian for guardian in guardians if guardian.id != child_guest.id and not is_junior(event, guardian)}
     return [
         {
             "guardian_guest_id": guardian.id,
@@ -129,8 +130,9 @@ async def verify_guardian_handoff(
     match = next((entry for entry in entries if guardian and entry.get("guardian_guest_id") == guardian.id), None)
     if not token and not selected_id:
         return None, None, "Authorized guardian credential is required"
-    if not guardian or not match:
-        return None, None, "Guardian is not authorized for this junior"
+    from ..services.event_forms import is_junior
+    if not guardian or not match or guardian.id == child_guest.id or is_junior(event, guardian):
+        return None, None, "An authorized adult guardian is required for this junior"
     if not _entry_is_usable(match):
         return None, None, "Guardian authorization is awaiting confirmation from the guardian"
     return guardian, match.get("relationship") or "Authorized guardian", None

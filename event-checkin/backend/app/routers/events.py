@@ -6,6 +6,7 @@ import re
 import secrets
 import uuid as _uuid
 import httpx
+from ..services.credit_balance import available_credits, credit_scope
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, func, select, update
@@ -206,6 +207,7 @@ async def _event_out_for_user(event: Event, user: User, db: AsyncSession) -> Eve
     )
     org_cohort = org.redesign_cohort if org is not None else "legacy_only"
     return EventOut.model_validate(event).model_copy(update={
+        "message_credits": await available_credits(db, event), "credit_scope": credit_scope(),
         "my_access_role": access_role,
         "my_access_level": access_level,
         "my_can_manage_event": can_manage,
@@ -244,6 +246,21 @@ async def _notify_operators_new_event(event_id: str, event_name: str, org_name: 
                 await send_simple_email(email, f"New event: {event_name}", body, message_kind="operator_new_event")
     except Exception:
         logging.getLogger(__name__).exception("Failed to notify operators of new event %s", event_id)
+
+
+@router.get("/creation-limits")
+async def creation_limits(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_admin)):
+    org_id = await db.scalar(select(Membership.org_id).where(Membership.user_id == current_user.id, Membership.role.in_(["owner", "admin"])).order_by(Membership.created_at).limit(1))
+    org = await db.get(Organization, org_id) if org_id else None
+    if not org:
+        raise HTTPException(403, "You don't belong to an organization")
+    from ..organization_entitlements import guest_cap
+    return {"guest_cap": guest_cap(org) if settings.organization_entitlements_v2 else 25,
+            "currency": org.currency or "USD", "note": "Capacity is checked again when the event is created. Upgrade your organization pass for a larger event."}
+
+
+async def _event_balance_out(event: Event, db: AsyncSession) -> EventOut:
+    return EventOut.model_validate(event).model_copy(update={"message_credits": await available_credits(db, event), "credit_scope": credit_scope()})
 
 
 @router.post("", response_model=EventOut, status_code=201)
@@ -358,7 +375,7 @@ async def create_event(
         ingest_marketing_lead, current_user, stage="event_created",
         event_type=event.event_type, guest_count=event.guest_cap,
     )
-    return event
+    return await _event_balance_out(event, db)
 
 
 # Configuration/template fields safe to carry into a duplicate. Deliberately
@@ -725,7 +742,7 @@ async def update_event(
         current_user, stage="event_created", event_type=event.event_type,
         guest_count=event.guest_cap,
     )
-    return event
+    return await _event_balance_out(event, db)
 
 
 @router.delete("/{event_id}", status_code=204)
@@ -784,7 +801,7 @@ async def change_status(
     event.status = new_status
     await db.commit()
     await db.refresh(event)
-    return event
+    return await _event_balance_out(event, db)
 
 
 # ── Team (user assignment) ─────────────────────────────────────────────────────
@@ -981,7 +998,7 @@ async def update_event_source(
         event.source_sync_enabled = body.source_sync_enabled
     await db.commit()
     await db.refresh(event)
-    return event
+    return await _event_balance_out(event, db)
 
 
 @router.post("/{event_id}/sync-now")
@@ -1140,6 +1157,10 @@ async def toggle_features(
             assert_feature_allowed(event, feature)
     if "seating_enabled" in body:
         event.seating_enabled = bool(body["seating_enabled"])
+    if "menu_selection_timing" in body:
+        if body["menu_selection_timing"] not in {"before_arrival", "after_admission"}:
+            raise HTTPException(422, "Choose before_arrival or after_admission")
+        event.menu_selection_timing = body["menu_selection_timing"]
     if "menu_enabled" in body:
         event.menu_enabled = bool(body["menu_enabled"])
     if "logistics_enabled" in body:
@@ -1258,7 +1279,7 @@ async def toggle_features(
     if any(bool(body.get(feature)) for feature in ("seating_enabled", "menu_enabled", "logistics_enabled", "registry_enabled", "venue_access_enabled", "experience_enabled", "festiome_addon_enabled", "planner_enabled", "engagement_enabled", "speaker_enabled", "partner_enabled", "reminders_enabled")):
         from ..services.marketing_client import ingest_marketing_lead
         await ingest_marketing_lead(current_user, stage="activated", event_type=event.event_type)
-    return event
+    return await _event_balance_out(event, db)
 
 
 @router.patch("/{event_id}/walk-in", response_model=EventOut)
@@ -1272,7 +1293,7 @@ async def set_walk_in(event_id: str, body: dict, db: AsyncSession = Depends(get_
     event.walk_in_enabled = bool(body.get("active"))
     await db.commit()
     await db.refresh(event)
-    return event
+    return await _event_balance_out(event, db)
 
 
 @router.patch("/{event_id}/walk-in-group", response_model=EventOut)
@@ -1290,7 +1311,7 @@ async def set_walk_in_group(event_id: str, body: dict, db: AsyncSession = Depend
     event.walk_in_table_group_id = gid
     await db.commit()
     await db.refresh(event)
-    return event
+    return await _event_balance_out(event, db)
 
 
 @router.patch("/{event_id}/walk-in-group-choice", response_model=EventOut)
@@ -1303,7 +1324,7 @@ async def set_walk_in_group_choice(event_id: str, body: dict, db: AsyncSession =
     event.walk_in_group_choice_enabled = bool(body.get("enabled"))
     await db.commit()
     await db.refresh(event)
-    return event
+    return await _event_balance_out(event, db)
 
 
 @router.patch("/{event_id}/default-guest-group", response_model=EventOut)
@@ -1325,7 +1346,7 @@ async def set_default_guest_group(
     event.default_guest_table_group_id = gid
     await db.commit()
     await db.refresh(event)
-    return event
+    return await _event_balance_out(event, db)
 
 
 @router.patch("/{event_id}/self-checkin", response_model=EventOut)
@@ -1345,7 +1366,7 @@ async def toggle_self_checkin(
         event.event_code = await unique_event_code(db)
     await db.commit()
     await db.refresh(event)
-    return event
+    return await _event_balance_out(event, db)
 
 
 @router.patch("/{event_id}/event-code", response_model=EventOut)
@@ -1369,7 +1390,7 @@ async def set_event_code(
     event.event_code = code
     await db.commit()
     await db.refresh(event)
-    return event
+    return await _event_balance_out(event, db)
 
 
 # ── Invite page settings ──────────────────────────────────────────────────────
@@ -1438,7 +1459,7 @@ async def update_invite_settings(
         category.sort_order = min(category.sort_order or 15, 15)
     await db.commit()
     await db.refresh(event)
-    return event
+    return await _event_balance_out(event, db)
 
 
 @router.post("/{event_id}/rsvp-link", response_model=EventOut)
@@ -1456,7 +1477,7 @@ async def generate_rsvp_link(
         event.rsvp_token = str(_uuid.uuid4())
     await db.commit()
     await db.refresh(event)
-    return event
+    return await _event_balance_out(event, db)
 
 
 # ── RSVP questions (admin CRUD) ───────────────────────────────────────────────
@@ -2138,7 +2159,7 @@ async def delete_cover_image(
         event.invite_cover_image = None
         await db.commit()
         await db.refresh(event)
-    return event
+    return await _event_balance_out(event, db)
 
 
 @router.post("/{event_id}/upload-logo")
@@ -2198,4 +2219,4 @@ async def delete_logo(
         event.logo_url = None
         await db.commit()
         await db.refresh(event)
-    return event
+    return await _event_balance_out(event, db)

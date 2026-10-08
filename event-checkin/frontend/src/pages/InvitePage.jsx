@@ -572,7 +572,7 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {}, guidedFlow =
   const [smsConsent, setSmsConsent] = useState(false)
   const [choice, setChoice] = useState(event.rsvp_landing_layout === 'welcome' ? 'yes' : '')
   const [answers, setAnswers] = useState({})
-  const emptyInvitee = () => ({ first_name: '', last_name: '', relationship: '', phone: '', email: '', guest_type: 'Invited Guest', age_group: '', notes: '', is_junior: false, pickup_authorized_by_invitee_indices: [] })
+  const emptyInvitee = () => ({ first_name: '', last_name: '', relationship: '', phone: '', email: '', guest_type: (event.rsvp_invitee_type_options?.length ? event.rsvp_invitee_type_options : DEFAULT_INVITEE_TYPES)[0], age_group: '', notes: '', is_junior: false, pickup_authorized_by_invitee_indices: [] })
   const [invitees, setInvitees] = useState([])
   const [shipAddr, setShipAddr] = useState({})
   const [sizes, setSizes] = useState({})
@@ -630,7 +630,6 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {}, guidedFlow =
     }
     setInvitees((rows) => {
       if (rows.length > additionalInviteeLimit) return rows.slice(0, additionalInviteeLimit)
-      if (rows.length === 0) return [emptyInvitee()]
       return rows
     })
   }, [additionalInviteeLimit])
@@ -649,7 +648,7 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {}, guidedFlow =
   }
 
   function removeInvitee(index) {
-    setInvitees((rows) => rows.length <= 1 ? [emptyInvitee()] : rows.filter((_, i) => i !== index))
+    setInvitees((rows) => rows.filter((_, i) => i !== index))
   }
 
   async function handleSubmit(e) {
@@ -691,7 +690,7 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {}, guidedFlow =
                   guest_type: row.guest_type,
                   age_group: row.age_group || undefined,
                   notes: row.notes.trim() || undefined,
-                  is_junior: event.junior_guardian_handoff_enabled ? !!row.is_junior : undefined,
+                  is_junior: !!row.is_junior,
                   pickup_authorized_by_invitee_indices: event.junior_guardian_handoff_enabled
                     ? (row.pickup_authorized_by_invitee_indices || [])
                         .map((origIdx) => indexMap.get(origIdx))
@@ -870,7 +869,7 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {}, guidedFlow =
                 <div key={index} className="rounded-2xl border border-slate-200 bg-white p-4">
                   <div className="mb-3 flex items-center justify-between">
                     <div className="text-sm font-extrabold text-slate-800">Invitee {index + 1}</div>
-                    {invitees.length > 1 && (
+                    {invitees.length > 0 && (
                       <button type="button" onClick={() => removeInvitee(index)} className="text-xs font-bold text-red-500">Remove</button>
                     )}
                   </div>
@@ -922,13 +921,13 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {}, guidedFlow =
                       <input value={row.notes} onChange={(e) => setInvitee(index, 'notes', e.target.value)} className={inputCls} placeholder="Any seating, protocol, or meal note for this person" />
                     </div>
                   </div>
-                  {event.junior_guardian_handoff_enabled && (
+                  {(
                     <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
                       <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
                         <input type="checkbox" checked={!!row.is_junior} onChange={(e) => setInvitee(index, 'is_junior', e.target.checked)} />
-                        This guest is a junior (needs pickup authorization)
+                        This guest is a child / junior
                       </label>
-                      {row.is_junior && invitees.length > 1 && (
+                      {event.junior_guardian_handoff_enabled && row.is_junior && invitees.length > 1 && (
                         <div className="mt-2 pl-6">
                           <div className="text-xs font-semibold text-slate-600">Who else in your party can pick up {row.first_name || 'this guest'}?</div>
                           <small className="text-slate-400">You are always authorized automatically.</small>
@@ -982,10 +981,12 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {}, guidedFlow =
             <fieldset data-registration-step="review" hidden={registrationStep !== 'review'} className="space-y-5">
               <div className="guided-step-heading"><span>Step 3</span><h3>Review Registration</h3><p>Check these details before confirming your place.</p></div>
               <div className="guided-review-card">
-                <div><small>Primary guest</small><b>{[form.first_name, form.last_name].filter(Boolean).join(' ') || 'Name not entered'}</b><span>{form.email || form.phone || 'Contact not entered'}</span></div>
-                <div><small>Family / guests</small><b>{invitees.filter((row) => row.first_name.trim() || row.last_name.trim()).length} additional</b><span>{invitees.filter((row) => row.first_name.trim() || row.last_name.trim()).map((row) => [row.first_name, row.last_name].filter(Boolean).join(' ')).join(', ') || 'No additional guests'}</span></div>
-                <div><small>Event</small><b>{eventTitle(event)}</b><span>{event.venue_name || 'Venue to be announced'}</span></div>
+                <div><small>Primary guest</small><b>{[form.first_name, form.last_name].filter(Boolean).join(' ') || 'Name not entered'}</b><span>{[form.email, form.phone].filter(Boolean).join(' · ') || 'Contact not entered'}</span></div>
+                <div><small>Family / guests</small><b>{invitees.filter((row) => row.first_name.trim() || row.last_name.trim()).length} additional</b><span>{invitees.filter((row) => row.first_name.trim() || row.last_name.trim()).map((row) => `${[row.first_name, row.last_name].filter(Boolean).join(' ')} — ${row.guest_type}${row.age_group ? ' · ' + row.age_group : ''}${row.email ? ' · ' + row.email : ''}${row.phone ? ' · ' + row.phone : ''}`).join('; ') || 'No additional guests'}</span></div>
+                <div><small>Event</small><b>{eventTitle(event)}</b><span>{fmtDate(event.event_date, event.timezone)} · {event.venue_name || 'Venue to be announced'}</span></div>
+                {(event.questions || []).filter(q => questionConditionMet(q, answers)).map(q => <div key={q.id}><small>{q.label || q.question || q.prompt}</small><b>{String(answers[q.id] ?? 'Not answered')}</b></div>)}
               </div>
+              <button type="button" className="guided-back" onClick={() => setRegistrationStep('details')}>Edit your details</button>
               <button type="button" className="guided-back" onClick={() => setRegistrationStep('guests')}>← Edit family / guests</button>
             </fieldset>
           )}
@@ -1431,7 +1432,7 @@ function GuestHubAccessState({ event, failure, onRetry, onViewEvent }) {
 
 function FlowPass({ event, hub, previewMock, onHome }) {
   const guest = hub?.guest || {}
-  return <div className="flow-pass-screen"><FlowTopBar event={event} onHome={onHome} /><div className="flow-pass-hero">{event?.logo_url && <img src={event.logo_url} alt="" />}<div><span>{event?.organization_name || 'FESTIO EVENT'}</span><h1>{event?.name}</h1><p>Unity · Heritage · Progress</p></div></div><section className="flow-pass-card"><h2>{guest.name || 'Guest'}</h2><p>Guest · {event?.organization_name || 'Registered attendee'}</p>{guest.qr_token && <img className="flow-qr" src={previewMock ? PREVIEW_QR_DATA_URI : `/api/scan/${guest.qr_token}/qr.png`} alt="Your QR pass code" />}<div className="flow-ready">✓ <b>{guest.admitted ? 'CHECKED IN' : 'READY FOR ENTRY'}</b><small>Present this QR at check-in</small></div><div className="flow-pass-facts"><span><b>▣</b>{fmtDate(event.event_date, event.timezone)}</span><span><b>●</b>{event.venue_name || 'Venue details'}</span><span><b>♟</b>Guests included</span></div><button type="button" className="flow-primary" onClick={onHome}>Open GuestHub →</button></section></div>
+  return <div className="flow-pass-screen"><FlowTopBar event={event} onHome={onHome} /><div className="flow-pass-hero">{event?.logo_url && <img src={event.logo_url} alt="" />}<div><span>{event?.organization_name || 'FESTIO EVENT'}</span><h1>{event?.name}</h1><p>Your event. Your community.</p></div></div><section className="flow-pass-card"><h2>{guest.name || 'Guest'}</h2><p>Guest · {event?.organization_name || 'Registered attendee'}</p>{guest.qr_token && <img className="flow-qr" src={previewMock ? PREVIEW_QR_DATA_URI : `/api/scan/${guest.qr_token}/qr.png`} alt="Your QR pass code" />}<div className="flow-ready">✓ <b>{guest.admitted ? 'CHECKED IN' : 'READY FOR ENTRY'}</b><small>Present this QR at check-in</small></div><div className="flow-pass-facts"><span><b>▣</b>{fmtDate(event.event_date, event.timezone)}</span><span><b>●</b>{event.venue_name || 'Venue details'}</span><span><b>♟</b>Guests included</span></div><button type="button" className="flow-primary" onClick={onHome}>Open GuestHub →</button></section></div>
 }
 
 function FlowBottom({ screen, go }) { return <nav className="flow-bottom"><button className={screen === 'home' ? 'active' : ''} onClick={() => go('home')}>⌂<span>Home</span></button><button className={screen === 'program' ? 'active' : ''} onClick={() => go('program')}>▦<span>Programme</span></button><button onClick={() => go('day')}>▶<span>Live</span></button><button onClick={() => go('pass')}>♙<span>Me</span></button></nav> }
@@ -3273,7 +3274,7 @@ function JourneyInviteShell({ event, tone, designTheme, title, dateLabel, timeLa
           <div className="complete-event-screen">
             <FlowTopBar event={event} />
             <div className="complete-rsvp-hero" style={cover ? eventBrandingKey(event) ? { '--event-cover': `url(${JSON.stringify(cover)})` } : { backgroundImage: `linear-gradient(150deg, rgba(255,249,233,.96), rgba(247,201,108,.78)), url(${cover})` } : undefined}>
-              <div className="complete-rsvp-brand">{event.logo_url && <img src={event.logo_url} alt="" />}<div><span>{host || 'Festio Event'}</span><h1>{title}</h1><em>Unity · Heritage · Progress</em></div></div>
+              <div className="complete-rsvp-brand">{event.logo_url && <img src={event.logo_url} alt="" />}<div><span>{host || 'Festio Event'}</span><h1>{title}</h1><em>Your event. Your community.</em></div></div>
               <div className="complete-rsvp-meta"><span>▣ {[dateLabel, timeLabel].filter(Boolean).join(' · ')}</span>{venue ? <a href={mapUrl(event.venue_address || venue)} target="_blank" rel="noopener noreferrer">● {venue} ↗</a> : <span>● Venue to be announced</span>}</div>
               <button type="button" className="complete-hero-cta" onClick={() => setCompleteScreen('register')}>Register / RSVP Now →</button>
             </div>

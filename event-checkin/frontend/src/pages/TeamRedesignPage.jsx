@@ -779,7 +779,7 @@ export default function TeamRedesignPage() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [currentEventId] = useCurrentEvent()
-  useEventDetails(currentEventId) // kept: no consumer in this file currently reads it, but fetching stays harmless and consistent with every other redesign page
+  const { event, loading: eventLoading } = useEventDetails(currentEventId)
   const rawTab = searchParams.get('tab')
   const tab = rawTab === 'tasks' ? 'tasks' : rawTab === 'mytasks' ? 'mytasks' : 'team'
 
@@ -818,7 +818,7 @@ export default function TeamRedesignPage() {
             <h1>{tab === 'mytasks' ? 'My Tasks' : 'Team & Tasks'}</h1>
           </div>
           <div className="rr-meta">
-            <Icon name="team" size={13} /> {tab === 'mytasks' ? 'Across all your events' : (event?.name || (currentEventId ? 'Loading…' : 'No event selected'))}
+            <Icon name="team" size={13} /> {tab === 'mytasks' ? 'Across all your events' : (event?.name || (currentEventId ? (eventLoading ? 'Loading event…' : 'Event tasks') : 'No event selected'))}
           </div>
         </div>
       </div>

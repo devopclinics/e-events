@@ -10,10 +10,10 @@ const emptyProduct = { name: '', description: '', price: '', currency: 'USD', ca
 const money = (amount, currency) => new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(Number(amount || 0) / 100)
 const usableSettings = (cfg) => {
   const saved = cfg.config || { enabled: false, provider_account_id: '', fee_bps: 500, fees_paid_by: 'buyer' }
-  if (cfg.providers?.[saved.provider]) return saved
-  if (cfg.providers?.paystack) return { ...saved, provider: 'paystack', currency: 'NGN' }
-  if (cfg.providers?.stripe) return { ...saved, provider: 'stripe', currency: 'USD' }
-  return { ...saved, provider: saved.provider || 'stripe', currency: saved.currency || 'USD' }
+  // Never silently change an existing settlement currency or payment provider.
+  if (cfg.config) return saved
+  const currency = cfg.default_currency || 'USD'
+  return { ...saved, currency, provider: currency === 'NGN' ? 'paystack' : 'stripe' }
 }
 
 function SalesPulse({ orders = [], currency = 'USD', summary = {} }) {
@@ -235,7 +235,7 @@ export default function TicketingRedesignPage() {
   return <RedesignShell title="Ticket sales" subtitle={config?.test_mode ? 'Test-mode paid admission' : 'Live paid admission'}>
     <header className="tk-hero">
       <div><span className="tk-eyebrow">Festio Tickets</span><h1>Turn your guest list into a box office.</h1><p>Create several ticket types, route payouts to the organizer, and follow every order from payment to check-in.</p></div>
-      <div className="tk-hero-tools"><label className="tk-event-picker"><span>Managing event</span><select value={eventId || ''} onChange={(e) => setEventId(e.target.value)}><option value="" disabled>Choose an event…</option>{events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}</select></label><div className="tk-mode"><span></span>Test mode<strong>No live charges</strong></div></div>
+      <div className="tk-hero-tools"><label className="tk-event-picker"><span>Managing event</span><select value={eventId || ''} onChange={(e) => setEventId(e.target.value)}><option value="" disabled>Choose an event…</option>{events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}</select></label><div className="tk-mode"><span></span>{config?.test_mode === true ? 'Test mode' : config?.test_mode === false ? 'Live mode' : 'Checking payment mode…'}<strong>{config?.test_mode === true ? 'No live charges' : config?.test_mode === false ? 'Real payments' : 'Wait for configuration'}</strong></div></div>
     </header>
     {error && <div className="tk-error">{error}</div>}
     {!eventId ? <div className="rr-panel">Select an event first.</div> : config && !config.service_enabled ?

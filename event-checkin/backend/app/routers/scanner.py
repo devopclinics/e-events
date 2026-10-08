@@ -578,7 +578,7 @@ async def view_ticket(qr_token: str, db: AsyncSession = Depends(get_db)):
         if table:
             table_name = table.name
 
-    menu_locked = bool(event and event.menu_enabled and not guest.admitted)
+    menu_locked = bool(event and event.menu_enabled and not guest.admitted and not (event.menu_selection_timing == "before_arrival" and guest.rsvp_status == "confirmed"))
     menu_categories = []
     guest_choices: dict[str, dict] = {"single": {}, "multi": {}, "combo": {}}
     if event and event.menu_enabled:
@@ -589,8 +589,9 @@ async def view_ticket(qr_token: str, db: AsyncSession = Depends(get_db)):
         if cats and all(c.display_only for c in cats):
             menu_categories, guest_choices = cats, choices
             menu_locked = False
-        elif event.status == "active" and guest.admitted:
+        elif event.status == "active" and (guest.admitted or (event.menu_selection_timing == "before_arrival" and guest.rsvp_status == "confirmed")):
             menu_categories, guest_choices = cats, choices
+            menu_locked = False
 
     partner_info = None
     if guest.partner_guest_id:
@@ -1672,7 +1673,7 @@ async def submit_menu(qr_token: str, body: GuestMenuSubmit, db: AsyncSession = D
         raise HTTPException(status_code=400, detail="Menu selection is not enabled for this event")
     if event.status != "active":
         raise HTTPException(status_code=400, detail="Menu selection is only available while the event is active")
-    if not guest.admitted:
+    if not guest.admitted and not (event.menu_selection_timing == "before_arrival" and guest.rsvp_status == "confirmed"):
         raise HTTPException(status_code=400, detail="Menu unlocks at check-in")
     if guest.meal_served:
         raise HTTPException(status_code=400, detail="Your meal has been served — selection is locked")

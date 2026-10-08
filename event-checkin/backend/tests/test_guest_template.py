@@ -12,7 +12,7 @@ from sqlalchemy import select, func
 from conftest import _Session
 from app.models import Event, Guest, TicketType
 
-BASE_COLS = ["first_name", "last_name", "email", "phone"]
+BASE_COLS = ["first_name", "last_name", "email", "phone", "rsvp_guest_type", "rsvp_relationship", "is_junior"]
 SHIP_COLS = ["ship_address1", "ship_address2", "ship_city", "ship_state",
              "ship_postal", "ship_country"]
 

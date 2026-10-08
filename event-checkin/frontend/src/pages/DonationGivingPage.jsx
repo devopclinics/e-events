@@ -283,7 +283,7 @@ export default function DonationGivingPage() {
   const pledgeChannels = campaign?.pledge_payment_channels || []
   const progress = campaign?.goal_minor ? Math.min(100, Math.round(campaign.confirmed_minor / campaign.goal_minor * 100)) : 0
   const amountMinor = Math.round(Number(amount || 0) * 100)
-  const donationIntro = !campaign?.description || /pledge/i.test(campaign.description)
+  const donationIntro = !campaign?.description
     ? `Support ${campaign?.event_name || 'this event'}. Every contribution helps make the event possible.`
     : campaign.description
 

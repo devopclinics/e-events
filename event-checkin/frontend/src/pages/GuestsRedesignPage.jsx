@@ -55,7 +55,7 @@ function adaptGuest(g) {
     vip: !!g.is_vip,
     submitter: g.rsvp_submitter_name || null,
     qr: !!g.qr_generated_at,
-    invited: g.invite_sent_at ? new Date(g.invite_sent_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—',
+    invited: g.invite_status === 'sent' && g.invite_sent_at ? new Date(g.invite_sent_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—',
     channels: {
       email: channelState(g.email_delivery_at, g.email_delivery_status),
       sms: channelState(g.sms_delivery_at, g.sms_delivery_status),
@@ -402,7 +402,7 @@ function GuestsTab({ notify, onView, onEdit, onRemove, onUnadmit, onApproveRsvp,
             <tbody>
               {filtered.map((g) => (
                 <tr key={g.id}>
-                  <td><input type="checkbox" aria-label={`Select ${g.first_name} ${g.last_name}`} checked={selected.has(g.id)} onChange={() => toggleSelected(g.id)} /></td>
+                  <td><input type="checkbox" aria-label={`Select ${g.name}`} checked={selected.has(g.id)} onChange={() => toggleSelected(g.id)} /></td>
                   <td>
                     <div className="rd-who">
                       <span className="dot">{g.initials}</span>
@@ -847,11 +847,11 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
     return { total, confirmed, declined, pendingApproval, awaitingReply, notInvited }
   }, [guests])
   const reminderGuestIds = useMemo(
-    () => guests.filter((g) => g.raw.invite_sent_at && !['confirmed', 'declined'].includes(String(g.raw.rsvp_status || '').toLowerCase())).map((g) => g.id),
+    () => guests.filter((g) => g.raw.invite_status === 'sent' && g.raw.invite_sent_at && !['confirmed', 'declined'].includes(String(g.raw.rsvp_status || '').toLowerCase())).map((g) => g.id),
     [guests],
   )
   const invitedGuestIds = useMemo(
-    () => guests.filter((g) => g.raw.invite_sent_at).map((g) => g.id),
+    () => guests.filter((g) => g.raw.invite_status === 'sent').map((g) => g.id),
     [guests],
   )
 
@@ -1279,7 +1279,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
                 <input className="rd-field" value={newInviteeType} placeholder="Guest type name (e.g. Spouse)" onChange={(e) => setNewInviteeType(e.target.value)} />
                 <button className="rr-btn secondary" disabled={!newInviteeType.trim()} onClick={() => {
                   const type = newInviteeType.trim()
-                  if (!inviteeTypeOptions.includes(type)) setInviteeTypeOptions((prev) => [...prev, type])
+                  if (!inviteeTypeOptions.includes(type)) setInviteeTypeOptions((prev) => [...new Set([...(prev.length ? prev : ['Spouse', 'Child', 'Parent/Guardian', 'Invited Guest', 'Other']), type])])
                   setNewInviteeType('')
                 }}><Icon name="plus" size={12} /> Add guest type</button>
               </div>
@@ -1427,6 +1427,15 @@ export default function GuestsRedesignPage() {
   const [importProgress, setImportProgress] = useState(0)
   const [importResult, setImportResult] = useState(null)
   const [importFile, setImportFile] = useState(null)
+  const [importPreview, setImportPreview] = useState(null)
+  const [importMapping, setImportMapping] = useState({})
+  const [importPreviewBusy, setImportPreviewBusy] = useState(false)
+  async function previewImport(mapping = {}) {
+    setImportPreviewBusy(true)
+    try { const next=await api.uploadGuests(eventId, importFile, mapping, true); setImportPreview(next); setImportMapping(next.mapping); setImportStep('mapping') }
+    catch(e) { notify(e.message || 'Could not preview this file', true) }
+    finally { setImportPreviewBusy(false) }
+  }
   const importTimerRef = useRef(null)
 
   // RSVP approval
@@ -1437,8 +1446,16 @@ export default function GuestsRedesignPage() {
   // Invite send flow
   const [sendCount, setSendCount] = useState(null) // null = closed, number = open audience step
   const [sendGuestIds, setSendGuestIds] = useState([])
+  const [sendStep, setSendStep] = useState('audience')
+  const [sendPreview, setSendPreview] = useState(null)
+  const [sendPreviewError, setSendPreviewError] = useState('')
+  useEffect(()=>{
+    if(sendCount===null || sendStep!=='audience')return
+    let cancelled=false;setSendPreview(null);setSendPreviewError('')
+    api.previewGuestInvites(eventId,sendGuestIds,sendGuestIds.length>0).then(data=>{if(!cancelled)setSendPreview(data)}).catch(e=>{if(!cancelled)setSendPreviewError(e.message)})
+    return()=>{cancelled=true}
+  },[eventId,sendCount,sendStep,sendGuestIds])
   const [sendResult, setSendResult] = useState(null)
-  const [sendStep, setSendStep] = useState('audience') // audience | sending | done | partial
   const [invitePreviewOpen, setInvitePreviewOpen] = useState(false)
   const [invitePreviewCh, setInvitePreviewCh] = useState('email')
   const sendTimerRef = useRef(null)
@@ -1496,6 +1513,9 @@ export default function GuestsRedesignPage() {
   useEffect(() => {
     if (!editTarget) { setEditAnswers(null); return }
     setEditForm({
+      rsvp_guest_type: editTarget.raw.rsvp_guest_type || '',
+      rsvp_relationship: editTarget.raw.rsvp_relationship || '',
+      is_junior: !!editTarget.raw.is_junior || ['child','junior','minor'].includes((editTarget.raw.rsvp_guest_type || '').toLowerCase()),
       first_name: editTarget.raw.first_name || '',
       last_name: editTarget.raw.last_name || '',
       email: editTarget.raw.email || '',
@@ -1552,7 +1572,7 @@ export default function GuestsRedesignPage() {
     return [
       { ...STAT_TILES[0], value: total, caption: 'Imported + self-registered' },
       { ...STAT_TILES[1], value: qr, caption: `${Math.max(0, total - qr)} waiting on QR` },
-      { ...STAT_TILES[2], value: invited, caption: `${Math.max(0, total - invited)} not sent yet` },
+      { ...STAT_TILES[2], value: invited, caption: `${Math.max(0, total - invited)} without an invitation send` },
       { ...STAT_TILES[3], value: admitted, caption: total ? `${Math.round((admitted / total) * 100)}% of total guests` : 'No guests yet' },
     ]
   }, [guests])
@@ -1566,7 +1586,7 @@ export default function GuestsRedesignPage() {
     setImportStep('validating')
     setImportProgress(30)
     try {
-      const result = await api.uploadGuests(eventId, importFile)
+      const result = await api.uploadGuests(eventId, importFile, importMapping)
       setImportProgress(100)
       setImportResult({
         imported: result.added || result.imported || 0,
@@ -1720,6 +1740,7 @@ export default function GuestsRedesignPage() {
             </div>
             <div><label className="rd-field-label">Email</label><input className="rd-field" type="email" value={addForm.email} onChange={(e) => setAddForm({ ...addForm, email: e.target.value })} /></div>
             <div><label className="rd-field-label">Phone (E.164)</label><input className="rd-field" placeholder="+234..." value={addForm.phone} onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })} /></div>
+
             {event?.venue_access_enabled && <div><label className="rd-field-label">Check-in access</label><select className="rd-field" value={addForm.ticket_type_id} onChange={(e) => setAddForm({ ...addForm, ticket_type_id: e.target.value })}><option value="">No access type yet</option>{ticketTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}</select><span className="rd-hint">Import templates and registration categories can assign this automatically; use this for manual guests.</span></div>}
             <label className="gr-required-check"><input type="checkbox" checked={addForm.vip} onChange={(e) => setAddForm({ ...addForm, vip: e.target.checked })} /> Mark as VIP</label>
             <label className="gr-required-check"><input type="checkbox" checked={addForm.sendInvite} onChange={(e) => setAddForm({ ...addForm, sendInvite: e.target.checked })} /> Send invite immediately</label>
@@ -1807,6 +1828,8 @@ export default function GuestsRedesignPage() {
             {event?.venue_access_enabled && <div><label className="rd-field-label">Check-in access</label><select className="rd-field" value={editForm.ticket_type_id} onChange={(e) => setEditForm((v) => ({ ...v, ticket_type_id: e.target.value }))}><option value="">No access type</option>{ticketTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}</select></div>}
             <div><label className="rd-field-label">Email</label><input className="rd-field" value={editForm.email} onChange={(e) => setEditForm((v) => ({ ...v, email: e.target.value }))} /></div>
             <div><label className="rd-field-label">Phone (E.164)</label><input className="rd-field" value={editForm.phone} onChange={(e) => setEditForm((v) => ({ ...v, phone: e.target.value }))} /></div>
+            <label className="rd-field-label">Relationship / role<input className="rd-field" value={editForm.rsvp_guest_type || ''} onChange={e=>setEditForm(v=>({...v,rsvp_guest_type:e.target.value}))}/></label>
+            <label><input type="checkbox" checked={!!editForm.is_junior} onChange={e=>setEditForm(v=>({...v,is_junior:e.target.checked}))}/> This attendee is a junior / minor</label><p className="rd-hint">Confirm the attendee’s details before correcting this. Guardian pickup and consent-signing permissions are managed separately.</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div><label className="rd-field-label">Table</label><select className="rd-field" value={editForm.table_id} onChange={(e) => setEditForm((v) => ({ ...v, table_id: e.target.value, seat_number: e.target.value ? v.seat_number : '' }))}><option value="">Unassigned</option>{tables.map((table) => <option key={table.id} value={table.id}>{table.name}</option>)}</select></div>
               <div><label className="rd-field-label">Seat</label><input className="rd-field" disabled={!editForm.table_id} value={editForm.seat_number} onChange={(e) => setEditForm((v) => ({ ...v, seat_number: e.target.value }))} placeholder="e.g. 4" /></div>
@@ -1835,6 +1858,8 @@ export default function GuestsRedesignPage() {
                   // teammate edited them while this modal sat open) is
                   // rejected by the server instead of silently overwritten.
                   await api.updateGuest(eventId, editTarget.id, {
+                    rsvp_guest_type: editForm.rsvp_guest_type.trim() || undefined,
+                    is_junior: !!editForm.is_junior,
                     first_name: editForm.first_name.trim(),
                     last_name: editForm.last_name.trim(),
                     email: editForm.email.trim() || null,
@@ -2057,14 +2082,14 @@ export default function GuestsRedesignPage() {
         >
           {sendStep === 'audience' && (
             <div>
-              <p style={{ fontSize: '0.85rem', marginBottom: 14 }}>About to send invitations to <strong>{sendCount} guests</strong> across the following channels:</p>
+              <p style={{ fontSize: '0.85rem', marginBottom: 14 }}>About to send invitations to <strong>{sendCount} guests</strong> using the configured channel policy:</p>{sendPreviewError ? <p role="alert">{sendPreviewError}</p> : !sendPreview ? <p role="status">Checking recipients and credits…</p> : <div><ul>{Object.entries(sendPreview.channels).map(([channel,count])=><li key={channel}>{channel}: {count} eligible recipients</li>)}</ul><p>{sendPreview.unreachable} unreachable · {sendPreview.blocked} blocked</p><p>Estimated credits: {sendPreview.estimated_credits} · Available {sendPreview.balance_scope} balance: {sendPreview.balance}</p><small>{sendPreview.note}</small></div>}
               <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 6, padding: '8px 12px', fontSize: '0.82rem', marginBottom: 14 }}>
                 <Icon name="warning" size={12} /> The server will apply the event's configured channel policy, consent rules, recipient safety, and available credits.
               </div>
               <div className="rd-row2" style={{ gridTemplateColumns: 'auto 1fr 1fr' }}>
                 <button className="rr-btn secondary" onClick={() => setSendCount(null)}>Cancel</button>
                 <button className="rr-btn secondary" onClick={() => { setSendCount(null); navigate('/communications-redesign?tab=scheduler&preset=invitation') }}><Icon name="clock" size={13} /> Schedule instead</button>
-                <button className="rr-btn primary" onClick={() => startSend(sendCount)}>Send now</button>
+                <button className="rr-btn primary" disabled={!sendPreview || sendPreview.blocked > 0 || !Object.values(sendPreview.channels).some(Boolean)} onClick={() => startSend(sendCount)}>Send now</button>
               </div>
             </div>
           )}
@@ -2122,7 +2147,7 @@ export default function GuestsRedesignPage() {
                 <span>Supports XLSX, CSV, Google Sheets export</span>
                 <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => setImportFile(e.target.files?.[0] || null)} />
                 {importFile && <span>{importFile.name}</span>}
-                <button className="rr-btn secondary" disabled={!importFile} onClick={() => setImportStep('mapping')}>Continue to import</button>
+                <button className="rr-btn secondary" onClick={() => previewImport()} disabled={importPreviewBusy || !importFile}>Preview columns</button>
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
                 <button className="rr-btn secondary" onClick={() => api.downloadGuestTemplate(eventId, 'xlsx').catch((e) => notify(e.message || 'Template download failed', true))}>Download template</button>
@@ -2131,11 +2156,17 @@ export default function GuestsRedesignPage() {
           )}
           {importStep === 'mapping' && (
             <div>
-              <p style={{ fontSize: '0.85rem', marginBottom: 12 }}>Festio will validate the selected file and import recognized guest, contact, access, household, and seating columns. Unknown columns are ignored and real server results are shown after import.</p>
+              <p>No guests have been saved. Review the mapping and sample rows, then validate any changes before importing.</p>
+              {(importPreview?.headers || []).map(header=><label key={header} style={{display:'flex',justifyContent:'space-between',gap:12,margin:'10px 0'}}>{header}<select className="rd-field" style={{maxWidth:250}} aria-label={`Map ${header}`} value={importMapping[header] || ''} onChange={e=>{setImportMapping({...importMapping,[header]:e.target.value});setImportPreview({...importPreview,result:null})}}><option value="">Ignore column</option>{importPreview.fields.map(field=><option key={field} value={field}>{field.replaceAll("_", " ")}</option>)}</select></label>)}
+              <p>{importPreview?.row_count || 0} rows · Ignored columns: {(importPreview?.headers || []).filter(header=>!importMapping[header]).join(', ') || 'none'}</p>
+              {!importPreview?.result && <p role="status">Mapping changed. Validate again to refresh the sample and row checks.</p>}<div style={{overflowX:'auto'}}><table className="gr-import-sample"><thead><tr>{Object.keys(importPreview?.sample?.[0] || {}).map(key=><th style={{padding:8,textAlign:"left"}} key={key}>{key.replaceAll("_", " ")}</th>)}</tr></thead><tbody>{(importPreview?.sample || []).map((row,i)=><tr key={i}>{Object.entries(row).map(([key,value])=><td style={{padding:8,borderTop:"1px solid var(--rr-line)"}} key={key}>{value}</td>)}</tr>)}</tbody></table></div>
+              {(importPreview?.issues || []).map(issue=><p role="alert" key={issue}>{issue}</p>)}
+              {importPreview?.result && <p role="status">Validation: {importPreview.result.added} new, {importPreview.result.skipped} skipped / existing. {importPreview.result.phone_note} {importPreview.result.cap_note} {importPreview.result.ticket_note}</p>}
+              <button className="rr-btn secondary" disabled={importPreviewBusy} onClick={()=>previewImport(importMapping)}>{importPreviewBusy?'Validating…':'Validate mapping'}</button>
               <div className="rr-panel" style={{ padding: 12 }}><strong>{importFile?.name}</strong></div>
               <div className="rd-row2" style={{ marginTop: 14 }}>
                 <button className="rr-btn secondary" onClick={() => setImportStep('upload')}>Back</button>
-                <button className="rr-btn primary" onClick={startImport}>Validate &amp; import</button>
+                <button className="rr-btn primary" disabled={!importPreview?.result || importPreviewBusy} onClick={startImport}>Import validated rows</button>
               </div>
             </div>
           )}

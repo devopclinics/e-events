@@ -58,10 +58,10 @@ async def channel_delivery_report(db: AsyncSession, event_id: str, channels: tup
         if action in ("spend", "reserve"):
             bucket["sent"].add(key)
             st = (status or "").lower()
-            if "deliver" in st or st in DELIVERED_SYNONYMS:
-                bucket["delivered"].add(key)
-            elif st in FAILED_STATUSES:
+            if st in FAILED_STATUSES:
                 bucket["failed"].add(key)
+            elif "deliver" in st or st in DELIVERED_SYNONYMS:
+                bucket["delivered"].add(key)
             credits_spent[channel] += abs(credits or 0)
         elif action == "refund":
             bucket["failed"].add(key)
@@ -75,30 +75,38 @@ async def channel_delivery_report(db: AsyncSession, event_id: str, channels: tup
 
 
 async def email_delivery_report(db: AsyncSession, event_id: str) -> dict:
-    """Email's real outcome lives in EmailDeliveryEvent (webhook-driven),
-    not the credit ledger. Counts distinct recipients per terminal status,
-    since one email typically produces multiple lifecycle events
-    (accepted -> sent -> delivered)."""
+    """Count provider messages, deduplicating lifecycle webhooks per recipient.
+
+    Keep the distinct-recipient metric separately: three messages to one person
+    are three messages, not one send. Uncorrelated legacy rows remain distinct.
+    """
     rows = (await db.execute(
-        select(EmailDeliveryEvent.recipient, EmailDeliveryEvent.status)
+        select(EmailDeliveryEvent.id, EmailDeliveryEvent.provider,
+               EmailDeliveryEvent.provider_email_id, EmailDeliveryEvent.recipient,
+               EmailDeliveryEvent.status)
         .where(EmailDeliveryEvent.event_id == event_id)
     )).all()
-    by_recipient: dict[str, set[str]] = {}
-    for recipient, status in rows:
-        by_recipient.setdefault(recipient or "", set()).add((status or "").lower())
+    by_message: dict[tuple, set[str]] = {}
+    recipients = set()
+    for row_id, provider, message_id, recipient, status in rows:
+        normalized = (recipient or "").strip().lower()
+        if normalized:
+            recipients.add(normalized)
+        key = (provider, message_id or row_id, normalized)
+        by_message.setdefault(key, set()).add((status or "").lower())
 
     delivered = failed = blocked = sent_only = 0
-    for statuses in by_recipient.values():
+    for statuses in by_message.values():
         if "delivered" in statuses:
             delivered += 1
-        elif "bounced" in statuses or "suppressed" in statuses:
+        elif statuses.intersection({"bounced", "suppressed", "failed"}):
             failed += 1
         elif "blocked_no_credits" in statuses:
             blocked += 1
         else:
             sent_only += 1
-    total = len(by_recipient)
     return {
-        "recipients": total, "delivered": delivered, "failed": failed,
+        "messages": len(by_message), "recipients": len(recipients),
+        "delivered": delivered, "failed": failed,
         "blocked_no_credits": blocked, "sent_unconfirmed": sent_only,
     }

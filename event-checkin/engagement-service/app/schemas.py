@@ -139,6 +139,7 @@ class ActivitySummary(BaseModel):
     session_id: str | None = None
     session_title: str | None = None
     created_at: datetime
+    question_count: int = 0
     response_count: int = 0
     participant_count: int = 0
     # Survey/feedback only — how many of participant_count pressed the final

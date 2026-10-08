@@ -209,6 +209,7 @@ async def _invite_page_out(event: Event, db: AsyncSession) -> InvitePageOut:
         id=event.id,
         name=event.name,
         couples_name=event.couples_name,
+        event_type=event.event_type,
         event_date=event.event_date,
         event_end_date=event.event_end_date,
         timezone=event.timezone,
@@ -223,7 +224,7 @@ async def _invite_page_out(event: Event, db: AsyncSession) -> InvitePageOut:
         invite_message=event.invite_message,
         invite_cover_image=event.invite_cover_image,
         logo_url=event.logo_url,
-        rsvp_enabled=event.rsvp_enabled,
+        rsvp_enabled=event.rsvp_enabled and event.status == "active",
         experience_enabled=event.experience_enabled,
         live_program_enabled=event.live_program_enabled,
         festiome_addon_enabled=event.festiome_addon_enabled,
@@ -665,6 +666,7 @@ async def _submit_multi_invitee_rsvp(
             rsvp_submitter_phone=submitter_phone,
             rsvp_relationship=(invitee.relationship or "").strip() or None,
             rsvp_guest_type=guest_type,
+            is_junior=invitee.is_junior or guest_type.strip().casefold() in {"child", "junior", "minor"},
             rsvp_notes=" | ".join(filter(None, [
                 f"Age group: {(invitee.age_group or '').strip()}" if (invitee.age_group or "").strip() else None,
                 (invitee.notes or "").strip() or None,
@@ -807,6 +809,8 @@ async def submit_rsvp(
     fires invite notifications via the existing email/SMS/WhatsApp pipeline."""
     event = await _get_public_event(event_id, db)
 
+    if event.status != "active":
+        raise HTTPException(409, "Registration is not open yet. Please return when the organizer activates this event.")
     if not event.rsvp_enabled:
         raise HTTPException(400, "RSVP is not open for this event")
 

@@ -143,7 +143,7 @@ export default function AdminRedesignPage() {
   const stats = !guestsLoading ? {
     total: guests.length,
     qr: guests.filter((g) => g.qr_generated_at).length,
-    invited: guests.filter((g) => g.invite_sent_at).length,
+    invited: guests.filter((g) => g.invite_status === 'sent').length,
     admitted: guests.filter((g) => g.admitted).length,
     declined: guests.filter((g) => g.rsvp_status === 'declined').length,
   } : null
@@ -338,7 +338,7 @@ export default function AdminRedesignPage() {
 
   const currentStep = journeySteps.find((s) => !s.done)
   const messagingSummary = !guestsLoading ? {
-    sent: guests.filter((guest) => !!guest.invite_sent_at).length,
+    sent: guests.filter((guest) => guest.invite_status === 'sent').length,
     failed: guests.filter((guest) => guest.invite_status === 'failed').length,
     unsent: guests.filter((guest) => !guest.invite_sent_at).length,
     noContact: guests.filter((guest) => !guest.email && !guest.phone).length,
@@ -461,7 +461,7 @@ export default function AdminRedesignPage() {
         <div className="rr-panel rr-health">
           <div className="rr-health-head"><h2>Setup progress</h2><Icon name="info" size={13}/></div>
           <HealthRing pct={healthPct}/>
-          <p>{healthPct === 100 ? <strong>Your event is fully set up.</strong> : <><strong>{journeySteps.length - journeySteps.filter((s) => s.done).length} step(s) remaining.</strong> Finish these to get your event fully ready.</>}</p>
+          <p>{healthPct === 100 ? <strong>Basic setup complete. Review your enabled services before going live.</strong> : <><strong>{journeySteps.length - journeySteps.filter((s) => s.done).length} step(s) remaining.</strong> Finish these basic setup steps, then check your enabled services.</>}</p>
           <button className="rr-link-btn" onClick={() => setChecklistOpen(true)}>View health checklist <Icon name="arrow" size={13}/></button>
         </div>
       </div>
@@ -500,13 +500,14 @@ export default function AdminRedesignPage() {
         <div className="rr-panel rr-quick highlight">
           <div className="rr-quick-head"><span className="rr-quick-icon amber"><Icon name="send" size={16}/></span><h3>Invitations</h3></div>
           <div className="rr-quick-big">{stats ? stats.invited : '—'}<small>Invitation{stats?.invited === 1 ? '' : 's'} sent</small></div>
-          <div className="rr-quick-sub amber">{stats ? `${stats.total - stats.invited} Not sent yet` : ''}</div>
+          <div className="rr-quick-sub amber">{stats ? `${stats.total - stats.invited} without an invitation send (includes self-registration)` : ''}</div>
           <button onClick={() => navigate('/guests-redesign?tab=invite')}>Send more invites <Icon name="arrow" size={13}/></button>
         </div>
         <div className="rr-panel rr-quick">
-          <div className="rr-quick-head"><span className="rr-quick-icon teal"><Icon name="ticket" size={16}/></span><h3>Check-in ready</h3></div>
+          <div className="rr-quick-head"><span className="rr-quick-icon teal"><Icon name="ticket" size={16}/></span><h3>Check-in setup</h3></div>
           <div className="rr-checklist">
-            <div className={event?.is_paid ? 'ok' : 'warn'}><Icon name={event?.is_paid ? 'check' : 'info'} size={12}/> {event?.is_paid ? 'Scanning enabled' : 'Scanning not enabled — choose an Event Pass'}</div>
+            <div className={event?.status === 'active' ? 'ok' : 'warn'}><Icon name={event?.status === 'active' ? 'check' : 'info'} size={12}/>{event?.status === 'active' ? 'Event active' : 'Event is not active — review its status before admission'}</div>
+            <div className={event?.is_paid ? 'ok' : 'warn'}><Icon name={event?.is_paid ? 'check' : 'info'} size={12}/> {event?.is_paid ? 'Scanning entitlement available' : 'Scanning not enabled — choose an Event Pass'}</div>
             <div className={event?.is_paid ? 'ok' : 'warn'}><Icon name={event?.is_paid ? 'check' : 'info'} size={12}/> {event?.is_paid ? 'Event Pass ready' : 'No Event Pass yet'}</div>
             <div className={event?.rsvp_enabled ? 'ok' : 'warn'}><Icon name={event?.rsvp_enabled ? 'check' : 'info'} size={12}/> {event?.rsvp_enabled ? 'RSVP form enabled' : 'RSVP form not enabled'}</div>
           </div>

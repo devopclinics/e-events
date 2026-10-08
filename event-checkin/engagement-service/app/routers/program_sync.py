@@ -125,13 +125,15 @@ async def receive_program_event(
 async def list_program_sessions(
     identity: Identity = Depends(current_identity),
     db: AsyncSession = Depends(get_db),
+    include_archived: bool = False,
 ):
     require_staff(identity)
-    sessions = (await db.execute(
-        select(ProgramSession)
-        .where(ProgramSession.org_id == identity.org_id, ProgramSession.event_id == identity.event_id)
-        .order_by(ProgramSession.sort_order, ProgramSession.starts_at, ProgramSession.title)
-    )).scalars().all()
+    statement = select(ProgramSession).where(
+        ProgramSession.org_id == identity.org_id, ProgramSession.event_id == identity.event_id)
+    if not include_archived:
+        statement = statement.where(ProgramSession.status.in_(("published", "draft")))
+    sessions = (await db.execute(statement.order_by(
+        ProgramSession.sort_order, ProgramSession.starts_at, ProgramSession.title))).scalars().all()
     output: list[ProgramSessionOut] = []
     for session in sessions:
         activity_count = await db.scalar(

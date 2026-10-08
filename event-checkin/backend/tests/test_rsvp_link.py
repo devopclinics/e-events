@@ -11,6 +11,7 @@ async def test_public_rsvp_link_uses_event_token(ctx):
     ev = ctx.ids["event_a"]
     async with _Session() as s:
         event = await s.get(Event, ev)
+        event.status = "active"
         event.rsvp_enabled = True
         event.rsvp_token = "share-token-123"
         event.rsvp_require_approval = True
@@ -43,6 +44,7 @@ async def test_public_rsvp_link_can_create_multiple_pending_invitees(ctx):
     ev = ctx.ids["event_a"]
     async with _Session() as s:
         event = await s.get(Event, ev)
+        event.status = "active"
         event.rsvp_enabled = True
         event.invite_mode = "open"
         event.rsvp_token = "multi-token-123"
@@ -116,6 +118,7 @@ async def test_multi_invitee_rsvp_enforces_category_limit_rules(ctx):
     ev = ctx.ids["event_a"]
     async with _Session() as s:
         event = await s.get(Event, ev)
+        event.status = "active"
         event.rsvp_enabled = True
         event.invite_mode = "open"
         event.rsvp_token = "category-limit-token"
@@ -181,6 +184,7 @@ async def test_multi_invitee_rsvp_supports_submitter_only_category(ctx):
     ev = ctx.ids["event_a"]
     async with _Session() as s:
         event = await s.get(Event, ev)
+        event.status = "active"
         event.rsvp_enabled = True
         event.invite_mode = "open"
         event.rsvp_token = "submitter-only-token"
@@ -246,6 +250,7 @@ async def test_multi_invitee_rsvp_can_allow_duplicate_emails(ctx):
     ev = ctx.ids["event_a"]
     async with _Session() as s:
         event = await s.get(Event, ev)
+        event.status = "active"
         event.rsvp_enabled = True
         event.invite_mode = "open"
         event.rsvp_token = "duplicate-email-token"
@@ -290,6 +295,7 @@ async def test_multi_invitee_rsvp_maps_category_to_submitter_and_invitee_groups(
     ev = ctx.ids["event_a"]
     async with _Session() as s:
         event = await s.get(Event, ev)
+        event.status = "active"
         event.rsvp_enabled = True
         event.invite_mode = "open"
         event.rsvp_token = "cat-seating-token"
@@ -356,6 +362,7 @@ async def test_multi_invitee_rsvp_per_field_required_flags(ctx):
     ev = ctx.ids["event_a"]
     async with _Session() as s:
         event = await s.get(Event, ev)
+        event.status = "active"
         event.rsvp_enabled = True
         event.invite_mode = "open"
         event.rsvp_token = "req-flags-token"

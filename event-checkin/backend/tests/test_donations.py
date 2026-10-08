@@ -194,7 +194,7 @@ async def test_donation_tracker_public_flow_keeps_pledges_separate_and_private(c
     assert snapshot["pledged_minor"] == 30000
     assert snapshot["donation_count"] == 0
     assert snapshot["pledge_count"] == 1
-    assert {item["type"] for item in snapshot["pledge_payment_channels"]} == {"festio_pay", "cash_app", "zelle", "paypal", "bank_transfer", "offline"}
+    assert {item["type"] for item in snapshot["pledge_payment_channels"]} == {"zelle"}
     assert snapshot["recent_public"][0]["name"] == "Anonymous donor"
     assert snapshot["recent_public"][0]["amount_minor"] is None
 

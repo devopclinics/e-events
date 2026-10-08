@@ -25,6 +25,7 @@ class Organization(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     name: Mapped[str] = mapped_column(String(255))
+    message_credit_units: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
@@ -76,6 +77,7 @@ class Event(Base):
     # Festio Live add-on gate — see festio_live_participation() in main.py.
     engagement_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     message_credits: Mapped[int] = mapped_column(Integer, default=0)
+    rsvp_invitee_contact_exempt_types: Mapped[list | None] = mapped_column(JSON, nullable=True)
     plan_tier: Mapped[str] = mapped_column(String(20), default="free")
     # Speaker Showcase cross-link: lets program_sessions() tell the Program
     # tab whether/where to link a session's speaker.
@@ -88,6 +90,7 @@ class Guest(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
+    rsvp_guest_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
     first_name: Mapped[str] = mapped_column(String(100))
     last_name: Mapped[str] = mapped_column(String(100))
     rsvp_status: Mapped[str] = mapped_column(String(20), default="invited")

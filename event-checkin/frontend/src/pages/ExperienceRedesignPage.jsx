@@ -186,7 +186,16 @@ function ExperienceStepEditor({ form, setForm, steps, busy, onClose, onSave, spe
   const dependencyChoices = steps.filter((step) => step.id !== form.id && step.key !== form.key)
   const sessionChoices = steps.filter((step) => step.type === 'session_attendance')
   const feedbackChoices = steps.filter((step) => step.type === 'feedback' && step.id !== form.id)
-  const patch = (next) => setForm((current) => ({ ...current, ...next }))
+  const patch = (next) => setForm((current) => {
+    const updated = {...current,...next}
+    if(updated.type==='session_attendance' && updated.program_is_segment && updated.session_date && updated.session_start_time && updated.session_end_time){
+      const start=Number(localInputToOffsetSeconds(event?.event_date,event?.timezone,`${updated.session_date}T${updated.session_start_time}`))
+      const end=Number(localInputToOffsetSeconds(event?.event_date,event?.timezone,`${updated.session_date}T${updated.session_end_time}`))
+      updated.program_start_offset_seconds=start
+      updated.program_duration_seconds=end-start
+    }
+    return updated
+  })
   const updateQuestion = (index, next) => setForm((current) => ({
     ...current,
     feedback_questions: current.feedback_questions.map((question, questionIndex) => questionIndex === index ? { ...question, ...next } : question),
@@ -251,16 +260,16 @@ function ExperienceStepEditor({ form, setForm, steps, busy, onClose, onSave, spe
         </section>
 
         <section className="ex-editor-section accent">
-          <div className="ex-editor-section-title with-control"><div><strong>Live Program timing</strong><span>Optional timed program segment</span></div><label><input type="checkbox" checked={form.program_is_segment} onChange={(event) => patch({ program_is_segment: event.target.checked })}/> Include</label></div>
+          <div className="ex-editor-section-title with-control"><div><strong>Live Program timing</strong><span>{form.type==='session_attendance' ? 'Uses the session date, start and end time below.' : 'Optional timed program segment'}</span></div><label><input type="checkbox" checked={form.program_is_segment} onChange={(event) => patch({ program_is_segment: event.target.checked })}/> Include</label></div>
           {form.program_is_segment && <div className="ex-editor-grid">
             <StepField label="Segment starts" hint={event?.timezone ? `Local time in ${event.timezone}` : 'Set the event timezone in Setup to schedule this precisely'}>
-              <input className="rr-input" type="datetime-local" value={offsetSecondsToLocalInput(event?.event_date, event?.timezone, form.program_start_offset_seconds)} onChange={(domEvent) => patch({ program_start_offset_seconds: localInputToOffsetSeconds(event?.event_date, event?.timezone, domEvent.target.value) })}/>
+              <input className="rr-input" type="datetime-local" disabled={form.type==='session_attendance'} value={offsetSecondsToLocalInput(event?.event_date, event?.timezone, form.program_start_offset_seconds)} onChange={(domEvent) => patch({ program_start_offset_seconds: localInputToOffsetSeconds(event?.event_date, event?.timezone, domEvent.target.value) })}/>
             </StepField>
             <StepField label="Duration" hint={form.program_start_offset_seconds !== '' && form.program_duration_seconds ? `Ends ${formatEventInstant(event?.event_date, event?.timezone, Number(form.program_start_offset_seconds) + Number(form.program_duration_seconds))}` : 'Hours and minutes'}>
               <div className="ex-duration-pair">
-                <input className="rr-input" type="number" min="0" placeholder="0" aria-label="Duration hours" value={secondsToHm(form.program_duration_seconds).hours} onChange={(domEvent) => patch({ program_duration_seconds: hmToSeconds(domEvent.target.value, secondsToHm(form.program_duration_seconds).minutes) })}/>
+                <input className="rr-input" type="number" min="0" placeholder="0" disabled={form.type==='session_attendance'} aria-label="Duration hours" value={secondsToHm(form.program_duration_seconds).hours} onChange={(domEvent) => patch({ program_duration_seconds: hmToSeconds(domEvent.target.value, secondsToHm(form.program_duration_seconds).minutes) })}/>
                 <span>h</span>
-                <input className="rr-input" type="number" min="0" max="59" placeholder="0" aria-label="Duration minutes" value={secondsToHm(form.program_duration_seconds).minutes} onChange={(domEvent) => patch({ program_duration_seconds: hmToSeconds(secondsToHm(form.program_duration_seconds).hours, domEvent.target.value) })}/>
+                <input className="rr-input" type="number" min="0" max="59" placeholder="0" disabled={form.type==='session_attendance'} aria-label="Duration minutes" value={secondsToHm(form.program_duration_seconds).minutes} onChange={(domEvent) => patch({ program_duration_seconds: hmToSeconds(secondsToHm(form.program_duration_seconds).hours, domEvent.target.value) })}/>
                 <span>m</span>
               </div>
             </StepField>
@@ -770,8 +779,8 @@ export default function ExperienceRedesignPage() {
   // ── Workflow cards: publish/unpublish/archive/unarchive/clone/delete ──
   async function handlePublish(w) {
     const alreadyPublished = (workflows || []).find((x) => x.status === 'published' && x.id !== w.id)
-    if (alreadyPublished) { notifyError(`Cannot publish — "${alreadyPublished.name}" is already live. Unpublish it first.`); return }
-    const updated = await runAction(`${w.id}:publish`, () => api.publishExperienceWorkflow(currentEventId, w.id), `${w.name} published.`)
+    if (alreadyPublished && !window.confirm(`Replace “${alreadyPublished.name}” with “${w.name}”? Previous attendance and completion records are retained in the archived workflow. The new workflow has its own progress.`)) return
+    const updated = await runAction(`${w.id}:publish`, () => api.publishExperienceWorkflow(currentEventId, w.id, alreadyPublished?.id), `${w.name} published.`)
     if (updated !== FAILED) { await Promise.all([loadWorkflows(w.id), loadEvent(), refreshDashboardAndAudit()]) }
   }
   async function handleUnpublish(w) {
@@ -806,16 +815,26 @@ export default function ExperienceRedesignPage() {
   function openAddStep() {
     setStepForm({ ...blankStepForm(), sort_order: ((selectedWorkflow?.steps?.length || 0) + 1) * 10 })
   }
+  const [presetBefore, setPresetBefore] = useState('suggested')
   async function addPresetStep(preset) {
     if (!selectedWorkflow || !isDraftSelected) return
     const existing = new Set(sortedSteps.map((step) => step.key))
-    let payload = stepPresetPayload(preset, (sortedSteps.length + 1) * 10)
+    const anchor = presetBefore === 'suggested' ? sortedSteps.find(s=>s.type==='checkout' || /departure|check.?out/i.test(s.title)) : sortedSteps.find(s=>s.id===presetBefore)
+    const index = anchor ? sortedSteps.findIndex(s=>s.id===anchor.id) : sortedSteps.length
+    const previousOrder = index > 0 ? Number(sortedSteps[index-1].sort_order) : 0
+    const nextOrder = anchor ? Number(anchor.sort_order) : previousOrder + 20
+    let payload = stepPresetPayload(preset, Math.floor((previousOrder + nextOrder) / 2))
     if (existing.has(payload.key)) {
       const suffix = sortedSteps.length + 1
       payload = { ...payload, key: `${payload.key}_${suffix}`, title: `${payload.title} ${suffix}` }
     }
     const saved = await runAction(`preset:${preset.key}`, () => api.createExperienceStep(currentEventId, selectedWorkflow.id, payload), `${payload.title} added.`)
-    if (saved !== FAILED) await Promise.all([loadWorkflows(selectedWorkflow.id), refreshDashboardAndAudit()])
+    if (saved !== FAILED) {
+      const ids = sortedSteps.map(step=>step.id)
+      ids.splice(index,0,saved.id)
+      await runAction(`preset:${preset.key}:order`,()=>api.reorderExperienceSteps(currentEventId,selectedWorkflow.id,ids),'Step position saved.')
+      await Promise.all([loadWorkflows(selectedWorkflow.id), refreshDashboardAndAudit()])
+    }
   }
   function openEditStep(step) {
     const config = step.config || {}
@@ -991,11 +1010,19 @@ export default function ExperienceRedesignPage() {
       if (config.feedback.questions.some((question) => !question.prompt)) throw new Error('Every feedback question needs wording')
     } else delete config.feedback
 
+    let segmentStart = Number(stepForm.program_start_offset_seconds)
+    let segmentDuration = Number(stepForm.program_duration_seconds)
+    if (stepForm.program_is_segment && stepForm.type === 'session_attendance') {
+      const session = config.session || {}
+      if (!session.date || !session.start_time || !session.end_time) throw new Error('Set the session date, start and end before adding it to the Live Program.')
+      segmentStart = Number(localInputToOffsetSeconds(realEvent?.event_date,realEvent?.timezone,`${session.date}T${session.start_time}`))
+      segmentDuration = Number(localInputToOffsetSeconds(realEvent?.event_date,realEvent?.timezone,`${session.date}T${session.end_time}`)) - segmentStart
+    }
     if (stepForm.program_is_segment) {
-      const start = Number(stepForm.program_start_offset_seconds)
-      const duration = Number(stepForm.program_duration_seconds)
+      const start = segmentStart
+      const duration = segmentDuration
       if (!Number.isFinite(start) || start < 0 || !Number.isFinite(duration) || duration <= 0) {
-        throw new Error('Live Program segments need a valid start offset and duration')
+        throw new Error('Live Program segments need a start time on or after the event starts and a duration greater than zero')
       }
       config.program = { ...(config.program || {}), ...(stepForm.program_category.trim() ? { category: stepForm.program_category.trim() } : {}) }
       config.announce = {
@@ -1024,8 +1051,8 @@ export default function ExperienceRedesignPage() {
       enabled: !!stepForm.enabled,
       blocks_checkin: !!stepForm.blocks_checkin,
       is_segment: !!stepForm.program_is_segment,
-      starts_offset_seconds: stepForm.program_is_segment ? Number(stepForm.program_start_offset_seconds) : null,
-      duration_seconds: stepForm.program_is_segment ? Number(stepForm.program_duration_seconds) : null,
+      starts_offset_seconds: stepForm.program_is_segment ? segmentStart : null,
+      duration_seconds: stepForm.program_is_segment ? segmentDuration : null,
       conditions: (() => { const conditions = parseJsonMaybe(stepForm.conditions, 'Conditions') || {}; if (stepForm.type === 'session_attendance') { const groups = stepForm.session_age_groups.split(',').map((value) => value.trim()).filter(Boolean); if (groups.length) conditions.age_groups_include = groups; else delete conditions.age_groups_include } return Object.keys(conditions).length ? conditions : null })(),
       config: Object.keys(config).length ? config : null,
     }
@@ -1530,7 +1557,7 @@ export default function ExperienceRedesignPage() {
                       </div>
                       <div className="ex-preset-panel">
                         <strong>Step presets</strong>
-                        <span>Add a fully configured operational step.</span>
+                        <span>Add a configured step at the right point in the journey.</span><label>Insert before<select className="rr-select" value={presetBefore} onChange={e=>setPresetBefore(e.target.value)}><option value="suggested">Suggested: before departure</option><option value="end">At the end</option>{sortedSteps.map(step=><option key={step.id} value={step.id}>{step.title}</option>)}</select></label>
                         <div>{STEP_PRESETS.map((preset) => <button type="button" key={preset.key} disabled={actionKey === `preset:${preset.key}`} onClick={() => addPresetStep(preset)}><Icon name={stepTypeIcon(preset.type)} size={11}/>{preset.title}</button>)}</div>
                       </div>
                     </div>}

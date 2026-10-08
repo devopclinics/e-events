@@ -162,14 +162,16 @@ const GUIDED_STEPS = [
 
 function WizardPhase({ onComplete, notify }) {
   const [form, setForm] = useState({
-    name: '', type: 'Conference / seminar', host: '', date: '', timezone: 'Africa/Lagos',
+    name: '', type: 'Conference / seminar', host: '', date: '', timezone: DETECTED_TZ || 'UTC',
     attendanceMode: 'rsvp',
     multiDay: false, endDate: '', baseUrl: '', venue: '', venueAddress: '',
-    guestCount: '', currency: 'NGN — Nigerian Naira',
+    guestCount: '', currency: '',
     channels: new Set(['email']), features: new Set(['rsvp', 'planner']),
   })
   const [recommendation, setRecommendation] = useState(null)
   const [recommendationLoading, setRecommendationLoading] = useState(false)
+  const [creationLimits, setCreationLimits] = useState(null)
+  useEffect(()=>{api.eventCreationLimits().then(limits=>{setCreationLimits(limits);setForm(current=>({...current,currency:current.currency || CURRENCIES.find(c=>c.startsWith(limits.currency)) || ''}))}).catch(()=>{})},[])
   const enabledFeatureCount = form.features.size
   function toggleSet(key, val) {
     setForm((prev) => {
@@ -237,7 +239,7 @@ function WizardPhase({ onComplete, notify }) {
           </div>
           <div>
             <label className="rd-field-label">Estimated guest count</label>
-            <input className="rd-field" type="number" value={form.guestCount} placeholder="500" onChange={(e) => setForm({ ...form, guestCount: e.target.value })} />
+            <input className="rd-field" type="number" min="1" max={creationLimits?.guest_cap || undefined} value={form.guestCount} placeholder={String(creationLimits?.guest_cap || 25)} onChange={(e) => setForm({ ...form, guestCount: e.target.value })} /><p className="rd-hint">{creationLimits ? `Current pass: up to ${creationLimits.guest_cap} guests. Upgrade the organization pass for a larger event.` : "Checking your plan capacity…"}</p>
           </div>
         </div>
         <div className="su-field-row">
@@ -299,12 +301,12 @@ function WizardPhase({ onComplete, notify }) {
           <div>
             <label className="rd-field-label">Currency</label>
             <select className="rd-field" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
-              {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
+              <option value="" disabled>Choose the event currency</option>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}
             </select>
           </div>
           <div>
-            <label className="rd-field-label">App base URL</label>
-            <input className="rd-field" value={form.baseUrl} placeholder="wc2026" onChange={(e) => setForm({ ...form, baseUrl: e.target.value })} />
+            <details><summary>Advanced: custom app address</summary><label className="rd-field-label">App base URL</label>
+            <input className="rd-field" value={form.baseUrl} type="url" placeholder={window.location.origin} onChange={(e) => setForm({ ...form, baseUrl: e.target.value })} /></details>
           </div>
         </div>
         <p className="su-section-label">Communication channels</p>
@@ -338,9 +340,12 @@ function WizardPhase({ onComplete, notify }) {
               notify('End date must be on or after the start date.', true)
               return
             }
+            if (!form.currency) { notify("Choose the event currency before creating your event.", true); return }
+            if (creationLimits && Number(form.guestCount) > creationLimits.guest_cap) { notify(`Your current pass allows ${creationLimits.guest_cap} guests. Choose a larger pass or reduce this capacity.`, true); return }
             let event = null
             try {
               event = await api.createEvent({
+                setup_preferences: { features: [...form.features], channels: [...form.channels], currency: form.currency.slice(0, 3) },
                 name: form.name.trim(),
                 couples_name: form.host.trim(),
                 event_type: form.type,
@@ -426,6 +431,7 @@ function WizardPhase({ onComplete, notify }) {
   )
 }
 
+const SETUP_FEATURE_FIELDS = {seating:'seating_enabled',orders:'menu_enabled',logistics:'logistics_enabled',registry:'registry_enabled',speakers:'speaker_enabled',partners:'partner_enabled',access:'venue_access_enabled',festiome:'festiome_addon_enabled',experience:'experience_enabled',planner:'planner_enabled',live:'engagement_enabled'}
 function GuidedSetupPhase({ eventId, notify, onEventUnavailable }) {
   const [event, setEvent] = useState(null)
   const [states, setStates] = useState(() =>
@@ -579,6 +585,30 @@ function GuidedSetupPhase({ eventId, notify, onEventUnavailable }) {
     }
   }
 
+  async function resumeFeature(feature) {
+    setBusy(`feature:${feature}`)
+    try {
+      if(feature==='rsvp')await api.updateInviteSettings(eventId,{rsvp_enabled:true})
+      else if(feature==='selfcheckin')await api.setSelfCheckin(eventId,true)
+      else if(SETUP_FEATURE_FIELDS[feature])await api.toggleFeatures(eventId,{[SETUP_FEATURE_FIELDS[feature]]:true})
+      else throw new Error('Open service settings to finish this feature.')
+      const rows=await api.listEvents();setEvent(rows.find(row=>row.id===eventId)||null)
+      notify('Feature enabled. Review its settings before using it.')
+    }catch(e){notify(e.message || 'This feature still needs setup or a pass upgrade.',true)}finally{setBusy('')}
+  }
+  async function resumePreferences() {
+    setBusy('preferences')
+    const preferences = event.setup_preferences || {}
+    const channels = preferences.channels || []
+    const results = await Promise.allSettled([
+      api.toggleFeatures(eventId, {notify_email:channels.includes('email'), notify_sms:channels.includes('sms'), notify_whatsapp:channels.includes('whatsapp')}),
+      api.setBillingCurrency(eventId, preferences.currency),
+    ])
+    const errors = results.flatMap((result,index)=>result.status==='rejected' ? [`${index===0?'Communication channels':'Currency'}: ${result.reason?.message || 'Could not save'}`] : [])
+    try { const rows=await api.listEvents(); setEvent(rows.find(row=>row.id===eventId)||null) } catch {}
+    setBusy('')
+    notify(errors.length?errors.join(' · '):'Communication channels and currency saved.',!!errors.length)
+  }
   const completedCount = steps.filter((step) => states[step.id] === 'completed').length
 
   if (!eventId) return <div className="rr-panel"><div className="rd-panel-body">Create or select an event before starting guided setup.</div></div>
@@ -587,6 +617,8 @@ function GuidedSetupPhase({ eventId, notify, onEventUnavailable }) {
 
   return (
     <div className="su-guided">
+      {!!event?.setup_preferences?.features?.length && <section className="rr-panel" style={{padding:18,marginBottom:18}}><h2>Your requested features</h2><p>Included features may still need configuration. Enabling a service does not finish its setup.</p>{event.setup_preferences.features.map(id=>{const active=id==='rsvp'?event.rsvp_enabled:id==='selfcheckin'?event.self_checkin_enabled:event[SETUP_FEATURE_FIELDS[id]];return <div key={id} style={{display:'flex',gap:12,alignItems:'center',margin:'8px 0'}}><strong>{FEATURES.find(f=>f.id===id)?.label || id}</strong><span>{active?'Enabled · review settings':'Requested · needs activation'}</span>{!active&&<button className="rr-btn secondary" disabled={!!busy} onClick={()=>resumeFeature(id)}>Retry activation</button>}</div>})}<p>Requested channels: {(event.setup_preferences.channels || []).join(', ') || 'none'} · Currency: {event.setup_preferences.currency || 'not selected'}</p><button className="rr-btn secondary" disabled={!!busy || !event.setup_preferences.currency} onClick={resumePreferences}>Apply requested channels &amp; currency</button><p><a href="/communications-redesign?tab=settings">Review service settings →</a></p></section>}
+      {event?.menu_enabled && <section className="rr-panel" style={{padding:18,marginBottom:18}}><label>When can guests choose meals?<select className="rd-field" value={event.menu_selection_timing || 'after_admission'} onChange={async e=>{try{await api.toggleFeatures(eventId,{menu_selection_timing:e.target.value});setEvent({...event,menu_selection_timing:e.target.value});notify('Meal selection timing saved.')}catch(err){notify(err.message,true)}}}><option value="after_admission">After event check-in</option><option value="before_arrival">Before arrival, after registration confirmation</option></select></label><p>Serving still requires check-in. Served selections stay locked.</p></section>}
       <div className="su-guided-header">
         <div>
           <h2>Guided setup</h2>

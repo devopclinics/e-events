@@ -325,12 +325,12 @@ const TOP_LINKS = [
   { id: 'events', label: 'Events', to: '/events-redesign', icon: 'calendar' },
   {
     id: 'design', label: 'Design Studio', to: '/design-studio-redesign', icon: 'palette',
-    gate: ({ user, event }) => user?.role === 'admin' && !!event?.is_paid,
+    gate: ({ user, event }) => user?.role === 'admin',
   },
   { id: 'results', label: 'Results', to: '/event-results-redesign', icon: 'barchart' },
   {
     id: 'planner', label: 'Planner', to: '/planner-redesign', icon: 'book',
-    gate: ({ event }) => !!event?.planner_enabled,
+    gate: ({ user }) => ['admin', 'event_manager'].includes(user?.role),
   },
   {
     id: 'ticketing', label: 'Ticket sales', to: '/ticketing-redesign', icon: 'ticket',
@@ -344,13 +344,13 @@ const TOP_LINKS = [
   },
   {
     id: 'festiome', label: 'FestioMe', to: '/festiome-redesign', icon: 'chat',
-    gate: ({ event }) => !!event?.festiome_addon_enabled && !(event?.blocked_comm_features || []).includes('festiome'),
+    gate: ({ user }) => ['admin', 'event_manager'].includes(user?.role),
   },
   { id: 'checkin', label: 'Check-in', to: '/scanner-redesign', icon: 'ticket' },
   { id: 'academy', label: 'Academy', to: '/training', icon: 'book' },
   {
-    id: 'orders', label: 'Orders', to: '/kitchen-redesign', icon: 'card',
-    gate: ({ event }) => !!event?.menu_enabled,
+    id: 'orders', label: 'Meals & orders', to: '/kitchen-redesign', icon: 'card',
+    gate: ({ user }) => ['admin', 'event_manager'].includes(user?.role),
   },
   {
     id: 'console', label: 'Console', to: '/superadmin-redesign?tab=console', icon: 'shield',
@@ -372,7 +372,7 @@ const SIDEBAR_NAV = [
   ['grid', 'Setup Guide', '/setup-redesign?view=guide', 'guide', null, 'setupGuide'],
   ['users', 'Guests', '/guests-redesign?tab=guests', 'guests'],
   ['send', 'Invites & RSVP', '/guests-redesign?tab=invite', 'invite'],
-  ['message', 'Guest Communication', '/communications-redesign?tab=hub', 'communication'],
+  ['message', 'Guest inbox', '/communications-redesign?tab=hub', 'communication'],
   ['card', 'Billing', '/billing-redesign?tab=billing', 'billing'],
   ['grp', 'Planning'],
   ['book', 'Planner', '/planner-redesign', 'planner', null, 'planner'],
@@ -381,7 +381,7 @@ const SIDEBAR_NAV = [
   ['grp', 'Add-ons', null, null, null, 'anyAddon'],
   ['ticket', 'Venue Access', '/checkin-redesign?tab=zones', 'access', null, 'venueAccess'],
   ['chair', 'Seating', '/addons-redesign?tab=seating', 'seating', null, 'seating'],
-  ['card', 'Orders', '/kitchen-redesign', 'menu', null, 'orders'],
+  ['card', 'Meals & orders', '/kitchen-redesign', 'menu', null, 'orders'],
   ['upload', 'Deliveries', '/addons-redesign?tab=logistics', 'logistics', null, 'logistics'],
   ['image', 'Gift list', '/addons-redesign?tab=registry', 'registry', null, 'registry'],
   ['users', 'Speakers', '/addons-redesign?tab=speakers', 'speakers', null, 'speakers'],
@@ -392,7 +392,7 @@ const SIDEBAR_NAV = [
   ['team', 'Team', '/team-redesign?tab=team', 'team'],
   ['file', 'Tasks', '/team-redesign?tab=tasks', 'tasks'],
   ['barchart', 'Experience', '/experience-redesign', 'experience', null, 'experience', true],
-  ['message', 'Messages', '/communications-redesign?tab=messages', 'messages'],
+  ['message', 'Broadcasts & templates', '/communications-redesign?tab=messages', 'messages'],
   ['settings', 'Features & messaging', '/communications-redesign?tab=settings', 'features'],
 ]
 
@@ -633,10 +633,10 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
                 </div>
                 {SIDEBAR_NAV.map(([icon, label, to, id, count, gate, discoverable], i) => {
                   const accessMissing = gate && !flags[gate]
-                  if (accessMissing && !discoverable) return null
+                  if (accessMissing && !discoverable && !['admin', 'event_manager'].includes(user?.role)) return null
                   if (icon === 'grp') return <small key={label + i}>{label.toUpperCase()}</small>
                   return (
-                    <Link key={label} to={to} className={eventActive === id ? 'active' : ''}>
+                    <Link key={label} to={accessMissing ? '/communications-redesign?tab=settings' : to} className={eventActive === id ? 'active' : ''}>
                       <Icon name={icon} size={15} /><span>{label}</span>
                       {accessMissing ? <b>Enable</b> : count != null && <b>{count}</b>}
                     </Link>

@@ -255,6 +255,7 @@ async def ticketing_token(
     role = "admin" if user.is_platform_superadmin else await _org_role(user, event.org_id, db)
     if role not in ("owner", "admin"):
         raise HTTPException(404, "Event not found")
+    org = await db.get(Organization, event.org_id)
     now = datetime.now(timezone.utc)
     token = jwt.encode({
         "sub": user.firebase_uid or user.id,
@@ -265,6 +266,7 @@ async def ticketing_token(
         "role": role,
         "iss": "guesthub",
         "aud": "ticketing",
+        "currency": org.currency if org else "USD",
         "iat": now,
         "exp": now + timedelta(minutes=15),
     }, settings.ticketing_internal_token, algorithm="HS256")

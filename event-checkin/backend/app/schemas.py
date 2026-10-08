@@ -57,6 +57,7 @@ class TokenResponse(BaseModel):
 # ── Events ───────────────────────────────────────────────────────────────────
 
 class EventCreate(BaseModel):
+    setup_preferences: Optional[dict] = None
     name: str
     # Optional host/organizer/honoree label — blank for events with no such party.
     couples_name: Optional[str] = ""
@@ -167,6 +168,8 @@ class EventSourceUpdate(BaseModel):
 
 
 class EventOut(BaseModel):
+    menu_selection_timing: str = "after_admission"
+    setup_preferences: Optional[dict] = None
     model_config = ConfigDict(from_attributes=True)
 
     id: str
@@ -291,7 +294,8 @@ class EventOut(BaseModel):
     is_paid: bool = False
     guest_cap: Optional[int] = None
     paid_channels: bool = False
-    message_credits: int = 0
+    message_credits: float = 0
+    credit_scope: str = "event"
     # Access for the requesting user on this specific event. Account-wide role
     # is not sufficient because one person may own one org and be staff in another.
     my_access_role: str = "official"
@@ -2359,6 +2363,9 @@ class GuestCreate(BaseModel):
 
 
 class GuestUpdate(BaseModel):
+    rsvp_guest_type: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    rsvp_relationship: Optional[str] = Field(default=None, max_length=120)
+    is_junior: Optional[bool] = None
     """Partial edit of a guest from the admin guest-edit modal (ported from prod)."""
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -2374,6 +2381,7 @@ class GuestUpdate(BaseModel):
 
 
 class GuestOut(BaseModel):
+    is_junior: bool = False
     model_config = ConfigDict(from_attributes=True)
 
     id: str
@@ -2580,7 +2588,7 @@ class DashboardChannelDelivery(BaseModel):
 
 
 class DashboardCredits(BaseModel):
-    balance: int = 0
+    balance: float = 0
     spent: int = 0
 
 
@@ -2762,6 +2770,7 @@ class GuestHubRecoveryResponse(BaseModel):
 
 
 class InvitePageOut(BaseModel):
+    event_type: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
     id: str

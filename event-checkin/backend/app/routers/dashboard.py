@@ -1,5 +1,6 @@
 import asyncio
 import json
+from ..services.credit_balance import available_credits, credit_scope
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -240,7 +241,7 @@ async def get_dashboard(event_id: str, db: AsyncSession = Depends(get_db), _: Us
         for c in ("sms", "mms", "whatsapp")
         if chan[c]["sent"] or chan[c]["failed"]
     ]
-    credits = DashboardCredits(balance=event.message_credits or 0, spent=credits_spent)
+    credits = DashboardCredits(balance=await available_credits(db, event), spent=credits_spent)
 
     return DashboardStats(
         total=total, admitted=admitted_count, pending=total - admitted_count,

@@ -135,7 +135,7 @@ function MetricTile({ icon, label, value, detail, values, tone = 'teal', title }
 
 function ResultsSidebar({ event, activeView, onChange, exceptionCount }) {
   const eventRange = event?.event_end_date
-    ? `${fmtEventDate(event)} – ${new Date(event.event_end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+    ? `${fmtEventDate(event)} – ${new Date(event.event_end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: event.timezone || 'UTC' })}`
     : fmtEventDate(event)
   return <aside className="er-results-sidebar" aria-label="Results sections">
     <div className="er-results-event-mini"><strong>{event?.name || 'Selected event'}</strong><span>{eventRange} · {event?.status || 'Draft'}</span></div>

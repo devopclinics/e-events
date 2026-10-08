@@ -154,6 +154,7 @@ async def test_rsvp_non_junior_invitee_gets_no_guardian_tracking(ctx):
     ev = ctx.ids["event_a"]
     async with _Session() as s:
         event = await s.get(Event, ev)
+        event.status = "active"
         event.rsvp_enabled = True
         event.invite_mode = "open"
         event.rsvp_token = "rsvp-junior-token-1"
@@ -186,6 +187,7 @@ async def test_rsvp_submitter_auto_authorized_no_confirmation_needed(ctx):
     ctx.login(ctx.ids["user_a"])
     async with _Session() as s:
         event = await s.get(Event, ev)
+        event.status = "active"
         event.rsvp_enabled = True
         event.invite_mode = "open"
         event.rsvp_token = "rsvp-junior-token-2"
@@ -236,6 +238,7 @@ async def test_rsvp_third_party_designation_needs_confirmation(ctx):
     ctx.login(ctx.ids["user_a"])
     async with _Session() as s:
         event = await s.get(Event, ev)
+        event.status = "active"
         event.rsvp_enabled = True
         event.invite_mode = "open"
         event.rsvp_token = "rsvp-junior-token-3"
@@ -367,6 +370,7 @@ async def test_guesthub_party_scope_add_succeeds_without_search(ctx):
     ev = ctx.ids["event_a"]
     async with _Session() as s:
         event = await s.get(Event, ev)
+        event.status = "active"
         event.rsvp_enabled = True
         event.invite_mode = "open"
         event.rsvp_token = "rsvp-hub-token-1"
@@ -411,6 +415,7 @@ async def test_guesthub_any_guest_scope_search_and_add(ctx):
     ev = ctx.ids["event_a"]
     async with _Session() as s:
         event = await s.get(Event, ev)
+        event.status = "active"
         event.rsvp_enabled = True
         event.invite_mode = "open"
         event.rsvp_token = "rsvp-hub-token-2"
@@ -496,6 +501,7 @@ async def test_guesthub_cannot_manage_guest_they_did_not_submit(ctx):
     ev = ctx.ids["event_a"]
     async with _Session() as s:
         event = await s.get(Event, ev)
+        event.status = "active"
         event.rsvp_enabled = True
         event.invite_mode = "open"
         event.rsvp_token = "rsvp-hub-token-3"
@@ -536,6 +542,7 @@ async def test_my_juniors_endpoint_scoped_to_own_party(ctx):
     ev = ctx.ids["event_a"]
     async with _Session() as s:
         event = await s.get(Event, ev)
+        event.status = "active"
         event.rsvp_enabled = True
         event.invite_mode = "open"
         event.rsvp_token = "rsvp-hub-token-4"

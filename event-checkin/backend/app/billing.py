@@ -217,5 +217,5 @@ def public_catalog(currency: str, tiers: list[dict], packs: list[dict]) -> dict:
             "credits": None,
             "capabilities": ADD_ON_CATALOG["enterprise"],
         },
-        "addons": ADD_ON_CATALOG,
+        "addons": {**ADD_ON_CATALOG, "message_credits": [{**pack, "label": f"{pack['credits']:,} credits"} for pack in packs]},
     }

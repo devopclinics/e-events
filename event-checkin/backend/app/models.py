@@ -373,6 +373,8 @@ class EventUserSection(Base):
 
 
 class Event(Base):
+    menu_selection_timing: Mapped[str] = mapped_column(String(30), default="after_admission", server_default="after_admission")
+    setup_preferences: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     __tablename__ = "events"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -1625,6 +1627,7 @@ class Guest(Base):
     rsvp_submitter_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     rsvp_relationship: Mapped[str | None] = mapped_column(String(120), nullable=True)
     rsvp_guest_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    is_junior: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     rsvp_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Stable linkage to the staging ticketing-service order. The order lives in
     # a separate database, so this is intentionally indexed rather than an FK.
@@ -2961,3 +2964,14 @@ class EventConsentAuthority(Base):
     approved_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class GuestProfileAudit(Base):
+    __tablename__ = "guest_profile_audits"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), index=True)
+    guest_id: Mapped[str] = mapped_column(String(36), index=True)
+    actor_user_id: Mapped[str] = mapped_column(String(36))
+    before: Mapped[dict] = mapped_column(JSON)
+    after: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

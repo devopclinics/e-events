@@ -29,7 +29,7 @@ function OrderCard({ order, working, multiCategory, onServe, onToggleCategory })
       </div>
     })}</div>
     {!selections(order).length && <div className="kn-no-orders">No selection</div>}
-    {!multiCategory && (!served ? <button className="rr-btn primary kn-advance-btn" disabled={!!working} onClick={() => onServe(order.guest_id)}>{working ? 'Saving…' : 'Mark served'}</button> :
+    {!multiCategory && (!served ? <button className="rr-btn primary kn-advance-btn" disabled={!!working || !order.admitted || !selections(order).length} title={!order.admitted ? "Check in this guest before serving" : !selections(order).length ? "No meal selected" : undefined} onClick={() => onServe(order.guest_id)}>{working ? 'Saving…' : 'Mark served'}</button> :
       <div className="kn-served-badge"><Icon name="check" size={13}/> Served</div>)}
     {multiCategory && served && <div className="kn-served-badge"><Icon name="check" size={13}/> All selections served</div>}
   </div>
@@ -92,7 +92,7 @@ export default function KitchenRedesignPage() {
 
   const guests = list(data?.guests)
   const tables = useMemo(() => [...new Set(guests.map((g) => g.table_name).filter(Boolean))].sort(), [guests])
-  const filtered = guests.filter((g) => (status === 'all' || (status === 'served') === !!g.meal_served) && (table === 'all' || g.table_name === table))
+  const filtered = guests.filter((g) => (status === 'all' || (status === 'served' ? !!g.meal_served : !g.meal_served && selections(g).length > 0)) && (table === 'all' || g.table_name === table))
   const tally = useMemo(() => {
     const counts = new Map()
     guests.flatMap((guest) => selections(guest).filter((item) => data?.multi_category_serving ? !guest.served_categories?.[item.categoryId] : !guest.meal_served)).forEach((item) => counts.set(item.name, (counts.get(item.name) || 0) + 1))
@@ -100,7 +100,7 @@ export default function KitchenRedesignPage() {
   }, [guests, data?.multi_category_serving])
   const grouped = tables.map((name) => {
     const group = guests.filter((g) => g.table_name === name)
-    return { name, pending: group.filter((g) => !g.meal_served).length, served: group.filter((g) => g.meal_served).length, total: group.length }
+    return { name, pending: group.filter((g) => !g.meal_served && selections(g).length).length, served: group.filter((g) => g.meal_served).length, total: group.length }
   })
   const event = events.find((item) => item.id === eventId)
   const served = guests.filter((g) => g.meal_served).length

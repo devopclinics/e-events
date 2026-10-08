@@ -48,6 +48,11 @@ async def pro_event_for_experience_tests(ctx):
 
 @pytest.mark.asyncio
 async def test_default_workflow_created_from_existing_event_features(ctx):
+    # Runtime routes require explicit activation, independently of the Pro entitlement.
+    async with _Session() as db:
+        event = await db.get(Event, ctx.ids["event_a"])
+        event.experience_enabled = True
+        await db.commit()
     async with _Session() as s:
         ev = await s.get(Event, ctx.ids["event_a"])
         ev.is_paid = True
@@ -501,6 +506,11 @@ async def test_session_attendance_accepts_sessions_json_shape(ctx):
 
 @pytest.mark.asyncio
 async def test_published_workflow_is_active_over_default_draft(ctx):
+    # Runtime routes require explicit activation, independently of the Pro entitlement.
+    async with _Session() as db:
+        event = await db.get(Event, ctx.ids["event_a"])
+        event.experience_enabled = True
+        await db.commit()
     ctx.login(ctx.ids["user_a"])
     event_id = ctx.ids["event_a"]
 
@@ -1424,6 +1434,11 @@ async def test_disabled_experience_does_not_expose_runtime_next_steps(ctx):
 
 @pytest.mark.asyncio
 async def test_step_dependencies_block_runtime_completion_until_prior_steps_complete(ctx):
+    # Runtime routes require explicit activation, independently of the Pro entitlement.
+    async with _Session() as db:
+        event = await db.get(Event, ctx.ids["event_a"])
+        event.experience_enabled = True
+        await db.commit()
     ctx.login(ctx.ids["user_a"])
     event_id = ctx.ids["event_a"]
 
@@ -1533,6 +1548,11 @@ async def test_scanner_offline_manifest_contains_venue_access_rules(ctx):
 
 @pytest.mark.asyncio
 async def test_step_allowed_roles_are_enforced(ctx):
+    # Runtime routes require explicit activation, independently of the Pro entitlement.
+    async with _Session() as db:
+        event = await db.get(Event, ctx.ids["event_a"])
+        event.experience_enabled = True
+        await db.commit()
     ctx.login(ctx.ids["user_a"])
     event_id = ctx.ids["event_a"]
 

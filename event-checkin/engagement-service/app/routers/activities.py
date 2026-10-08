@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload
 from ..auth import Identity, current_identity, require_activity_session, require_admin, require_capability, require_staff
 from ..database import get_db
 from ..config import settings
-from ..models import ActivityParticipant, ActivityQuestion, EngagementActivity, EngagementEventSettings, ParticipantResponse, ProgramSession, QuestionOption
+from ..models import EngagementQnaQuestion, ActivityParticipant, ActivityQuestion, EngagementActivity, EngagementEventSettings, ParticipantResponse, ProgramSession, QuestionOption
 from ..realtime import publish
 from ..schemas import ActivityAdvanceIn, ActivityCreate, ActivityExtendIn, ActivityOut, ActivityStatusIn, ActivitySummary, ActivityUpdate, GuidedShowAutomationIn, QuestionCreate, QuestionLiveStateIn, QuestionOut, QuestionUpdate
 
@@ -311,31 +311,29 @@ async def list_activities(identity: Identity = Depends(current_identity), db: As
             EngagementActivity.org_id == identity.org_id,
         ).order_by(EngagementActivity.created_at.desc())
     )).scalars().all()
+    ids = [activity.id for activity in rows]
+    if not ids:
+        return []
+    response_counts = dict((await db.execute(select(ParticipantResponse.activity_id, func.count())
+        .where(ParticipantResponse.activity_id.in_(ids)).group_by(ParticipantResponse.activity_id))).all())
+    participant_counts = dict((await db.execute(select(ActivityParticipant.activity_id, func.count())
+        .where(ActivityParticipant.activity_id.in_(ids)).group_by(ActivityParticipant.activity_id))).all())
+    completion_stats = {row[0]: (row[1], row[2]) for row in (await db.execute(select(
+        ActivityParticipant.activity_id, func.count(),
+        func.avg(func.extract("epoch", ActivityParticipant.completed_at - ActivityParticipant.joined_at)))
+        .where(ActivityParticipant.activity_id.in_(ids), ActivityParticipant.completed_at.is_not(None))
+        .group_by(ActivityParticipant.activity_id))).all()}
+    question_counts = dict((await db.execute(select(EngagementQnaQuestion.activity_id, func.count())
+        .where(EngagementQnaQuestion.activity_id.in_(ids)).group_by(EngagementQnaQuestion.activity_id))).all())
     out = []
-    for a in rows:
-        response_count = await db.scalar(select(func.count()).select_from(ParticipantResponse).where(ParticipantResponse.activity_id == a.id)) or 0
-        # Count joined participants, not only people who submitted a standard
-        # response. Q&A participants create questions/upvotes rather than
-        # ParticipantResponse rows and must still appear in the command center.
-        participant_count = await db.scalar(
-            select(func.count()).select_from(ActivityParticipant).where(ActivityParticipant.activity_id == a.id)
-        ) or 0
-        completed_count = await db.scalar(
-            select(func.count()).select_from(ActivityParticipant).where(
-                ActivityParticipant.activity_id == a.id, ActivityParticipant.completed_at.is_not(None),
-            )
-        ) or 0
-        avg_completion_seconds = None
-        if completed_count:
-            avg_completion_seconds = await db.scalar(
-                select(func.avg(func.extract("epoch", ActivityParticipant.completed_at - ActivityParticipant.joined_at)))
-                .where(ActivityParticipant.activity_id == a.id, ActivityParticipant.completed_at.is_not(None))
-            )
-        summary = ActivitySummary.model_validate(a)
-        summary.response_count = response_count
-        summary.participant_count = participant_count
-        summary.completed_count = completed_count
-        summary.avg_completion_seconds = float(avg_completion_seconds) if avg_completion_seconds is not None else None
+    for activity in rows:
+        summary = ActivitySummary.model_validate(activity)
+        summary.question_count = question_counts.get(activity.id, 0) if activity.type == "q_and_a" else 0
+        summary.response_count = response_counts.get(activity.id, 0)
+        summary.participant_count = participant_counts.get(activity.id, 0)
+        completed, duration = completion_stats.get(activity.id, (0, None))
+        summary.completed_count = completed
+        summary.avg_completion_seconds = float(duration) if duration is not None else None
         out.append(summary)
     return out
 
@@ -361,9 +359,12 @@ async def list_control_activities(identity: Identity = Depends(current_identity)
         .where(ActivityParticipant.activity_id.in_(ids))
         .group_by(ActivityParticipant.activity_id)
     )).all())
+    question_counts = dict((await db.execute(select(EngagementQnaQuestion.activity_id, func.count())
+        .where(EngagementQnaQuestion.activity_id.in_(ids)).group_by(EngagementQnaQuestion.activity_id))).all())
     result = []
     for activity in rows:
         summary = ActivitySummary.model_validate(activity)
+        summary.question_count = question_counts.get(activity.id, 0) if activity.type == "q_and_a" else 0
         summary.response_count = response_counts.get(activity.id, 0)
         summary.participant_count = participant_counts.get(activity.id, 0)
         result.append(summary)

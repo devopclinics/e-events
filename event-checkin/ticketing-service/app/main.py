@@ -481,6 +481,22 @@ async def public_events(db: AsyncSession = Depends(get_db)):
     return {"events": rows}
 
 
+@app.get("/api/ticketing/public/events/{event_id}", dependencies=[Depends(require_service_enabled)])
+async def public_event_detail(event_id: str, db: AsyncSession = Depends(get_db)):
+    cfg = await db.get(EventConfig, event_id)
+    if not cfg or not cfg.enabled:
+        raise HTTPException(404, "Ticket sales are unavailable for this event")
+    async with httpx.AsyncClient(timeout=10) as client:
+        response = await client.post(f"{settings.core_backend_url}/api/internal/ticketing/events",
+            headers={"X-Internal-Token": settings.internal_service_token}, json={"event_ids": [event_id]})
+    response.raise_for_status()
+    event = next((row for row in response.json().get("events", []) if row["id"] == event_id), None)
+    if not event:
+        raise HTTPException(404, "Event not available")
+    return {**event, "currency": cfg.currency, "enabled": True,
+            "sales_url": f"{settings.public_base_url}/tickets/e/{event_id}"}
+
+
 @app.get("/api/ticketing/events/{event_id}/config")
 async def get_config(event_id: str, ident: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
     if ident.event_id != event_id:
@@ -491,6 +507,8 @@ async def get_config(event_id: str, ident: Identity = Depends(current_identity),
     if config:
         config.update({"fee_bps": fee["fee_bps"]})
     return {"service_enabled": settings.service_enabled, "config": config,
+            "test_mode": settings.environment.lower() != "production",
+            "default_currency": ident.currency,
             "providers": {"stripe": provider_ready("stripe"), "paystack": provider_ready("paystack")},
             "fee_policy": {**fee, "fees_paid_by": cfg.fees_paid_by if cfg else fee["fees_paid_by"],
                            "can_manage": ident.is_platform_superadmin}}

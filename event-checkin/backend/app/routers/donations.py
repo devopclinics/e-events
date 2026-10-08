@@ -62,6 +62,11 @@ PLEDGE_PAYMENT_CHANNELS = [
 ]
 
 
+def pledge_channels(campaign):
+    enabled = {c.get("type") for c in (campaign.channels or []) if c.get("enabled")}
+    return [c for c in PLEDGE_PAYMENT_CHANNELS if c["type"] in enabled]
+
+
 def _public_base() -> str:
     return settings.frontend_url.rstrip("/")
 
@@ -473,7 +478,7 @@ async def public_campaign(token: str, db: AsyncSession = Depends(get_db), _: Non
         donation_count=totals["donation_count"], pledge_count=totals["pledge_count"],
         show_pledged_total=campaign.show_pledged_total,
         channels=[channel for channel in (campaign.channels or []) if channel.get("enabled")],
-        pledge_payment_channels=PLEDGE_PAYMENT_CHANNELS,
+        pledge_payment_channels=pledge_channels(campaign),
         recent_public=_public_recent(campaign, rows), funds=await _funds(campaign, rows, db),
     )
 
@@ -502,6 +507,8 @@ async def create_public_contribution(token: str, body: DonationContributionCreat
         raise HTTPException(422, "Cash and cheque contributions are recorded by event staff")
     if body.channel == "pledge" and (not body.expected_payment_channel or not body.expected_payment_date):
         raise HTTPException(422, "Pledges require an expected payment channel and date")
+    if body.channel == "pledge" and body.expected_payment_channel not in {c["type"] for c in pledge_channels(campaign)}:
+        raise HTTPException(422, "Choose an enabled payment method for your pledge")
     if body.channel == "festio_pay" and not channel.get("checkout_url"):
         raise HTTPException(409, "Festio Pay is not configured for this campaign")
     registry_item = await _validate_registry_fund(campaign, body.registry_item_id, db)

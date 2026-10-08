@@ -267,7 +267,7 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
   }
 
   return (
-    <form className="sc-camera-wrap" onSubmit={submit}>
+    <form className="sc-camera-wrap" onSubmit={submit}>{mode === 'access' && !zones.some(z=>z.is_active!==false) && <div role="status" className="sc-error">No active zones are configured. <a href="/addons-redesign?tab=access">Create a zone and assign ticket access</a>, or choose Convention check-in for general admission.</div>}
       <div className="sc-camera-frame">
         <div className="sc-camera-corners"><span/><span/><span/><span/></div>
         <div className="sc-camera-placeholder">
@@ -377,7 +377,7 @@ function ManualMode({ event, sections, zones, onResult, onManifestChange, onQueu
           : await api.manualCheckin(event.id, guest.id, event.section_mode_enabled ? sectionId || null : null)
       onResult(response.status === 'guardian_required' ? {
         ...response, denied: false, message: event.manual_checkin_enabled ? 'Check the guardian’s identity, then select them below, or scan their pass.' : 'Guardian verification required. Scan the authorized guardian’s pass next.',
-      } : { ...response, admission_feedback: !zoneOperation && operation !== 'checkout' })
+      } : { ...response, guest: response.guest || guest, admission_feedback: !zoneOperation && operation !== 'checkout' })
       if (response.status === 'guardian_required') beginGuardianStep(guest, response)
       else {
         cancelGuardianStep()
@@ -393,7 +393,7 @@ function ManualMode({ event, sections, zones, onResult, onManifestChange, onQueu
           onResult({ ...offline.result, offline: true, admission_feedback: true })
           if (offline.result.status === 'offline_queued') setResults((items) => items.map((item) => item.id === guest.id ? { ...item, admitted: true } : item))
         } catch (storageError) { setError(storageError.message || 'Could not save this check-in. Do not admit yet.') }
-      } else { setError(err.message); onResult({ status: 'invalid', message: err.message, admission_feedback: !zoneOperation && operation !== 'checkout' }) }
+      } else { setError(err.message); onResult({ status: 'invalid', guest, message: err.message, admission_feedback: !zoneOperation && operation !== 'checkout' }) }
     }
     finally { setBusyId('') }
   }
@@ -411,7 +411,7 @@ function ManualMode({ event, sections, zones, onResult, onManifestChange, onQueu
         cancelGuardianStep()
         if (response.status === 'checked_out' || response.status === 'already_checked_out') setResults((items) => items.map((item) => item.id === guest.id ? { ...item, checked_out: true } : item))
       }
-    } catch (err) { setError(err.message); onResult({ status: 'invalid', message: err.message }) }
+    } catch (err) { setError(err.message); onResult({ status: 'invalid', guest, message: err.message }) }
     finally { setBusyId('') }
   }
 
@@ -831,7 +831,7 @@ function CommandResultPanel({ result, onStepComplete, stepBusy }) {
             <span className="sc-command-avatar">{initials}</span>
             <div>
               <span className={`sc-command-status-headline sc-command-status-${tone}`}><Icon name={tone === 'green' ? 'check' : tone === 'red' ? 'shield' : 'info'} size={13}/>{status}</span>
-              <strong>{name || 'Unknown guest'}</strong>
+              <strong>{name || 'Guest identity not confirmed'}</strong>
               <small>{result.message || 'The scan was processed.'}</small>
             </div>
           </div>

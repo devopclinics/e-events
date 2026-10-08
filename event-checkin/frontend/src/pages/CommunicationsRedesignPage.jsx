@@ -2657,9 +2657,9 @@ function SchedulerTab({ eventId, event, notify, initialPreset }) {
 /* ── page ────────────────────────────────────────────────────────────── */
 
 const TABS = [
-  { key: 'hub', label: 'Guest Communication', eventActive: 'communication' },
-  { key: 'messages', label: 'Messages', eventActive: 'messages' },
-  { key: 'scheduler', label: 'Scheduler', eventActive: 'communication' },
+  { key: 'hub', label: 'Guest inbox', eventActive: 'communication' },
+  { key: 'messages', label: 'Broadcasts & templates', eventActive: 'messages' },
+  { key: 'scheduler', label: 'Scheduled messages', eventActive: 'communication' },
   { key: 'settings', label: 'Features & Channels', eventActive: 'features' },
 ]
 

@@ -348,7 +348,7 @@ function RealLogisticsContent({ eventId, notify }) {
         <div style={{ flex: 1 }}><label className="rd-field-label">Vendor phone</label><input className="rd-field" value={form.vendor_phone} onChange={(e) => setForm((v) => ({ ...v, vendor_phone: e.target.value }))} /></div>
       </div>
       <label className="gr-required-check"><input type="checkbox" checked={form.collect_size} onChange={(e) => setForm((v) => ({ ...v, collect_size: e.target.checked }))} /> Collect size at RSVP</label>
-      <label className="gr-required-check"><input type="checkbox" checked={form.auto_add} onChange={(e) => setForm((v) => ({ ...v, auto_add: e.target.checked }))} /> Auto-add confirmed guests</label>
+      <label className="gr-required-check"><input type="checkbox" checked={form.auto_add} onChange={(e) => setForm((v) => ({ ...v, auto_add: e.target.checked }))} /> Automatically add future confirmations (use Add all confirmed for existing guests)</label>
       {form.collect_size && <div><label className="rd-field-label">Size options (comma-separated)</label><input className="rd-field" value={form.size_options} onChange={(e) => setForm((value) => ({ ...value, size_options: e.target.value }))} placeholder="S, M, L, XL, 2XL"/></div>}
       <div><label className="rd-field-label">Notes</label><textarea className="rr-textarea" value={form.notes} onChange={(e) => setForm((v) => ({ ...v, notes: e.target.value }))} /></div>
       <div className="rd-row2"><button className="rr-btn secondary" onClick={() => setEditing(null)}>Cancel</button><button className="rr-btn primary" disabled={busy || !form.name.trim()} onClick={save}>{busy ? 'Saving…' : 'Save shipment'}</button></div>
@@ -1024,7 +1024,7 @@ function RealRemindersContent({ eventId, event, notify }) {
           <div className="ad-registry-item-top">
             <span>
               <Icon name="clock" size={14} /> {r.label}
-              {' · '}{new Date(r.fire_at_utc).toLocaleString()}
+              {' · '}{new Date(r.fire_at_utc).toLocaleString(undefined, {timeZone: event?.timezone || 'UTC'})} ({event?.timezone || 'UTC'})
               {' · '}{(r.channels || []).map((c) => REMINDER_CHANNELS.find((rc) => rc.id === c)?.label || c).join(', ')}
               {' · '}{REMINDER_AUDIENCE_PRESETS.find((p) => p.id === audiencePresetId(r.audience_rsvp_statuses))?.label}
               {r.status === 'sent' && <small> · Sent to {r.guests_sent}/{r.guests_targeted}</small>}

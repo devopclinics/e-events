@@ -144,11 +144,11 @@ async def archive_form(event_id:str,form_id:str,db:AsyncSession=Depends(get_db),
 
 @router.get('/{event_id}/form-people')
 async def form_people(event_id:str,q:str='',db:AsyncSession=Depends(get_db),user:User=Depends(require_event_admin)):
-    await event_for(event_id,db)
+    event=await event_for(event_id,db)
     query=select(Guest).where(Guest.event_id==event_id)
     if q.strip():query=query.where((Guest.first_name+' '+Guest.last_name).ilike('%'+q.strip()[:100]+'%'))
     rows=(await db.scalars(query.order_by(Guest.first_name,Guest.last_name).limit(100))).all()
-    return [{'id':g.id,'name':f'{g.first_name} {g.last_name}'} for g in rows]
+    return [{'id':g.id,'name':f'{g.first_name} {g.last_name}','is_junior':service.is_junior(event,g)} for g in rows]
 
 
 @router.get('/{event_id}/consent-authorities')

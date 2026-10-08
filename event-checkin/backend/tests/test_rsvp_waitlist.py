@@ -13,6 +13,7 @@ from conftest import _Session
 async def _event(event_id, *, capacity, require_approval=False, multi_invitee=False):
     async with _Session() as s:
         ev = await s.get(Event, event_id)
+        ev.status = "active"
         ev.rsvp_enabled = True
         ev.invite_mode = "open"
         ev.rsvp_require_approval = require_approval

@@ -7,7 +7,7 @@ import httpx
 from collections import defaultdict
 from datetime import datetime
 from urllib.parse import urlparse
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, Response, Body
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, Response, Body, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, select, func
 from sqlalchemy.exc import IntegrityError
@@ -28,6 +28,7 @@ from ..models import (
     ExperienceEvent,
     FeedbackSubmission,
     Guest,
+    GuestProfileAudit,
     GuestExperienceProgress,
     GuestMenuChoice,
     Household,
@@ -322,7 +323,7 @@ _SHIP_COLS = ("ship_address1", "ship_address2", "ship_city", "ship_state",
 def _template_columns(event: Event) -> list[str]:
     """Importable columns for this event, driven by its enabled add-ons.
     Must stay in lockstep with what _process_csv understands."""
-    cols = ["first_name", "last_name", "email", "phone"]
+    cols = ["first_name", "last_name", "email", "phone", "rsvp_guest_type", "rsvp_relationship", "is_junior"]
     if event.venue_access_enabled:
         cols.append("ticket_type")
         cols.append("tags")
@@ -351,7 +352,7 @@ def _norm_header(h: str) -> str:
     return re.sub(r"[\s\-]+", "_", (h or "").strip().lower())
 
 
-async def _process_csv(text: str, event_id: str, db: AsyncSession):
+async def _process_csv(text: str, event_id: str, db: AsyncSession, *, dry_run: bool = False):
     text = text.replace('\r\n', '\n').replace('\r', '\n')
     reader = csv.DictReader(io.StringIO(text))
     fields = {_norm_header(f) for f in (reader.fieldnames or [])}
@@ -533,6 +534,9 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
             email=email or None,
             phone=normalized_phone,
             ticket_type_id=ticket_type_id,
+            rsvp_guest_type=row.get("rsvp_guest_type", "").strip() or None,
+            rsvp_relationship=row.get("rsvp_relationship", "").strip() or None,
+            is_junior=row.get("is_junior", "").strip().lower() in {"1", "yes", "true"} or row.get("rsvp_guest_type", "").strip().lower() in {"child", "minor", "junior"},
             **ship,
         )
         db.add(g)
@@ -569,7 +573,10 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
                 guest.assigned_table_group_id = gid
                 groups_assigned += 1
 
-    await db.commit()
+    if dry_run:
+        await db.rollback()
+    else:
+        await db.commit()
     result = {"added": added, "skipped": skipped}
     if backfilled_phones:
         result["backfilled_phones"] = backfilled_phones
@@ -963,14 +970,49 @@ async def export_guests(
 
 
 @router.post("/{event_id}/guests/upload")
-async def upload_guests(event_id: str, file: UploadFile = File(...), db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_manage_access)):
+async def upload_guests(event_id: str, file: UploadFile = File(...), mapping: str = Form("{}"), preview: bool = False, db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_manage_access)):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
 
     raw = await file.read()
     text = _decode_csv_bytes(raw, file.filename or "")
-    return await _process_csv(text, event_id, db)
+    import json
+    try:
+        chosen = json.loads(mapping)
+        if not isinstance(chosen, dict):
+            raise ValueError()
+    except (ValueError, TypeError):
+        raise HTTPException(422, "Invalid column mapping")
+    reader = csv.DictReader(io.StringIO(text))
+    headers = reader.fieldnames or []
+    allowed = _template_columns(event)
+    aliases = {"table_tag": "table_group", "assigned_table_tag": "table_group"}
+    resolved = {h: chosen.get(h, aliases.get(_norm_header(h), _norm_header(h)) if aliases.get(_norm_header(h), _norm_header(h)) in allowed else "") for h in headers}
+    if any(value and value not in allowed for value in resolved.values()):
+        raise HTTPException(422, "Unknown destination column")
+    destinations = [value for value in resolved.values() if value]
+    if len(destinations) != len(set(destinations)):
+        raise HTTPException(422, "Map each guest field only once")
+    rows = [{dest: row.get(h, "") for h, dest in resolved.items() if dest} for row in reader]
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=destinations)
+    writer.writeheader(); writer.writerows(rows)
+    if preview:
+        issues = []
+        result = None
+        if not {"first_name", "last_name"}.issubset(destinations):
+            issues.append("Map both first_name and last_name before importing.")
+        else:
+            # The real parser and entitlement checks run in a rolled-back transaction.
+            try:
+                result = await _process_csv(buf.getvalue(), event_id, db, dry_run=True)
+            finally:
+                await db.rollback()
+        return {"headers": headers, "mapping": resolved, "fields": allowed, "sample": rows[:5],
+                "row_count": len(rows), "ignored": [h for h, d in resolved.items() if not d],
+                "issues": issues, "result": result}
+    return await _process_csv(buf.getvalue(), event_id, db)
 
 
 async def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest, db: AsyncSession,
@@ -1825,6 +1867,22 @@ async def update_guest(
         if data.phone.strip() and phone is None:
             raise HTTPException(400, "Invalid phone format — use E.164 e.g. +447911123456")
         guest.phone = phone
+    profile_before = {key: getattr(guest, key) for key in ("rsvp_guest_type", "rsvp_relationship", "is_junior")}
+    if data.rsvp_guest_type is not None:
+        guest.rsvp_guest_type = data.rsvp_guest_type.strip()
+    if data.rsvp_relationship is not None:
+        guest.rsvp_relationship = data.rsvp_relationship.strip() or None
+    if data.is_junior is not None:
+        guest.is_junior = data.is_junior
+    if (guest.rsvp_guest_type or '').strip().casefold() in {'child', 'junior', 'minor'}:
+        guest.is_junior = True
+    profile_after = {key: getattr(guest, key) for key in profile_before}
+    if profile_before != profile_after:
+        db.add(GuestProfileAudit(event_id=event_id, guest_id=guest.id, actor_user_id=_.id, before=profile_before, after=profile_after))
+        if guest.is_junior:
+            authorities = (await db.scalars(select(EventConsentAuthority).where(EventConsentAuthority.event_id == event_id, EventConsentAuthority.signer_guest_id == guest.id))).all()
+            for authority in authorities:
+                authority.active = False
     if data.is_vip is not None:
         guest.is_vip = data.is_vip
     if data.sms_consent is not None:
@@ -2378,6 +2436,37 @@ async def send_invites(event_id: str, background_tasks: BackgroundTasks, db: Asy
 
     await db.commit()
     return {"queued": len(guests)}
+
+
+@router.post("/{event_id}/guests/send-preview")
+async def preview_invites(event_id: str, body: dict = Body(default={}), db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_manage_access)):
+    from ..services.credit_balance import available_credits, credit_scope
+    from ..entitlements import channel_weight
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    query = select(Guest).where(Guest.event_id == event_id)
+    if body.get("guest_ids"):
+        query = query.where(Guest.id.in_(body["guest_ids"]))
+    if not body.get("force"):
+        query = query.where(Guest.invite_sent_at.is_(None))
+    guests = list((await db.scalars(query)).all())
+    counts = {c: 0 for c in ("email", "sms", "whatsapp", "mms")}
+    blocked = unreachable = 0
+    for guest in guests:
+        reminder = event.invite_mode == "closed" and body.get("force") and guest.invite_sent_at and guest.rsvp_status == "invited"
+        if not _invite_recipients_allowed(event, guest, reminder=bool(reminder)):
+            blocked += 1
+            continue
+        chosen = channels_for_flow(event, guest, "reminder" if reminder else "invite", paid_ok=can_use_paid_channels(event))
+        if not chosen:
+            unreachable += 1
+        for channel in chosen:
+            counts[channel] += 1
+    return {"recipients": len(guests), "channels": counts, "blocked": blocked, "unreachable": unreachable,
+            "estimated_credits": round(sum(count * channel_weight(channel, org_id=event.org_id) for channel, count in counts.items()), 2),
+            "balance": await available_credits(db, event), "balance_scope": credit_scope(),
+            "note": "Estimate before delivery. Provider readiness, message length and available credits are rechecked when sending."}
 
 
 @router.post("/{event_id}/guests/send-batch")

@@ -122,6 +122,10 @@ async def get_current_user(
         await db.commit()
         await db.refresh(user)
 
+    if decoded.get("name") and user.name in {None, "", email.split("@")[0]}:
+        user.name = decoded["name"]
+        await db.commit()
+
     # Suspended account → no access (paired with a disabled Firebase user).
     if not user.is_active:
         raise HTTPException(403, "This account has been suspended. Contact support.")

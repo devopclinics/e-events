@@ -49,6 +49,7 @@ const ACTIVITY_TYPES = [
   ['feedback', 'Feedback'], ['q_and_a', 'Q&A'], ['word_cloud', 'Word Cloud'],
   ['voting', 'Live Voting'],
 ]
+const activityLabel = (type) => ACTIVITY_TYPES.find(([key])=>key===type)?.[1] || String(type || '').replaceAll('_',' ')
 const QUESTION_TYPES = [
   ['single_choice', 'Single choice'], ['multiple_choice', 'Multiple choice'],
   ['true_false', 'True / False'], ['yes_no', 'Yes / No'], ['rating_5', 'Rating (5)'],
@@ -542,7 +543,7 @@ function OverviewPanel({ eventId, joinInfo, activities, displays, onCreate, onOp
         <header><div><h3>Live activities</h3><p>Realtime event activity</p></div><button onClick={() => onTab('Live Control')}>Open control room →</button></header>
         {rows.length === 0 ? <EmptyActivity onCreate={onCreate} /> : <div className="fl-activity-list">{overviewRows.slice(0, 5).map((item) => <button key={item.id} onClick={() => onOpen(item.id)} className="fl-activity-row">
           <span className={`fl-type-icon fl-type-${item.type}`}>{({ quiz: '✦', poll: '▥', survey: '≋', rating: '★', feedback: '↗', q_and_a: '?', word_cloud: 'Aa' })[item.type] || '◉'}</span>
-          <span className="fl-activity-copy"><strong>{item.title}</strong><small>{String(item.type).replaceAll('_', ' ')} · {item.participant_count || 0} participants</small></span>
+          <span className="fl-activity-copy"><strong>{item.title}</strong><small>{activityLabel(item.type)} · {item.participant_count || 0} participants</small></span>
           <span className="fl-activity-responses">{item.response_count || 0}<small>responses</small></span><StatusChip status={item.status} />
         </button>)}</div>}
       </section>
@@ -837,7 +838,7 @@ function DisplayCard({ display, draft, onDraftChange, onDraftApplied, eventId, a
       </>}
     </div>
     <div className="fl-scene-strip">{availableScenes.map(([key, label]) => <button key={key} title={label} className={pendingScene === key ? 'active' : ''} onClick={() => setPendingScene(key)}><span>{({ welcome: '✦', join: '⌗', agenda: '≡', question: '?', responding: '◌', results: '▥', all_results: '▦', survey_insights: '◫', correct_answer: '✓', leaderboard: '♛', rating: '★', q_and_a: '?', word_cloud: 'Aa', live_spectrum: '↔', interactive_quadrant: '⊞', image_heatmap: '◉', ranking_race: '≋', prediction_reveal: '◐', commitment_wall: '▦', photo_mosaic: '▦', location_map: '⌖', journey_recap: '⌁', spotlight_wheel: '◎' })[key] || '◉'}</span>{label}</button>)}</div>
-    {pendingActivity && availableScenes.length < DISPLAY_SCENES.length && <p className="rd-hint" style={{ marginTop: -6, marginBottom: 10 }}>Only showing scenes that work with a {pendingActivity.type.replace('_', ' ')} activity — others would show nothing useful.</p>}
+    {pendingActivity && availableScenes.length < DISPLAY_SCENES.length && <p className="rd-hint" style={{ marginTop: -6, marginBottom: 10 }}>Only showing scenes that work with a {activityLabel(pendingActivity.type)} activity — others would show nothing useful.</p>}
 
     <div className="fl-display-preview-box">
       <div className="fl-display-preview-box-head">
@@ -978,7 +979,7 @@ function UnifiedControlRoom({ activities, displays, selected, loadingActivityId,
         <div className="fl-control-activity-list">
           {allActivities.filter((activity) => activity.status !== 'archived').map((activity) => <button type="button" key={activity.id} className={`fl-control-activity${selected?.id === activity.id ? ' selected' : ''}`} aria-pressed={selected?.id === activity.id} disabled={busy} onClick={() => { setReceipt(''); onSelectActivity(activity.id) }}>
             <i className={activity.status === 'live' ? 'live' : ''} aria-hidden="true" />
-            <span><strong>{activity.title}</strong><small>{String(activity.type).replaceAll('_', ' ')} · {activity.status}</small></span>
+            <span><strong>{activity.title}</strong><small>{activityLabel(activity.type)} · {activity.status}</small></span>
             <b>{activity.response_count || 0}</b>
           </button>)}
           {!allActivities.length && <p className="fl-control-empty">No activities yet. Create one in Activity studio.</p>}
@@ -1125,6 +1126,29 @@ function FestioLiveEventPage({ eventId }) {
     catch (e) { setError(e.message) }
   }
   useEffect(() => { loadActivities() }, [eventId, enabled]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(()=>{
+    if(!eventId || !enabled)return
+    let cancelled=false, timer
+    async function refresh(){
+      if(!document.hidden && !busy){
+        try{
+          const rows=await api.liveActivities(eventId)
+          if(!cancelled)setActivities(rows)
+          if(results && selected){ const fresh=await api.liveResults(eventId,selected.id); if(!cancelled)setResults(fresh) }
+          if(responseDetails !== null && selected){ const fresh=await api.liveResponseDetails(eventId,selected.id); if(!cancelled)setResponseDetails(fresh) }
+          if(moderationItems !== null && selected && selected.type !== 'q_and_a'){ const fresh=await api.liveModerationItems(eventId,selected.id); if(!cancelled)setModerationItems(fresh) }
+          if(selected?.type==='q_and_a'){
+            const questions=await api.liveQnaList(eventId,selected.id)
+            if(!cancelled)setQnaItems(questions)
+          }
+        }catch(e){if(!cancelled)setError(`Live updates paused: ${e.message}`)}
+      }
+      if(!cancelled)timer=setTimeout(refresh,10000)
+    }
+    timer=setTimeout(refresh,10000)
+    return()=>{cancelled=true;clearTimeout(timer)}
+  },[eventId,enabled,selected?.id,selected?.type,busy,!!results,responseDetails !== null,moderationItems !== null])
 
   async function loadProgramSessions() {
     if (!eventId || !enabled) return
@@ -1980,7 +2004,7 @@ function FestioLiveEventPage({ eventId }) {
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: 13.5 }}>{i + 1}. {q.prompt}</div>
-                      <div style={{ fontSize: 11.5, color: '#5b6a5c', textTransform: 'capitalize' }}>{q.question_type.replace('_', ' ')}</div>
+                      <div style={{ fontSize: 11.5, color: '#5b6a5c', textTransform: 'capitalize' }}>{q.question_type.replaceAll('_', ' ')}</div>
                     </div>
                     <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                       {q.status === 'archived' && <span className="fl-question-archived">Archived</span>}
@@ -2088,7 +2112,7 @@ function FestioLiveEventPage({ eventId }) {
                   <h4 style={{ margin: '0 0 10px' }}>Conditional branching</h4>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <select className="rr-select" aria-label="Branch source question" value={newRule.source_question_id} onChange={(e) => setNewRule((v) => ({ ...v, source_question_id: e.target.value }))}><option value="">If question…</option>{selected.questions.map((q) => <option key={q.id} value={q.id}>{q.prompt}</option>)}</select>
-                    <select className="rr-select" aria-label="Branch condition" value={newRule.operator} onChange={(e) => setNewRule((v) => ({ ...v, operator: e.target.value }))}>{['equals', 'not_equals', 'greater_than', 'less_than', 'contains', 'answered', 'not_answered'].map((op) => <option key={op} value={op}>{op.replace('_', ' ')}</option>)}</select>
+                    <select className="rr-select" aria-label="Branch condition" value={newRule.operator} onChange={(e) => setNewRule((v) => ({ ...v, operator: e.target.value }))}>{['equals', 'not_equals', 'greater_than', 'less_than', 'contains', 'answered', 'not_answered'].map((op) => <option key={op} value={op}>{op.replaceAll('_', ' ')}</option>)}</select>
                     {!['answered', 'not_answered'].includes(newRule.operator) && <input className="rr-input" style={{ width: 130 }} placeholder="Value" value={newRule.comparison_value} onChange={(e) => setNewRule((v) => ({ ...v, comparison_value: e.target.value }))} />}
                     <select className="rr-select" aria-label="Branch target question" value={newRule.target_question_id} onChange={(e) => setNewRule((v) => ({ ...v, target_question_id: e.target.value }))}><option value="">Then question…</option>{selected.questions.map((q) => <option key={q.id} value={q.id}>{q.prompt}</option>)}</select>
                     <select className="rr-select" aria-label="Branch action" value={newRule.action} onChange={(e) => setNewRule((v) => ({ ...v, action: e.target.value }))}><option value="show">Show</option><option value="hide">Hide</option></select>
@@ -2203,7 +2227,7 @@ function FestioLiveEventPage({ eventId }) {
               <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--rr-line, #eee)' }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: 13 }}>{item.prompt}</div>
-                  <div style={{ fontSize: 11.5, color: '#5b6a5c' }}>{item.question_type.replace('_', ' ')}{item.category ? ` · ${item.category}` : ''} · used {item.usage_count}x{item.tags?.length ? ` · ${item.tags.join(', ')}` : ''}</div>
+                  <div style={{ fontSize: 11.5, color: '#5b6a5c' }}>{item.question_type.replaceAll('_', ' ')}{item.category ? ` · ${item.category}` : ''} · used {item.usage_count}x{item.tags?.length ? ` · ${item.tags.join(', ')}` : ''}</div>
                 </div>
                 {selected && <button className="rr-btn" disabled={busy} onClick={() => importFromBank(item.id)}>Import</button>}
                 <button className="rr-link-btn" disabled={busy} onClick={async () => { await api.liveDuplicateBankItem(eventId, item.id); await loadBank() }}>Duplicate</button>
@@ -2220,10 +2244,10 @@ function FestioLiveEventPage({ eventId }) {
           <div className="rd-panel-head"><div><span className="fl-eyebrow">Pressure-ready control room</span><h3>Live Control</h3><p>See every live room and jump into presenter controls instantly.</p></div><span className="fl-realtime">● Realtime</span></div>
           <div className="rd-panel-body">
             {suggestedActivity && <div className="fl-program-cue"><span>✦ PROGRAM CUE</span><div><strong>{currentProgramSession.title} is happening now</strong><small>{suggestedActivity.title} is ready.{suggestedActivity.config?.auto_start_enabled ? ' Auto-start is on — it will go live on its own any moment.' : ' Festio will never start it automatically.'}</small></div><button className="rr-btn secondary" onClick={async () => { await openActivity(suggestedActivity.id); setTab('Activities') }}>Review and start manually →</button></div>}
-            {visibleActivities.some((a) => a.status === 'live') && (() => { const current = visibleActivities.find((a) => a.status === 'live' && a.response_count > 0) || visibleActivities.find((a) => a.status === 'live'); const rate = current.participant_count ? Math.min(100, Math.round((current.response_count / current.participant_count) * 100)) : 0; return <div className="fl-control-hero"><div><span>● LIVE NOW · {String(current.type).replaceAll('_', ' ')}</span><h2>{current.title}</h2><div><b>{current.participant_count || 0}<small>participants</small></b><b>{current.response_count || 0}<small>responses</small></b><b>{rate}%<small>response rate</small></b></div></div><button onClick={async () => { await openActivity(current.id); setTab('Activities') }}>Open live controls →</button></div> })()}
+            {visibleActivities.some((a) => a.status === 'live') && (() => { const current = visibleActivities.find((a) => a.status === 'live' && a.response_count > 0) || visibleActivities.find((a) => a.status === 'live'); const rate = current.participant_count ? Math.min(100, Math.round((current.response_count / current.participant_count) * 100)) : 0; return <div className="fl-control-hero"><div><span>● LIVE NOW · {activityLabel(current.type)}</span><h2>{current.title}</h2><div><b>{current.participant_count || 0}<small>participants</small></b><b>{(current.type==='q_and_a'?current.question_count:current.response_count) || 0}<small>{current.type==='q_and_a'?'questions submitted':'responses'}</small></b>{current.type!=='q_and_a'&&<b>{rate}%<small>response rate</small></b>}</div></div><button onClick={async () => { await openActivity(current.id); setTab('Activities') }}>Open live controls →</button></div> })()}
             {visibleActivities.filter((a) => !['completed', 'archived'].includes(a.status)).map((a) => (
               <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--rr-line, #eee)' }}>
-                <div style={{ flex: 1 }}><strong>{a.title}</strong><div className="rd-hint">{programSessionById.get(a.session_id)?.title || 'Event-wide'} · {a.participant_count} participants · {a.response_count} responses</div></div>
+                <div style={{ flex: 1 }}><strong>{a.title}</strong><div className="rd-hint">{programSessionById.get(a.session_id)?.title || 'Event-wide'} · {a.participant_count} participants · {a.type === 'q_and_a' ? `${a.question_count || 0} questions submitted` : `${a.response_count || 0} responses`}</div></div>
                 <StatusChip status={a.status} />
                 <button className="rr-btn primary" onClick={async () => { await openActivity(a.id); setTab('Activities') }}>Open controls</button>
               </div>
@@ -2251,7 +2275,7 @@ function FestioLiveEventPage({ eventId }) {
             {visibleActivities.map((a) => (
               <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--rr-line, #eee)' }}>
                 <div style={{ flex: 1 }}><strong>{a.title}</strong><div className="rd-hint">{programSessionById.get(a.session_id)?.title || 'Event-wide'} · {a.participant_count} participants</div></div>
-                <strong>{a.response_count} responses</strong>
+                <strong>{a.type === 'q_and_a' ? `${a.question_count || 0} questions submitted` : `${a.response_count || 0} responses`}</strong>
                 <button className="rr-btn secondary" onClick={() => api.liveDownloadExport(eventId, a.id, a.title).catch((e) => setError(e.message))}>Export CSV</button>
                 <button className="rr-btn secondary" onClick={async () => { setError(''); try { const [full, data, details, moderation, activityRules] = await Promise.all([api.liveGetActivity(eventId, a.id), api.liveResults(eventId, a.id), api.liveResponseDetails(eventId, a.id), a.type === 'q_and_a' ? Promise.resolve([]) : api.liveModerationItems(eventId, a.id), ['survey', 'feedback'].includes(a.type) ? api.liveRules(eventId, a.id) : Promise.resolve([])]); setSelected(full); setResults(data); setResponseDetails(details); setModerationItems(moderation); setRules(activityRules); setTab('Activities') } catch (e) { setError(e.message) } }}>Review</button>
               </div>

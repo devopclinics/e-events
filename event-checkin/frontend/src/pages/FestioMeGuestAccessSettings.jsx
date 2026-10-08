@@ -66,7 +66,7 @@ export default function FestioMeGuestAccessSettings({ eventId }) {
           <p className="rd-hint">{selected.size} approved adult{selected.size === 1 ? '' : 's'}</p>
           <div style={{ maxHeight: 320, overflowY: 'auto', display: 'grid', gap: 10, marginBottom: 12 }}>
             {guests.map((guest) => <label key={guest.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0' }}>
-              <input type="checkbox" checked={selected.has(guest.id)} disabled={saving} onChange={(e) => {
+              <input type="checkbox" checked={selected.has(guest.id)} disabled={saving || guest.is_junior} onChange={(e) => {
                 const checked = e.target.checked
                 setPolicy((current) => {
                   const ids = new Set(current.adult_guest_ids || [])
@@ -76,7 +76,7 @@ export default function FestioMeGuestAccessSettings({ eventId }) {
                 })
                 setSaved('')
               }} />
-              <span>{guest.name}</span>
+              <span>{guest.name}{guest.is_junior ? ' · Junior (not eligible for adult approval)' : ''}</span>
             </label>)}
             {!guests.length && <p>No guests match this search.</p>}
           </div>

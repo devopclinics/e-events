@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://dashboard_ro:dashboard_ro@db:5432/checkin"
     frontend_url: str = "http://localhost:5173"
     firebase_credentials: str = ""
+    organization_entitlements_v2: bool = False
     superadmin_emails: str = ""
     # Optional: Festio Live participation stat on the Operations tab. Same
     # shared secret engagement-service itself verifies (see that service's

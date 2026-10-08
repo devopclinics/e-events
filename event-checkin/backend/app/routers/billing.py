@@ -6,6 +6,7 @@ endpoints degrade gracefully when keys aren't configured (checkout → 503).
 import json
 import logging
 
+from ..services.credit_balance import available_credits, credit_scope
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -78,7 +79,8 @@ async def list_tiers(event_id: str, user: User = Depends(get_current_user), db: 
         "configured": _provider_enabled(provider),
         "is_paid": event.is_paid,
         "plan_tier": event.plan_tier,
-        "message_credits": (org.message_credit_units / 10) if settings.organization_entitlements_v2 and org else event.message_credits,
+        "message_credits": await available_credits(db, event),
+        "balance_scope": credit_scope(),
         "purchased_addons": event.purchased_addons or [],
         "available_addons": [key for key in sorted(set(FEATURE_ADDON.values())) if event_allows_addon(event, key)],
         "tiers": tiers,
@@ -112,11 +114,13 @@ async def credit_ledger(event_id: str, limit: int = 50, user: User = Depends(get
         for c in ("sms", "mms", "whatsapp")
     ]
     summary.append({
-        "channel": "email", "sends": email["recipients"], "delivered": email["delivered"],
+        "channel": "email", "sends": email["messages"], "delivered": email["delivered"],
         "failed": email["failed"] + email["blocked_no_credits"], "credits": None,
     })
     return {
-        "balance": event.message_credits,
+        "balance": await available_credits(db, event),
+        "balance_scope": credit_scope(),
+        "usage_scope": "event",
         "summary": summary,
         "email_detail": email,
         "rows": [

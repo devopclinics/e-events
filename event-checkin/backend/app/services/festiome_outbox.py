@@ -46,6 +46,9 @@ def guest_is_festiome_eligible(guest: Guest, event: Event | None = None) -> bool
         return False
     policy = (event.festiome_access_policy or {}) if event else {}
     if policy.get("mode") == "approved_adults":
+        from .event_forms import is_junior
+        if is_junior(event, guest):
+            return False
         return guest.id in set(policy.get("adult_guest_ids") or [])
     return True
 

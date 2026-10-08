@@ -3,6 +3,7 @@
 from datetime import datetime
 from typing import Literal
 
+from ..services.event_forms import is_junior as guest_is_junior
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -202,6 +203,7 @@ async def get_festiome_access_policy(
                 "id": guest.id,
                 "name": f"{guest.first_name} {guest.last_name}".strip(),
                 "approved": guest.id in allowed,
+                "is_junior": guest_is_junior(event, guest),
             }
             for guest in guests
         ],
@@ -221,6 +223,9 @@ async def set_festiome_access_policy(
     guests = (await db.execute(select(Guest).where(Guest.event_id == event_id))).scalars().all()
     known_ids = {guest.id for guest in guests}
     requested = set(data.adult_guest_ids)
+    from ..services.event_forms import is_junior
+    if data.mode == "approved_adults" and any(g.id in requested and is_junior(event, g) for g in guests):
+        raise HTTPException(422, "A junior attendee cannot be approved as an adult")
     if requested - known_ids:
         raise HTTPException(400, "Every approved adult must be a guest in this event")
     event.festiome_access_policy = {
@@ -266,6 +271,8 @@ async def enable_festiome(
         # This failure is confined to the explicit enable action. No event state
         # is changed, so it is safe for the organizer to retry.
         raise HTTPException(503, str(exc)) from exc
+    if not event.festiome_id and not event.festiome_access_policy:
+        event.festiome_access_policy = {"mode": "approved_adults", "adult_guest_ids": []}
     event.festiome_enabled = link.enabled
     event.festiome_id = link.festiome_id
     event.festiome_open_url = link.open_url

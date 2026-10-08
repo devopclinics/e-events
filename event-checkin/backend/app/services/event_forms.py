@@ -6,7 +6,7 @@ from .experience import guest_age_group, step_applies_to_guest
 
 
 def is_junior(event, guest):
-    return guest.id in (event.guardian_authorizations or {}) or (guest.rsvp_guest_type or '').lower() in {'child', 'junior', 'minor'}
+    return bool(getattr(guest, 'is_junior', False)) or guest.id in (event.guardian_authorizations or {}) or (guest.rsvp_guest_type or '').strip().casefold() in {'child', 'junior', 'minor'}
 
 
 async def context_for(guest, db):

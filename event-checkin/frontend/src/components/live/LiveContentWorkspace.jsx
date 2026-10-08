@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../../api'
 import './LiveContentWorkspace.css'
 
@@ -62,12 +62,14 @@ export function PresenterMaterialsWorkspace({ eventId, sessions = [], displays =
 
 export function CertificatesWorkspace({ eventId, sessions: suppliedSessions = [] }) {
   const [templates,setTemplates]=useState([]),[selected,setSelected]=useState(null),[candidates,setCandidates]=useState([]),[certificates,setCertificates]=useState([]),[chosen,setChosen]=useState(new Set()),[notice,setNotice]=useState(null),[busy,setBusy]=useState(false),[report,setReport]=useState(null),[availableSessions,setAvailableSessions]=useState(suppliedSessions)
-  const load = async () => { const ts=await api.listCertificateTemplates(eventId); setTemplates(ts); const template=selected ? ts.find(t=>t.id===selected.id)||ts[0] : ts[0]; setSelected(template||null); setCertificates(await api.listEventCertificates(eventId)); if(template) setCandidates(await api.listCertificateCandidates(eventId,template.id)) }
+  const eligibilityRequest = useRef(0)
+  const refreshCandidates = async (templateId) => { const revision=++eligibilityRequest.current; setCandidates([]); setChosen(new Set()); const rows=await api.listCertificateCandidates(eventId,templateId); if(revision===eligibilityRequest.current)setCandidates(rows) }
+  const load = async () => { const ts=await api.listCertificateTemplates(eventId); setTemplates(ts); const template=selected ? ts.find(t=>t.id===selected.id)||ts[0] : ts[0]; setSelected(template||null); setCertificates(await api.listEventCertificates(eventId)); if(template) await refreshCandidates(template.id) }
   useEffect(()=>{ load().catch(e=>setNotice({type:'error',text:e.message})); api.listLiveContentSessions(eventId).then(setAvailableSessions).catch(()=>setAvailableSessions(suppliedSessions)) },[eventId])
-  useEffect(()=>{ if(selected) api.listCertificateCandidates(eventId,selected.id).then(setCandidates).catch(e=>setNotice({type:'error',text:e.message})) },[selected?.id])
+  useEffect(()=>{ if(selected) refreshCandidates(selected.id).catch(e=>setNotice({type:'error',text:e.message})) },[selected?.id])
   const eligible=useMemo(()=>candidates.filter(c=>c.eligible&&!c.issued),[candidates])
   const design={...DEFAULT_DESIGN,...(selected?.design||{})}, eligibility={minimum_sessions:1,require_event_checkin:true,required_session_ids:[],...(selected?.eligibility||{})}
-  const save = async () => { setBusy(true); try { const row=await api.saveCertificateTemplate(eventId,selected.id,{name:selected.name,design,eligibility,active:selected.active}); setSelected(row); setNotice({type:'success',text:'Certificate design and eligibility rules saved.'}) } catch(e){setNotice({type:'error',text:e.message})} finally{setBusy(false)} }
+  const save = async () => { setBusy(true); try { const row=await api.saveCertificateTemplate(eventId,selected.id,{name:selected.name,design,eligibility,active:selected.active}); setSelected(row); await refreshCandidates(row.id); setNotice({type:'success',text:'Certificate design saved and eligibility refreshed.'}) } catch(e){setNotice({type:'error',text:e.message})} finally{setBusy(false)} }
   const editDesign=(key,value)=>setSelected({...selected,design:{...design,[key]:value}}), editEligibility=(key,value)=>setSelected({...selected,eligibility:{...eligibility,[key]:value}})
   const createTemplate=async()=>{setBusy(true);try{const row=await api.createCertificateTemplate(eventId,{name:`Certificate ${templates.length+1}`,design:DEFAULT_DESIGN,eligibility:{minimum_sessions:1,require_event_checkin:true,required_session_ids:[]},active:true});setTemplates([...templates,row]);setSelected(row);setNotice({type:'success',text:'New certificate template created.'})}catch(e){setNotice({type:'error',text:e.message})}finally{setBusy(false)}}
   const uploadAsset=async(key,file)=>{if(!file)return;setBusy(true);try{const result=await api.uploadCertificateAsset(eventId,file);editDesign(key,result.url);setNotice({type:'success',text:'Image uploaded. Save the template to apply it.'})}catch(e){setNotice({type:'error',text:e.message})}finally{setBusy(false)}}

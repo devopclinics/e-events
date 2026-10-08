@@ -11,6 +11,7 @@ class Identity:
     org_id: str
     role: str
     is_platform_superadmin: bool = False
+    currency: str = "USD"
 
 
 async def current_identity(authorization: str | None = Header(default=None)) -> Identity:
@@ -26,7 +27,7 @@ async def current_identity(authorization: str | None = Header(default=None)) -> 
     if not data.get("event_id") or not data.get("org_id"):
         raise HTTPException(401, "Token is missing event scope")
     return Identity(data["sub"], data["event_id"], data["org_id"], data.get("role", "member"),
-                    bool(data.get("is_platform_superadmin", False)))
+                    bool(data.get("is_platform_superadmin", False)), data.get("currency", "USD"))
 
 
 def require_admin(identity: Identity) -> None:

@@ -12,8 +12,6 @@ import GuidedSetupPhaseFive from './GuidedSetupPhaseFive'
 import GuidedSetupPhaseSix from './GuidedSetupPhaseSix'
 import './SetupRedesignPage.css'
 
-const GUIDED_SETUP_ENABLED = import.meta.env.VITE_GUIDED_SETUP_ENABLED === 'true'
-
 export const EVENT_TYPES = [
   'Wedding', 'Nikkah / Aqd', 'Graduation ceremony', 'Birthday party',
   'Gala / banquet', 'Conference / seminar', 'Community / religious event',
@@ -669,7 +667,7 @@ function GuidedSetupPhase({ eventId, notify, onEventUnavailable }) {
 
 export default function SetupRedesignPage() {
   const initialView = new URLSearchParams(window.location.search).get('view')
-  const [phase, setPhaseState] = useState(GUIDED_SETUP_ENABLED && ['outcomes', 'guide', 'audience', 'experience', 'operations', 'live', 'closeout'].includes(initialView) ? initialView : 'wizard')
+  const [phase, setPhaseState] = useState(['outcomes', 'guide', 'audience', 'experience', 'operations', 'live', 'closeout'].includes(initialView) ? initialView : 'wizard')
   const [eventId, setCurrentEvent] = useCurrentEvent()
   const [toast, setToast] = useState(null)
 
@@ -692,7 +690,7 @@ export default function SetupRedesignPage() {
           <button className={`su-phase-btn${phase === 'wizard' ? ' active' : ''}`} onClick={() => setPhase('wizard')}>
             <span className="su-phase-num">1</span> Create event
           </button>
-          {GUIDED_SETUP_ENABLED && <>
+          <>
           <div className="su-phase-divider" />
           <button className={`su-phase-btn${phase === 'outcomes' ? ' active' : ''}`} onClick={() => setPhase('outcomes')}>
             <span className="su-phase-num">2</span> Choose outcomes
@@ -721,10 +719,10 @@ export default function SetupRedesignPage() {
           <button className={`su-phase-btn${phase === 'closeout' ? ' active' : ''}`} onClick={() => setPhase('closeout')}>
             <span className="su-phase-num">8</span> Results &amp; closeout
           </button>
-          </>}
+          </>
         </div>
 
-        {phase === 'wizard' && <WizardPhase notify={notify} onComplete={(event) => { setCurrentEvent(event.id); if (GUIDED_SETUP_ENABLED) setPhase('outcomes'); else window.location.assign('/admin-redesign') }} />}
+        {phase === 'wizard' && <WizardPhase notify={notify} onComplete={(event) => { setCurrentEvent(event.id); setPhase('outcomes') }} />}
         {phase === 'outcomes' && <OutcomeLauncher eventId={eventId} notify={notify} onContinue={() => setPhase('guide')} />}
         {phase === 'guide' && <PhaseOneGuide eventId={eventId} onChooseOutcomes={() => setPhase('outcomes')} onCreateEvent={() => setPhase('wizard')} />}
         {phase === 'audience' && <GuidedSetupPhaseTwo eventId={eventId} notify={notify} onBack={() => setPhase('guide')} />}

@@ -169,6 +169,7 @@ function Nav({ hasMenu, eventName, canUseDesignStudio, hasFestioMe, canManageCur
     ...(((!eventName && ['admin', 'event_manager'].includes(user?.role)) || canManageCurrentEvent || hasGuestDirectory)
       ? [{ to: '/admin', label: hasGuestDirectory && !canManageCurrentEvent ? 'Guests' : 'Event Setup', end: true }]
       : []),
+    ...(['admin', 'event_manager'].includes(user?.role) ? [{ to: '/setup-redesign?view=guide', label: 'Setup Guide' }] : []),
     ...(user?.role === 'admin' && canUseDesignStudio ? [{ to: '/design-studio', label: 'Design Studio' }] : []),
     { to: '/dashboard', label: 'Results' },
     { to: '/my-tasks', label: 'My Tasks' },

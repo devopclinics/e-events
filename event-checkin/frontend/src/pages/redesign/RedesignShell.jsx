@@ -307,8 +307,6 @@ export function Icon({ name, size = 18, className }) {
   return <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
 }
 
-const GUIDED_SETUP_ENABLED = import.meta.env.VITE_GUIDED_SETUP_ENABLED === 'true'
-
 // Mirrors the real top nav (App.jsx Nav, :85-203). Destinations point
 // directly at each item's redesign page — Check-in and Orders used to
 // route through their legacy URLs (/scanner, /kitchen) on the theory that
@@ -322,7 +320,7 @@ const TOP_LINKS = [
   { id: 'setup', label: 'Event Setup', to: '/admin-redesign', icon: 'calendar' },
   {
     id: 'guide', label: 'Setup Guide', to: '/setup-redesign?view=guide', icon: 'grid',
-    gate: ({ user }) => GUIDED_SETUP_ENABLED && ['admin', 'event_manager'].includes(user?.role),
+    gate: ({ user }) => ['admin', 'event_manager'].includes(user?.role),
   },
   { id: 'events', label: 'Events', to: '/events-redesign', icon: 'calendar' },
   {
@@ -371,6 +369,7 @@ const TOP_LINKS = [
 const SIDEBAR_NAV = [
   ['grp', 'Setup Progress'],
   ['calendar', 'Start here', '/admin-redesign', 'overview'],
+  ['grid', 'Setup Guide', '/setup-redesign?view=guide', 'guide', null, 'setupGuide'],
   ['users', 'Guests', '/guests-redesign?tab=guests', 'guests'],
   ['send', 'Invites & RSVP', '/guests-redesign?tab=invite', 'invite'],
   ['message', 'Guest Communication', '/communications-redesign?tab=hub', 'communication'],
@@ -528,6 +527,7 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
   // gates on (AdminPage.jsx). Falls back to all-hidden while no event is
   // selected/loaded, matching how the real app behaves with no current event.
   const flags = {
+    setupGuide: ['admin', 'event_manager'].includes(user?.role),
     venueAccess: !!event?.venue_access_enabled,
     seating: !!event?.seating_enabled,
     orders: !!event?.menu_enabled,

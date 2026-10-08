@@ -7,6 +7,7 @@
 // branding creeping back into customer-facing content. Exits non-zero (and
 // prints every problem found, not just the first) without modifying
 // anything.
+import { spawnSync } from 'node:child_process'
 import { readFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -76,6 +77,14 @@ const filesToScan = [
 ]
 for (const f of filesToScan) {
   if (existsSync(f)) scanForBannedStrings(f)
+}
+
+// Keep support and operator Media Library knowledge synchronized with Help.
+const knowledgeCheck = spawnSync(process.execPath, [
+  path.resolve(frontendRoot, '../support-service/scripts/build_knowledge_base.mjs'), '--check',
+], { encoding: 'utf8' })
+if (knowledgeCheck.status !== 0) {
+  problems.push('Generated knowledge is out of date; run support-service/scripts/build_knowledge_base.mjs. ' + (knowledgeCheck.stderr || '').trim())
 }
 
 // ---- Report ----

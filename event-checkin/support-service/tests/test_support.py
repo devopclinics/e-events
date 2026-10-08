@@ -151,7 +151,8 @@ def test_broad_getting_started_question_retrieves_onboarding_sections():
 
     assert titles == ["Get started", "Create your event", "Add your guest list"]
     assert "Experience workflows" not in titles
-    assert "Click New Event" in knowledge
+    assert "Click New event" in knowledge
+    assert "Confirm Timezone" in knowledge
 
 
 def test_all_features_question_retrieves_complete_feature_map():

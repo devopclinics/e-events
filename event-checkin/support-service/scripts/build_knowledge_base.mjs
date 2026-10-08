@@ -7,16 +7,20 @@
 // Regenerate and commit the output whenever guideContent.mjs changes:
 //   node support-service/scripts/build_knowledge_base.mjs
 import { readFileSync, writeFileSync } from 'node:fs'
-import { CONTENT } from '../../frontend/src/guideContent.mjs'
+import { CONTENT, GUIDE_REVISED_AT } from '../../frontend/src/guideContent.mjs'
 
 const ROLES = ['organizer', 'staff', 'guest', 'operator']
 
 function topicMarkdown(t) {
   const lines = [`### ${t.title}`, '']
   if (t.intro) lines.push(t.intro, '')
+  if (t.path) lines.push(`Go to: ${t.path}`, '')
+  if (t.before) lines.push(`Before you start: ${t.before}`, '')
   if (t.steps?.length) {
     lines.push(...t.steps.map((s, i) => `${i + 1}. ${s}`), '')
   }
+  if (t.check) lines.push(`Check the result: ${t.check}`, '')
+  if (t.troubleshoot) lines.push(`If something is wrong: ${t.troubleshoot}`, '')
   if (t.tip) lines.push(`Tip: ${t.tip}`, '')
   if (t.warn) lines.push(`Warning: ${t.warn}`, '')
   return lines.join('\n')
@@ -36,6 +40,7 @@ function roleMarkdown(key) {
 
 const doc = [
   '# Festio product documentation',
+  `Revised ${GUIDE_REVISED_AT}`,
   '',
   'Generated from frontend/src/guideContent.mjs — do not edit by hand, run',
   'support-service/scripts/build_knowledge_base.mjs to regenerate.',
@@ -43,7 +48,7 @@ const doc = [
   ...ROLES.map(roleMarkdown),
 ].join('\n')
 
-writeFileSync(new URL('../app/knowledge_base.md', import.meta.url), doc)
+
 
 // Media Library is operator-only. Bundle the generated support knowledge and
 // internal QA runbook into the frontend so operators can view/download them
@@ -56,5 +61,20 @@ const bundledDocs = [
   `export const QA_RELEASE_RUNBOOK_MD = ${JSON.stringify(runbook)}`,
   '',
 ].join('\n')
-writeFileSync(new URL('../../frontend/src/generated/internalMediaDocs.mjs', import.meta.url), bundledDocs)
-console.log(`wrote knowledge_base.md (${doc.length} chars)`)
+const outputs = [
+  [new URL('../app/knowledge_base.md', import.meta.url), doc],
+  [new URL('../../frontend/src/generated/internalMediaDocs.mjs', import.meta.url), bundledDocs],
+]
+if (process.argv.includes('--check')) {
+  let drift = false
+  for (const [url, expected] of outputs) {
+    let actual = ''
+    try { actual = readFileSync(url, 'utf8') } catch {}
+    if (actual !== expected) { console.error(`Documentation out of date: ${url.pathname}`); drift = true }
+  }
+  if (drift) process.exit(1)
+  console.log('knowledge-base: OK — generated documents match Help source')
+} else {
+  for (const [url, text] of outputs) writeFileSync(url, text)
+  console.log(`wrote knowledge_base.md (${doc.length} chars) and internal Media Library documents`)
+}

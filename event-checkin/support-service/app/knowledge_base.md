@@ -1,4 +1,5 @@
 # Festio product documentation
+Revised 2026-10-08
 
 Generated from frontend/src/guideContent.mjs — do not edit by hand, run
 support-service/scripts/build_knowledge_base.mjs to regenerate.
@@ -9,107 +10,1093 @@ Create an event, invite guests, and run check-in on the day.
 
 ### Get started
 
-Everything begins with a free account — no credit card required.
+Build a usable event first, then add the services your guests need. Prepare, create and save, then test the guest or staff result.
 
-1. Go to festio.events and click Get Started.
-2. Sign in with Google (fastest) or create an account with any email address.
-3. You land straight in Event Setup with your own organisation already created.
-4. Click New Event to create your first event — you can run a free event with up to 25 guests right away.
-5. Want to try all paid features before buying? Use the trial request banner in Event Setup and send a request — we'll set you up.
+Go to: Event Setup → Setup Guide
 
-Tip: The free tier includes email invites, RSVP tracking, and up to 25 guests. Upgrade to an Event Pass to unlock SMS/WhatsApp, QR check-in, seating, entry areas, and more.
+Before you start: Have the event name, dates, timezone, venue, audience size, registration method and one controlled test contact ready.
 
-### Just need RSVPs? Start here
+1. Open Festio and sign in to your organizer account. New organizers use the registration flow and complete any verification instructions shown there.
+2. Use the event selector in the header before editing. Check its name every time you move between events. Organization settings and the credit wallet can affect more than one event.
+3. Open Setup Guide. Follow Create event → Choose outcomes → Foundation → Audience & registration → Design & guest experience → Operations & giving → Conference & Live → Results & closeout.
+4. For a simple event, finish the foundation, RSVP, a named guest, a usable pass and check-in first. Add seating, meals, sessions or engagement only when needed.
+5. For each service, follow A: prepare access and inputs; B: create and save the record; C: preview and test the guest or staff result.
+6. Keep a test log: service, record name, guest used, date, expected result, actual result and screenshot. A preview alone does not prove a delivered message or successful scan.
+7. Use “Record test or review” in the Setup Guide after the actual check. Record Partial if some conditions remain untested. Event Active is a separate lifecycle state, not proof that every service is ready.
 
-Only collecting RSVPs — no tickets, seating, or check-in? This is the shortest path, and it runs on the free plan. You only ever touch two tabs.
+Check the result: You can name the event, reach each enabled workspace and explain what its guest-facing test will prove.
 
-1. Create your event: Event Setup → New Event → enter a name and date. Leave every paid add-on (Seating, Orders, Entry rules, Deliveries, Gift list) OFF — for RSVP-only you don't need any of them, and they stay hidden from your sidebar.
-2. Turn on your RSVP page: Invites & RSVP → Invitation page & RSVP. Pick "Anyone with event link" for the simplest setup (one link anyone can use), or "Only guests with a personal invite link" if you need a precise, no-forwarding headcount.
-3. Make it yours: add a welcome message, cover image, an optional RSVP deadline, a maximum RSVP count, and any custom questions (dietary, plus-one, t-shirt size…). Click "Preview invite page" to see exactly what guests will see.
-4. Get guests in — two ways: (a) simplest — just copy the public event link and share it yourself on WhatsApp, email, or socials; or (b) add a guest list (Guests → Add guest, or upload a spreadsheet) and send personal links from Invites & RSVP.
-5. Watch responses roll in: the Guests tab shows each guest as Attending, Declined, Pending, or No reply — updating live. That is your headcount, no extra steps.
-6. Optional — approvals: if you turned on "Approval required," confirm or reject each RSVP from the Guests tab (or use "Approve all").
-7. That's it. No check-in, scanning, or seating to set up — ignore every other tab. The same event can grow later (add tickets, seating, or check-in) without starting over.
-
-Tip: RSVP-only fits the free plan: email invites + up to 25 guests, no Event Pass needed. Upgrade only if you want SMS/WhatsApp invites, a bigger guest list, or to add check-in/seating to the very same event later.
+If something is wrong: If a service is marked Enable, start in Features & messaging and Billing. If the guide opens a different stage, choose the numbered stage directly.
 
 ### Create your event
 
-Each event is a self-contained workspace with its own guests, invites, settings, and day-of tools.
+Create the event record that supplies names, dates, location and currency to other services.
 
-1. In Event Setup, click New Event.
-2. Enter the event name, event type, optional host/organiser name, date and time, timezone, venue, location, expected guest count, and currency. Enable the multi-day option and add an end date when needed.
-3. Save. Open the event — navigation is grouped into Setup (Start here, Guests, Invites & RSVP), Entry areas/rules, Add-ons (Seating, Orders, Deliveries, Gift list), and Team & settings. On a phone the sidebar becomes a dropdown.
-4. Under Team &amp; settings → Features, toggle on the features you need: Seating, Orders, Entry rules, Deliveries, and Gift list. Each requires an Event Pass — once enabled it appears in the sidebar.
-5. The event you pick is remembered across Results, Check-in, and Orders — you only choose it once. The current event shows as a chip in the top bar.
-6. Set the event to Draft while preparing, Active on the day to enable check-in, and Ended afterwards.
-7. You can create multiple events — each is independent with its own guest list and settings.
+Go to: Event Setup → New event → Create event
 
-Tip: Confirm the timezone before inviting guests. Festio displays invite, ticket, and check-in times in the event timezone, which may differ from the timezone on your device.
+Before you start: Know your current guest cap and whether attendance uses invitations, tickets, both or a private list.
+
+1. Click New event. If a remembered guide stage opens, choose “1 Create event” to reach the creation form.
+2. Enter Event name. Choose Type; for a conference choose “Conference / seminar”. Review “Apply Conference / seminar suggestions” before using the suggested services.
+3. Enter Organizer / company name and Estimated guest count. Read the current pass limit beside the count before continuing.
+4. Enter Date and time in the event’s local timezone. Confirm Timezone rather than assuming the detected choice is right for the venue.
+5. For several days, select “Multi-day event” and enter the end date/time. Use a concrete start and end for each day’s sessions later.
+6. Enter Venue and Venue address. These are also used in public directions; preview the resulting map link.
+7. Choose Invitation / RSVP, Paid tickets, Tickets + invitations or Internal / private list. Select the event Currency explicitly.
+8. Review communication channels and the feature checkboxes. A checkbox selection is a setup request; confirm entitlement and activation later in Billing and Features & messaging.
+9. Leave “Advanced: custom app address” collapsed for normal hosted setup. Click “Create event & continue setup →” after the required fields are complete.
+10. Confirm the saved event in the header. Open Manage event for later edits and use Preview event to inspect public facts. Recheck dates and currency on the website, GuestHub, Results and ticketing before sharing.
+
+Check the result: The new event appears in the event selector with the intended dates, venue and selected services.
+
+If something is wrong: Compare the event timezone, start/end dates and currency across the website, GuestHub, Results and ticket storefront before sharing. Ticket settlement currency is configured separately; existing prices and orders retain their original currency.
+
+### Follow the Setup Guide and record proof
+
+Use the guide as a checklist of service readiness and controlled tests.
+
+Go to: Setup Guide → numbered stages
+
+Before you start: Select the correct existing event; do not create another event just to revisit setup.
+
+1. Choose the relevant numbered stage. Read “Stage X of 8” and the applicable-task summary.
+2. Read “Next recommended action”. Check the card’s Current service checks, timestamp and any prerequisites before entering the workspace.
+3. Click the task’s workspace link and complete its configuration. Publishing, sending, charging and batch issuance are separate actions.
+4. When a workspace provides a Return to stage link, use it to keep your place. Otherwise reopen the guide and choose the stage.
+5. Click Refresh status after a saved change. Distinguish Checks complete from Ready for next check and Blocked.
+6. Run the actual controlled test named in the task: for RSVP, submit one response, confirm stored roles/answers, then open the pass and check delivery.
+7. Click Record test or review. Tick only the checks you performed. Enter a Test record / reference and describe Scope & remaining work.
+8. Choose Partial, Failed or Passed honestly. Passed is unavailable until the required checklist is complete. Save the record and verify the card’s updated status.
+9. Proceed with Next stage after resolving necessary tasks. Review Operations, Conference/Live and Closeout for the services you enabled.
+
+Check the result: The task records a specific test and its limits, rather than a broad one-click approval.
+
+If something is wrong: A legacy manual verification is not a current scoped test. Re-record the specific checks. Refresh status rather than treating an Active event as fully tested.
+
+### Enable a service or add-on
+
+Make a service available for this event and open the workspace that owns its content.
+
+Go to: Features & messaging + Billing
+
+Before you start: Check the selected event, Event Pass and whether the service is included or requires a purchase.
+
+1. Open Billing and review the current Event Pass, guest cap and Event add-ons. Included access and a feature being switched on are separate conditions.
+2. If a paid module is required, review its current price and hosted checkout before purchasing an Event Pass or add-on.
+3. For an included add-on, use Included · open setup in Billing to open its workspace. Entitlement does not switch the service on automatically: review Features & messaging and its settings before testing.
+4. Open its settings/workspace. The sidebar may show an Enable link while a service is off; use that link to reach activation.
+5. Create at least one useful record: for example, a table for Seating, a category/item for Orders, a shipment for Logistics or an activity for Festio Live.
+6. Check guest presentation rules. Some pages are public; some appear in GuestHub after registration, approval, check-in or attendance.
+7. Preview with an appropriate test guest and verify the new content appears. An enabled switch with an empty workspace is not a finished service.
+8. Return to the corresponding Setup Guide stage and record the controlled test.
+
+Check the result: The service is entitled, enabled, configured and reachable by its intended audience.
+
+If something is wrong: If setup is unavailable, confirm the selected event, entitlement and permissions. Review Billing and Features & messaging, then open the corresponding workspace.
 
 ### Add your guest list
 
-Import from a spreadsheet, sync from Google Sheets, or add guests one at a time.
+Create a named attendee with appropriate contact, access and role information.
 
-1. Go to Start here → Download template. It contains exactly the columns your event uses — with an Excel dropdown for ticket types — so nothing is missed.
-2. Fill in the template and click Upload guest file. Your own spreadsheet works too: column names match in any case or spacing (First Name = first_name = FIRST NAME).
-3. Email is optional — guests without an email can still receive SMS/WhatsApp invites and be checked in by QR.
-4. For live sync: paste a Google Sheets or OneDrive share link. Import once, or set a sync interval while the event is Active.
-5. Watch the sync status badge: green = ok, amber = imported with warnings (unknown ticket types, rows over plan limit, invalid phone numbers), red = sync failed (check the share link is still public).
-6. Re-importing never creates duplicates — it fills in missing phone numbers, ticket types, addresses, and tags for existing guests.
-7. For Entry rules events: add a "tags" column (e.g. "VIP; Press") — unknown tags are created automatically and control which areas each guest may enter.
-8. The free tier allows up to 25 guests total. An Event Pass raises this limit based on the tier you choose.
-9. To add a single guest: Guests tab → Add guest, fill in the form.
+Go to: Guests → Add guest / row actions → Edit
 
-Tip: Column matching is flexible — "First Name", "first_name", "firstname" all map to the same field. The only required column is a name (first + last, or full name).
+Before you start: Prepare contact data you have permission to use, the access type and whether the attendee is a junior.
 
-Warning: Phone numbers must include the country code (e.g. +2348012345678 for Nigeria, +14155551234 for US) for SMS/WhatsApp delivery to work.
+1. Open Guests and click Add guest. Enter first name, last name, email and Phone (E.164) where applicable. E.164 uses +country code followed by the number.
+2. Choose Check-in access type. This controls admission entitlement; it is separate from the attendee’s relationship or party role.
+3. Tick VIP only when appropriate. Leave Send invite immediately off while testing the stored data first.
+4. Click Add and confirm the person appears once. Check the Ready QR status and their RSVP/admission state.
+5. Use the row’s “Actions for [name]” menu → Edit to inspect stored details. Set “Relationship / role” when a correction is needed.
+6. For a minor, select “This attendee is a junior / minor”. Confirm the underlying information first; a family relationship label alone should not be your only check.
+7. Review table, seat, VIP and contact opt-in fields before Save. The edit form also shows RSVP answers read-only.
+8. For households, use the Households section and guest-selection “Assign household” control. Household membership and guardian signing/pickup permission are separate settings.
+9. For a junior, check Experience → Consent → Choose adult. A correctly marked junior should not be offered as an adult signer. Configure guardian permissions separately with an authorized organizer.
+10. Open the guest’s GuestHub and My Party to confirm the saved category and personal pass relationship.
+
+Check the result: The saved category is displayed correctly and juniors are excluded from the adult guardian selector.
+
+If something is wrong: After a party registration, inspect each stored relationship and junior flag. Correct a misclassified junior before assigning guardians or requesting signatures.
+
+### Import a guest spreadsheet safely
+
+Preview and map a file before writing guest records.
+
+Go to: Guests → Import guests
+
+Before you start: Use the downloadable template where possible. Prepare one person per row; keep phones as text with country codes.
+
+1. Click Import guests, then Download template if you need the expected columns.
+2. Choose File and select a CSV/XLSX or Google Sheets export. Start with a small controlled file to learn the mapping.
+3. Click Preview columns. No guests have been saved at this point.
+4. For each file header, review “Map [column]”. Choose the intended field or Ignore column. First/last name, email, phone, RSVP type/relationship, junior flag, ticket type, tags, table group and shipping fields are exposed.
+5. Read the sample-row table. Confirm values are in the right fields, not merely that a header was recognized.
+6. Read the row count and Ignored columns summary. Validate mapping after any corrections.
+7. Review Validation counts for new and skipped / existing records. Inspect the sample rows and duplicate matches before importing.
+8. Use Back to correct the file or mapping. Click Import validated rows only when the preview is correct; this is the write step.
+9. After import, review warnings/errors, find the added guests and use Check duplicates. Open one guest record to inspect role, contact and access.
+10. For a link import or Live spreadsheet sync, use Event Setup’s matching source option. Verify its permissions, preview and sync state; never assume a pasted link is a permanent connection.
+
+Check the result: The mapping is editable, sample rows are visible and validation completes before Import validated rows.
+
+If something is wrong: A skipped existing row is not a failed new import. Review mapping and duplicate rules before retrying; avoid importing the same file repeatedly.
 
 ### Set up your RSVP & invite page
 
-The invite page is what guests see when they open their link. Make it yours.
+Collect confirmations, contact information and useful answers before issuing guest passes.
 
-1. Go to Invites & RSVP → Invitation page & RSVP.
-2. Choose Anyone with event link (one shared link, anyone can RSVP) or Only guests with personal invite link (unique private link per guest — only that guest can use it).
-3. RSVP form fields: for Email and Phone, choose Don't ask / Optional / Required for the submitter, and Optional / Required for any additional guests they register. Name is always required.
-4. Optionally: set an RSVP deadline, enable approval required (you manually approve each RSVP), add custom questions (dietary, t-shirt size, table preference, etc.), upload a cover image, and write a welcome message.
-5. Click "Preview invite page" to see exactly what guests will see before you send anything.
-6. For Orders events: add choices for meals, drinks, gifts, or any other item guests should select on the invite page.
-7. For Deliveries events: turn on address collection — guests enter their shipping address when they RSVP.
-8. Set a maximum RSVP count to close registrations once the venue is full.
+Go to: Invites & RSVP → With RSVP
 
-Tip: Personal invite links prevent forwarding and double-booking. Use them for formal events or when you need a precise headcount.
+Before you start: Decide who may register, whether approval is needed, the deadline/capacity and the questions you truly need.
 
-### Invitation categories & automatic seating
+1. Open Invites & RSVP and choose With RSVP. Read the public link controls; Copy shares the live form, while Preview is for inspection.
+2. Confirm Open for registrations, approval policy and whether the time is announced. Enter the RSVP deadline and capacity if needed.
+3. Write a clear welcome/message: who may register, what is included, how to add family, and what happens next.
+4. Choose whether the same email may make multiple RSVPs. For a household event, avoid treating a shared email as proof that attendees are duplicates.
+5. Set primary email/phone requirements and additional-attendee fields. Use optional contact rules deliberately for juniors.
+6. Create custom questions with Add question. Use a field type suited to the answer; mark only essential questions required. Example: dietary restrictions as a short answer.
+7. Click Save invitation settings. Review display toggles such as countdown, capacity, sharing, calendar and confetti separately; save display settings.
+8. Choose the RSVP landing and GuestHub layout that suit the event. Inspect the form on a guest-sized view and the chosen GuestHub presentation.
+9. Submit one controlled RSVP, inspect its stored answers/role, and open the generated GuestHub/pass. Test approval separately if it is enabled.
+10. Only then send the form link broadly. Record the scoped test in the Setup Guide.
 
-For schools, conventions, and large family events: let one person register a whole party, gate how many guests each category may bring, and seat everyone at the right tables automatically.
+Check the result: The public form accepts intended data, stores the answers and routes the test guest to the right next step.
 
-1. Invites & RSVP → tick "Let one submitter register multiple invitees". Each registered person becomes a separate guest with their own QR pass.
-2. Set the Default max invitees, then define your categories in Category invitee limits — e.g. {"Graduating Family": 6, "Friends of Graduand": 3, "Individual invited guest": 0}. Use 0 for submitter-only categories.
-3. Saving the categories automatically creates a required "Invitation category" question on the public RSVP page — the submitter picks their category first, and the form enforces that category's guest allowance.
-4. Give your tables a Category label in the Seating tab (e.g. "Family", "Friends", "Staff"). Several tables can share one label — together they form a bucket that fills table by table.
-5. Back in Invites & RSVP, the Category → tables section lists each invitation category with two dropdowns: the Submitter table bucket and the Invited-guests table bucket. Leave one blank to skip it.
-6. From then on, every RSVP is seated on submission: the submitter is pinned to a table in their category's submitter bucket, and each guest they registered is pinned to the invited-guests bucket.
-7. At check-in, each guest gets the next free seat at their pinned table — full tables overflow to the next table in the same bucket.
-8. Guests who registered before you configured the mapping aren't re-seated automatically — assign them a table group or table from the Guests tab.
+If something is wrong: Previewing styling does not test registration. A browser already recognized as a guest may go directly to GuestHub; repeat the new-registration test in a separate clean guest session.
 
-Tip: Name your categories exactly as guests should read them ("Hafla & Graduands — up to 10 additional guests" reads better than "CAT-A"). The RSVP dropdown shows each category with its guest allowance.
+### Invitation categories & auto-seating
+
+Let a registrant add the right people while preserving each attendee’s identity and eligibility.
+
+Go to: Invites & RSVP → multi-invitee settings
+
+Before you start: List allowed categories, extra-guest limit, junior contact rules and any age-group or table mapping.
+
+1. Enable multi-invitee registration and set the maximum additional guests. The test event used a limit of four.
+2. Review Guest types and create categories such as Child and Spouse. Inspect the resulting guest dropdown after any change; do not assume adding categories preserves every default.
+3. For Child, enable Skip contact only when the responsible adult can be reached and this is appropriate for the event.
+4. Add relevant Age groups and Category rules/table mapping through their controls. Keep a relationship label separate from an admission access type.
+5. Save multi-invitee settings, then preview a party registration with one adult and one child.
+6. At review, confirm all attendee names, categories and question answers before submitting. Correct omissions before treating the form as ready.
+7. Inspect the stored guest records afterward. Use Edit to confirm Relationship / role and the junior flag.
+8. Create/assign a household if the party should arrive or leave together. Configure authorized guardian signing/pickup permissions independently.
+9. Open My Party and each authorized personal pass. A child needs their own attendee record and QR; sharing an adult’s code is not the party workflow.
+10. Review FestioMe’s Who can join policy before allowing junior community participation.
+
+Check the result: Each person has the right role, junior status and own pass; guardian choices exclude juniors.
+
+If something is wrong: Inspect every person’s saved role and junior status after registration. If a junior appears in Choose adult, correct the guest record before assigning a guardian.
+
+### Ticket sales
+
+Prepare a storefront, ticket inventory and delivery without confusing admission with a payment-only item.
+
+Go to: Ticket sales → 01 Availability through 06 Live sales report
+
+Before you start: Confirm event and ticket settlement currencies, payment mode, provider credentials, fee policy and paid-product payout readiness. Free-only tickets do not require a paid payout account.
+
+1. Choose the event under Managing event. Read the payment mode after configuration loads. Test mode means no live charges; Live credentials configured describes the configured provider, not a completed payment or verified payout.
+2. For paid products, connect the organizer’s approved payout account with Paystack or Stripe and follow provider verification. Do not enter financial credentials as part of a training exercise.
+3. Review Festio service share and “How should the fee be handled?”. Confirm tax settings when applicable, then save the relevant choice.
+4. In Add tickets, choose Type: Ticket grants admission; Donation / sponsorship is payment-only and grants no pass; External registration sends buyers elsewhere.
+5. Enter Ticket name, Price, Quantity available, Admission access and Description. Compare the currency beside Price with the event currency. Existing ticket catalogs retain their settlement currency; a mismatch must be understood before adding inventory. Before any products exist, use Ticket settlement currency and Save currency and provider to choose USD/Stripe or NGN/Paystack.
+6. Review the catalog’s quantity/sold counts. Hide removes a type from sale; leave test inventory clearly identified.
+7. For a complimentary pass, choose Ticket type, quantity, recipient first/last name, delivery email and reason, then Issue complimentary pass. For multiple passes, provide individual attendees as requested.
+8. Customize Delivery message studio separately from RSVP templates. Enable intended channels; set Subject line, Introduction and Text displayed under every QR code. The secure QR block is inserted automatically.
+9. Use Copy link / Copy embed in Publish & share. Open the hosted page and check availability, questions, review and zero-price/paid behavior.
+10. Inspect Complete order ledger and Download CSV report. Reconcile complimentary versus paid orders, fulfilled passes and delivery states before using the figures for finance.
+
+Check the result: The storefront displays the intended catalog and a valid pass is issued to the named complimentary attendee.
+
+If something is wrong: A currency warning identifies an existing catalog using a different settlement currency. Existing prices cannot safely be relabeled or converted. Before products exist, save the correct currency/provider in Ticket settlement currency. After products exist, contact support to plan a new event catalog or a reviewed migration; existing prices and orders retain their original currency. If the provider is not configured, resolve credentials before paid checkout. Confirm final order, fulfillment and provider settlement separately.
+
+### Add promo codes and checkout questions
+
+Collect extra order information and create a bounded discount.
+
+Go to: Ticket sales → Customer, payment & automation tasks
+
+Before you start: Decide the code, percent/fixed amount, usage limit and exact checkout questions.
+
+1. Find Create promo code in Customer, payment & automation tasks.
+2. Enter the CODE, choose Percent or Fixed amount, and enter its value and allowed usage count.
+3. For Percent, enter a whole percentage from 1 to 100, such as 10. Review the discounted total before saving.
+4. Click Create code only after checking its intended financial effect. Validate its effect on the storefront’s review total before using it publicly.
+5. Under Checkout form builder, click Add field. Enter Field label, choose Short text, Long text, Dropdown, Checkbox or Date, and select Required only if necessary.
+6. Use Step name to group fields into a named page. Fields with the same step share a page; blank step stays on the first page.
+7. For choices, supply the offered options when the selected field type requests them. Preview Next/Back navigation with a guest.
+8. Click Publish form and confirm the field appears during checkout. Verify that the submitted answer is visible in the order’s relevant record.
+9. Keep free-checkout testing separate from paid payment tests; do not charge simply to check a question or discount label.
+
+Check the result: The code applies the intended discount and published checkout questions appear in the correct step.
+
+If something is wrong: Check the discount’s final total and currency in checkout before payment. Percent discounts use whole percentages from 1 to 100.
 
 ### Send invitations
 
-Reach guests on the channel they actually check — WhatsApp, SMS, or email.
+Send a deliberate, costed invitation batch through the configured channels.
 
-1. Shared link: copy the event link and share it yourself (WhatsApp group, email, social). Or use Manual invite — search a specific guest and send them a personal link.
-2. Personal links: use Invites & RSVP to send to guests who have not been invited yet, remind no-replies, or resend links.
-3. Pick your channels: Email (first 25 per event free, then ½ credit each), SMS (1 credit), WhatsApp (1 credit), MMS (3 credits).
-4. Each guest receives their personal Festio Pass automatically by email when they RSVP as Attending.
-5. For guests without email: if you have their phone number, their QR pass is delivered via SMS or WhatsApp instead.
-6. Message credits are pre-purchased from the Event Pass area — top up as needed. Check your balance before a bulk send.
-7. For reminders, use Broadcast Message to nudge guests before the event or during arrival.
+Go to: Guests → select guests → Send invite
 
-Tip: Run a small test send to yourself first (add your own phone/email as a test guest) to confirm message formatting and delivery before sending to all guests.
+Before you start: Guest contacts, permissions, a saved invitation template, channel readiness and sufficient credits.
 
-Warning: WhatsApp and SMS sends consume message credits. Check the estimated cost and available balance before confirming. If the balance is insufficient, do not assume every recipient was contacted: read the result, review the credit ledger and delivery report, top up if needed, then retry only recipients that were not sent.
+1. Open Guests. Filter or search for the intended audience and inspect RSVP/Invited/Delivery states.
+2. Select individual named checkboxes. Check the selected count before Send invite; a filtered page is not automatically the intended full audience.
+3. Click Send invite to open “Review audience before sending”. This is the review step, not Send now.
+4. Read eligible counts for email, SMS, WhatsApp and MMS. Check unreachable/blocked recipients and Estimated credits versus the available organization balance.
+5. Compare the review with your intended channel policy. All checked can send on several channels; First available chooses according to configured routing.
+6. For the first test, use one controlled recipient. Read provider readiness and consent exclusions; a phone number alone is not permission to message.
+7. Use Schedule instead for a timed invitation, or Cancel to correct contacts, audience or routing. Use Send now only when the preflight is right.
+8. After sending, inspect the recipient’s channel delivery state and credit ledger. Ask the controlled recipient to confirm the actual email/SMS/WhatsApp and open the pass.
+9. Record exact recipients, channel and received message in the Setup Guide; an accepted send is not proof of inbox delivery.
+
+Check the result: Preflight shows the audience, channels, exclusions, cost and wallet balance; a controlled test receipt confirms the intended message and link.
+
+If something is wrong: Use the current preflight rate and wallet estimate for the chosen channels. Resolve any disagreement between Billing and preflight before a large send.
+
+### Broadcast an update
+
+Send an event-wide update or control reusable message wording.
+
+Go to: Broadcasts & templates
+
+Before you start: Decide purpose, audience, available channel, test recipient and whether this is a one-time message or a template.
+
+1. Open Broadcasts & templates. Choose the message type: General, Thank you, Feedback or an Experience-stage message.
+2. Choose Test one guest for the first check. Select the test guest or direct contact; confirm the intended recipient.
+3. Write the body in plain language with one clear action and an event-specific destination. Review audience filters and ticket-type selection when using audience mode.
+4. Choose enabled channels only. Check Email/SMS/WhatsApp against Features & messaging; an unchecked or unavailable provider must not be assumed ready.
+5. Review who is reachable, routing and credit use before sending. Inspect the sent message on the receiving device.
+6. For a reusable message, find the appropriate template and choose Edit. Preserve required merge fields and the personal pass/link.
+7. Use Preview to check the wording. Use Test send to a controlled guest to check actual merge values and delivery.
+8. Save the edited template and reopen it to verify persistence. Reset returns to defaults; review carefully before using it.
+9. WhatsApp approval is a separate provider/paid workflow where offered. Do not assume saving template wording makes it approved or funded.
+
+Check the result: The message has the right audience, correct links and event-specific merge values in an actual test receipt.
+
+If something is wrong: Ticket delivery templates live in Ticket sales → Delivery message studio, separately from RSVP/broadcast templates.
+
+### Schedule a message or reminder
+
+Prepare communications for an exact time or a time relative to the event.
+
+Go to: Scheduled messages → New scheduled message; Reminders
+
+Before you start: Have the audience definition, event timezone, channel and planned send time ready.
+
+1. Open Scheduled messages and click New scheduled message.
+2. Choose Purpose: invitation, RSVP, consent, event/session, feedback, thank you or scheduled announcement. Enter a clear Internal name.
+3. Choose Audience and Recipient mode. Dynamic resolves eligible recipients when the job runs; Frozen preserves the selected recipient set.
+4. Choose Timing: a Specific date or Relative to event. Confirm the visible event timezone and enter a local time.
+5. Choose the supported channels and message/template content requested by the form. Confirm credits and provider readiness.
+6. Use Save as draft to prepare without scheduling. Review the saved draft, then use Schedule communication only when it should run.
+7. For the separate legacy Reminders workspace, choose New reminder, event offset, local time, channel and RSVP audience, then save.
+8. Reopen the reminder and compare its saved time with the list and the event timezone before relying on delivery.
+9. Before launch, check recipient mode, deadline, timezone and whether a reminder should exclude people who have already responded.
+10. After its scheduled time, review job/delivery status and receipt with a controlled guest. A scheduled row is not proof of a successful send.
+
+Check the result: A saved draft/scheduled job shows the intended purpose, audience and event-local time.
+
+If something is wrong: Scheduled messages and Reminders overlap. Prefer the current scheduler for clearly scoped jobs, and inspect existing reminder times before using them.
+
+### Guest Communication: replies & direct messages
+
+Keep organizer announcements and guest conversations accessible inside the event.
+
+Go to: Guest inbox → Announcements / Guest inbox & chat moderation
+
+Before you start: FestioHub, Event updates and Message host settings must match your communication plan.
+
+1. Open Guest inbox. Under New announcement, enter a Title and Message.
+2. Choose Audience: All guests, Confirmed guests, Declined only, Checked in or Not checked in.
+3. Write one specific update, avoiding unnecessary private information in a shared feed. Example: the room for a workshop.
+4. Click Send announcement and confirm it appears under Past announcements. Review its reported reach and intended audience.
+5. Open a test guest’s Inbox → Updates. Use Refresh updates if needed; the refreshed guest UI also explains automatic online updates.
+6. For a private conversation, select the guest thread in the organizer inbox. Read its history before composing a reply.
+7. Reply to the individual using the thread’s supported controls, then verify the guest sees the reply in Messages.
+8. Use Chat moderation for visible guest chat, and FestioMe Moderation for community reports; they are different scopes.
+9. Use the organizer Refresh control when investigating freshness. Record whether the result appeared automatically or only after manual refresh.
+
+Check the result: The saved announcement appears in the guest Updates view and a private reply reaches only the intended conversation.
+
+If something is wrong: GuestHub reach does not prove external email delivery. Open a guest view to confirm the announcement content and refresh behavior.
+
+### Design Studio: brand your invite, pass & Guest Hub
+
+Give connected guest surfaces a consistent visual identity.
+
+Go to: Design Studio → Theme → Layout → Customize → Review & publish
+
+Before you start: Prepare licensed cover/logo images and event wording; check design entitlement.
+
+1. Open Design Studio for the selected event. Start with 1 Theme and choose a palette/type pairing such as Modern, Formal or Celebration.
+2. If you want to preserve existing settings, review “Keep my colours and typography” before applying a theme.
+3. Use 2 Layout to choose the presentation. Compare it with the needs of the event rather than selecting on appearance alone.
+4. Open 3 Customize. Upload cover and logo as JPG/PNG/WebP up to 5 MB; a transparent PNG is suitable for a logo.
+5. Set primary, accent, background, surface and text colours and Typography. Check contrast and readable text over your cover.
+6. Enter Event display title and Welcome message. Review RSVP presentation checkboxes for hero title, host, About, venue and admission note.
+7. Use preview surfaces RSVP, GuestHub, My Pass, Flyer and Email. Switch Desktop and Phone and inspect each one.
+8. Specialist tools expose Flyer, Festio Pass, Certificates, Event Page and FestioHub functions. Use these for their specific settings rather than assuming the shared preview changes all message wording.
+9. Open 4 Review & publish. Compare draft/published version and review every affected surface. “All changes saved” describes a saved draft.
+10. Click Publish new version only after review, then inspect an actual guest link. Email preview is illustrative; delivered wording belongs to message templates.
+
+Check the result: The published design appears on the real RSVP, GuestHub and pass without changing guest permissions.
+
+If something is wrong: Website publication is separate. A published Design Studio version does not automatically publish an edited Event website draft.
+
+### Create and publish the event website
+
+Build a public event landing page with accurate facts, programme highlights and guest destinations.
+
+Go to: Design Studio → Event website ↗
+
+Before you start: Save the canonical event facts, sessions, speakers and registration link first.
+
+1. Click Event website ↗. Review the Live/version badge and the notice explaining which version visitors see.
+2. In Identity, set Website address, Short introduction, Website headline and Summary. Confirm the event facts and date consistency check.
+3. Use Design, Header & footer and Style & media to set visual presentation, navigation, cover/logo and footer copy as exposed by the selected design.
+4. In Programme, import the canonical sessions. Use Refresh programme from source to review changes rather than assuming an automatic live update.
+5. Review source differences for date/time, description, room and speakers. Select only intended changes; preserve deliberate website edits. Apply selected changes to draft.
+6. In Speakers, import/review the event’s speaker records and confirm biographies and images are fit for public display.
+7. In Content sections, enter the event story, registration facts, venue/travel details, feature sections and FAQs. Fully complete a question and answer before saving.
+8. In Connections, verify RSVP, Festio Live, FestioMe and My GuestHub destinations. Check primary/secondary action labels and contact email.
+9. Click Save draft. Open saved preview and inspect Desktop, Tablet and Mobile. Expand a session and confirm start/end, room, speaker and timezone.
+10. Click Publish website. Open View live website in a guest context and test every navigation/action link. Review History for previous versions; Unpublish removes the live site. Check that Speakers opens inside the website, including when the published page uses the speaker directory without imported cards.
+
+Check the result: The public site shows the intended published version, useful session facts and guest-facing links.
+
+If something is wrong: Programme/speaker imports are editable snapshots. Reopen source review after source changes and republish. Full programme access is explicitly registration-gated; the website contains selected highlights.
+
+### Seating: tables and guest assignments
+
+Give guests useful table and seat assignments and keep parties together.
+
+Go to: Seating → Table / Table groups / Auto assign
+
+Before you start: Know room capacity, table sizes, table groups and whether you need automatic party pairing.
+
+1. Enable Seating, then open its workspace. Create relevant Table groups/sections before bulk assignment.
+2. Click Table. Enter Table name, Category, Capacity and Table order; click Create.
+3. Repeat for each physical table. Use recognizable names that match signage; a group is a section, not a table.
+4. Check total table capacity against confirmed attendance and desired spare seats.
+5. Assign a guest manually through their Edit form’s Table and Seat fields, or use selected-guest “Assign table group” for section placement.
+6. Use Auto assign after reviewing group rules and party pairing. Inspect household/couple placement and guests left unassigned.
+7. Treat Reassign all as a broad change: review its scope and preserve deliberate seat placements before using it.
+8. Open the seating chart/table assignment view. Check for oversubscribed tables, duplicate seats and gaps.
+9. Open the guest’s pass/GuestHub to verify the assignment is understandable. Staff signage and printed reference should use the same table labels.
+
+Check the result: Tables have sufficient capacity and the intended guests see the correct assignments.
+
+If something is wrong: Section scanning depends on groups and cannot run alongside Venue Access. Decide the scanning model before assigning staff entrances.
+
+### Arrange a floor layout
+
+Show where tables and room elements are physically located.
+
+Go to: Seating → Floor layout
+
+Before you start: Create tables first and have a simple venue plan to copy.
+
+1. Open Floor layout from Seating. Use the available layout controls for the event’s room.
+2. Place the created tables in positions that match the actual venue. Keep table labels legible and distinct.
+3. Add supported room elements through the visible controls; do not treat a drawing as a capacity or access rule.
+4. Arrange entrances, circulation space and stage/room landmarks so staff can orient guests.
+5. Save the layout through the editor’s save control. Reopen it and confirm placements persisted.
+6. Use the exposed chart/share controls only for the intended audience. Inspect any shared read-only view before distributing it.
+7. Compare the layout with the table assignment list and guest table names. Keep a simple on-site reference available for staff.
+
+Check the result: The saved layout and table assignment list describe the same room.
+
+If something is wrong: Save the layout, reopen it and compare its tables and capacity with the seating assignment list before using it on event day.
+
+### Create meal categories and choices
+
+Collect meal preferences and feed a clear fulfillment process.
+
+Go to: Meals & orders → Configure menu and choices
+
+Before you start: Decide categories, available dishes, selection rules and when guests may choose.
+
+1. Enable Orders and open Meals & orders. Use Configure menu and choices to reach menu settings.
+2. Create a Category. Enter Category name, guest visibility and selection mode: Single, Multiple or Combination.
+3. Save the category, then add its items with the item control. Enter the dish/item name and the offered fields; provide a clear description or dietary note when available.
+4. Repeat for each selectable dish. Hide categories that are for staff only; inspect what the guest will actually see.
+5. In Kitchen Display, review “When can guests choose meals?”. Choose After event check-in or Before arrival, after registration confirmation.
+6. Preview with a confirmed guest. Make one controlled choice and verify it is recorded for that attendee.
+7. Before service, compare selections with attendee counts. People awaiting a choice are different from actual kitchen orders.
+8. Open Order queue, Prep tally and By table during service. Filter a table or Pending/Served/All as appropriate.
+9. Mark served only after fulfillment and check-in as required. Served selections remain locked; verify the guest cannot accidentally order again.
+10. Use the per-table/item totals for the caterer, while Results provides the broader event snapshot.
+
+Check the result: Kitchen Pending counts guests with unserved meal selections, not every registered guest. Verify pending filters, category service states and the preparation tally agree; guests without meal choices should not inflate pending orders.
+
+If something is wrong: If Pending and the queue disagree, confirm the selected meal category, actual saved choices and served status. Guests without choices should not count as actionable pending orders.
+
+### Deliveries: ship merch, aso-ebi & gifts
+
+Track merchandise/gift fulfillment per guest with a vendor-friendly packing list.
+
+Go to: Deliveries → New shipment
+
+Before you start: Prepare shipment items, variants, vendor details and eligible guest addresses.
+
+1. Enable Logistics and open Deliveries. Click New shipment.
+2. Enter Name and choose Phase (pre-event or post-event). Add vendor and vendor contact details if relevant.
+3. Choose Collect size at RSVP only if variants are needed; enter the offered comma-separated sizes/variants.
+4. Read “Automatically add future confirmations”. It applies to guests confirming after this setup; it is not an existing-audience backfill.
+5. Enter Notes and Save shipment. Open the saved shipment’s management view.
+6. Use Add all confirmed when existing confirmed attendees should be included. Inspect recipients before proceeding.
+7. Add shipment items with name, quantity and size/variant where offered. Check every recipient’s address and missing-data warnings.
+8. Open the packing-list/share view. Confirm it contains only the shipment data intended for that vendor; obtain approval before exposing real guest addresses.
+9. Update packed/shipped status as work happens and reconcile totals against recipients/items.
+10. Use separate shipments for different phases so pre-event merchandise and post-event gifts do not share an ambiguous status.
+
+Check the result: The shipment has the intended recipients, items and fulfillment status; future-only inclusion is clearly labeled.
+
+If something is wrong: If recipients are zero, inspect whether confirmations already existed. Use Add all confirmed and resolve missing addresses before sharing with a vendor.
+
+### Gift list
+
+Coordinate claimed gifts and external purchase links.
+
+Go to: Gift list → Add item / Add cash fund / Add link
+
+Before you start: Prepare item descriptions, quantities and links; decide whether you need a registry or a giving campaign.
+
+1. Enable Registry and open Gift list. Enter and save the guest-facing introduction.
+2. Use Add item for a physical wish, Add link for an external item, or inspect Add cash fund for the currently offered funding workflow.
+3. For an item, choose Type, enter Title and Description, Purchase URL, Quantity, Estimated price and Image where offered.
+4. Use Fetch details for an external purchase URL, then review the returned text/image/price rather than accepting it blindly.
+5. Save the item and repeat for the list. Check quantity and whether a guest can understand what they are claiming.
+6. Open Preview Registry. Test a synthetic claim and verify its status in the organizer list before sharing.
+7. Share the public registry link through the event website/invitation or the exposed Send guests controls after reviewing recipients.
+8. Keep gift coordination separate from a payment. Registry copy says no payments move through the platform; a separate Giving/Donation Tracker can have payment-method configuration.
+9. Review claims and avoid interpreting an estimated price or pledged gift as money received.
+
+Check the result: Guests see the saved introduction/items and the organizer can distinguish unclaimed versus claimed wishes.
+
+If something is wrong: Cash-fund controls can lead to Donation Tracker. Read the destination and ledger semantics before promising payment processing.
+
+### Entry areas & ticket rules
+
+Control entry by venue area, access type, tags and scan direction.
+
+Go to: Venue Access → zones / Ticket types / Rules
+
+Before you start: Map real entrances and room capacities. Choose Venue Access or section scanning, not both.
+
+1. Enable Venue Access and open its workspace. Click Add zone.
+2. Enter Name, Capacity, Description and Direction (In & out, In only or Out only). Create the zone.
+3. Create the required Ticket types/access types and choose which zones each permits. Review unrestricted/empty-rule behavior before use.
+4. Assign access types to guests in their Edit form or through a mapped import. “VIP” or a party relationship is not automatically the admission rule.
+5. Under Rules, use Add tag for finer classifications. Build the zone/tag requirements explicitly; the UI says empty tag rules admit everyone.
+6. Create a Gate with name, zone and direction so a scanning station has one recognizable assignment.
+7. Open Assign and review who has each access type. Verify a guest who should be allowed and one who should be denied.
+8. Test entry and exit at the configured zone. Check occupancy and the guest’s recorded journey in Analytics.
+9. For juniors, inspect Junior operations and guardian pickup/check-out rules separately. Only an authorized organizer should assign real guardian rights.
+10. Give staff a gate-based instruction and test it on the actual scanning device before opening the doors.
+
+Check the result: The intended pass is admitted only in permitted zones/directions and occupancy changes correctly.
+
+If something is wrong: If Venue Access is on but no zone/access type exists, the scanner cannot complete its job. Set these prerequisites first; do not work around a denial by widening access indiscriminately.
+
+### Check-in day
+
+Admit guests with their own QR and retain an understandable arrival record.
+
+Go to: Check-in / Event Setup → Self check-in
+
+Before you start: Event Active, scanning entitlement, staff assignment, access rules and a test pass.
+
+1. In Event Setup, confirm the event is Active. Review Check-in setup and the pass/scanning entitlement.
+2. Open Check-in. Choose Convention check-in or Checkout and select the relevant zone/gate and direction.
+3. For a controlled desktop test, use Manual search or enter a pass token and Record scan where exposed. Use only the intended test guest.
+4. On the actual door device, select the correct gate/zone, allow the camera when authorized and use Start camera.
+5. Scan the guest’s own QR fully within frame. Read the result and the displayed reason; distinguish successful entry, duplicate scan and denied access.
+6. Check the guest profile/Results and zone occupancy after the scan. A checkout should update the corresponding departure/on-site count.
+7. For offline preparation, use Prepare this scanner. Check manifest count and expiry; the captured UI specified a 30-minute manifest.
+8. Offline QR/manual processing has limits: guardian checkout and some daily rules require a connection; duplicate protection may be device-local. Reconnect and confirm synchronization.
+9. For Self check-in, open its Event Setup section, review the switch and Copy/Download QR. Guests scan the event QR to find their own record; this is different from scanning a personal pass.
+10. After the event, review records and use the approved event lifecycle action to End it. Do not archive/delete while unresolved records are still needed.
+
+Check the result: One controlled scan updates the right guest and zone; staff know how to recognize duplicate/denied results.
+
+If something is wrong: Test camera permissions and offline behavior on the actual staff devices before event day. Check that a denied or duplicate scan has not changed admission status.
+
+### Experience workflows: consent, souvenirs, rooms & sessions
+
+Define the operational steps an attendee moves through.
+
+Go to: Experience → Setup → template / Workflow
+
+Before you start: List the required journey and its order; decide which steps are automatic, staff-confirmed or guest-completed.
+
+1. Enable Experience and open the workspace. In Setup, choose a suitable template: VIP dinner, Conference, Wedding reception or Simple check-in.
+2. A template creates a new draft. Select that workflow and give it a recognizable name/version.
+3. Open Workflow and inspect each step: check-in, badge, consent, table, meal, souvenir, session, feedback or departure as offered.
+4. Configure per-step conditions such as ticket types and required dependencies. These conditions belong to the step, not a single workflow audience.
+5. Place steps in the real event sequence. Do not let a consent-dependent handoff precede the time when that consent can be completed.
+6. For sessions, enter guest-facing title/description, start/end, room, speaker and attendance rules; see the sessions chapter.
+7. Preview progress with a test guest and confirm which actions are available to the guest versus staff.
+8. Publish the reviewed draft. Only one workflow should be live for the event. Published steps are read-only; Clone to prepare changes.
+9. When publishing a replacement, review the current live/draft versions and synchronized sessions before completing the switch.
+10. Use Guests, Feedback, Analytics and Export progress to inspect completion and remaining steps. Configure Messages/Inbound Automations only for the triggers your team actually needs.
+
+Check the result: The live journey’s steps are ordered, targeted and reachable by the intended guest/staff roles.
+
+If something is wrong: Publish and synchronize the reviewed workflow before linking sessions to activities, materials or certificates. Operational selectors use published sessions; draft copies prepare future versions.
+
+### Create multi-day sessions and sync programme
+
+Give attendees a reliable timetable with useful session facts.
+
+Go to: Experience → Workflow session step; Planner → Runsheet
+
+Before you start: Event timezone/dates, session duration, room, speaker and attendance/access requirements.
+
+1. Use Experience’s draft workflow and add/configure the Session attendance/programme step available in Workflow.
+2. Enter the session title and a guest-facing description. Workflow instructions such as “Track attendance” should not become a public session summary.
+3. Set the concrete date/start/end or duration requested by the session editor. Confirm the event timezone and any segment start/offset fields.
+4. Enter Room/location and associate the intended speaker when offered. Add attendance/access conditions deliberately.
+5. For each day, create distinct sessions with the correct calendar date. Do not use a day-two time with a day-one date.
+6. Publish the reviewed workflow and enable Live Program mode. Use Sync program now, then inspect the synchronized session count.
+7. Open the GuestHub Programme. Check the date tabs, start/end time range, room, speaker and eligibility for each published session.
+8. Use Planner Runsheet for production cues, owners, breaks and dependencies; it is a separate operational view.
+9. For the website, refresh programme from source, review selected differences, apply to draft and republish. Website highlights do not replace the full GuestHub programme.
+10. Attach Live activities, materials and certificate rules to a published session. Operational selectors use published sessions; a draft copy is preparation for a future version. Publish and synchronize the reviewed workflow before choosing its session.
+
+Check the result: GuestHub and the published website show useful current session facts; the production runsheet uses the same local dates.
+
+If something is wrong: Resolve schedule/offset errors using the visible editor fields. Compare each day’s local dates, start/end times, room and speaker across GuestHub, website and runsheet.
+
+### Create forms and consent versions
+
+Collect independent event, meal or activity forms with explicit timing and signer rules.
+
+Go to: Experience → Consent → Forms & consent
+
+Before you start: Prepare reviewed wording, audience, required questions and who is authorized to sign.
+
+1. Open Consent and click New blank form or choose a draft template such as Food and dietary information or Junior Platform participation consent.
+2. Enter Form title and wording. Choose the offered type: typed-signature consent or information acknowledgement.
+3. Set Available timing: before arrival or after check-in as needed. Review which audience can access it: everyone, adults or juniors.
+4. Set Who signs. A guardian-only form is different from a self-signing adult form; verify authorization separately.
+5. Add the relevant age groups, tags, ticket types and required zone/session gating where exposed.
+6. Add questions using Text, Textarea, Select or Checkbox. Supply options for choice fields and select Required only where essential.
+7. Click Save draft version. Reopen the draft, preview the actual guest wording and verify the target guest can reach it.
+8. Publish the version when approved. Guests see only a published version; keep previous completion records intact.
+9. Use Parent / legal guardian signing permissions to associate an eligible adult when authorized. A correctly marked junior is excluded from Choose adult.
+10. Review Completion records and export CSV/PDF through the offered controls. Compare attendee, form version, signer and source. Do not sign a real waiver as a test.
+
+Check the result: The correct published form reaches the intended person at the intended time and completed records identify the version/source.
+
+If something is wrong: Use the form’s actual Available timing and Who signs settings. Before-arrival and after-check-in forms have different access requirements.
+
+### Collect event feedback
+
+Choose the feedback collection that matches an event journey or a live audience activity.
+
+Go to: Experience → Feedback; Festio Live → Feedback activity
+
+Before you start: Define a small useful question set and the moment guests should receive it.
+
+1. For journey feedback, open Experience → Feedback. Inspect the configured questions and the required fields.
+2. Use Edit step for question/rule changes in a draft workflow, or Clone a live workflow before editing.
+3. Use Preview guest to inspect the complete form. Test required ratings, recommendation/NPS and optional open text.
+4. Prepare feedback draft before sending. Select the intended audience and delivery timing, then review Send feedback.
+5. Complete one controlled guest response and inspect its stored record under Feedback.
+6. Use filters, Export results and Remind nonresponders where offered. Keep response rate and question score denominators distinct.
+7. For live feedback, create a Feedback activity in Festio Live and add suitable questions; follow the Live preparation/run chapters.
+8. Check the actual completion wording in a guest view. It should refer to your event or the organizing team.
+9. Close the test activity after inspection and retain the response records for reporting.
+
+Check the result: A test response is retained and the completion copy matches the event or is safely neutral.
+
+If something is wrong: Check the question label, target audience and completion wording in a controlled guest response before opening feedback to all attendees.
+
+### Create a speaker showcase
+
+Publish useful speaker profiles and connect them to programme highlights.
+
+Go to: Speakers → Add speaker
+
+Before you start: Have permission to publish a biography, headshot and professional links.
+
+1. Enable Speakers and open the showcase workspace. Click Add speaker.
+2. Enter the speaker’s name, presentation/title and biography through the form. Add the offered photograph and professional/social links.
+3. Use accurate public copy rather than staff-only release or logistics notes.
+4. Save and reopen the profile. Repeat for each speaker; use Edit for later corrections.
+5. Choose whether the speaker page is visible before RSVP. Review this setting against the event’s public-registration plan.
+6. Use Preview page to inspect the public showcase and each profile/link.
+7. Associate the canonical speaker with the intended session through Experience/conference tools where offered.
+8. Import/refresh speakers in Event website and publish the website version separately. GuestHub’s Speakers button opens its internal screen. Website Speakers navigation stays in the Meet the speakers section; View all speakers expands the lineup inside the website. Use the GuestHub return control to get back to your event services.
+
+Check the result: The public profile and linked programme use the right name/photo/biography and publication audience.
+
+If something is wrong: Changing the speaker source does not prove the website’s imported snapshot changed. Review the website speaker import and publish again.
+
+### Create partner and sponsor listings
+
+Show sponsors and partners in clearly named tiers or categories.
+
+Go to: Partners → categories → Add partner
+
+Before you start: Prepare approved partner names, description, logo and website URL.
+
+1. Enable Partners and open the workspace. Create categories that reflect your event, such as Community Partner or Supporting Sponsor.
+2. Click Add partner. Enter Name and choose Category.
+3. Enter Description with the partner’s role in the event; avoid claiming a sponsorship commitment before it exists.
+4. Upload a logo or use the offered Logo URL field. Check the image and website destination.
+5. Save the partner and confirm it appears in the intended category. Repeat as needed.
+6. Open Preview page and inspect grouping, logo readability, description and outbound link.
+7. For conference applications, review and connect accepted sponsor/exhibitor submissions to the canonical partner record as exposed by Conference Center.
+8. If using the public event website, inspect its partner/content presentation and publish the relevant website changes separately.
+
+Check the result: The partner is visible in the right group and its link/logo are correct.
+
+If something is wrong: Partner listings describe public presentation. They do not replace procurement approval, contracts or payment records.
+
+### Open calls, review proposals and create tracks
+
+Connect submissions, canonical speakers/partners and conference operations.
+
+Go to: Conference Center
+
+Before you start: Know which application types are allowed and who reviews them.
+
+1. Open Conference Center → Calls & abstracts. Select Open and the allowed types: speaker, abstract, exhibitor or sponsor.
+2. Enter Welcome message and Submission deadline; inspect the stable public call link and copy it only when ready.
+3. Open a controlled public submission and verify the application fields and stored proposal before opening the call broadly.
+4. In Submissions, click Review details. Read the complete applicant, organization, proposal summary and contact details; add Review notes and Save review.
+5. Use Accept & connect only after review. It links the accepted person/organization to Speakers or Partners as appropriate. Decline is a separate decision.
+6. Open Tracks → + Add track. Enter Name, Description, Audience and Color, then Save. Reopen the saved track to confirm its details.
+7. Use Speaker operations for + meeting / + release and the Exhibitors & sponsors workspace for the available operational records. Their in-page creation dialogs now open.
+8. Use Photo gallery/Media library and Integrations only for the exposed asset/provider connections; confirm visibility before publishing or syncing.
+9. In Shared templates, choose Save current setup and give the organization template a name. It is reusable setup, not proof every event’s content is already ready.
+10. Finish canonical scheduling in Experience and production planning in Planner. Preview guest programme and public speaker/partner pages.
+
+Check the result: Proposal review opens details, track creation saves, and operational/template controls expose usable dialogs.
+
+If something is wrong: Reopen saved tracks and reviewed proposals to confirm the details. Preview meeting, release and template changes before saving operational records.
+
+### Festio Live: create an activity
+
+Collect audience answers from phones and prepare content for a room display.
+
+Go to: Festio Live > + New activity
+
+Before you start: Have an event and decide whether participation is event-wide or attached to a session.
+
+1. Open Festio Live and choose + New activity.
+2. Choose Quiz, Poll, Survey, Rating, Feedback, Q&A, Word Cloud or Live Voting.
+3. Enter a clear title and short description telling guests what to do.
+4. Select the Experience/program session, or keep the activity event-wide.
+5. Choose anonymity, answer changes, guest results and text moderation deliberately.
+6. Create the activity, then open its question editor.
+7. Add the question text and choose the appropriate answer format. Add choice options where needed.
+8. For a quiz, configure the correct answer and scoring controls exposed by that question. For feedback, avoid quiz scoring.
+9. Save and preview. Use a synthetic guest before inviting the audience.
+10. Return to Control room to run the activity; creation alone does not open participation.
+
+Check the result: The activity appears in Activities and its question is readable in the guest view.
+
+If something is wrong: If guests cannot answer, inspect both activity participation and individual question status.
+
+### Choose the right activity and question
+
+Match the answer format to the decision you need.
+
+Go to: Festio Live > Activities > question editor
+
+Before you start: Write the question before selecting a format.
+
+1. Quiz: use a factual question, choice options and an explicitly configured correct answer; review leaderboard settings.
+2. Poll: ask one preference question; single choice gives one vote, multiple choice permits several selections.
+3. Survey: create a short sequence; use rating, text and choice formats only where each adds useful information.
+4. Rating: state the subject and explain the ends of the scale. Five-point, ten-point and NPS formats are exposed.
+5. Feedback: ask one actionable improvement question and decide whether text needs moderation.
+6. Q&A: explain who will answer and how questions are moderated or spotlighted.
+7. Word Cloud: request short words or phrases; set anonymity and moderation appropriate to the audience.
+8. Live Voting: explain the choices and voting window before opening participation.
+9. Advanced formats exposed include number, ranking, quadrant and image click. Preview each on a guest phone before use.
+10. Review Responses after a test. A saved activity, a submitted answer and a displayed result are separate outcomes.
+
+Check the result: You can explain the question and how its answers will be used in one sentence.
+
+If something is wrong: Use the current editor controls; do not assume every format offers the same scoring or display options.
+
+### Run the show and projector
+
+Open participation, close it deliberately and show the correct content on each display.
+
+Go to: Festio Live > Control room / Channels & devices
+
+Before you start: Prepare at least one activity and question. Have the display operator open the actual display link.
+
+1. Open Channels & devices and give each display a recognisable name, such as Main stage.
+2. Choose its whole-event or session scope and activity. Copy its display link to the authorised screen operator.
+3. Preview the screen. A zero connected-screens count means the projector has not joined.
+4. In Control room select the activity and intended target display.
+5. Start the guided show and show the introduction or join QR.
+6. Open participation. If the question itself is closed, reopen the intended question using its controls.
+7. Confirm a test guest sees the intended prompt before announcing voting.
+8. Lock responses when the time is over, then reveal the result using the available controls.
+9. Use Current result, All results or the appropriate scene; display choices do not create or delete responses.
+10. Finish by returning to the join/welcome screen and closing participation.
+
+Check the result: The guest can answer only during the intended window, and the display shows the selected activity.
+
+If something is wrong: Check three separate states: activity participation, question status and display scene.
+
+### Add presenter and guest resources
+
+Share slides, handouts, videos or useful links with the appropriate audience.
+
+Go to: Festio Live > Presenter materials
+
+Before you start: Have the source file or URL and the rights to share it.
+
+1. Open Presenter materials and choose Upload or Link.
+2. Choose the event-wide scope or the intended session.
+3. Enter a display title guests can understand.
+4. For Upload select an accepted file; the inspected screen states a 100 MB maximum. For Link paste the destination.
+5. Choose the material type: slides, PDF, handout, sheet, video or link.
+6. Choose the audience: Presenter only, Production team or GuestHub attendees.
+7. Set guest release timing: as soon as approved or after the session is attended.
+8. Add the material to the presenter library.
+9. Review and approve it before relying on guest availability.
+10. Open Preview and then check an eligible GuestHub account.
+
+Check the result: The approved resource is available to the intended audience at the chosen time.
+
+If something is wrong: Attendance-gated files require the matching published session attendance record. If a session is absent, publish and synchronize its workflow; never substitute a similarly named draft session.
+
+### Create and issue certificates
+
+Issue credentials using actual check-in and session records.
+
+Go to: Festio Live > Certificates
+
+Before you start: Decide the qualification rules and use accurate attendance data.
+
+1. Open Certificates and select + New template.
+2. Enter the certificate name, heading and recognition text.
+3. Choose primary/accent colours and signature label; add logo, background or signature artwork if needed.
+4. Review the live sample preview. The sample name is not an issued certificate.
+5. Choose whether convention check-in is required.
+6. Set minimum sessions and/or required named sessions. Leave required sessions unselected when using only the count.
+7. Choose automatic issuance only after the rules are correct.
+8. Save design and rules. Review Eligibility and issuance.
+9. Select eligible attendees and use Issue selected; use Issue & email only when recipients and delivery are intended.
+10. Check the issued credential PDF and Verify link. Future template edits do not alter issued snapshots.
+
+Check the result: Eligible participants show an issued credential with a downloadable PDF and verification link.
+
+If something is wrong: A disabled guest selection means ineligible or already issued. Required-session rules use published sessions. Review the actual check-in/session evidence and refresh eligibility after saving rules; do not weaken rules merely to force issuance.
+
+### Create a giving campaign
+
+Collect and track campaign pledges using enabled methods.
+
+Go to: Festio Live > Donation Tracker
+
+Before you start: Agree a campaign purpose, currency and permitted receiving methods.
+
+1. Open Donation Tracker.
+2. Enter campaign title, description, target and currency.
+3. Set privacy and pledge options to match how donor names should appear.
+4. Enable only the receiving methods the organiser can actually support.
+5. Save the campaign and open its guest-facing giving link.
+6. Read the campaign text as a guest and inspect the available methods.
+7. For a synthetic test, use a pledge rather than initiating a real payment.
+8. Review pending and confirmed records separately.
+9. Record offline receipts only when money was actually received and the record is authorised.
+10. Use the donation display scene if the campaign will appear on a screen.
+
+Check the result: Guests see the saved campaign wording and only supported methods; totals distinguish commitments from confirmed receipts.
+
+If something is wrong: A pledge is a promise, not proof that funds reached an account. Payment and provider activation require the organiser’s input.
+
+### FestioMe: guest community & groups
+
+Keep attendees connected before and after the event.
+
+Go to: FestioMe > Groups / Channels
+
+Before you start: Decide membership policy, age suitability and who will moderate.
+
+1. Open FestioMe for the selected event.
+2. Create a group and give it a clear name.
+3. Choose Open, approval-based or invitation-based membership as appropriate.
+4. Use the event-support-group setting when this is the event’s support space.
+5. Create a channel within the community.
+6. Enter the channel name and choose Discussion, Announcement, Staff or Private as offered.
+7. For a private channel, choose only the intended members.
+8. Save and inspect the community from an authorised guest account.
+9. Check People, connection and direct-message exposure, particularly for juniors.
+10. Review moderation reports and membership requests regularly.
+
+Check the result: An eligible guest can find the group and intended channel, while restricted spaces remain restricted.
+
+If something is wrong: Attendance, child/guardian relationships and community membership are separate controls. Do not assume junior safety follows automatically from registration.
+
+### Publish a community meetup
+
+Arrange a follow-up gathering for community members.
+
+Go to: FestioMe > Meetings
+
+Before you start: Have a confirmed venue or joining destination and capacity.
+
+1. Open the community Meetings area.
+2. Choose the create-meetup control.
+3. Enter the title and a plain-language description.
+4. Enter location or joining information.
+5. Set the start and end times and check their timezone.
+6. Set capacity to the actual number available.
+7. Review the details before choosing Publish.
+8. Open the member-facing view and confirm the date, place and joining action.
+
+Check the result: Members can understand when and where the meetup happens and how to join.
+
+If something is wrong: Publishing makes the gathering visible to its configured community audience. Use real details only when the organiser intends that publication.
+
+### Set a budget and cost categories
+
+Plan spending and track commitments consistently.
+
+Go to: Planner > Budget
+
+Before you start: Agree an event budget and currency.
+
+1. Open Planner and select Budget.
+2. Enter the total budget, currency and explanatory notes.
+3. Save the budget.
+4. Add cost categories matching the event, such as Venue, Catering and Production.
+5. Allocate category amounts using the available fields.
+6. Add vendor amounts and deposits in the vendor records when appropriate.
+7. Review the budget overview after saving.
+8. Compare planned, committed and paid figures before making financial decisions.
+
+Check the result: Saved totals and categories appear in the budget view and use the intended currency.
+
+If something is wrong: Planner amounts are budget records. Check the event currency and Ticketing settlement currency separately before comparing amounts.
+
+### Add vendors and compare quotes
+
+Keep suppliers, scope and competing proposals in one place.
+
+Go to: Planner > Vendors / Procurement
+
+Before you start: Have business contact details and a clear comparison scope.
+
+1. Open Vendors and choose the create-vendor control.
+2. Enter vendor name, category, contact details and website where relevant.
+3. Choose a status such as prospect, shortlisted, contracted, paid or cancelled.
+4. Enter agreed amount, deposit and due/expiry dates only when known; save.
+5. Open Procurement and create a quote for the vendor.
+6. Give comparable quotes the same comparison group.
+7. Enter title, currency and line items with quantity, unit and price.
+8. Add scope, notes and expiry date. Keep it Draft until ready for the indicated review stage.
+9. Save the quote and compare like-for-like scope, not just the headline total.
+10. Use approval controls only with the organiser’s authorised decision.
+
+Check the result: The vendor and quote appear in their lists with matching currency and comparable scope.
+
+If something is wrong: A saved or submitted quote is not a supplier payment or signed contract.
+
+### Prepare contracts and store documents
+
+Keep draft terms and supporting files attached to the right supplier.
+
+Go to: Planner > Contracts / Documents
+
+Before you start: Have approved source terms and document ownership.
+
+1. Open Contracts and create a new draft.
+2. Select the vendor, enter the title and draft terms.
+3. Save the draft and inspect it before sharing.
+4. Keep draft creation separate from sending, signing or accepting binding terms.
+5. Open Documents when adding supporting paperwork.
+6. Choose the file, name, document type and related vendor.
+7. Enter an expiry date when relevant.
+8. Upload and confirm the document appears with the intended supplier.
+9. Review expired or outdated documents before the event.
+
+Check the result: The draft and uploaded documents are discoverable under the correct supplier.
+
+If something is wrong: Final contract acceptance and real supplier communications require the responsible organiser’s approval.
+
+### Create milestones and the runsheet
+
+Turn preparation work and event-day cues into an ordered plan.
+
+Go to: Planner > Timeline / Runsheet
+
+Before you start: Have event dates, timezone, responsible people and locations.
+
+1. Open Timeline and create a milestone.
+2. Enter title, description, due date and status; save.
+3. Open Runsheet and create an item.
+4. Enter start/end time and verify the timezone shown.
+5. Give the item a title and type, then choose owner and location.
+6. Set any Starts after dependency only when it reflects the actual sequence.
+7. Enter cue notes and status, then save.
+8. Review the entire sequence for overlaps, gaps and local dates.
+9. Share the relevant plan with the team using available sharing controls.
+10. Update status during rehearsals and the event.
+
+Check the result: Items appear in chronological order with a clear owner, location and local time.
+
+If something is wrong: Compare the event timezone and start/end dates across Results, Ticketing and published programme surfaces before sharing the production schedule.
+
+### Add your team
+
+Delegate preparation and event operations with appropriate access.
+
+Go to: Team / Tasks
+
+Before you start: The organiser must authorise the recipient and role.
+
+1. Open Team and choose Add teammate.
+2. Enter the intended email and review the role options.
+3. Choose the narrowest role that supports the work.
+4. Review event, guest and scanner access separately where those controls are exposed.
+5. Send the invitation only after the organiser approves that access.
+6. Open Tasks and create a task with an actionable title.
+7. Choose assignee, due date and notes, then save.
+8. Use List, Board or My Tasks to track work.
+9. Update status through Open, In progress and Done as work progresses.
+10. Review outstanding tasks and access before the event.
+
+Check the result: The task appears under the intended assignee; the teammate has only the intended access.
+
+If something is wrong: A visible team member card does not prove every permission. Check the actual role/access controls and test with that account.
+
+### Event Pass & message credits
+
+Understand entitlement and message funding before using paid services.
+
+Go to: Billing > Top up message credits
+
+Before you start: Know the intended event, currency, credit requirement and approved spending amount.
+
+1. Open Billing for the selected event.
+2. Read the active Event Pass, guest cap and wallet balance.
+3. Select USD/Stripe or NGN/Paystack deliberately and review the matching catalog.
+4. Compare available credit packs with the invitation preflight estimate.
+5. Open the credit-pack details to review the amount and price.
+6. Request the required amount or approved code from the organiser before a purchase.
+7. Use Buy credits only when the purchase is approved; the organiser completes payment details and any consequential payment step.
+8. After success, verify the wallet and Credit ledger.
+9. For included add-ons, open the corresponding workspace from the sidebar; the inspected Included · open setup buttons were disabled.
+10. Keep message credits, an Event Pass and an individual module entitlement distinct.
+
+Check the result: After a completed top-up, the ledger, wallet balance and transaction status agree.
+
+If something is wrong: Compare Billing, message preflight and Results for the same event and wallet. If the totals disagree, resolve the discrepancy with support before spending.
+
+### Walk through the guest experience
+
+Check the journey the guest actually receives.
+
+Go to: Public event website / RSVP / GuestHub
+
+Before you start: Use synthetic contacts and an authorised test pass.
+
+1. Open the published event website and read identity, date, venue, programme, speakers and FAQ.
+2. Follow the real registration or ticket CTA for the event’s configured route.
+3. Review RSVP categories, party members and confirmation before submission.
+4. Open the resulting pass and confirm the right person and access type.
+5. Visit GuestHub Home, Programme, My Pass, Inbox and More.
+6. Verify meals, table, resources, workflow and consent appear only when configured and eligible.
+7. Read a test announcement and use Refresh updates if needed.
+8. Test a Live activity during its participation window.
+9. Check the community destination and any privacy-sensitive People or messaging controls.
+10. Repeat with another eligible attendee and with a genuinely narrow/mobile browser before release.
+
+Check the result: A guest can prepare, arrive, participate and find follow-up information without organiser assistance.
+
+If something is wrong: A logged-in/recognised browser may bypass fresh signup or RSVP. Use a fresh session when validating those entry flows.
+
+### Results
+
+Close out the event with understandable counts and usable records.
+
+Go to: Results > report / exports
+
+Before you start: Have the correct event selected and know which metrics you need.
+
+1. Open Results and read the selected event, reporting scope and event timezone. Compare the start/end calendar dates with Event Setup and the public ticket page.
+2. Compare invited, registered, checked-in and attendance counts as distinct measures.
+3. Review message, consent, session and service sections that are available.
+4. Check warnings against the source workspace before acting.
+5. Open the export/report controls.
+6. Choose the available report or dataset appropriate to the task.
+7. Review the downloaded file’s event, date, columns and totals before sharing.
+8. Use Festio Live Responses for activity-specific answers and Q&A counts.
+9. Store reports with the event’s approved records and explain any unresolved inconsistencies.
+
+Check the result: The export matches the intended event and the source records.
+
+If something is wrong: Do not treat a contradictory summary as authoritative. Compare the source record, event timezone, wallet configuration and deployed service versions; retain the discrepancy with the exported record until resolved.
+
+### Event Calendars: curated listing pages
+
+Organise reusable audiences and curated event listings.
+
+Go to: Org Settings > Collections
+
+Before you start: Choose intended visibility; a calendar can be public or private.
+
+1. Open Org Settings and go to Collections.
+2. Enter a New list name and choose Add. Open View to manage its contacts using the controls provided.
+3. Choose New calendar. Enter the required Title and optional Description.
+4. Choose Public or Private deliberately; review Hide past events.
+5. Save calendar and open Manage.
+6. Use Add event to include eligible events.
+7. Upload a calendar logo if needed. Arrange curated events with Up and Down.
+8. For private links, choose the authorised contact-list audience.
+9. Send private links only when the recipients and purpose are approved.
+10. Inspect the resulting listing before distributing it widely.
+
+Check the result: The calendar lists the intended events in order and has the intended visibility.
+
+If something is wrong: Contact lists reuse audience data across events. Avoid exposing an existing list in a public calendar.
+
+### Public API & developer access
+
+Connect organisation data with approved external systems.
+
+Go to: Org Settings > API / Webhooks
+
+Before you start: This is an advanced setup requiring an authorised technical owner and destination.
+
+1. Open Org Settings and review the Integration plan.
+2. Read API docs and Open API Explorer before creating credentials.
+3. Confirm the intended integration needs and permissions with the technical owner.
+4. Use Create new key with an account that has integration permissions. Choose only the scope your integration needs.
+5. Store any created key securely; do not include it in guides or screenshots.
+6. Review Add webhook for the approved receiving endpoint and required notifications.
+7. Confirm endpoint ownership and data handling before saving an outbound integration.
+8. Test with synthetic records using the documented API.
+9. Review subscription requirements before read-write access or hosted checkout.
+10. Rotate or revoke credentials through the product when access ends.
+
+Check the result: An approved integration can read or receive only the intended records.
+
+If something is wrong: Use the endpoint paths and authentication documented in the current API Explorer. Test requests with synthetic records before connecting production data.
+
+### Just need RSVPs? Start here
+
+Not every event needs seating, orders, or entry rules — sometimes you just want a clean guest list and RSVP count.
+
+1. In New event, choose Invitation / RSVP and leave optional paid services off.
+2. Complete event dates, timezone and venue, then create the event.
+3. Open Invites & RSVP and choose Anyone with event link or personal invite links. Set the required fields and approval rules.
+4. Save, preview and submit one controlled RSVP in a fresh browser session. Confirm the guest record, personal link and pass before sharing.
+5. Enable additional services later through Features & messaging and review entitlements in Billing.
+
+Tip: A preview checks presentation; a saved guest registration checks the RSVP flow.
 
 ### Track RSVPs & approvals
 
@@ -123,218 +1110,51 @@ Warning: WhatsApp and SMS sends consume message credits. Check the estimated cos
 
 Tip: Use the filter + bulk-select to approve, email, or change ticket types for a whole group at once.
 
-### Broadcast an update
+### Customize your message templates
 
-Push a message to any subset of guests at any time — before, during, or after the event.
+Every automatic message — invitations, RSVP confirmations, reminders, and more — has editable wording per channel.
 
-1. Invites & RSVP → Broadcast Message.
-2. Write your message (plain text — keep it short for SMS/WhatsApp).
-3. Choose your target: All guests, RSVP Attending, RSVP Declined, No reply, Checked-in, or Not checked-in.
-4. Pick your channel(s): email, SMS, WhatsApp — or all three.
-5. Preview the estimated credit cost before sending.
-6. Hit Send. Delivery happens in the background — you can leave the page.
-7. Useful examples: venue change, schedule update, parking instructions, "doors open in 30 minutes", post-event thank-you.
-
-Warning: Broadcast sends are immediate and cannot be recalled once sent. Double-check your message and target group before confirming.
-
-### Seating & orders
-
-Assign tables, let guests pick meals, drinks, gifts, or other items, and give staff a live Orders view.
-
-1. Team &amp; settings → Features → turn on Seating and/or Orders (requires an Event Pass).
-2. Seating tab → Create tables: set a name (Table 1, Head Table, VIP Round…), capacity, a display order, and optionally a Category label (the label groups tables into buckets used by Invitation categories & automatic seating).
-3. Floor layout: open Floor layout to drag tables onto a canvas of your venue — add the stage, entrances, dance floor, and bar, and share a read-only link with your planner or venue.
-4. Use Auto-assign to fill tables automatically by RSVP order, or drag guests to specific seats manually.
-5. Reserve a seat for a guest: click an empty seat on the chart and pick the guest — they're placed in exactly that seat (handy for a head table or a specific arrangement).
-6. Partner pairing: guests can link their plus-one on their ticket page — auto-assign keeps them together.
-7. Table groups: group tables into a section (e.g. "Family side", "Friends side", "Men", "Women"). A guest assigned to a group can only be seated at that group's tables — auto-assign, manual seating, and check-in all honour it.
-8. No double-booking: each seat holds exactly one guest and a table can't be filled past its capacity — the seating chart and a guest's profile both block it. If a guest's table or group is already full at check-in, they show as Denied so you can re-seat them rather than being seated twice.
-9. Orders tab → Add categories (Meals, Drinks, Gifts, Merchandise) and items with optional descriptions.
-10. Guests see the available items on their ticket page and pick before your deadline.
-11. Orders view: a read-only view your staff or caterer can open on a tablet — shows each table's order totals and individual choices, updating live.
-12. Use the seating plan and order totals as the working list for your caterer or fulfilment team.
-
-Tip: Use the RSVP deadline as your cutoff when you do not want guests changing item choices at the last minute.
-
-### Entry areas & ticket rules
-
-Control which guests can enter which areas of your venue — enforced automatically at every scan.
-
-1. Team &amp; settings → Features → turn on Entry rules (requires an Event Pass).
-2. Entry areas tab → Areas: create the areas in your venue — Main Hall, VIP Lounge, Backstage, Green Room, etc. Set an optional capacity limit and direction mode (Entry only / Exit only / Both).
-3. Ticket types: create tiers — GA (General Admission), VIP, Press, Staff, Speaker. For each type, choose which zones they may enter. Leave empty to allow all zones.
-4. Ticket capacity (optional): give a ticket type a limit (e.g. 50 VIP) and you won't be able to assign more than that many guests to it — handy for capped tiers.
-5. Assign ticket types: set a guest's type one by one from their profile, or include a ticket_type column in your imported spreadsheet.
-6. Tags: create classifiers (VIP, 21+, Speaker, Media…) for finer control — a guest can have multiple tags. Set zone rules to require specific tags.
-7. Gates: create a named gate for each scanner position (e.g. "Main Entrance", "VIP Gate", "Backstage Door"). Pin it to a zone + direction. Staff select their gate once — access rules are enforced automatically.
-8. Analytics: live occupancy per zone, peak arrival times, room-to-room flow, and each guest's full journey through the venue.
-
-Tip: Gates are the easiest setup for multi-zone events: staff just select "I'm at Main Entrance" and scan — the zone and direction are automatic for every scan after that. Note: Entry rules can't be combined with Section scanning on the same event — use Entry rules for access control + occupancy, Section scanning to seat walk-ins by entrance.
+1. Open Guest Communication → Templates for the selected event.
+2. Choose the message type and channel. Edit the subject and body using the offered merge fields.
+3. Preview the event name, dates, guest link and any channel-specific wording.
+4. Save, send to one controlled test contact and inspect the actual receipt.
+5. Ticket fulfillment uses Ticket sales → Delivery message studio; edit those templates separately.
 
 ### Section scanning (multi-entrance seating)
 
-For events where each entrance serves a part of the room — e.g. men's / women's sides, or marquee A / marquee B — route walk-ins and ungrouped check-ins to the right section automatically, per staff member.
+For events seated by table group with two or more entrances — each scanner routes walk-ins and manual check-ins into the section it's assigned to.
 
-1. Set up your sections as table groups first (Seating tab) — a section is simply a table group.
-2. Guests tab → Walk-in guests → turn on Section scanning. It needs at least one table group, and can't be used together with Entry rules.
-3. Team &amp; settings → Event team: assign each staff member their section. A staffer pinned to one section is routed there automatically; give them two or more and they pick their section on the scanner.
-4. At the door: walk-ins and ungrouped manual check-ins handled by that staffer are seated in their section. Admins/owners aren't pinned — they pick a section on the scanner.
-5. A guest who already belongs to a different group keeps their own group — a section never overrides a guest's explicit assignment.
+1. Guest Communication → Features & messaging → turn on Section scanning (only shown once you have table groups set up in Seating).
+2. On the Team page, assign each staff member (or each device) the table-group section they're stationed at.
+3. Walk-ins and manual check-ins scanned at that station seat into that section automatically, instead of a single shared default group.
+4. A guest's own assigned group always wins if it doesn't match the scanning station — there's no override flow by design.
 
-Tip: While Section scanning is on, each staffer's assigned section replaces the single "auto-assign walk-ins to table group" setting.
-
-### Experience workflows: consent, souvenirs, rooms & sessions
-
-Use Experience when an event has an operational journey after admission: consent, badge pickup, souvenir handoff, room/table assignment, session attendance, certificates, or checkout.
-
-1. Team &amp; settings → Features → turn on Experience. This adds the Experience workspace for the selected event.
-2. Create or clone a workflow in Team &amp; settings → Experience. Keep it Draft while editing; only one workflow should be Published at a time.
-3. Add steps in the order staff should follow: Main check-in, Consent, Badge pickup, Souvenir, Room assignment, Session attendance, and any custom steps.
-4. Use Step dependencies to gate the journey. Example: Consent depends on Main check-in; Souvenir depends on Consent; Room assignment depends on Souvenir; Session attendance depends on its room assignment.
-5. For consent, load the active consent form in the Experience consent area. Guests sign from their Festio Pass after check-in, and each signature is tied to the form version they signed.
-6. For multi-room or multi-day seating, create tables and table groups in Seating first. Then set a Room assignment step to "Separate seat for this step", give it a unique assignment scope, room/hall name, and matching table group.
-7. Scoped room assignments do not replace the guest's main seat. They let the same guest have a Red Oak Ballroom seat, a luncheon seat, and a breakout room seat in one event.
-8. For sessions, add Session attendance steps with topic, date, start time, end time, room, speaker, capacity, and check-in window. Staff cannot check guests into the session until the configured window opens.
-9. Publish the workflow when ready, then run a test guest through check-in, consent, souvenir, room assignment, and one session gate before sending to all attendees.
-
-Tip: Main seating and Experience room assignment are connected but serve different purposes: main seating is the guest's default event seat; scoped Experience seating is for a specific room, session, meal, or day.
-
-Warning: Use HTTPS for real phone camera scanning. Browser camera access is unreliable or blocked on normal HTTP from phones.
-
-### Deliveries: ship merch, aso-ebi & gifts
-
-1. Team &amp; settings → Features → turn on Deliveries.
-2. Deliveries tab → New Shipment. Name it (e.g. "Aso-ebi fabric", "Welcome bag", "Gift delivery").
-3. Add items to the shipment — each with a name, optional size/variant, and quantity.
-4. Guest addresses: collected automatically if you turned on address collection in RSVP settings, or import them via the ship_address columns in your guest list.
-5. Packing list: a shareable read-only page your fulfilment vendor opens — they see guest names, addresses, and items without needing a login.
-6. Mark items as packed/shipped per guest — or bulk-mark a whole shipment.
-7. Use multiple shipments for different waves (pre-event aso-ebi vs post-event gift delivery).
-
-Tip: Add the shipping address fields to your RSVP custom questions so guests fill them in when they confirm — no separate data collection needed.
-
-### Gift list
-
-1. Team &amp; settings → Features → turn on Gift list.
-2. Gift list tab → Add items: paste a store link and the platform auto-fills the title, image, and price. Or add cash funds (e.g. "Honeymoon fund", "New home contribution").
-3. Write a welcome message shown at the top of the gift list page.
-4. Share the public gift list link directly — paste it in WhatsApp, add it to your invite page, or print it on physical invites.
-5. Guests mark what they'll bring (or how much they're contributing) so nobody doubles up.
-6. No money moves through Festio — guests purchase or give directly to you. The gift list is purely a wish-list coordination tool.
-7. You can see who has claimed each item from the Gift list tab.
-
-### Guest Hub & FestioMe community
-
-Every guest gets a personal hub, and your event can host its own private community for announcements, groups, and chat.
-
-1. Guest Hub: every guest's pass includes a personal FestioHub link — their QR code, seating details, order choices, event updates, and a message thread to your team, on any device. It's sent automatically with their ticket; nothing to configure.
-2. Guest Communication tab: control which channels guests can use to reach you (email, chat, announcements), and see every guest thread in one inbox.
-3. FestioMe: open the FestioMe area from the top navigation to create your event's community — post announcements, share photos, and create groups (e.g. "Parents", "Volunteers").
-4. Groups can be open to all guests, join-on-request, or private (selected members only). Members can chat in group channels or one-to-one.
-5. Guests reach the community from their FestioHub — the link is on their pass, scoped to your event.
-6. Push notifications: guests who allow notifications on their hub get announcement pushes even when the page is closed.
-
-Tip: Post day-of logistics (parking, doors-open time, dress code) as announcements — every guest sees them on their hub without you spending SMS credits.
-
-### Guest communication controls
-
-Event Updates, Guest Chat, Message Host, and FestioMe groups are separate surfaces. Enable only the conversations your event needs.
-
-1. Open Guest Communication for the selected event. Review Event Updates, Guest Chat, Guest posting, Message Host, and any attending-only option one at a time.
-2. Use Event Updates for host-to-guest announcements. Choose the intended audience before publishing, such as attending, declined, checked-in, or not checked-in.
-3. Use Guest Chat for a shared event conversation. Turn Guest posting off when guests should be able to read existing messages but not add new ones.
-4. Use Message Host for private guest questions. Replies belong to that guest's private thread and must never be copied into Guest Chat or a public FestioMe group.
-5. Use FestioMe groups for native community conversations. Group membership and privacy are managed separately from Guest Chat eligibility.
-6. After changing a toggle, open one eligible and one ineligible test guest link in separate browser sessions. Confirm that only the intended module or composer changed.
-7. Moderate shared Guest Chat from the organizer view. Hiding a message removes it from guest views without turning a private host message into shared content.
-8. Turning communication modules off must not disable RSVP, QR tickets, or Check-in. Test those core paths after making a major communication change.
-
-Tip: Before launch, use clearly different test text in Event Updates, Guest Chat, Message Host, and FestioMe. This makes accidental cross-posting or private-content leakage easy to spot.
-
-Warning: Treat Message Host and direct messages as private. Never paste private message text into an announcement or shared group while troubleshooting.
+Warning: Section scanning and Venue Access (zone/gate-based entry rules) can't both be on for the same event — turn one off before enabling the other.
 
 ### Tasks: run your to-do list as a team
 
-A per-event Kanban board for coordination work that isn't guest data — "confirm florist," "print name badges," "brief the door staff." Any team member on the event can see and work the board, not just owners/admins.
+Assign and track the work behind your event — who's doing what, by when.
 
-1. Open the event's Tasks tab (or My Tasks in the top nav to see every task assigned to you across all events at once).
-2. Add a task: title, optional notes, an assignee from your team, and an optional due date.
-3. Drag a card between Open, In progress, and Done to update its status — or change status from the task's detail panel.
-4. Open a task to see its full detail panel: a comment thread for back-and-forth with whoever's working it, subtasks for breaking a bigger task into steps, and file attachments.
-5. Attach files or images to a task from either side — the person who created it or the person it's assigned to. Useful for reference photos, signed vendor contracts, floor-plan PDFs, anything the task needs.
-6. Every status change, reassignment, and attachment is logged in the task's activity feed alongside the comments, so there's one place to see the full history.
+1. Team & Tasks page → Tasks tab → + Task: set a title, assignee, due date, and notes.
+2. Switch between List and Board view depending on how your team likes to work.
+3. Open a task to add subtasks, attach files, or post a comment in its activity thread.
+4. Move a task through Open → In progress → Done as work happens.
+5. My Tasks (from your own account) shows everything assigned to you across every event you have access to, separate from any one event's task list.
 
-Tip: Use My Tasks if you're staff working across several events — it pulls together everything assigned to you in one list instead of checking each event's board separately.
+Tip: Planner's Timeline milestones can link to tasks automatically — a milestone's linked tasks show up in both places.
 
-### Add your team
+### Planner: budget, vendors & run sheet
 
-1. Team tab → "Add a teammate" → enter their email address and choose a role.
-2. Roles: Owner and Admin can manage the event (settings, guests, seating, etc.); Staff can only check guests in on events they're assigned to.
-3. Per-staffer permissions (for assigned Staff): toggle Seats (let them reassign seats), Orders (open the live Orders view), and Dashboard (view Results) for each person — all off by default.
-4. For Section scanning events: assign each staffer their section (table group) from the same Team panel, so walk-ins they handle route to the right part of the room.
-5. The teammate signs in with that exact email — their account links to your organisation automatically.
-6. Assign the teammate to specific events from the Team tab — they only see events they've been assigned to.
-7. Sign in as each staff member in a separate browser session and verify their displayed identity, assigned event, and permitted navigation. Staff should not see owner/admin setup controls unless their organisation role was intentionally changed.
-8. After changing permissions or removing an assignment, have the staff member refresh and retry an action. Revoked access should stop promptly while historical scan attribution remains intact.
-9. Remove a teammate from the Team tab at any time. Their account continues to exist but loses access to your events.
+Keep the planning work — budget, vendors, contracts, timeline — next to your guest list instead of scattered across spreadsheets.
 
-Tip: Add all check-in staff before the event day. Have them test-login and open the Check-in page the day before so there are no surprises on the day.
+1. Guest Communication → Features & messaging → turn on Planner, then Open your planner.
+2. Budget tab: track allocated vs. actual spend by category.
+3. Vendors and Procurement tabs: a workspace per vendor for quotes and orders.
+4. Contracts tab: draft a contract with title and terms, Save draft, then Send — the vendor signs from their own portal link. Status moves through draft → sent → signed, showing who signed and when.
+5. Timeline tab: add milestones and link tasks to each one (shares the same task list as Team & Tasks) — this is a milestone list, not a Gantt chart.
+6. Runsheet and Documents tabs: your day-of schedule and shared files in one place.
 
-### Check-in day
-
-1. The day before: set the event to Active in Start here. This enables Check-in to process guests.
-2. Ensure all scanning staff are added to the Team tab and assigned to this event.
-3. Share the Check-in page with staff. No app install — it runs in any mobile browser.
-4. Staff open Check-in → choose their gate (or set area + direction manually) → tap Start camera.
-5. Each guest shows their QR code (from email, SMS, WhatsApp, or their ticket page). Staff point the camera — admission is instant.
-6. Green = admitted. Yellow = already admitted (duplicate scan — same guest, same seat, never seated twice). Red = denied (wrong zone, at capacity, table/section full, or needs an Event Pass).
-7. For walk-in guests not on the list: Guests tab → Add guest → assign them a ticket type → their QR appears immediately for scanning.
-8. Results updates in real time — open it on a separate screen to monitor check-ins live.
-9. After the event: set to Ended to disable further check-ins. Review the full check-in record from the Guests tab.
-
-Tip: Test scanning works on at least one device before guests arrive. Scan your own guest entry to confirm the green admitted screen appears.
-
-Warning: Check-in requires the event to be set to Active. If guests are getting "Event not active" errors, check the event status in Start here.
-
-### Results
-
-1. Open Results from the nav during or after your event.
-2. Top row: total RSVP'd, total checked in, currently in venue (if using Entry areas).
-3. RSVP breakdown doughnut: Attending vs Declined vs No reply.
-4. Check-in timeline: arrivals per hour throughout the event — shows when your peak entry times were.
-5. Area occupancy (Entry areas): live count and capacity bar per area. Turns red when near capacity.
-6. Orders summary: totals by selected item across all tables.
-7. Per-table report: each table's check-in count, order choices, and which guests are seated there.
-8. Results auto-refreshes every few seconds — no need to reload manually.
-9. Staff and Orders access roles can view Results for their assigned events when permitted (read-only).
-
-Tip: Put Results on a tablet at the organiser desk so you can monitor arrivals in real time without leaving your post.
-
-### Event Pass & message credits
-
-1. Free tier: email invites, up to 25 guests, Festio branding on invite pages, no paid features.
-2. Event Pass: buy per event in Invites & RSVP → Event Pass. Unlocks SMS/WhatsApp invites, more guests, QR check-in, seating & orders, entry areas, deliveries, gift list, and removes Festio branding.
-3. Event Passes are tiered by guest cap — choose the tier that fits your event size. You can upgrade to a higher tier if your guest list grows.
-4. Message credits: buy in the Event Pass area. 1 credit = 1 SMS or 1 WhatsApp message; MMS costs 3; after your first 25 emails per event, 2 emails cost 1 credit.
-5. Low on credits mid-event? Buy a top-up instantly from Event Setup — credits are available immediately.
-6. Trial: new accounts can request a free trial from the Event Setup banner — send the request and we'll comp your first event.
-
-Tip: Check your credit balance before any bulk send. The Event Pass area shows your current balance and usage history.
-
-### Event Calendars: curated listing pages
-
-A Calendar is a single page that lists several of your events together — public (one shared link, anyone can view) or private (a personalized link per contact, with pre-filled RSVP and status tracking). This is organisation-wide, not per-event — find it under Org Settings → Calendars.
-
-1. Go to Org Settings → Calendars → "+ New calendar". Give it a title, choose Public or Private, and click Create.
-2. Click the calendar to expand it. Add an optional description (shown under the title), upload a logo and set its display width, and toggle "Hide past events" (on by default — turn it off to show a full/archival listing instead of just what's upcoming).
-3. Curate events: under "Events on this calendar," pick an event from the dropdown and click Add — it's saved immediately, no separate save step. Drag the ⠿ handle (or use the ↑/↓ buttons) to reorder; click Remove to take one off.
-4. Registering from a calendar sends the visitor to that event's own normal RSVP page — same questions, capacity limits, and confirmation email as any other RSVP. The calendar is a curated doorway, not a second registration system, so whatever you've configured per-event (open/invite-only, custom questions) applies exactly as normal.
-5. Public calendars: copy the Public link and share it anywhere, or copy the Embed snippet to drop the calendar into another website as an iframe.
-6. Private calendars: build a Contact List first (Org Settings → Contact Lists — add contacts one at a time or upload a CSV), then attach one or more lists to the calendar from its contact-list picker. Every contact gets their own personalized access token automatically, including anyone added to an already-attached list later.
-7. Click "Send calendar link to all contacts" to email each contact their personal link. Opening it pre-fills their name/email on any event they register for, and shows their RSVP status (accepted/declined/waitlisted) on events they've already responded to instead of a blank form.
-8. View and per-event click counts are shown on the calendar detail view, so you can see how much traffic the calendar itself and each listed event are getting.
-
-Tip: Use a private calendar plus a Contact List when the same group of people should see several of your events at once (e.g. a recurring series or a multi-part programme) without you sending separate individual invites for each one.
+Tip: Vendor e-signature happens entirely in the vendor's own portal view — you don't need to chase a separate signing tool.
 
 ### Export & post-event
 
@@ -342,8 +1162,8 @@ Tip: Use a private calendar plus a Contact List when the same group of people sh
 2. Seating tab: use the seating chart and table assignment list for on-site reference.
 3. Orders tab: review per-table item totals for your caterer or fulfilment team.
 4. Deliveries tab: review guest names, addresses, and items for fulfilment.
-5. Results: check-in timeline and area analytics are visible on-screen — take screenshots or use your browser print function.
-6. After the event, set it to Ended and archive it. Archived events remain accessible for reporting but don't appear in your active list.
+5. Open Results → Closeout & exports to select the available report and download it. Check event scope and filters; use browser print for a visual copy of charts.
+6. After the event, set it to Ended so check-in and RSVP submissions close. The event stays in your event list with its full data for reporting — nothing is deleted or hidden.
 
 ### Troubleshooting
 
@@ -355,14 +1175,11 @@ Common issues and how to fix them.
 4. QR not scanning: ensure the event is set to Active. Check the scanner device has camera permission in browser settings. Try good lighting — the QR needs to be fully visible in frame.
 5. Guest getting "Already admitted": the QR was used at a previous gate. Check their check-in log (Guest profile) to see where they were scanned. This is normal — just admit them manually if it was an error.
 6. Area showing Denied: the guest's ticket type or tags don't permit entry to that area. Check the guest's ticket type in their profile and compare with the rules in Entry areas.
-7. Check-in shows "No seat available" or "table group full": the guest's table or table group is at capacity. Free a seat, raise the table capacity, or move them to another group in Seating — then scan again.
-8. Can't enable Section scanning (or Entry rules): the two can't run on the same event. Turn the other one off first. Section scanning also needs at least one table group to exist.
-9. "Sold out" when assigning a ticket type: that ticket type has hit its capacity limit. Raise the limit on the ticket type, or pick a different one.
-10. Credits ran out during a bulk send: buy a top-up from Event Setup and resume the send from Invites & RSVP using a no-reply reminder.
-11. Can't see Seating / Entry areas tabs: these features must be turned on in Team &amp; settings → Features, and require an Event Pass.
-12. Staff can't see the event in Check-in: they must be added in Team tab AND assigned to this specific event.
-13. RSVP deadline passed but guests are still submitting: the deadline blocks new RSVPs from the public invite page. You can still add or approve guests manually from Event Setup.
-14. A Calendar shows fewer events than you curated onto it: check "Hide past events" in that calendar's settings — it's on by default, so anything with a past event date is filtered from the public/private view even though it still shows in your admin curation list.
+7. Credits ran out during a bulk send: buy a top-up from Event Setup and resume the send from Invites & RSVP using a no-reply reminder.
+8. Can't see Seating / Venue Access tabs: these features must be turned on in Guest Communication → Features &amp; messaging, and require an Event Pass.
+9. Staff can't see the event in Check-in: they must be added in Team tab AND assigned to this specific event.
+10. RSVP deadline passed but guests are still submitting: the deadline blocks new RSVPs from the public invite page. You can still add or approve guests manually from Event Setup.
+11. Guests don't see "Join Festio Live" on their ticket page: confirm Festio Live is turned on (Guest Communication → Features &amp; messaging) and that an activity is actually set to Live, not Draft. Share the festio.events/live/join code as a fallback.
 
 ## Staff / Check-in
 
@@ -375,8 +1192,7 @@ Check guests in at the door. No app needed — runs in your phone browser.
 3. You'll see the events you've been assigned to in the Check-in screen.
 4. Open Check-in on the device you'll use on the day and confirm you can see the event. Do this at least the day before.
 5. Grant camera permission: the browser will ask the first time you start the camera. Allow it — if you accidentally denied, go to your browser Settings → Site permissions → Camera and re-enable it.
-6. Check your internet connection and the scanner's Online/Offline status. If connectivity drops, do not keep scanning unless the screen explicitly says the scan was queued for offline sync.
-7. After reconnecting, wait for the scanner to report Online, retry one test guest, and confirm Results contains only one admission. Escalate any queued or uncertain scan before continuing the line.
+6. Check your internet connection. Opening Check-in once while online automatically caches the guest list on your device — if the connection drops later, scanning keeps working and syncs automatically once you're back online (you'll see a blue result instead of green while offline).
 
 Tip: Do a test scan the day before. Your organiser can add themselves as a guest — scan their QR to confirm the green admitted screen appears.
 
@@ -386,11 +1202,10 @@ Tip: Do a test scan the day before. Your organiser can add themselves as a guest
 2. Select your event from the list.
 3. If the event uses Gates, select your gate (e.g. "Main Entrance"). This sets your zone and direction automatically.
 4. If using manual area entry: pick the area you're standing at and direction (Entry / Exit).
-5. If the event uses Section scanning: your section is usually set for you. If you cover more than one, pick your section once — walk-ins and manual check-ins you handle are seated there.
-6. Tap Start camera. Point the camera at the guest's QR code — it reads instantly without pressing any button.
-7. Hold the phone steady and ensure good lighting. The QR code must be fully within the camera frame.
-8. After each scan the screen resets automatically, ready for the next guest within a second.
-9. If a guest's phone screen is dim: ask them to increase brightness. A printed QR works just as well.
+5. Tap Start camera. Point the camera at the guest's QR code — it reads instantly without pressing any button.
+6. Hold the phone steady and ensure good lighting. The QR code must be fully within the camera frame.
+7. After each scan the screen resets automatically, ready for the next guest within a second.
+8. If a guest's phone screen is dim: ask them to increase brightness. A printed QR works just as well.
 
 Tip: If a QR is not working, ask the organiser to look up the guest in Guests and confirm their invitation or ticket code.
 
@@ -399,24 +1214,11 @@ Tip: If a QR is not working, ask the organiser to look up the guest in Guests an
 1. ✅ Green — "Welcome, [Name]!" — admitted successfully. Guest may proceed.
 2. ⚠️ Yellow — "Already admitted" — this QR was scanned before. Ask when and where — it's usually fine if they're moving between zones.
 3. 🔴 Red — "Access denied" — the guest's ticket type or tags don't permit this area, or the area is at capacity. Politely direct them to the correct entrance.
-4. 🔴 Red — "No seat available / table full" — the guest's assigned table or section is full. Don't re-scan; send them to the organiser's desk to be re-seated (the system won't double-book a seat).
-5. 🔴 Red — "Event not active" — the organiser hasn't set the event to Active yet. Ask them to do so in Event Setup → Start here.
-6. 🔴 Red — "Needs Event Pass" — the organiser's account is on the free tier. This shouldn't happen at a real event — contact your organiser.
-7. ❓ "Guest not found" — the QR is from a different event or is corrupted. Direct the guest to the organiser desk.
+4. 🔴 Red — "Event not active" — the organiser hasn't set the event to Active yet. Ask them to do so in Event Setup → Start here.
+5. 🔴 Red — "Needs Event Pass" — the organiser's account is on the free tier. This shouldn't happen at a real event — contact your organiser.
+6. ❓ "Guest not found" — the QR is from a different event or is corrupted. Direct the guest to the organiser desk.
+7. 🔵 Blue — "Checked in on this device" — the internet dropped, so the scan was accepted from the guest list already cached on your phone and queued to sync. Keep scanning normally; it uploads automatically once you're back online.
 8. For any denied result, do not override — direct the guest to the organiser's desk for resolution.
-
-### Experience next steps
-
-1. If the organiser enabled Experience, the scan result shows the guest's next operational steps after admission.
-2. Only steps that are available should be acted on. Blocked steps are waiting for an earlier required step such as consent, souvenir pickup, or room assignment.
-3. Consent: ask the guest to open their Festio Pass or FestioHub and sign the consent form. The consent step completes when the signed form is recorded.
-4. Souvenir, badge, or welcome pack: hand the item to the guest, then tap Complete on the scanner if the step is available.
-5. Room assignment: tap Assign Room. Festio assigns the next available table and seat inside the room/table group configured by the organiser.
-6. Session attendance: tap Check in only when the guest is entering the correct session. If the session is not open yet, the scanner shows "Not open" and the button is disabled.
-7. A session can have a time gate, such as opening 30 or 60 minutes before start. Do not manually complete it early unless the organiser changes the schedule.
-8. After completing a step, the scanner refreshes the next steps so you can continue the guest journey without leaving Check-in.
-
-Tip: For large events, assign one staff member per station: entrance check-in, consent help desk, souvenir table, room assignment desk, and session doors.
 
 ### Zone scanning & gates
 
@@ -431,6 +1233,17 @@ Tip: For large events, assign one staff member per station: entrance check-in, c
 
 Tip: If you're covering multiple gates, stay on Gate mode and switch your gate selection each time you move — don't try to use Manual mode for a fast-moving door.
 
+### Running an Experience workflow
+
+If the organizer has set up an Experience workflow, check-in is just the first step — you may also mark consent, seating, souvenirs, or session attendance.
+
+1. Each guest's Festio Pass page shows their current step in the workflow — what's done and what's next.
+2. Mark a step complete from the guest's pass page as they go through it — souvenir pickup, badge issued, seated, etc.
+3. Open the guest journey or assigned workflow and review its required steps.
+4. Consent/forms may be available before arrival or after check-in according to their published timing. Complete only the forms your role is authorized to sign.
+5. For juniors, an authorized parent or legal guardian completes guardian-only forms. Confirm the saved signer and form version.
+6. Session access follows the published session and your pass eligibility; a programme entry alone does not grant admission.
+
 ### Tips for a smooth check-in
 
 1. Keep your phone charged — bring a power bank for all-day events.
@@ -441,7 +1254,6 @@ Tip: If you're covering multiple gates, stay on Gate mode and switch your gate s
 6. Guests who can't find their QR: ask them to check their confirmation email/SMS/WhatsApp. If still missing, direct them to the organiser desk for lookup in Guests.
 7. Manual lookup: ask the organiser to use Guests or the ticket code lookup to confirm the guest before entry.
 8. Noisy lighting (direct sunlight, flashing lights): tilt the guest's screen slightly towards you or ask them to cup their hand over it to reduce glare.
-9. If two stations may scan the same guest, let the first confirmed admission win. The second device should show Already admitted; never use a manual override merely because the devices raced.
 
 ## Guest
 
@@ -456,13 +1268,11 @@ You received an invite — here's everything you need from RSVP to arrival.
 
 ### RSVP
 
-1. Fill in your name and any questions the host has set (dietary preference, item choice, t-shirt size, etc.). Fields marked * are required; the rest are optional.
-2. If the form asks for an Invitation category (schools, ceremonies, conventions): pick the category that describes you first — it sets how many additional guests you may register and where your party will be seated.
-3. Registering your party: use "Add additional guest" to enter each person you're bringing (name, and contact details if asked). Every person you register gets their own QR pass — so register everyone in one submission.
-4. Click Confirm to say yes, or "Can't make it" to decline.
-5. On a personal (closed) invite link, you can return and change your answer until the RSVP deadline.
-6. If the host requires approval, you'll see "RSVP submitted — awaiting confirmation" until they approve. You'll get a notification when you're confirmed.
-7. If you're bringing a plus-one: look for the partner/plus-one option on your ticket page after confirming — link your partner's name so you're seated together.
+1. Fill in your name and any questions the host has set (dietary preference, item choice, t-shirt size, etc.).
+2. Click Confirm to say yes, or "Can't make it" to decline.
+3. On a personal (closed) invite link, you can return and change your answer until the RSVP deadline.
+4. If the host requires approval, you'll see "RSVP submitted — awaiting confirmation" until they approve. You'll get a notification when you're confirmed.
+5. If you're bringing a plus-one: look for the partner/plus-one option on your ticket page after confirming — link your partner's name so you're seated together.
 
 Tip: RSVP as soon as possible — some events have capacity limits and close registrations once full.
 
@@ -477,6 +1287,21 @@ Tip: RSVP as soon as possible — some events have capacity limits and close reg
 
 Tip: Screenshot your QR code and save it to your phone's camera roll before the event, in case you lose internet access on the day.
 
+### Buying a paid ticket
+
+1. Some events are ticketed rather than free RSVP — you'll see prices and ticket types (General Admission, VIP, etc.) on the event page.
+2. Pick a ticket type and quantity, then pay by card through the event's checkout.
+3. After payment, you receive the same personal QR pass a free RSVP guest gets — show it at the door the same way.
+4. A refund (if the organizer issues one) cancels your pass along with the payment.
+
+### Your guest journey (consent, souvenirs, sessions)
+
+1. Your current step and what's next are shown right on your pass — staff can also see and update it as you go through each step.
+2. Open the guest journey or assigned workflow and review its required steps.
+3. Consent/forms may be available before arrival or after check-in according to their published timing. Complete only the forms your role is authorized to sign.
+4. For juniors, an authorized parent or legal guardian completes guardian-only forms. Confirm the saved signer and form version.
+5. Session access follows the published session and your pass eligibility; a programme entry alone does not grant admission.
+
 ### Order choices & seating
 
 1. If the host set up orders, you'll see a "Pick your items" section on your ticket/RSVP page.
@@ -484,20 +1309,6 @@ Tip: Screenshot your QR code and save it to your phone's camera roll before the 
 3. Your item choices are sent to the event team and linked to your table automatically — you don't need to tell anyone on the day.
 4. Seating: the host assigns tables. Your table and seat number (if assigned) appear on your ticket page before the event.
 5. If you're attending as a couple/group: link your plus-one on your ticket page so the host can seat you together.
-
-### FestioHub & event activity
-
-1. Your confirmation includes a personal FestioHub link — your event pass, QR code, seating details, host updates, and a direct message line to the event team, on any device.
-2. FestioMe community: if the host opened a community, your hub links to it — announcements, photos, and groups you can join or request to join. Allow notifications to get updates even when the page is closed.
-3. For Experience events, your ticket page includes a FestioHub or Track my activity button.
-4. Open FestioHub to see your event pass, updates from the organiser, and your activity progress.
-5. After check-in, FestioHub can show next steps such as signing consent, collecting a badge or souvenir, receiving a room/table assignment, and attending sessions.
-6. If consent is required, open the consent section, review the form, type your name and signature, then submit it. You can download or request a copy after signing.
-7. Room and table assignments may appear at different times. A convention can assign one seat for the main hall, another for lunch, and another for a breakout room.
-8. Session attendance is checked by staff at the session door. Some sessions only open for check-in shortly before the session starts.
-9. If a step looks incomplete but staff already helped you, ask the event desk to refresh or update your activity record.
-
-Tip: Keep your ticket link handy. It is your fastest path back to your QR code, consent form, FestioHub, and activity progress.
 
 ### Providing your address (aso-ebi / gifts)
 
@@ -515,6 +1326,17 @@ Tip: Keep your ticket link handy. It is your fastest path back to your QR code, 
 4. You can unclaim an item if your plans change — just return to the registry link and untick.
 5. No account or login required to view or claim items.
 
+### Join a live quiz, poll or survey
+
+1. If the host is running Festio Live, a "Join Festio Live" button appears on your invite/ticket page whenever an activity is live — tap it to join instantly, no extra sign-in.
+2. No personal invite link (e.g. you're at a talk or keynote)? Go to festio.events/live/join on your phone and enter the 6-character join code shown on screen, or scan the QR code if one is displayed.
+3. Answer from your own phone — quizzes may have a timer and award points; polls, ratings, and surveys just record your response.
+4. For quizzes: your score and rank appear on the leaderboard once the host reveals results.
+5. For word clouds and open-text questions: your answer may need host approval before it appears on the shared screen — this is normal if nothing shows up immediately.
+6. You can only submit once per question unless the host has turned on "Allow changes" for that activity.
+
+Tip: If "Join Festio Live" isn't showing on your ticket page, the host hasn't started an activity yet — check back once the session begins, or ask the host for the join code.
+
 ### Guest FAQ
 
 Quick answers to common questions.
@@ -526,9 +1348,19 @@ Quick answers to common questions.
 5. I want to bring an extra guest — contact the host. They control plus-one allowances.
 6. I need to cancel — return to your invite link and change your RSVP to "Can't make it". Contact the host if you're past the deadline.
 7. I have a dietary requirement — if there's no option on the RSVP form, add a note in the "special requests" field or contact the host directly.
-8. Where do I sign consent? — open your ticket link after check-in and tap FestioHub or the consent section. If you cannot find it, ask the event desk to resend your link.
-9. Why can't staff check me into a session yet? — the organiser may have set a session check-in window. Staff can check you in when that window opens.
-10. Why do I have more than one table or seat? — some conventions assign seats separately for different rooms, meals, or sessions. Follow the room/table shown for the activity you are attending.
+
+### Use GuestHub: programme, speakers and event services
+
+Keep your event information and personal pass together.
+
+1. Open the personal GuestHub link in your confirmation message. If you cannot find it, use My GuestHub recovery with your registration email.
+2. Open My Pass and check the attendee name before showing the QR code. Open My Party to review only the people linked to your registration.
+3. Open Programme to view the published day, local time, room, speaker and session access.
+4. Open Services → Speakers when enabled. Profiles open inside GuestHub; use the return control to get back to event services.
+5. For enabled forms, meal choices, resources or Live activities, follow the available controls. Some services require approval, check-in or session attendance.
+6. Open Inbox or Communications for organizer updates and help. If information fails to load, retry without submitting a duplicate registration.
+
+Check the result: You can return to your event services and pass without losing your GuestHub session.
 
 ## Operator
 
@@ -544,7 +1376,7 @@ Platform management — organisations, billing, pricing, and support tooling.
 ### Comp events & add credits
 
 1. Console → Overview: lists every organisation with its events.
-2. Click an event → Comp Event: select a tier to grant it free (the tiers configured in Pricing). The organiser immediately gets all features of that tier.
+2. Click an event → Comp Event: select a tier to grant it free (Starter, Standard, Pro, Scale, etc.). The organiser immediately gets all features of that tier.
 3. Click an organisation → Add Credits: enter a credit amount to top up their message credit balance at no charge.
 4. Comps and credit grants are logged with the operator name and timestamp.
 5. To remove a comp: click the event and select Remove Comp — the event reverts to its paid status.
@@ -577,6 +1409,22 @@ Warning: Org deletion is permanent and cannot be undone. Always confirm with the
 4. Message credit packs: edit the credits-per-pack, price, and active status.
 5. Changes apply immediately to the public pricing page and checkout.
 6. Deactivating a tier hides it from checkout but doesn't affect events already on that tier.
+7. Global add-on promotion (in the same Pricing tab): opens every add-on free on all current and future paid events for a set period — "Open paid-event add-ons for 6 months" or "End promotion now". Free events still can't use add-ons, and any explicit per-org or per-event override still takes precedence.
+
+### Grant or deny add-ons per organization
+
+1. Console → Add-on Access: search for the organization or event you need.
+2. Manage add-ons on an organization opens an override editor per add-on — Grant, Deny, or return it to normal billing rules.
+3. Organization-level grants apply to all of that org's current and future events, not just one.
+4. Use this for one-off exceptions (a customer needs Planner early, or should never get a specific add-on) rather than the blanket Console → Pricing promotion, which affects everyone.
+
+### Platform-wide settings
+
+1. Console → Support chat: toggle whether the in-app support chat widget is visible to organizers platform-wide.
+2. Console → Usage: aggregated usage stats across all organizations.
+3. Console → QA checklist: view results submitted from the staging QA checklist tools.
+4. Console → Referrals and Affiliate stores: manage referral tracking and affiliate storefronts.
+5. Console → Org Plans: view and adjust organization-level subscription plans (distinct from per-event Event Pass tiers).
 
 ### Manage operators
 

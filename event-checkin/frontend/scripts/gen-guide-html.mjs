@@ -2,7 +2,7 @@
 // CONTENT the SPA uses, so search engines / curl / AI fetch tools can read the
 // guide without executing JavaScript. Run after `vite build` (see package.json).
 import { writeFileSync } from 'node:fs'
-import { CONTENT } from '../src/guideContent.mjs'
+import { CONTENT, GUIDE_REVISED_AT } from '../src/guideContent.mjs'
 
 const esc = (s) => String(s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -16,7 +16,14 @@ function topicHtml(t) {
     `<img src="${esc(src)}" alt="${esc(t.title)}" loading="lazy" />`).join('\n')
   return `<section id="${esc(t.id)}">
   <h3>${esc(t.icon || '')} ${esc(t.title)}</h3>
+  ${t.intro ? `<p>${esc(t.intro)}</p>` : ''}
+  ${t.path ? `<p><b>Go to:</b> ${esc(t.path)}</p>` : ''}
+  ${t.before ? `<p><b>Before you start:</b> ${esc(t.before)}</p>` : ''}
   <ol>${steps}</ol>
+  ${t.check ? `<p><b>Check the result:</b> ${esc(t.check)}</p>` : ''}
+  ${t.troubleshoot ? `<p><b>If something is wrong:</b> ${esc(t.troubleshoot)}</p>` : ''}
+  ${t.tip ? `<p><b>Tip:</b> ${esc(t.tip)}</p>` : ''}
+  ${t.warn ? `<p><b>Warning:</b> ${esc(t.warn)}</p>` : ''}
   ${figs}
 </section>`
 }
@@ -31,7 +38,7 @@ function roleHtml(key) {
 </section>`
 }
 
-const body = ROLES.map(roleHtml).join('\n')
+const body = `<p>Revised ${esc(GUIDE_REVISED_AT)}</p>` + ROLES.map(roleHtml).join('\n')
 
 const html = `<!DOCTYPE html>
 <html lang="en">

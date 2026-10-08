@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
+import { topicSearchText } from '../helpTopicText.mjs'
 import { CONTENT } from '../guideContent.mjs'
 
 // ── UI ───────────────────────────────────────────────────────────────────────
@@ -51,6 +52,8 @@ function Topic({ t, open, onToggle, query }) {
       {open && (
         <div className="px-5 pb-5 pt-1 space-y-4">
           {t.intro && <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{t.intro}</p>}
+          {t.path && <p className="text-sm"><b>Go to:</b> {hl(t.path)}</p>}
+          {t.before && <p className="text-sm"><b>Before you start:</b> {hl(t.before)}</p>}
           {tipBadge}
           {warnBadge}
           <ol className="space-y-3">
@@ -61,6 +64,8 @@ function Topic({ t, open, onToggle, query }) {
               </li>
             ))}
           </ol>
+          {t.check && <p className="text-sm"><b>Check the result:</b> {hl(t.check)}</p>}
+          {t.troubleshoot && <p className="text-sm"><b>If something is wrong:</b> {hl(t.troubleshoot)}</p>}
           {images.length > 0 && (
             <div className={`grid gap-3 ${images.length > 1 ? 'sm:grid-cols-2' : ''}`}>
               {images.map((src) => (
@@ -105,7 +110,7 @@ export default function HelpPage({ publicMode = false }) {
     if (!query.trim()) return data.topics
     const q = query.toLowerCase()
     return data.topics.filter((t) =>
-      t.title.toLowerCase().includes(q) || t.steps.some((s) => s.toLowerCase().includes(q)))
+      topicSearchText(t).includes(q))
   }, [data, query])
 
   // open topics: all open when searching, else first open

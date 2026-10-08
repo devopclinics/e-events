@@ -97,6 +97,8 @@ changes:
 docker run --rm -v "$(pwd):/work" -w /work node:20-alpine node support-service/scripts/build_knowledge_base.mjs
 ```
 
+Use `node support-service/scripts/build_knowledge_base.mjs --check` to verify that generated support and Media Library knowledge match the Help source. The frontend Help drift check also runs this gate. Update prerequisite, workspace, expected-result and troubleshooting fields along with steps when reviewing a workflow.
+
 `app/support_policy.md` is maintained separately for contact-channel facts,
 support boundaries, terminology, escalation rules, and response-quality policy.
 The service combines it with the generated guide, splits the result by heading,

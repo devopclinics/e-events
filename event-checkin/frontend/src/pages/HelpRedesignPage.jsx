@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import RedesignShell, { Icon } from './redesign/RedesignShell'
 import { useAuth } from '../context/AuthContext'
+import { topicSearchText } from '../helpTopicText.mjs'
 import { CONTENT, GUIDE_REVISED_AT } from '../guideContent.mjs'
 import './HelpRedesignPage.css'
 
@@ -60,12 +61,16 @@ function TopicAccordion({ topic, query }) {
               <img src={topic.image} alt={`${topic.title} screenshot`} loading="lazy" />
             </a>
           )}
+          {topic.path && <p><strong>Go to:</strong> {highlight(topic.path, query)}</p>}
+          {topic.before && <p><strong>Before you start:</strong> {highlight(topic.before, query)}</p>}
           {hasBoth && <div className="hp-eyebrow">Setup <span>— follow in order</span></div>}
           {topic.steps && topic.steps.length > 0 && (
             <ol className="hp-steps">
               {topic.steps.map((s, i) => <li key={i}>{highlight(s, query)}</li>)}
             </ol>
           )}
+          {topic.check && <p><strong>Check the result:</strong> {highlight(topic.check, query)}</p>}
+          {topic.troubleshoot && <p><strong>If something is wrong:</strong> {highlight(topic.troubleshoot, query)}</p>}
           {topic.capabilities && topic.capabilities.length > 0 && (
             <>
               <div className="hp-eyebrow">Capabilities <span>— use anytime, in any order</span></div>
@@ -130,6 +135,10 @@ export default function HelpRedesignPage() {
         id: t.id,
         title: t.title,
         intro: t.intro,
+        path: t.path,
+        before: t.before,
+        check: t.check,
+        troubleshoot: t.troubleshoot,
         badge: t.badge,
         steps: t.steps || [],
         capabilities: t.capabilities || [],
@@ -141,7 +150,7 @@ export default function HelpRedesignPage() {
   }, [data, role])
 
   const filtered = categories
-    .map((c) => ({ ...c, topics: c.topics.filter((t) => !query.trim() || t.title.toLowerCase().includes(query.trim().toLowerCase())) }))
+    .map((c) => ({ ...c, topics: c.topics.filter((t) => !query.trim() || topicSearchText(t).includes(query.trim().toLowerCase())) }))
     .filter((c) => c.topics.length > 0)
 
   return (

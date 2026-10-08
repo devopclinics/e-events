@@ -87,7 +87,8 @@ class PublicSiteContractTests(unittest.TestCase):
         validated = SiteContent(**content).model_dump(mode="json")
         page = render_site(validated, "community")
         self.assertIn('href="#programme"', page)
-        self.assertIn('href="https://festio.events/speakers/demo"', page)
+        self.assertIn('href="#speakers"', page)
+        self.assertIn('src="/speakers/demo?embedded=1"', page)
         self.assertIn('href="https://festio.events/rsvp/demo"', page)
         self.assertIn('href="https://festio.events/l/LIVE26"', page)
         self.assertIn('href="https://community.example/event"', page)
@@ -291,3 +292,19 @@ class AuditSnapshotTests(unittest.TestCase):
    self.assertIn('href="#speakers"',page)
    self.assertIn('View all speakers',page)
    self.assertEqual(c,original)
+
+class EmbeddedSpeakerTests(unittest.TestCase):
+ def test_directory_only_snapshot_stays_inside_site(self):
+  from .render import render_site
+  from .modern import security_policy
+  for family in ['premium-convention', 'atrium', 'modern-professional']:
+   page=render_site({'event_name':'Demo','headline':'Demo','navigation_configured':True,'navigation':[{'id':'speakers','label':'Speakers','destination_type':'speakers','url':'https://festio.events/speakers/demo','enabled':True}]},family)
+   self.assertIn('href="#speakers"',page)
+   self.assertIn('id="speakers"',page)
+   self.assertIn('src="/speakers/demo?embedded=1"',page)
+   self.assertNotIn('href="https://festio.events/speakers/demo"',page)
+  self.assertIn("frame-src 'self'",security_policy())
+ def test_untrusted_directory_is_never_embedded(self):
+  from .render import render_site
+  page=render_site({'event_name':'Demo','speakers_directory_url':'https://untrusted.example/speakers/demo'},'atrium')
+  self.assertNotIn('<iframe',page)

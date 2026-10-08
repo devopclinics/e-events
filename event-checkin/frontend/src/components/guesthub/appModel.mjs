@@ -1,4 +1,4 @@
-export const APP_SCREENS = ['home', 'programme', 'pass', 'inbox', 'more', 'party', 'experience', 'feedback', 'resources', 'communications', 'venue', 'profile', 'meals', 'appearance', 'live', 'checklist'];
+export const APP_SCREENS = ['home', 'programme', 'pass', 'inbox', 'more', 'party', 'experience', 'feedback', 'resources', 'communications', 'venue', 'profile', 'meals', 'appearance', 'live', 'checklist', 'speakers'];
 export function readAppRoute(hash = '') {
   const [path, query] = hash.replace(/^#\/?/, '').split('?');
   const params = new URLSearchParams(query);

@@ -21,7 +21,7 @@ SCRIPT_HASH = base64.b64encode(hashlib.sha256(JS.encode()).digest()).decode()
 
 def security_policy():
     return ("default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; font-src https:; "
-            f"script-src 'sha256-{SCRIPT_HASH}'; connect-src 'none'; frame-ancestors 'none'; "
+            f"script-src 'sha256-{SCRIPT_HASH}'; connect-src 'none'; frame-src 'self'; frame-ancestors 'none'; "
             "base-uri 'none'; form-action 'none'")
 
 

@@ -1,3 +1,5 @@
+export const GUIDE_REVISED_AT = '2026-10-08'
+
 export const CONTENT = {
   // ─────────────────────────────────────────────────────────────────────────
   // ORGANIZER
@@ -114,14 +116,14 @@ export const CONTENT = {
         steps: [
           'Shared link: copy the event link and share it yourself (WhatsApp group, email, social). Or use Manual invite — search a specific guest and send them a personal link.',
           'Personal links: use Invites & RSVP to send to guests who have not been invited yet, remind no-replies, or resend links.',
-          'Pick your channels: Email (always free), SMS (uses message credits), WhatsApp (uses message credits).',
+          'Pick your channels: Email, SMS and WhatsApp. Check preflight for the current per-channel credit cost, eligible recipients and available balance before sending.',
           'Each guest receives their personal ticket QR automatically by email when they RSVP as Attending.',
           'For guests without email: if you have their phone number, their QR ticket is delivered via SMS or WhatsApp instead.',
           'Message credits are pre-purchased from the Event Pass area — top up as needed. Check your balance before a bulk send.',
           'For reminders, use Broadcast Message to nudge guests before the event or during arrival.',
         ],
         tip: 'Run a small test send to yourself first (add your own phone/email as a test guest) to confirm message formatting and delivery before sending to all guests.',
-        warn: 'WhatsApp and SMS sends consume message credits — SMS costs more per message than WhatsApp (roughly 2 credits per SMS vs 1.5 per WhatsApp message by default). A bulk send to 300 guests can use several hundred credits, not just 300. Check the estimated cost shown before sending, and check your balance first — the send will stop mid-way if you run out.',
+        warn: 'Message costs depend on the channel and current pricing. Review the per-channel estimate, blocked or unreachable recipients, and available balance in preflight. Top up if required before confirming the send; acceptance does not prove final delivery.',
       },
       {
         id: 'org-track', icon: '✅', title: 'Track RSVPs & approvals',
@@ -225,7 +227,7 @@ export const CONTENT = {
           'Guests tab, Feedback tab, and Analytics tab track each guest\'s progress through the workflow and completion rates per step.',
           'Inbound Automations and Messages let you react to step completion (e.g. a message once a guest is seated).',
         ],
-        warn: 'Step ordering matters: the default "welcome pack" preset requires consent before souvenir pickup, but consent can\'t be signed until after check-in — putting a consent-dependent step earlier than check-in will silently block guests from completing it.',
+        warn: 'Step ordering matters: the default "welcome pack" preset requires consent before souvenir pickup, and consent timing is configurable. Choose pre-arrival or after check-in in Consent settings, then order dependent steps accordingly and test with an eligible guest.',
       },
       {
         id: 'org-logistics', icon: '📦', title: 'Deliveries: ship merch, aso-ebi & gifts',
@@ -261,7 +263,7 @@ export const CONTENT = {
         img: '/media/help2-ticketing.png',
         intro: 'Sell paid tickets — general admission, VIP, donations, or external registrations — instead of (or alongside) free RSVP.',
         steps: [
-          'Open Ticket sales from the sidebar. 01 Availability: turn on "Sell tickets for this event".',
+          'Open Ticket sales from the sidebar. Confirm Ticket settlement currency before creating products: USD uses Stripe and NGN uses Paystack. Save the selected currency/provider, then turn on Sell tickets for this event. Existing products lock their currency.',
           '02 Payouts: connect Paystack or Stripe, choose whether the processor fee is added to the buyer\'s total or deducted from your proceeds, and optionally add event tax.',
           '03 Ticket types: + Add this ticket type — choose a real ticket (grants admission), a donation/sponsorship (payment only, no pass), or an external registration (price shown here, buyer registers/pays elsewhere). Set name, price, quantity, and which access level it grants.',
           '04 Catalog: review and Hide any ticket type you want to pull from sale.',
@@ -270,7 +272,7 @@ export const CONTENT = {
           '06 Live sales report: gross revenue, tickets sold, refunds, your proceeds, and a full order ledger with approve/refund actions and a downloadable CSV.',
           'A purchased ticket issues the same QR pass as a free RSVP guest — check-in works identically either way. A full refund voids that pass and releases the inventory.',
         ],
-        warn: 'Ticket sales currently runs in test mode only — payments use Stripe/Paystack test keys, so no real money changes hands yet. Treat it as a preview of the checkout flow, not a live revenue channel, until this is confirmed generally available.',
+        warn: 'Read the current payment mode and provider status after configuration loads. Test mode uses test credentials and no live charges. Live credentials configured does not prove payout verification, successful fulfillment or settlement. Confirm those before launching paid sales.',
       },
       {
         id: 'org-community', icon: '💬', title: 'FestioMe: guest community & groups',
@@ -435,7 +437,7 @@ export const CONTENT = {
           'Seating tab: use the seating chart and table assignment list for on-site reference.',
           'Orders tab: review per-table item totals for your caterer or fulfilment team.',
           'Deliveries tab: review guest names, addresses, and items for fulfilment.',
-          'Results: check-in timeline and area analytics are visible on-screen — take screenshots or use your browser print function.',
+          'Open Results → Closeout & exports to select the available report and download it. Check event scope and filters; use browser print for a visual copy of charts.',
           'After the event, set it to Ended so check-in and RSVP submissions close. The event stays in your event list with its full data for reporting — nothing is deleted or hidden.',
         ],
       },

@@ -28,6 +28,21 @@ function billingMoney(amount, currency) {
   catch { return `${currency} ${(Number(amount || 0) / 100).toFixed(2)}` }
 }
 
+const ADDON_SETUP_ROUTES = {
+  addon_seating: '/addons-redesign?tab=seating',
+  addon_menu: '/addons-redesign?tab=orders',
+  addon_logistics: '/addons-redesign?tab=logistics',
+  addon_registry: '/addons-redesign?tab=registry',
+  addon_venue_access: '/checkin-redesign?tab=zones',
+  addon_experience: '/experience-redesign',
+  addon_festiome: '/festiome-redesign',
+  addon_planner: '/planner-redesign',
+  addon_engagement: '/live-redesign',
+  addon_speakers: '/addons-redesign?tab=speakers',
+  addon_partners: '/addons-redesign?tab=partners',
+  addon_reminders: '/addons-redesign?tab=reminders',
+}
+
 const CATALOG_DESTINATIONS = {
   design_studio: { label: 'Open Design Studio', route: '/design-studio-redesign', icon: 'image' },
   experience: { label: 'Open Experience', route: '/experience-redesign', icon: 'layers' },
@@ -301,7 +316,7 @@ function BillingTab({ notify, eventId, onBuyPass, onBuyCredits, onBuyAddon }) {
             <div className="bl-tier-price">{billingMoney(addon.amount, addon.currency || billing.currency)}</div>
             {addon.description && <p className="rd-hint">{addon.description}</p>}
             <button data-plan-key={addon.key} className={`rr-btn ${purchased ? 'secondary' : 'primary'}`} style={{ width: '100%', justifyContent: 'center' }}
-              disabled={!billing.configured || !billing.is_paid || purchased} onClick={() => onBuyAddon(addon)}>
+              disabled={purchased ? !ADDON_SETUP_ROUTES[addon.key] : !billing.configured || !billing.is_paid} onClick={() => purchased ? navigate(ADDON_SETUP_ROUTES[addon.key]) : onBuyAddon(addon)}>
               {purchased ? 'Included · open setup' : 'Buy add-on'}
             </button>
           </div>

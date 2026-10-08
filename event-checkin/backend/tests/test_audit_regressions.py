@@ -205,6 +205,10 @@ async def test_content_session_picker_hides_archived_workflows_without_deleting_
     response=await ctx.client.get(f'/api/events/{eid}/live-content/sessions')
     assert response.status_code==200,response.text
     titles={r['title'] for r in response.json()}
+    assert titles == {'Audit published'}
+    response=await ctx.client.get(f'/api/events/{eid}/live-content/sessions?include_drafts=true')
+    assert response.status_code==200
+    titles={r['title'] for r in response.json()}
     assert {'Audit draft','Audit published'} <= titles
     assert 'Audit archived' not in titles
     async with _Session() as db:

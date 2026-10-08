@@ -548,7 +548,7 @@ async def put_config(event_id: str, body: EventConfigIn, ident: Identity = Depen
     if (body.provider == "stripe" and body.currency != "USD") or (body.provider == "paystack" and body.currency != "NGN"):
         raise HTTPException(400, "Stripe ticketing currently requires USD; Paystack ticketing requires NGN")
     if body.enabled and not provider_ready(body.provider):
-        raise HTTPException(503, f"{body.provider.title()} test credentials are not configured")
+        raise HTTPException(503, f"{body.provider.title()} credentials are not configured")
     cfg = await db.get(EventConfig, event_id) or EventConfig(event_id=event_id, org_id=ident.org_id)
     if cfg.currency != body.currency:
         existing = await db.scalar(select(func.count(TicketProduct.id)).where(TicketProduct.event_id == event_id))
@@ -694,7 +694,7 @@ async def create_stripe_account(event_id: str, body: StripeAccountIn,
     if ident.event_id != event_id:
         raise HTTPException(403, "Wrong event scope")
     if not provider_ready("stripe"):
-        raise HTTPException(503, "Stripe test credentials are not configured")
+        raise HTTPException(503, "Stripe credentials are not configured")
     async with httpx.AsyncClient(timeout=20) as client:
         created = await client.post("https://api.stripe.com/v1/accounts", auth=(settings.stripe_secret_key, ""), data={
             "type": "express", "country": body.country, "email": str(body.email),
@@ -724,7 +724,7 @@ async def resume_stripe_onboarding(event_id: str, account_id: str, ident: Identi
     if not account or account.org_id != ident.org_id or account.provider != "stripe":
         raise HTTPException(404, "Stripe payout account not found")
     if not provider_ready("stripe"):
-        raise HTTPException(503, "Stripe test credentials are not configured")
+        raise HTTPException(503, "Stripe credentials are not configured")
     return {"onboarding_url": await stripe_account_link(account.provider_account_id)}
 
 

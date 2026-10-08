@@ -1707,7 +1707,7 @@ export default function ExperienceRedesignPage() {
               {experienceAudit === null ? <LoadingSkeleton rows={3} variant="list" /> : (
                 experienceAudit.length === 0
                   ? <p className="rd-rowlink">No recent activity.</p>
-                  : experienceAudit.slice(0, 8).map((a) => <div key={a.id} className="ex-audit-row"><Icon name="clock" size={12}/><span>{a.event_type}{a.source ? ` · ${a.source}` : ''}</span><small>{a.occurred_at ? new Date(a.occurred_at).toLocaleString() : ''}</small></div>)
+                  : experienceAudit.slice(0, 8).map((a) => <div key={a.id} className="ex-audit-row"><Icon name="clock" size={12}/><span>{String(a.event_type || 'Activity').replaceAll('_', ' ')}{a.source ? ` · ${a.source}` : ''}</span><small>{a.occurred_at ? new Date(a.occurred_at).toLocaleString() : ''}</small></div>)
               )}
             </div>
           </div>
@@ -1918,7 +1918,7 @@ export default function ExperienceRedesignPage() {
               <div className="rd-panel-body">
                 <div className="ex-audit-list">
                   {experienceAudit === null ? <LoadingSkeleton rows={4} variant="list" /> : experienceAudit.length === 0 ? <p className="rd-rowlink">No activity yet.</p> : (
-                    experienceAudit.slice(0, 10).map((a) => <div className="ex-audit-row" key={a.id}><Icon name="clock" size={12}/><span>{a.event_type}</span><small>{a.occurred_at ? new Date(a.occurred_at).toLocaleString() : ''}</small></div>)
+                    experienceAudit.slice(0, 10).map((a) => <div className="ex-audit-row" key={a.id}><Icon name="clock" size={12}/><span>{String(a.event_type || 'Activity').replaceAll('_', ' ')}</span><small>{a.occurred_at ? new Date(a.occurred_at).toLocaleString() : ''}</small></div>)
                   )}
                 </div>
               </div>

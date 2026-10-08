@@ -36,4 +36,8 @@ def test_session_picker_excludes_archived_but_history_is_explicitly_available():
         assert asyncio.run(list_program_sessions(identity,db,include_archived))==[]
         sql=str(db.execute.call_args.args[0].compile(compile_kwargs={'literal_binds':True}))
         assert "event_id = 'event'" in sql and "org_id = 'org'" in sql
-        assert ("status IN ('published', 'draft')" in sql) is (not include_archived)
+        assert ("status IN ('published')" in sql) is (not include_archived)
+    db=SimpleNamespace(execute=AsyncMock(return_value=result([])))
+    assert asyncio.run(list_program_sessions(identity,db,False,True))==[]
+    sql=str(db.execute.call_args.args[0].compile(compile_kwargs={'literal_binds':True}))
+    assert "status IN ('published', 'draft')" in sql

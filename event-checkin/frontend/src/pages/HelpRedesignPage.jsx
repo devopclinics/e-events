@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import RedesignShell, { Icon } from './redesign/RedesignShell'
 import { useAuth } from '../context/AuthContext'
-import { CONTENT } from '../guideContent.mjs'
+import { CONTENT, GUIDE_REVISED_AT } from '../guideContent.mjs'
 import './HelpRedesignPage.css'
 
 // guideContent.mjs is flat per role (label/blurb/topics[]) — no category
@@ -149,7 +149,7 @@ export default function HelpRedesignPage() {
       <div className="rr-pagehead">
         <div>
           <div className="rr-title-row"><h1>Help</h1></div>
-          <div className="rr-meta">Guides for getting the most out of Festio</div>
+          <div className="rr-meta">Guides for getting the most out of Festio · Revised {GUIDE_REVISED_AT}</div>
         </div>
       </div>
 

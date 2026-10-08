@@ -16,7 +16,7 @@ function selections(guest) {
   Object.entries(guest?.single || {}).forEach(([categoryId, s]) => out.push({ categoryId, name: text(s?.category_name, 'Category'), choices: [text(s?.item_name)].filter(Boolean) }))
   Object.entries(guest?.multi || {}).forEach(([categoryId, s]) => out.push({ categoryId, name: text(s?.category_name, 'Category'), choices: list(s?.items).map(String) }))
   Object.entries(guest?.combo || {}).forEach(([categoryId, s]) => out.push({ categoryId, name: text(s?.category_name, 'Category'), choices: [text(s?.combination_name), ...list(s?.items).map(String)].filter(Boolean) }))
-  return out.filter((item) => item.name)
+  return out.filter((item) => item.name && item.choices.length > 0)
 }
 
 function OrderCard({ order, working, multiCategory, onServe, onToggleCategory }) {
@@ -96,8 +96,9 @@ export default function KitchenRedesignPage() {
   }
 
   const guests = list(data?.guests)
+  const hasPendingOrder = (guest) => selections(guest).some(item => data?.multi_category_serving ? !guest.served_categories?.[item.categoryId] : !guest.meal_served)
   const tables = useMemo(() => [...new Set(guests.map((g) => g.table_name).filter(Boolean))].sort(), [guests])
-  const filtered = guests.filter((g) => (status === 'all' || (status === 'served' ? !!g.meal_served : !g.meal_served && selections(g).length > 0)) && (table === 'all' || g.table_name === table))
+  const filtered = guests.filter((g) => (status === 'all' || (status === 'served' ? !!g.meal_served : hasPendingOrder(g))) && (table === 'all' || g.table_name === table))
   const tally = useMemo(() => {
     const counts = new Map()
     guests.flatMap((guest) => selections(guest).filter((item) => data?.multi_category_serving ? !guest.served_categories?.[item.categoryId] : !guest.meal_served)).forEach((item) => counts.set(item.name, (counts.get(item.name) || 0) + 1))
@@ -105,7 +106,7 @@ export default function KitchenRedesignPage() {
   }, [guests, data?.multi_category_serving])
   const grouped = tables.map((name) => {
     const group = guests.filter((g) => g.table_name === name)
-    return { name, pending: group.filter((g) => !g.meal_served && selections(g).length).length, served: group.filter((g) => g.meal_served).length, total: group.length }
+    return { name, pending: group.filter((g) => hasPendingOrder(g)).length, served: group.filter((g) => g.meal_served).length, total: group.length }
   })
   const event = events.find((item) => item.id === eventId)
   const served = guests.filter((g) => g.meal_served).length
@@ -115,7 +116,7 @@ export default function KitchenRedesignPage() {
       {events.length > 1 && <select className="rr-select" value={eventId} onChange={(e) => setEventId(e.target.value)}><option value="">Select event</option>{events.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select>}</div>
     {error && <ErrorRetryState message={error} onRetry={load}/>}
     {loading ? <LoadingSkeleton rows={6}/> : !eventId ? <EmptyState icon="card" title="Select an event" body="Choose an event with order access."/> : <>
-      <div className="kn-summary"><div className="kn-summary-pill kn-tone-amber"><strong>{guests.length - served}</strong><small>Pending</small></div><div className="kn-summary-pill kn-tone-gray"><strong>{served}</strong><small>Served</small></div></div>
+      <div className="kn-summary"><div className="kn-summary-pill kn-tone-amber"><strong>{guests.filter((guest) => hasPendingOrder(guest)).length}</strong><small>Pending</small></div><div className="kn-summary-pill kn-tone-gray"><strong>{served}</strong><small>Served</small></div></div>
       <div className="kn-subtabs"><button className={`kn-subtab${tab === 'orders' ? ' active' : ''}`} onClick={() => setTab('orders')}>Order queue</button><button className={`kn-subtab${tab === 'tally' ? ' active' : ''}`} onClick={() => setTab('tally')}>Prep tally</button><button className={`kn-subtab${tab === 'tables' ? ' active' : ''}`} onClick={() => setTab('tables')}>By table</button></div>
       {tab === 'orders' && <><div className="kn-filters"><div className="kn-filter-group"><button className={`kn-filter-btn${table === 'all' ? ' active' : ''}`} onClick={() => setTable('all')}>All tables</button>{tables.map((name) => <button className={`kn-filter-btn${table === name ? ' active' : ''}`} onClick={() => setTable(name)} key={name}>{name}</button>)}</div><div className="kn-filter-group">{[['pending','Pending'],['served','Served'],['all','All']].map(([key,label]) => <button className={`kn-filter-btn${status === key ? ' active' : ''}`} onClick={() => setStatus(key)} key={key}>{label}</button>)}</div></div>
         {!filtered.length ? <EmptyState icon="check" title="Nothing outstanding" body="No orders match the current filters."/> : <div className="kn-order-grid">{filtered.map((order) => <OrderCard key={order.guest_id} order={order} working={working === order.guest_id || (working && working.startsWith(`${order.guest_id}:`)) ? working : ''} multiCategory={!!data?.multi_category_serving} onServe={markServed} onToggleCategory={toggleCategoryServed}/>)}</div>}</>}

@@ -61,11 +61,11 @@ export function PresenterMaterialsWorkspace({ eventId, sessions = [], displays =
 }
 
 export function CertificatesWorkspace({ eventId, sessions: suppliedSessions = [] }) {
-  const [templates,setTemplates]=useState([]),[selected,setSelected]=useState(null),[candidates,setCandidates]=useState([]),[certificates,setCertificates]=useState([]),[chosen,setChosen]=useState(new Set()),[notice,setNotice]=useState(null),[busy,setBusy]=useState(false),[report,setReport]=useState(null),[availableSessions,setAvailableSessions]=useState(suppliedSessions)
+  const [templates,setTemplates]=useState([]),[selected,setSelected]=useState(null),[candidates,setCandidates]=useState([]),[certificates,setCertificates]=useState([]),[chosen,setChosen]=useState(new Set()),[notice,setNotice]=useState(null),[busy,setBusy]=useState(false),[report,setReport]=useState(null),[availableSessions,setAvailableSessions]=useState(suppliedSessions.filter(session => session.status === 'published'))
   const eligibilityRequest = useRef(0)
   const refreshCandidates = async (templateId) => { const revision=++eligibilityRequest.current; setCandidates([]); setChosen(new Set()); const rows=await api.listCertificateCandidates(eventId,templateId); if(revision===eligibilityRequest.current)setCandidates(rows) }
   const load = async () => { const ts=await api.listCertificateTemplates(eventId); setTemplates(ts); const template=selected ? ts.find(t=>t.id===selected.id)||ts[0] : ts[0]; setSelected(template||null); setCertificates(await api.listEventCertificates(eventId)); if(template) await refreshCandidates(template.id) }
-  useEffect(()=>{ load().catch(e=>setNotice({type:'error',text:e.message})); api.listLiveContentSessions(eventId).then(setAvailableSessions).catch(()=>setAvailableSessions(suppliedSessions)) },[eventId])
+  useEffect(()=>{ load().catch(e=>setNotice({type:'error',text:e.message})); api.listLiveContentSessions(eventId).then(setAvailableSessions).catch(()=>setAvailableSessions(suppliedSessions.filter(session => session.status === 'published'))) },[eventId])
   useEffect(()=>{ if(selected) refreshCandidates(selected.id).catch(e=>setNotice({type:'error',text:e.message})) },[selected?.id])
   const eligible=useMemo(()=>candidates.filter(c=>c.eligible&&!c.issued),[candidates])
   const design={...DEFAULT_DESIGN,...(selected?.design||{})}, eligibility={minimum_sessions:1,require_event_checkin:true,required_session_ids:[],...(selected?.eligibility||{})}

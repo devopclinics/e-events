@@ -123,11 +123,11 @@ async def _validate_session(event_id, step_id, db):
 
 
 @router.get("/{event_id}/live-content/sessions")
-async def sessions(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_member)):
+async def sessions(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_member), include_drafts: bool = False):
     await _event(event_id, db)
     rows = (await db.execute(select(ExperienceStep)
         .join(ExperienceWorkflow, ExperienceWorkflow.id == ExperienceStep.workflow_id)
-        .where(ExperienceWorkflow.event_id == event_id, ExperienceWorkflow.status.in_(("published", "draft")), ExperienceStep.type == "session_attendance",
+        .where(ExperienceWorkflow.event_id == event_id, ExperienceWorkflow.status.in_(("published", "draft") if include_drafts else ("published",)), ExperienceStep.type == "session_attendance",
                ExperienceStep.enabled.is_(True)).order_by(ExperienceStep.sort_order))).scalars().all()
     return [{"id": row.id, "title": row.title, "description": row.description,
              "config": row.config or {}} for row in rows]

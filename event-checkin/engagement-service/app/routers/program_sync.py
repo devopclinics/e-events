@@ -126,12 +126,13 @@ async def list_program_sessions(
     identity: Identity = Depends(current_identity),
     db: AsyncSession = Depends(get_db),
     include_archived: bool = False,
+    include_drafts: bool = False,
 ):
     require_staff(identity)
     statement = select(ProgramSession).where(
         ProgramSession.org_id == identity.org_id, ProgramSession.event_id == identity.event_id)
     if not include_archived:
-        statement = statement.where(ProgramSession.status.in_(("published", "draft")))
+        statement = statement.where(ProgramSession.status.in_(("published", "draft") if include_drafts else ("published",)))
     sessions = (await db.execute(statement.order_by(
         ProgramSession.sort_order, ProgramSession.starts_at, ProgramSession.title))).scalars().all()
     output: list[ProgramSessionOut] = []

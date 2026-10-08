@@ -1793,7 +1793,7 @@ function FestioLiveEventPage({ eventId }) {
         <select className="rr-select" aria-label="Filter by Experience program session" value={programFilter} onChange={(event) => setProgramFilter(event.target.value)}>
           <option value="">All program sessions</option>
           <option value="event-wide">Event-wide only</option>
-          {(programSessions || []).map((session) => <option key={session.source_step_id} value={session.source_step_id}>{session.title}{session.room ? ` · ${session.room}` : ''}</option>)}
+          {(programSessions || []).filter(session => session.status === 'published').map((session) => <option key={session.source_step_id} value={session.source_step_id}>{session.title}{session.room ? ` · ${session.room}` : ''}</option>)}
         </select>
         {programFilter && <button type="button" onClick={() => setProgramFilter('')}>Clear filter</button>}
       </div>}

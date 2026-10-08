@@ -111,3 +111,27 @@ async def test_auto_issue_honors_required_sessions_and_preserves_issued_snapshot
         assert len(created) == 1
         assert created[0].snapshot["sessions_attended"] == 1
         assert created[0].snapshot["eligibility"]["required_session_ids"] == [required.id]
+
+
+@pytest.mark.asyncio
+async def test_session_choices_use_published_workflow_not_its_draft_copy(ctx):
+    ctx.login(ctx.ids["user_a"])
+    event_id = ctx.ids["event_a"]
+    ids = {}
+    async with _Session() as db:
+        for version, status in enumerate(("published", "draft", "archived"), start=1):
+            workflow = ExperienceWorkflow(event_id=event_id, name="Programme", status=status, version=version)
+            db.add(workflow)
+            await db.flush()
+            step = ExperienceStep(workflow_id=workflow.id, key="workshop", type="session_attendance", title="Workshop", enabled=True)
+            db.add(step)
+            await db.flush()
+            ids[status] = step.id
+        await db.commit()
+    response = await ctx.client.get(f"/api/events/{event_id}/live-content/sessions")
+    assert response.status_code == 200
+    assert [row["id"] for row in response.json()] == [ids["published"]]
+    response = await ctx.client.get(f"/api/events/{event_id}/live-content/sessions?include_drafts=true")
+    assert {row["id"] for row in response.json()} == {ids["published"], ids["draft"]}
+    ctx.login(ctx.ids["user_b"])
+    assert (await ctx.client.get(f"/api/events/{event_id}/live-content/sessions")).status_code == 404

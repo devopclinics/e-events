@@ -29,7 +29,7 @@ class FakeProvider(PaymentProvider):
 class StripeProvider(PaymentProvider):
     async def create_checkout(self, *, order_id, access_token, email, amount, currency, account_id, fee):
         if not settings.stripe_secret_key:
-            raise HTTPException(503, "Stripe test mode is not configured")
+            raise HTTPException(503, "Stripe credentials are not configured")
         data = {
             "mode": "payment", "customer_email": email,
             "success_url": f"{settings.public_base_url}/tickets/orders/{order_id}?token={access_token}&checkout=success",
@@ -67,7 +67,7 @@ class StripeProvider(PaymentProvider):
 class PaystackProvider(PaymentProvider):
     async def create_checkout(self, *, order_id, access_token, email, amount, currency, account_id, fee):
         if not settings.paystack_secret_key:
-            raise HTTPException(503, "Paystack test mode is not configured")
+            raise HTTPException(503, "Paystack credentials are not configured")
         payload = {"email": email, "amount": amount, "currency": currency,
                    "reference": f"festio_{order_id}",
                    "callback_url": f"{settings.public_base_url}/tickets/orders/{order_id}?token={access_token}&checkout=success",

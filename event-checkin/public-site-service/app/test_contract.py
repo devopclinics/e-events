@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pydantic import ValidationError
 from .render import render_site
 from .schemas import SiteContent, SiteUpsert
@@ -194,7 +194,7 @@ class PublicSiteContractTests(unittest.TestCase):
 
     def test_countdown_shows_days_to_go_matching_rsvp_page_wording(self):
         content = self.sample()
-        content["start_date"] = (datetime.now() + timedelta(days=10)).strftime("%B %d, %Y")
+        content["start_date"] = (datetime.now(timezone.utc) + timedelta(days=10)).strftime("%B %d, %Y")
         validated = SiteContent(**content).model_dump(mode="json")
         for family in ("community", "modern-professional"):
             page = render_site(validated, family)
@@ -202,7 +202,7 @@ class PublicSiteContractTests(unittest.TestCase):
 
     def test_countdown_says_tomorrow_on_the_day_before(self):
         content = self.sample()
-        content["start_date"] = (datetime.now() + timedelta(days=1)).strftime("%B %d, %Y")
+        content["start_date"] = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%B %d, %Y")
         validated = SiteContent(**content).model_dump(mode="json")
         page = render_site(validated, "community")
         self.assertIn("Tomorrow!", page)
@@ -210,7 +210,7 @@ class PublicSiteContractTests(unittest.TestCase):
 
     def test_countdown_is_hidden_once_the_event_has_started(self):
         content = self.sample()
-        content["start_date"] = datetime.now().strftime("%B %d, %Y")
+        content["start_date"] = datetime.now(timezone.utc).strftime("%B %d, %Y")
         validated = SiteContent(**content).model_dump(mode="json")
         page = render_site(validated, "community")
         self.assertNotIn('<span class="countdown-chip">', page)

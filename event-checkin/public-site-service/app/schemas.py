@@ -21,6 +21,9 @@ class Session(BaseModel):
     day: str = Field(default="", max_length=40)
     date: str = Field(default="", max_length=40)
     title: str = Field(min_length=1, max_length=160)
+    display_title: str = Field(default="", max_length=120)
+    display_summary: str = Field(default="", max_length=240)
+    image_alt: str = Field(default="", max_length=300)
     time: str = Field(default="", max_length=80)
     venue: str = Field(default="", max_length=120)
     audience: str = Field(default="", max_length=120)
@@ -156,6 +159,15 @@ class SiteContent(BaseModel):
     eyebrow: str = Field(default="", max_length=100)
     headline: str = Field(min_length=1, max_length=220)
     summary: str = Field(default="", max_length=1200)
+    headline_highlight: str = Field(default="", max_length=100)
+    intro_title: str = Field(default="", max_length=160)
+    intro_summary: str = Field(default="", max_length=1200)
+    intro_eyebrow: str = Field(default="", max_length=100)
+    closing_title: str = Field(default="", max_length=160)
+    closing_summary: str = Field(default="", max_length=400)
+    venue_image_url: HttpUrl | None = None
+    venue_image_alt: str = Field(default="", max_length=300)
+    venue_summary: str = Field(default="", max_length=600)
     timezone: str = "UTC"
     use_event_branding: bool = False
     use_template_style: bool = True
@@ -220,7 +232,7 @@ class SiteContent(BaseModel):
     navigation_configured: bool = False
     navigation: list[NavigationItem] = Field(default_factory=list, max_length=20)
 
-    @field_validator("venue_url", "hero_image_url", "feature_image_url", "logo_url", "festio_live_url", "festiome_url", "guesthub_url", mode="before")
+    @field_validator("venue_image_url", "venue_url", "hero_image_url", "feature_image_url", "logo_url", "festio_live_url", "festiome_url", "guesthub_url", mode="before")
     @classmethod
     def blank_optional_url_is_none(cls, value):
         return None if value in (None, "") else value
@@ -249,7 +261,7 @@ class SiteUpsert(BaseModel):
         "modern-professional", "clean-elegant", "storytelling", "bold-dynamic",
         "card-friendly", "conference-programme", "split-visual", "immersive",
         "programme-showcase", "elegant-countdown",
-        "atrium", "orbit", "editorial", "spectrum", "horizon",
+        "premium-convention", "atrium", "orbit", "editorial", "spectrum", "horizon",
         "pathway", "atlas", "assembly", "halo", "mosaic",
     ] = "community"
     content: SiteContent

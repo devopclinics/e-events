@@ -117,7 +117,7 @@ def _resolve_navigation(content: dict, connections: dict) -> dict:
         item = dict(raw)
         source = connections.get(item.get("destination_type"))
         if item.get("destination_type") == "section":
-            allowed = {"#programme": "programme" in result.get("visible_sections", []), "#tracks": "tracks" in result.get("visible_sections", []) and bool(result.get("tracks")), "#speakers": bool(result.get("speakers")), "#venue": bool(result.get("venue") or result.get("venue_facts")), "#registration": bool(result.get("registration_facts")), "#faq": bool(result.get("faqs")), "#contact": bool(contact_email), "#connect": "connect" in result.get("visible_sections", [])}
+            allowed = {"#about": bool(result.get("intro_title") or result.get("intro_summary")), "#programme": "programme" in result.get("visible_sections", []), "#tracks": "tracks" in result.get("visible_sections", []) and bool(result.get("tracks")), "#speakers": bool(result.get("speakers")), "#venue": bool(result.get("venue") or result.get("venue_facts")), "#registration": bool(result.get("registration_facts")), "#faq": bool(result.get("faqs")), "#contact": bool(contact_email), "#connect": "connect" in result.get("visible_sections", [])}
             requested = bool(item.get("enabled", True) if item.get("requested_enabled") is None else item["requested_enabled"])
             item["requested_enabled"] = requested
             item["enabled"] = requested and allowed.get(item.get("url"), False)

@@ -71,3 +71,15 @@ async def test_published_brand_and_event_facts_are_resolved_authoritatively(ctx,
   assert result['image_fit']=='contain' and result['image_alt']=='Event poster'
   assert result['start_date'].startswith('2026-12-23T19:00:00')
   assert result['timezone']=='America/Chicago'
+
+
+def test_event_story_navigation_tracks_optional_content():
+ content={'intro_title':'Why attend','navigation':[{'id':'about','destination_type':'section','url':'#about','enabled':True}]}
+ result=sites._resolve_navigation(content,{})
+ assert result['navigation'][0]['enabled'] is True
+ assert result['navigation'][0]['url']=='#about'
+ result['intro_title']=''
+ hidden=sites._resolve_navigation(result,{})
+ assert hidden['navigation'][0]['enabled'] is False
+ hidden['intro_summary']='An event for our community.'
+ assert sites._resolve_navigation(hidden,{})['navigation'][0]['enabled'] is True

@@ -13,7 +13,7 @@ from .templates import MODERN_TEMPLATES
 from .community import safe_url, safe_destination, navigation_markup, facts_markup, event_datetime, date_label, featured_sessions, programme_heading, programme_handoff
 
 ROOT = Path(__file__).parent
-CSS = (ROOT / "modern.css").read_text()
+CSS = (ROOT / "modern.css").read_text() + "\n" + (ROOT / "premium.css").read_text()
 JS = (ROOT / "modern.js").read_text()
 ART = json.loads((ROOT / "modern_art.json").read_text())
 SCRIPT_HASH = base64.b64encode(hashlib.sha256(JS.encode()).digest()).decode()
@@ -50,7 +50,7 @@ def artwork(family, content):
     start = event_datetime(content.get("start_date"), content.get("timezone") or "UTC")
     end = event_datetime(content.get("end_date"), content.get("timezone") or "UTC")
     year = str(start.year) if start else ""
-    art = ART[family]
+    art = ART.get(family, ART["atrium"])
     art = art.replace('FAITH &nbsp; / &nbsp; FAMILY &nbsp; / &nbsp; FUTURE', 'DISCOVER &nbsp; / &nbsp; CONNECT &nbsp; / &nbsp; BELONG')
     art = art.replace('PLATFORM<br><b>26</b>', f'EVENT<br><b>{year[-2:] if year else "✦"}</b>')
     art = art.replace('>Faith<', '>Discover<').replace('>Family<', '>Connect<').replace('>Learning<', '>Explore<')
@@ -67,26 +67,37 @@ def artwork(family, content):
 
 def programme(content):
     sessions = featured_sessions(content)
-    days = list(dict.fromkeys(s.get('date') or s.get('day') or 'Programme' for s in sessions))
-    day_names = {key: next((s.get('day') for s in sessions if (s.get('date') or s.get('day') or 'Programme') == key and s.get('day')), date_label(key, content.get('timezone') or 'UTC')) for key in days}
-    palette = ['#b17d42','#6979b9','#409380','#a06c9c','#467c9a']
-    track_colors = {t['title']: color(t.get('color'),palette[i%len(palette)]) for i,t in enumerate(content.get('tracks') or [])}
+    palette = ['#b17d42', '#6979b9', '#409380', '#a06c9c', '#467c9a']
+    track_colors = {t['title']: color(t.get('color'), palette[i % len(palette)]) for i, t in enumerate(content.get('tracks') or [])}
+    categories = list(dict.fromkeys(s.get('track') or s.get('audience') or '' for s in sessions))
+    filters = ''
+    if len(categories) > 1:
+        filters = '<div class="highlight-filters" data-highlight-controls hidden role="group" aria-label="Filter featured programmes"><button type="button" data-highlight-filter="all" aria-pressed="true">All highlights</button>' + ''.join(f'<button type="button" data-highlight-filter="{i}" aria-pressed="false">{e(label or "Other highlights")}</button>' for i, label in enumerate(categories)) + '</div>'
     cards = []
-    for i,s in enumerate(sessions):
-        day = s.get('date') or s.get('day') or 'Programme'
-        track = s.get('track') or ''
-        picture = safe_url(s.get('image_url'))
-        image = f'<img class="session-image" src="{picture}" alt="" loading="lazy">' if picture else ''
-        meta = ' · '.join(str(s[k]) for k in ('audience','venue') if s.get(k))
-        speaker = f'<p class="session-speaker">With {e(s["speaker"])}</p>' if s.get('speaker') else ''
-        description = f'<p class="session-description">{e(s["description"])}</p>' if s.get('description') else ''
-        cta = link({'label':s.get('action_label') or 'Open activity','url':s.get('action_url')},'text-btn')
-        details = f'<details class="session-details"><summary>Explore session <span aria-hidden="true">↗</span></summary><div><p>{e(day_names[day])} · {e(s.get("time") or "Time to be confirmed")}</p>{description}{speaker}{cta}</div></details>' if description or speaker or cta else ''
-        cards.append(f'<article class="session" data-session data-day="{days.index(day)}" data-track="{e(track)}" data-audience="{e(s.get("audience") or "")}" style="--session-color:{track_colors.get(track,palette[i%len(palette)])}">{image}<div class="session-top"><time>{e(s.get("time") or "Time to be confirmed")}</time><span>{e(track)}</span></div><small class="session-day">{e(day_names[day])}</small><h3>{e(s.get("title") or "Session")}</h3>{f"<p class=session-audience>{e(meta)}</p>" if meta else ""}{details}</article>')
+    for i, session in enumerate(sessions):
+        track = session.get('track') or ''
+        picture = safe_url(session.get('image_url'))
+        image = f'<img class="session-image" src="{picture}" alt="{e(session.get("image_alt") or "")}" loading="lazy">' if picture else '<div class="highlight-ornament" aria-hidden="true"><i></i><i></i><i></i></div>'
+        date = session.get('day') or date_label(session.get('date'), content.get('timezone') or 'UTC')
+        when = ' · '.join(x for x in (date, session.get('time')) if x)
+        original = session.get('title') or 'Session'
+        title = session.get('display_title') or original
+        summary = f'<p class="highlight-summary">{e(session["display_summary"])}</p>' if session.get('display_summary') else ''
+        meta = ' · '.join(str(session[k]) for k in ('audience', 'venue') if session.get(k))
+        details = []
+        if title != original: details.append(f'<p class="source-session-title">{e(original)}</p>')
+        if when: details.append(f'<p>{e(when)}</p>')
+        if meta: details.append(f'<p>{e(meta)}</p>')
+        if session.get('description'): details.append(f'<p class="session-description">{e(session["description"])}</p>')
+        if session.get('speaker'): details.append(f'<p class="session-speaker">With {e(session["speaker"])}</p>')
+        details.append(link({'label': session.get('action_label') or 'Open activity', 'url': session.get('action_url')}, 'text-btn'))
+        detail_markup = '<details class="session-details"><summary>Explore session <span aria-hidden="true">↗</span></summary><div>' + ''.join(details) + '</div></details>' if any(details) else ''
+        category = categories.index(track or session.get('audience') or '')
+        cards.append(f'<article class="session highlight-card {"has-image" if picture else "no-image"}" data-session data-category="{category}" style="--session-color:{track_colors.get(track, palette[i % len(palette)])}">{image}<div class="highlight-content"><span class="highlight-kicker">{e(track or session.get("audience") or "Event highlight")}</span><h3>{e(title)}</h3>{summary}{detail_markup}</div></article>')
     demo = any(str(s.get('description') or '').lstrip().lower().startswith('demo draft:') for s in sessions)
     notice = '<div class="draft-note"><strong>Demo programme</strong><span>Not an approved timetable. Open session details for source notes, assumptions and information awaiting organizer confirmation.</span></div>' if demo else ''
-    summary = content.get('programme_summary') or ''
-    return '<section class="programme" id="programme">'+section_heading(programme_heading(content),summary,'Event highlights')+notice+(f'<p class="timezone">Times: {e(content.get("timezone") or "UTC")}</p>' if sessions else '')+'<div class="sessions">'+(''.join(cards) or '<p class="empty">Featured programmes will be announced soon.</p>')+'</div>'+programme_handoff(content,'btn')+'</section>'
+    timezone = f'<p class="timezone">Programme timezone: {e(content.get("timezone") or "UTC")}</p>' if sessions else ''
+    return '<section class="programme" id="programme">' + section_heading(programme_heading(content), content.get('programme_summary') or '', 'Find your moment') + notice + filters + f'<div class="sessions featured-grid" data-count="{len(cards)}">' + (''.join(cards) or '<p class="empty">Featured programmes will be announced soon.</p>') + '</div>' + timezone + programme_handoff(content, 'btn') + '</section>'
 
 
 
@@ -97,22 +108,40 @@ def render_modern(content, family, *, preview=False):
     accent = t['accent'] if use_style else color(content.get('accent_color'),t['accent'])
     dark = family in ('orbit','horizon','assembly')
     surface = {'orbit':'#11192a','horizon':'#183b38','assembly':'#202820'}.get(family,'#ffffff')
-    colors = f"--bg:{t['bg']};--ink:{t['ink']};--color:{primary};--accent:{accent};--muted:{t['muted']};--surface:{surface};--line:{'#ffffff25' if dark else '#233b3026'};--tint:{'#ffffff0d' if dark else '#253b3008'};--button-ink:{contrast(primary)};--primary:{primary}"
+    colors = f"--bg:{t['bg']};--ink:{t['ink']};--color:{primary};--accent:{accent};--muted:{t['muted']};--surface:{surface};--line:{'#ffffff25' if dark else '#233b3026'};--tint:{'#ffffff0d' if dark else '#253b3008'};--button-ink:{contrast(primary)};--primary:{primary};--accent-ink:{contrast(accent)}"
+    hero_highlight = accent if contrast(accent) != "#ffffff" else "#ffffff"
+    colors += f";--hero-highlight:{hero_highlight}"
     visible = set(content.get('visible_sections') if content.get('visible_sections') is not None else ['stats','programme','tracks','connect'])
     name = e(content.get('event_name') or 'Event')
     logo = safe_url(content.get('logo_url'))
     brand = f'<img class="site-logo" src="{logo}" alt="{e(content.get("logo_alt") or "Event logo")}">' if logo else '<span class="brand-symbol" aria-hidden="true">✦</span>'
     nav = navigation_markup(content)
-    header = f'<header class="nav"><a class="brand" href="#home">{brand}<span>{name}</span></a><nav class="nav-links" aria-label="Event">{nav}</nav><details class="mobile-menu"><summary>Menu</summary><nav aria-label="Event mobile">{nav}</nav></details></header>'
+    header_action = link(content.get('primary_action'), 'btn header-action')
+    header = f'<header class="nav"><a class="brand" href="#home">{brand}<span>{name}</span></a><nav class="nav-links" aria-label="Event">{nav}</nav><details class="mobile-menu"><summary>Menu</summary><nav aria-label="Event mobile">{nav}</nav></details>{header_action}</header>'
     start = date_label(content.get('start_date'), content.get('timezone') or 'UTC')
     end = date_label(content.get('end_date'), content.get('timezone') or 'UTC')
     dates = ' – '.join(dict.fromkeys(x for x in (start,end) if x))
     action_primary = link(content.get('primary_action'))
     secondary = link(content.get('secondary_action'),'btn secondary')
     if not secondary and 'programme' in visible: secondary = '<a class="btn secondary" href="#programme">Featured programmes</a>'
+    title = content.get('headline') or content.get('event_name') or 'Welcome'
+    highlight = content.get('headline_highlight') or ''
+    headline = e(title)
+    if highlight and highlight in title:
+        before, after = title.split(highlight, 1)
+        headline = e(before) + '<em>' + e(highlight) + '</em>' + e(after)
+    fit = content.get('image_fit') if content.get('image_fit') in ('cover', 'contain') else 'cover'
+    position = content.get('image_position') if content.get('image_position') in ('center', 'top', 'bottom', 'left', 'right') else 'center'
+    colors += f';--hero-fit:{fit};--hero-position:{position}'
+    if not use_style:
+        font = {'modern-sans':'Arial,sans-serif', 'classic-serif':'Georgia,serif', 'elegant-serif':'Georgia,serif', 'display-rounded':'Trebuchet MS,sans-serif', 'bold-sans':'Arial Black,Arial,sans-serif'}.get(content.get('font_pairing'), 'Arial,sans-serif')
+        colors += f';--heading-font:{font}'
     hero_url = safe_url(content.get('feature_image_url') or content.get('hero_image_url'))
     media = f'<img class="uploaded-hero" src="{hero_url}" alt="{e(content.get("image_alt") or "")}">' if hero_url else f'<div aria-hidden="true">{artwork(family,content)}</div>'
-    hero = f'<section class="hero" id="home"><div class="hero-copy"><div class="eyebrow">{e(content.get("eyebrow") or content.get("event_name") or "Welcome")}</div><h1>{e(content.get("headline") or content.get("event_name") or "Welcome")}</h1><p class="hero-summary">{e(content.get("summary") or "")}</p><div class="hero-actions">{action_primary}{secondary}</div><div class="hero-meta"><span>{e(dates)}</span><span>{e(content.get("venue") or "")}</span></div></div><div class="hero-visual">{media}</div></section>'
+    hero = f'<section class="hero {"with-photo" if hero_url else "without-photo"}" id="home"><div class="hero-copy"><div class="eyebrow">{e(content.get("eyebrow") or content.get("event_name") or "Welcome")}</div><h1>{headline}</h1><p class="hero-summary">{e(content.get("summary") or "")}</p><div class="hero-actions">{action_primary}{secondary}</div><div class="hero-meta"><span>{e(dates)}</span><span>{e(content.get("venue") or "")}</span></div></div><div class="hero-visual">{media}</div></section>'
+    intro = ''
+    if content.get('intro_title') or content.get('intro_summary'):
+        intro = f'<section class="event-intro" id="about"><div><span class="eyebrow">{e(content.get("intro_eyebrow") or "The experience")}</span><h2>{e(content.get("intro_title") or "Discover the event")}</h2></div><p>{e(content.get("intro_summary") or "")}</p></section>'
     stats = ''.join(f'<div><strong>{e(str(x.get("value") or ""))} {e(x.get("label") or "")}</strong><span>{e(x.get("detail") or "")}</span></div>' for x in content.get('stats') or []) if 'stats' in visible else ''
     glance = f'<div class="micro-facts">{stats}</div>' if stats else ''
     audience = ''
@@ -145,7 +174,9 @@ def render_modern(content, family, *, preview=False):
     connect='<section class="community" id="connect">'+section_heading('The event, connected.','','Stay in the loop')+'<div class="tools">'+''.join(connections)+'</div></section>' if 'connect' in visible and connections else ''
     venue=''
     if content.get('venue') or content.get('venue_address') or content.get('venue_facts'):
-        venue=f'<section class="venue" id="venue"><div><div class="eyebrow">Venue &amp; travel</div><h2>{e(content.get("venue") or "Plan your arrival")}</h2><p>{e(content.get("venue_address") or "")}</p>{link({"label":"Open directions", "url":content.get("venue_url")})}<div class="facts">{facts_markup(content.get("venue_facts"))}</div></div><div class="venue-art" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div></section>'
+        venue_image = safe_url(content.get('venue_image_url'))
+        venue_media = f'<img class="venue-photo" src="{venue_image}" alt="{e(content.get("venue_image_alt") or content.get("venue") or "Event venue")}" loading="lazy">' if venue_image else ''
+        venue=f'<section class="venue" id="venue"><div><div class="eyebrow">Venue &amp; travel</div><h2>{e(content.get("venue") or "Plan your arrival")}</h2><p class="venue-summary">{e(content.get("venue_summary") or "")}</p><p>{e(content.get("venue_address") or "")}</p>{link({"label":"Open directions", "url":content.get("venue_url")})}<div class="facts">{facts_markup(content.get("venue_facts"))}</div></div>{venue_media}</section>'
     faq='<section class="faq" id="faq"><div>'+section_heading('Helpful answers','','Before you arrive')+'</div><div>'+''.join(f'<details><summary>{e(f.get("question") or "")}</summary><p>{e(f.get("answer") or "")}</p></details>' for f in content.get('faqs') or [])+'</div></section>' if content.get('faqs') else ''
     registration=f'<section class="content-section" id="registration">{section_heading("Registration details")}<div class="facts">{facts_markup(content.get("registration_facts"))}</div>{action_primary}</section>' if content.get('registration_facts') else ''
     exhibitors=''
@@ -159,9 +190,13 @@ def render_modern(content, family, *, preview=False):
     heritage=f'<p class="heritage">{e(content["heritage_message"])}</p>' if content.get('heritage_message') else ''
     contact_url=safe_destination('mailto:'+str(content.get('contact_email') or ''))
     contact=f'<section class="closing" id="contact"><h2>Questions about your visit?</h2><a class="btn" href="{contact_url}">Contact the organizer ↗</a></section>' if contact_url else ''
-    middle=schedule+audience if family in ('pathway','atlas') else audience+schedule
+    registration_close = ''
+    if action_primary:
+        registration_close = f'<section class="registration-close"><div><span class="eyebrow">{name}</span><h2>{e(content.get("closing_title") or "Be part of the experience.")}</h2><p>{e(content.get("closing_summary") or "")}</p></div><div>{action_primary}{link({"label":"Already registered? Open GuestHub", "url":content.get("guesthub_url")}, "text-btn")}</div></section>'
+    mobile_registration = f'<div class="mobile-registration">{link(content.get("primary_action"))}</div>' if action_primary else ''
+    middle=schedule+audience if family in ('premium-convention','pathway','atlas') else audience+schedule
     footer=f'<footer><span>{e(content.get("footer_tagline") or content.get("brand_tagline") or content.get("event_name") or "")} · <a href="https://festio.events" target="_blank" rel="noopener">Powered by Festio</a></span><nav aria-label="Footer">{navigation_markup(content,footer=True)}</nav></footer>'
     notice='<div class="review">Preview — visitors cannot see this draft</div>' if preview else ''
     # The policy also protects srcdoc previews; it permits only our fixed script.
     policy=security_policy().replace("frame-ancestors 'none'; ", "")
-    return f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="{e(policy)}"><title>{name}</title><meta name="description" content="{e((content.get("summary") or "")[:200])}"><meta property="og:title" content="{e(content.get("headline") or content.get("event_name") or "")}"><style>{CSS}</style></head><body class="{family} collection-modern" data-template="{family}" style="{colors}">{notice}<div class="wrap">{header}<main>{hero}{glance}{heritage}{highlights}{middle}{speakers}{"".join(features)}{registration}{exhibitors}{connect}{venue}{faq}{contact}</main>{footer}</div><script data-festio-programme>{JS}</script></body></html>'
+    return f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="{e(policy)}"><title>{name}</title><meta name="description" content="{e((content.get("summary") or "")[:200])}"><meta property="og:title" content="{e(content.get("headline") or content.get("event_name") or "")}"><style>{CSS}</style></head><body class="{family} collection-modern" data-template="{family}" style="{colors}">{notice}<div class="wrap">{header}<main>{hero}{intro}{glance}{heritage}{highlights}{middle}{speakers}{"".join(features)}{registration}{exhibitors}{venue}{faq}{connect}{contact}{registration_close}</main>{footer}</div>{mobile_registration}<script data-festio-programme>{JS}</script></body></html>'

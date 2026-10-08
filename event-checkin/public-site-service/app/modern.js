@@ -1,5 +1,18 @@
 (()=>{
   'use strict';
+  const highlightRoot=document.getElementById('programme');
+  const highlightControls=highlightRoot?.querySelector('[data-highlight-controls]');
+  if(highlightControls){
+    highlightControls.hidden=false;
+    highlightControls.querySelectorAll('[data-highlight-filter]').forEach(button=>button.addEventListener('click',()=>{
+      highlightControls.querySelectorAll('button').forEach(other=>other.setAttribute('aria-pressed',String(other===button)));
+      highlightRoot.querySelectorAll('[data-session]').forEach(card=>{
+        card.hidden=button.dataset.highlightFilter!=='all'&&card.dataset.category!==button.dataset.highlightFilter;
+        if(card.hidden)card.querySelectorAll('details[open]').forEach(detail=>detail.open=false);
+      });
+    }));
+  }
+  document.querySelectorAll('.mobile-menu a').forEach(a=>a.addEventListener('click',()=>a.closest('details').open=false));
   const root=document.getElementById('programme');
   if(!root)return;
   const controls=root.querySelector('[data-programme-controls]');

@@ -203,12 +203,16 @@ def schedule_markup(content):
             meta_bits.append(f'<span>{PEOPLE_ICON} {escape(session.get("audience"))}</span>')
         speaker = f'<span class="speaker-line">With {escape(session.get("speaker"))}</span>' if session.get("speaker") else ""
         description = f'<details class="session-details"><summary>Explore session</summary><p>{escape(session.get("description"))}</p></details>' if session.get("description") else ""
+        if session.get('display_title') and session['display_title'] != session.get('title'):
+            description += f'<p class=source-session-title>{escape(session.get("title") or "")}</p>'
+        if session.get('display_summary'):
+            description = f'<p>{escape(session["display_summary"])}</p>' + description
         cta = action({"label": session.get("action_label") or "View details", "url": session.get("action_url")}, "session-action") if session.get("action_url") else ""
         tag = f'<span class="session-tag" style="--track-color:{color}">{escape(track)}</span>' if track else ""
         cards.append(
             f'<article class="session" data-day="{escape(day, quote=True)}" data-track="{escape(track, quote=True)}">'
             f'<div class="session-time"><small>{escape(day)}</small><time>{escape(session.get("time", ""))}</time></div>{thumb}'
-            f'<div class="session-body">{tag}<h3>{escape(session.get("title", ""))}</h3>'
+            f'<div class="session-body">{tag}<h3>{escape(session.get("display_title") or session.get("title", ""))}</h3>'
             f'{description}<div class="session-meta">{"".join(meta_bits)}</div>{speaker}{cta}</div></article>'
         )
 

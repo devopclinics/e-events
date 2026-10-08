@@ -1,5 +1,18 @@
 [
   {
+    "id": "premium-convention",
+    "name": "Premium Convention",
+    "label": "Photographic, welcoming, refined",
+    "color": "#123f34",
+    "bg": "#f7f5ee",
+    "ink": "#163c33",
+    "accent": "#e9c979",
+    "muted": "#607169",
+    "desc": "A photo-led convention website with editorial storytelling, curated experiences and a clear registration journey.",
+    "layout": "Full-width photography \u00b7 editorial highlights \u00b7 venue story",
+    "title": "A place to belong."
+  },
+  {
     "id": "atrium",
     "name": "Atrium",
     "label": "Warm, architectural, welcoming",
@@ -8,7 +21,7 @@
     "ink": "#163b2e",
     "accent": "#d4ea81",
     "muted": "#526557",
-    "desc": "A spacious bento composition. The event story, dates and audience paths are visible together. My recommendation for NCNMO.",
+    "desc": "A spacious architectural composition with photography, editorial highlights and audience stories.",
     "layout": "Bento hero \u00b7 sculptural arch \u00b7 audience cards",
     "title": "Your people.<br>Your <em>Platform.</em>"
   },

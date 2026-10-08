@@ -156,6 +156,10 @@ def render_site(content: dict, family: str, *, preview: bool = False) -> str:
         html = render_modern(content, canonical_template(family), preview=preview)
     else:
         html = _render_site(content, family, preview=preview)
+        # Keep optional story content and its navigation target when returning to a classic design.
+        if content.get("intro_title") or content.get("intro_summary"):
+            intro = f'<section id="about" class="event-intro"><div class="eyebrow">{escape(content.get("intro_eyebrow") or "The experience")}</div><h2>{escape(content.get("intro_title") or "Discover the event")}</h2><p>{escape(content.get("intro_summary") or "")}</p></section>'
+            html = html.replace('<main>', '<main>'+intro, 1)
     fonts = {"modern-sans":"system-ui,-apple-system,sans-serif", "classic-serif":"Georgia,serif", "elegant-serif":"Iowan Old Style,Georgia,serif", "display-rounded":"Trebuchet MS,system-ui,sans-serif", "bold-sans":"Segoe UI,system-ui,sans-serif"}
     font = fonts.get(content.get("font_pairing"), fonts["modern-sans"])
     fit = content.get("image_fit") if content.get("image_fit") in ("contain", "cover") else "cover"

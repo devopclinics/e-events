@@ -289,4 +289,5 @@ class AuditSnapshotTests(unittest.TestCase):
    self.assertNotIn('/festiome?group=',page)
    self.assertIn('destination=festiome',page)
    self.assertIn('href="#speakers"',page)
+   self.assertIn('View all speakers',page)
    self.assertEqual(c,original)

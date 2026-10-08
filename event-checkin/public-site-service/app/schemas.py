@@ -158,6 +158,7 @@ class NavigationItem(BaseModel):
 
 class SiteContent(BaseModel):
     import_history: dict = Field(default_factory=dict)
+    speakers_directory_url: HttpUrl | None = None
     schema_version: Literal[1] = 1
     publication_features_version: Literal[2] = 2
     event_name: str = Field(min_length=1, max_length=180)

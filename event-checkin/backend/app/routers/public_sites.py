@@ -231,7 +231,7 @@ async def _prepare_website(event, content, db):
         if value.tzinfo is None: value = value.replace(tzinfo=timezone.utc)
         return value.astimezone(zone).isoformat()
     connections = await _website_connections(event, db)
-    content.update(event_name=event.name, start_date=iso(event.event_date), end_date=iso(event.event_end_date), timezone=event.timezone or "UTC", venue=event.venue_name or "", venue_address=event.venue_address or "", venue_url=connections["venue"]["url"], guesthub_url=connections["guesthub"]["url"], festiome_url=connections["festiome"]["url"] if connections["festiome"]["available"] else "", festio_live_url=connections["festio_live"]["url"])
+    content.update(event_name=event.name, start_date=iso(event.event_date), end_date=iso(event.event_end_date), timezone=event.timezone or "UTC", venue=event.venue_name or "", venue_address=event.venue_address or "", venue_url=connections["venue"]["url"], speakers_directory_url=connections["speakers"]["url"] or None, guesthub_url=connections["guesthub"]["url"], festiome_url=connections["festiome"]["url"] if connections["festiome"]["available"] else "", festio_live_url=connections["festio_live"]["url"])
     if content.get("use_event_branding"):
         try:
             async with httpx.AsyncClient(timeout=5) as client:

@@ -153,10 +153,12 @@ def render_site(content: dict, family: str, *, preview: bool = False) -> str:
     community = content.get("festiome_url") or ""
     if hub and urlsplit(community).netloc == urlsplit(hub).netloc and urlsplit(community).path in ("/festiome", "/festiome-redesign"):
         content["festiome_url"] = hub + ("&" if "?" in hub else "?") + "destination=festiome"
+    directory = content.get("speakers_directory_url") or ""
     for item in content.get("navigation") or []:
         if item.get("destination_type") == "festiome" and content.get("festiome_url"):
             item["url"] = content["festiome_url"]
         elif item.get("destination_type") == "speakers" and content.get("speakers"):
+            directory = directory or item.get("url", "")
             item["destination_type"], item["url"] = "section", "#speakers"
     if content.get("programme_summary") == "Choose a day or track to plan your experience.":
         content["programme_summary"] = "A few highlights from the event. Open GuestHub for the full timetable."
@@ -173,6 +175,10 @@ def render_site(content: dict, family: str, *, preview: bool = False) -> str:
         if content.get("intro_title") or content.get("intro_summary"):
             intro = f'<section id="about" class="event-intro"><div class="eyebrow">{escape(content.get("intro_eyebrow") or "The experience")}</div><h2>{escape(content.get("intro_title") or "Discover the event")}</h2><p>{escape(content.get("intro_summary") or "")}</p></section>'
             html = html.replace('<main>', '<main>'+intro, 1)
+    if content.get("speakers") and directory:
+        import re
+        link = action({"label":"View all speakers →", "url":directory}, "text-link")
+        html = re.sub(r'(<section\b[^>]*\bid="speakers"[^>]*>[\s\S]*?)(</section>)', lambda m:m[1]+link+m[2], html, count=1)
     fonts = {"modern-sans":"system-ui,-apple-system,sans-serif", "classic-serif":"Georgia,serif", "elegant-serif":"Iowan Old Style,Georgia,serif", "display-rounded":"Trebuchet MS,system-ui,sans-serif", "bold-sans":"Segoe UI,system-ui,sans-serif"}
     font = fonts.get(content.get("font_pairing"), fonts["modern-sans"])
     fit = content.get("image_fit") if content.get("image_fit") in ("contain", "cover") else "cover"

@@ -146,3 +146,19 @@ class DateTests(unittest.TestCase):
   for date in ['12/24/2026','2026-12-24','December 24, 2026']:
    self.assertIn('Tomorrow',countdown_markup({'start_date':date,'timezone':'America/Chicago'},datetime(2026,12,23,18,tzinfo=timezone.utc)))
   self.assertIn('Tomorrow',countdown_markup({'start_date':'2026-11-01T09:00:00-05:00','timezone':'America/Chicago'},datetime(2026,11,1,3,tzinfo=timezone.utc)))
+
+ async def test_partial_cards_save_reload_preview_and_publish_guidance(self):
+  content={**self.body['content'],'stats':[{'value':'','label':'Days'}], 'registration_facts':[{'label':'Price','value':''}], 'faqs':[{'question':'Where?','answer':''}]}
+  body={**self.body,'content':content}
+  saved=await self.put(body)
+  self.assertEqual(saved['content']['stats'][0]['label'],'Days')
+  preview=await self.c.post('/internal/sites/a/render-preview',json=body)
+  self.assertEqual(preview.status_code,200)
+  self.assertEqual(len(preview.json()['issues']),3)
+  blocked=await self.post('publish',saved['revision'])
+  self.assertEqual(blocked.status_code,422)
+  self.assertIn('At-a-glance cards 1',blocked.text)
+  self.assertEqual((await self.get())['content']['faqs'][0]['question'],'Where?')
+  content.update(stats=[{'value':'2','label':'Days'}],registration_facts=[{'label':'Price','value':'Free'}],faqs=[{'question':'Where?','answer':'Main Hall'}])
+  saved=await self.put({**body,'content':content,'expected_revision':saved['revision']})
+  self.assertEqual((await self.post('publish',saved['revision'])).status_code,200)

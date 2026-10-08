@@ -1,5 +1,5 @@
 import httpx
-from datetime import timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from urllib.parse import quote_plus
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, Body
@@ -11,6 +11,7 @@ from ..config import settings
 from ..database import get_db
 from ..models import Event, GuestSpeaker, User
 from .engagement import ensure_live_join_code, live_join_url
+from ..services.engagement_sync_outbox import _snapshot
 from ..services.experience import active_workflow
 from .speakers import ensure_speaker_token
 
@@ -32,12 +33,9 @@ async def _website_connections(event: Event, db: AsyncSession) -> dict:
     live_url = ""
     if event.engagement_enabled:
         live_url = live_join_url(await ensure_live_join_code(event.id, db))
-    # festiome_open_url is an in-app route (e.g. "/festiome?group=…"), meant for
-    # the SPA's own router — resolve it against the public base so it's a real
-    # absolute URL wherever it's used outside the SPA (the site's Link/
-    # NavigationItem fields both require one; see the Al-Azeemah publish 422).
-    festiome_raw = event.festiome_open_url or ""
-    festiome_url = f"{base}{festiome_raw}" if festiome_raw.startswith("/") else festiome_raw
+    # Public websites never send visitors to the organizer community route.
+    guest_entry = f"{base}/rsvp/{event.rsvp_token}?recover=1" if event.rsvp_enabled and event.rsvp_token else ""
+    festiome_url = guest_entry + "&destination=festiome" if guest_entry else ""
     connections = {
         "section": {"label": "Programme", "url": "#programme", "available": True, "source": "Website programme", "configure_url": "/design-studio-redesign/website"},
         "venue": {"label": "Venue", "url": f"https://www.google.com/maps/search/?api=1&query={quote_plus(venue_query)}" if venue_query else "", "available": bool(venue_query), "source": "Event Setup", "configure_url": "/admin-redesign"},
@@ -76,24 +74,33 @@ async def _website_content_sources(event: Event, db: AsyncSession) -> dict:
     workflow = await active_workflow(event.id, db) if event.experience_enabled else None
     if workflow and event.event_date:
         for step in sorted(workflow.steps, key=lambda item: (item.sort_order, item.title)):
-            if not step.enabled or not step.is_segment or step.starts_offset_seconds is None:
+            if not step.enabled or not (step.is_segment or step.type == "session_attendance"):
                 continue
-            starts_at = event.event_date + timedelta(seconds=step.starts_offset_seconds)
-            if starts_at.tzinfo is None: starts_at = starts_at.replace(tzinfo=timezone.utc)
-            starts_at = starts_at.astimezone(_event_zone(event))
+            snapshot = _snapshot(event, workflow, step, workflow.status)
+            if not snapshot.get("starts_at"):
+                continue
+            starts_at = datetime.fromisoformat(snapshot["starts_at"]).astimezone(_event_zone(event))
+            ends_at = datetime.fromisoformat(snapshot["ends_at"]).astimezone(_event_zone(event)) if snapshot.get("ends_at") else None
             config = step.config or {}
             program = config.get("program") or {}
+            description = str(program.get("public_description") or step.description or "")
+            if description.strip() == "Track guest attendance for a program segment or breakout.":
+                description = ""
+            time_label = starts_at.strftime("%-I:%M %p")
+            if ends_at:
+                time_label += " – " + ends_at.strftime("%-I:%M %p")
+                if ends_at.date() != starts_at.date(): time_label += " (" + ends_at.strftime("%b %-d") + ")"
             sessions.append({
                 "source_id": step.id,
                 "day": starts_at.strftime("%A"),
                 "date": starts_at.strftime("%Y-%m-%d"),
-                "time": starts_at.strftime("%-I:%M %p"),
+                "time": time_label,
                 "title": step.title,
-                "description": step.description or "",
-                "venue": str(program.get("venue") or ""),
+                "description": description,
+                "venue": str(snapshot.get("room") or program.get("venue") or ""),
                 "audience": str(program.get("audience") or ""),
                 "track": str(program.get("category") or ""),
-                "speaker": str(program.get("speaker") or ""),
+                "speaker": str(snapshot.get("speaker") or program.get("speaker") or ""),
                 "action_label": "",
                 "action_url": "",
             })
@@ -115,6 +122,8 @@ def _resolve_navigation(content: dict, connections: dict) -> dict:
     navigation = []
     for raw in result.get("navigation") or []:
         item = dict(raw)
+        if item.get("destination_type") == "speakers" and result.get("speakers"):
+            item.update(destination_type="section", url="#speakers")
         source = connections.get(item.get("destination_type"))
         if item.get("destination_type") == "section":
             allowed = {"#about": bool(result.get("intro_title") or result.get("intro_summary")), "#programme": "programme" in result.get("visible_sections", []), "#tracks": "tracks" in result.get("visible_sections", []) and bool(result.get("tracks")), "#speakers": bool(result.get("speakers")), "#venue": bool(result.get("venue") or result.get("venue_facts")), "#registration": bool(result.get("registration_facts")), "#faq": bool(result.get("faqs")), "#contact": bool(contact_email), "#connect": "connect" in result.get("visible_sections", [])}

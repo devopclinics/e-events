@@ -144,7 +144,20 @@ footer{{padding:2rem 5vw;border-top:1px solid #ddd;display:flex;justify-content:
 
 
 def render_site(content: dict, family: str, *, preview: bool = False) -> str:
-    content = dict(content)
+    from .draft_content import complete_preview
+    content = complete_preview(content)
+    # Repair known organizer destinations in older release snapshots at render
+    # time without altering their content or publishing an unrelated draft.
+    from urllib.parse import urlsplit
+    hub = content.get("guesthub_url") or ""
+    community = content.get("festiome_url") or ""
+    if hub and urlsplit(community).netloc == urlsplit(hub).netloc and urlsplit(community).path in ("/festiome", "/festiome-redesign"):
+        content["festiome_url"] = hub + ("&" if "?" in hub else "?") + "destination=festiome"
+    for item in content.get("navigation") or []:
+        if item.get("destination_type") == "festiome" and content.get("festiome_url"):
+            item["url"] = content["festiome_url"]
+        elif item.get("destination_type") == "speakers" and content.get("speakers"):
+            item["destination_type"], item["url"] = "section", "#speakers"
     if content.get("programme_summary") == "Choose a day or track to plan your experience.":
         content["programme_summary"] = "A few highlights from the event. Open GuestHub for the full timetable."
     zone = content.get("timezone") or "UTC"

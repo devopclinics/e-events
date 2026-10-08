@@ -22,16 +22,18 @@ export function OutcomeLauncher({ eventId, onContinue, notify }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
+  const generation=useRef(0)
   async function load() {
+    const request=++generation.current
     if (!eventId) { setLoading(false); return }
     setLoading(true); setError('')
     try {
       const progress = await api.getSetupProgress(eventId)
-      setSelected(selectedOutcomeIds(progress.steps))
-    } catch (err) { setError(err.message || 'Your saved outcomes could not be loaded') }
-    finally { setLoading(false) }
+      if(request===generation.current)setSelected(selectedOutcomeIds(progress.steps))
+    } catch (err) { if(request===generation.current)setError(err.message || 'Your saved outcomes could not be loaded') }
+    finally { if(request===generation.current)setLoading(false) }
   }
-  useEffect(() => { load() }, [eventId]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load();return()=>{generation.current++} }, [eventId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function toggle(id) {
     setSelected((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id])

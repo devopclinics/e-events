@@ -2760,6 +2760,7 @@ class InviteSettingsUpdate(BaseModel):
 class GuestHubRecoveryRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
+    destination: Literal["home", "programme", "festiome"] = "home"
     email: EmailStr
     first_name: str = Field(default="", max_length=100)
     last_name: str = Field(default="", max_length=100)

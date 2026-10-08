@@ -15,7 +15,7 @@ class FeaturedTests(unittest.TestCase):
    page=render_site(c,family)
    for i in range(250):
     self.assertEqual(f'Unique session {i:03d}' in page,i in [3,45,96],(family,i))
-   self.assertIn('href="https://example.com/rsvp/event?recover=1"',page)
+   self.assertIn('href="https://example.com/rsvp/event?recover=1&destination=programme"',page)
    self.assertIn('View full programme in GuestHub',page)
    self.assertEqual(c,original)
  def test_old_imports_do_not_become_featured_automatically(self):

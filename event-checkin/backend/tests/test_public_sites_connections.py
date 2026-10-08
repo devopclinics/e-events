@@ -6,7 +6,7 @@ from conftest import _Session
 
 
 @pytest.mark.asyncio
-async def test_festiome_open_url_is_resolved_to_an_absolute_url(ctx):
+async def test_festiome_organizer_route_becomes_guest_entry(ctx):
     """event.festiome_open_url is an in-app relative route (e.g.
     "/festiome?group=…"), meant for the SPA's own router. The website
     connections catalog feeds Link/NavigationItem fields that both require
@@ -15,6 +15,8 @@ async def test_festiome_open_url_is_resolved_to_an_absolute_url(ctx):
     event_id = ctx.ids["event_a"]
     async with _Session() as session:
         event = await session.get(Event, event_id)
+        event.rsvp_enabled = True
+        event.rsvp_token = "demo"
         event.festiome_addon_enabled = True
         event.festiome_open_url = "/festiome?group=55ad2036-6acc-46ee-b573-61ec3015b500"
         event.checkin_base_url = "https://staging.festio.events"
@@ -23,15 +25,17 @@ async def test_festiome_open_url_is_resolved_to_an_absolute_url(ctx):
         event = await session.get(Event, event_id)
         connections = await _website_connections(event, session)
 
-        assert connections["festiome"]["url"] == "https://staging.festio.events/festiome?group=55ad2036-6acc-46ee-b573-61ec3015b500"
+        assert connections["festiome"]["url"] == "https://staging.festio.events/rsvp/demo?recover=1&destination=festiome"
         assert connections["festiome"]["available"] is True
 
 
 @pytest.mark.asyncio
-async def test_festiome_open_url_already_absolute_is_left_alone(ctx):
+async def test_festiome_catalog_uses_verified_guest_entry_even_with_stored_url(ctx):
     event_id = ctx.ids["event_a"]
     async with _Session() as session:
         event = await session.get(Event, event_id)
+        event.rsvp_enabled = True
+        event.rsvp_token = "demo"
         event.festiome_addon_enabled = True
         event.festiome_open_url = "https://community.example.com/festiome/abc"
         event.checkin_base_url = "https://staging.festio.events"
@@ -40,4 +44,4 @@ async def test_festiome_open_url_already_absolute_is_left_alone(ctx):
         event = await session.get(Event, event_id)
         connections = await _website_connections(event, session)
 
-        assert connections["festiome"]["url"] == "https://community.example.com/festiome/abc"
+        assert connections["festiome"]["url"] == "https://staging.festio.events/rsvp/demo?recover=1&destination=festiome"

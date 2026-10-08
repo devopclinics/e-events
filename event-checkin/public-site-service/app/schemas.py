@@ -17,10 +17,12 @@ def blank_link_is_none(value):
 
 class Session(BaseModel):
     featured: bool = False
+    source_baseline: dict = Field(default_factory=dict)
+    source_missing: bool = False
     source_id: str = Field(default="", max_length=80)
     day: str = Field(default="", max_length=40)
     date: str = Field(default="", max_length=40)
-    title: str = Field(min_length=1, max_length=160)
+    title: str = Field(default="", max_length=160)
     display_title: str = Field(default="", max_length=120)
     display_summary: str = Field(default="", max_length=240)
     image_alt: str = Field(default="", max_length=300)
@@ -42,8 +44,10 @@ class Session(BaseModel):
 
 
 class Speaker(BaseModel):
+    source_baseline: dict = Field(default_factory=dict)
+    source_missing: bool = False
     source_id: str = Field(default="", max_length=80)
-    name: str = Field(min_length=1, max_length=160)
+    name: str = Field(default="", max_length=160)
     title: str = Field(default="", max_length=160)
     organization: str = Field(default="", max_length=160)
     bio: str = Field(default="", max_length=800)
@@ -58,7 +62,7 @@ class Speaker(BaseModel):
 
 class Fact(BaseModel):
     label: str = Field(default="", max_length=80)
-    value: str = Field(min_length=1, max_length=300)
+    value: str = Field(default="", max_length=300)
 
 
 class FeatureSection(BaseModel):
@@ -84,12 +88,12 @@ class FeatureSection(BaseModel):
 
 
 class FAQ(BaseModel):
-    question: str = Field(min_length=1, max_length=240)
-    answer: str = Field(min_length=1, max_length=1200)
+    question: str = Field(default="", max_length=240)
+    answer: str = Field(default="", max_length=1200)
 
 
 class Exhibitor(BaseModel):
-    name: str = Field(min_length=1, max_length=160)
+    name: str = Field(default="", max_length=160)
     category: str = Field(default="", max_length=100)
     description: str = Field(default="", max_length=300)
     logo_url: HttpUrl | None = None
@@ -101,13 +105,13 @@ class Exhibitor(BaseModel):
 
 
 class Stat(BaseModel):
-    value: str = Field(min_length=1, max_length=40)
-    label: str = Field(min_length=1, max_length=80)
+    value: str = Field(default="", max_length=40)
+    label: str = Field(default="", max_length=80)
     detail: str = Field(default="", max_length=120)
 
 
 class Track(BaseModel):
-    title: str = Field(min_length=1, max_length=100)
+    title: str = Field(default="", max_length=100)
     description: str = Field(default="", max_length=180)
     icon: str = Field(default="✦", max_length=8)
     color: str = Field(default="", max_length=7)
@@ -153,6 +157,7 @@ class NavigationItem(BaseModel):
 
 
 class SiteContent(BaseModel):
+    import_history: dict = Field(default_factory=dict)
     schema_version: Literal[1] = 1
     publication_features_version: Literal[2] = 2
     event_name: str = Field(min_length=1, max_length=180)

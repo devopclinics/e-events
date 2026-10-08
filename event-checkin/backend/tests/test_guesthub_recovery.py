@@ -174,3 +174,11 @@ async def test_email_escapes_guest_and_event_markup(ctx, mail):
     await request(ctx, email='amina@example.org')
     body = mail.call_args.kwargs['html_body']
     assert '<img src=x>' not in body and '&lt;img src=x&gt;' in body and '&amp; Idris' in body
+
+@pytest.mark.asyncio
+async def test_recovery_preserves_only_allowlisted_destination(ctx, mail):
+    await add(ctx, invite_token='guest-link')
+    response=await request(ctx,email='amina@example.org',destination='festiome')
+    assert response.status_code==202
+    assert '/r/guest-link?destination=festiome' in mail.call_args.kwargs['html_body']
+    assert (await request(ctx,email='amina@example.org',destination='https://evil.example')).status_code==422

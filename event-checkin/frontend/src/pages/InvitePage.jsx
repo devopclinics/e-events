@@ -1635,6 +1635,21 @@ function ManageGuardiansPanel({ token }) {
 
 function GuestHub({ event, accessToken, designTheme, previewMock = false, confirmed = true, onViewEvent }) {
   const [hub, setHub] = useState(null)
+  useEffect(() => {
+    if (previewMock || !hub?.guest?.qr_token) return
+    const url = new URL(window.location.href), destination = url.searchParams.get('destination')
+    if (!['programme','festiome'].includes(destination)) return
+    url.searchParams.delete('destination'); url.searchParams.delete('recover')
+    if (destination === 'festiome' && hub.capabilities?.festiome) {
+      window.location.replace(`/festiome/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}`)
+    } else {
+      url.hash = destination === 'programme' ? '/programme' : '/more'
+      window.history.replaceState(null, '', url)
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+      if (destination === 'programme') setHubTab('program')
+    }
+  }, [hub, event.id, previewMock])
+
   const [error, setError] = useState('')
   const [hubFailure, setHubFailure] = useState(null)
   const [hubRetry, setHubRetry] = useState(0)
@@ -3572,7 +3587,7 @@ export default function InvitePage() {
   }
 
   if (isStudioPreview) rsvpPanel = <div className="rounded-2xl border p-6">Design preview. Registration and ticket purchases are disabled here.</div>
-  if (!isStudioPreview && new URLSearchParams(location.search).get('recover') === '1') return <GuestHubRecovery event={event}/>
+  if (!isStudioPreview && new URLSearchParams(location.search).get('recover') === '1' && !hasGuestHub) return <GuestHubRecovery event={event}/>
   if (event.rsvp_landing_layout === 'welcome' && !hasGuestHub) {
     return <WelcomeLanding event={event} title={title} dateLabel={dateLabel} timeLabel={timeLabel}
       venue={venue} host={host} hostWebsite={hostWebsite} about={about} designTheme={designTheme}

@@ -68,7 +68,7 @@ async def test_website_connection_catalog_uses_current_event_setup(ctx, monkeypa
     assert connections["speakers"]["url"] == "https://staging.festio.events/speakers/speaker-demo"
     assert connections["rsvp"]["url"] == "https://staging.festio.events/rsvp/rsvp-demo"
     assert connections["festio_live"]["url"] == "https://staging.festio.events/l/LIVE26"
-    assert connections["festiome"]["url"] == "https://community.example/ncnmo"
+    assert connections["festiome"]["url"] == "https://staging.festio.events/rsvp/rsvp-demo?recover=1&destination=festiome"
     assert connections["rsvp"]["configure_url"] == "/guests-redesign?tab=invite"
 
     source_response = await ctx.client.get(f"/api/events/{event_id}/website/content-sources")
@@ -106,3 +106,28 @@ def test_absolute_site_urls_resolves_nested_event_media_and_actions():
     assert [item["url"] for item in resolved["navigation"]] == [
         "#programme", "mailto:events@example.com", "//unsafe.example/path",
     ]
+
+
+def test_speakers_stay_local_but_custom_destination_is_preserved():
+    content={'speakers':[{'name':'A'}], 'navigation':[{'id':'speakers','destination_type':'speakers','enabled':True}, {'id':'directory','destination_type':'custom','url':'https://example.org/directory','enabled':True}]}
+    resolved=_resolve_navigation(content,{'speakers':{'url':'https://example.org/speakers','available':True}})
+    assert resolved['navigation'][0]['url']=='#speakers'
+    assert resolved['navigation'][1]['url']=='https://example.org/directory'
+
+
+@pytest.mark.asyncio
+async def test_website_import_retains_attendance_schedule_details(ctx):
+    from app.routers.public_sites import _website_content_sources
+    from datetime import datetime
+    async with _Session() as db:
+        event=await db.get(Event,ctx.ids['event_a']);event.experience_enabled=True;event.timezone='America/Chicago';event.event_date=datetime(2026,11,14,15)
+        workflow=ExperienceWorkflow(event_id=event.id,name='Schedule',status='published',version=1,is_default=True)
+        db.add(workflow);await db.flush()
+        db.add(ExperienceStep(workflow_id=workflow.id,key='workshop',type='session_attendance',title='Workshop',description='Track guest attendance for a program segment or breakout.',enabled=True,is_segment=False,config={'session':{'date':'2026-11-14','start_time':'10:00','end_time':'11:00','room':'Workshop Room A','speaker':'Sheikh Demo'}}))
+        await db.commit()
+        source=await _website_content_sources(event,db)
+        row=source['sessions'][0]
+        assert row['time']=='10:00 AM – 11:00 AM'
+        assert row['venue']=='Workshop Room A' and row['speaker']=='Sheikh Demo'
+        assert row['description']==''
+        assert not {'guest_ids','audience_guest_ids','qr_token'} & row.keys()

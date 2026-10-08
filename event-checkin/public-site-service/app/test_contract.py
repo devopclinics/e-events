@@ -277,3 +277,16 @@ class PublicSiteContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class AuditSnapshotTests(unittest.TestCase):
+ def test_existing_snapshots_use_guest_routes_without_mutating_content(self):
+  import copy
+  from .render import render_site
+  c={'event_name':'Demo','headline':'Demo','speakers':[{'name':'Speaker'}],'guesthub_url':'https://festio.events/rsvp/event?recover=1','festiome_url':'https://festio.events/festiome?group=old','navigation_configured':True,'navigation':[{'id':'chat','destination_type':'festiome','label':'FestioMe','url':'https://festio.events/festiome?group=old','enabled':True},{'id':'speaker','destination_type':'speakers','label':'Speakers','url':'https://festio.events/speakers/old','enabled':True}]}
+  original=copy.deepcopy(c)
+  for family in ['premium-convention','atrium','modern-professional']:
+   page=render_site(c,family)
+   self.assertNotIn('/festiome?group=',page)
+   self.assertIn('destination=festiome',page)
+   self.assertIn('href="#speakers"',page)
+   self.assertEqual(c,original)

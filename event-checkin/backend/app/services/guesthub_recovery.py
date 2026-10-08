@@ -67,7 +67,8 @@ async def send_recovery_email(event_id: str, data: GuestHubRecoveryRequest) -> N
                 for guest in guests:
                     if not guest.invite_token:
                         guest.invite_token = str(uuid.uuid4())
-                    url = escape(f"{origin}/r/{guest.invite_token}", quote=True)
+                    destination = "?destination=" + data.destination if data.destination != "home" else ""
+                    url = escape(f"{origin}/r/{guest.invite_token}{destination}", quote=True)
                     name = escape(f"{guest.first_name} {guest.last_name}".strip())
                     links.append(f'<li><a href="{url}">Open GuestHub for {name}</a></li>')
                 await db.commit()

@@ -178,8 +178,10 @@ def programme_heading(content):
 def programme_handoff(content, cls="button"):
     hub = safe_url(content.get("guesthub_url"))
     if hub:
+        hub += ('&' if '?' in hub else '?') + 'destination=programme'
         cta = f'<a class="{cls}" href="{hub}">View full programme in GuestHub <span aria-hidden="true">→</span></a>'
-        note = "Already registered? Open your personal GuestHub link, or recover it using your registration email."
+        note = "Full timetable available after registration. Already registered? Open GuestHub using your registration email."
+        cta += action({"label": "Register to see the full programme", "url": (content.get("primary_action") or {}).get("url")}, cls)
     else:
         cta = action({"label": "Register to access GuestHub", "url": (content.get("primary_action") or {}).get("url")}, cls)
         note = "The full timetable is available through your personal GuestHub link after registration."

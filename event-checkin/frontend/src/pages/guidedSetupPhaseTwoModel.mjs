@@ -1,9 +1,10 @@
+import { finalizeReadiness } from './guideReadiness.mjs'
 export const PHASE_TWO_PROGRESS_PREFIX = 'phase2_'
 
 export const PHASE_TWO_RECIPES = [
   { id: 'audience', number: '2.1', title: 'Build the audience', outcome: 'rsvp', route: '/guests-redesign?tab=guests', action: 'Open audience workspace', description: 'Add guests manually or import a file, then resolve duplicates and warnings before sending anything.' },
   { id: 'rsvp', number: '2.2', title: 'Launch RSVP', outcome: 'rsvp', route: '/guests-redesign?tab=invite', action: 'Configure RSVP', description: 'Set access, deadline, capacity, questions and additional-guest rules, then preview and test the response.' },
-  { id: 'tickets', number: '2.3', title: 'Launch ticket sales', outcome: 'tickets', route: '/ticketing-redesign', action: 'Open Ticket Sales', description: 'Connect payouts, create an active product, preview checkout and verify one controlled test order.' },
+  { id: 'tickets', number: '2.3', title: 'Launch ticket sales', outcome: 'tickets', route: '/ticketing-redesign', action: 'Open Ticket Sales', description: 'Create an active product, preview checkout and record one controlled test. Paid products also require the selected payout account. Launch sales separately in Ticket Sales.' },
   { id: 'pass', number: '2.4', title: 'Issue Festio Passes', outcomes: ['rsvp', 'tickets'], route: '/design-studio-redesign?tab=Festio%20Pass', action: 'Design and test passes', description: 'Choose the pass design and delivery channels, then verify a named guest can open a valid QR pass.' },
   { id: 'channels', number: '2.5', title: 'Connect communication channels', outcome: 'communicate', route: '/communications-redesign?tab=settings', action: 'Review channel readiness', description: 'Enable only connected channels and send controlled tests before using them for event traffic.' },
   { id: 'automation', number: '2.6', title: 'Communicate with guests', outcomes: ['communicate', 'reminders'], route: '/communications-redesign?tab=scheduler', action: 'Configure communication', description: 'Prepare invitations, confirmations, reminders and follow-ups with routing, consent and schedules.' },
@@ -32,7 +33,12 @@ export function phaseTwoReadiness({ event = {}, progress = {}, selectedOutcomes 
   const config = ticketConfig?.config || ticketConfig || {}
   const activeProducts = productRows.filter((product) => product.active !== false)
   const verifiedPayouts = payoutRows.filter((account) => ['verified', 'active', 'enabled', 'connected'].includes(String(account.status || '').toLowerCase()) || account.verified === true)
-  const ticketConfigured = !!config.enabled && activeProducts.length > 0 && verifiedPayouts.length > 0
+  const needsPayout = activeProducts.some(p => p.price == null || p.price === '' || !Number.isFinite(Number(p.price)) || Number(p.price) > 0 || p.allow_custom_amount === true)
+  const selectedPayout = verifiedPayouts.some(a => a.provider === config.provider && (a.selected === true || (!!config.provider_account_id && a.provider_account_id === config.provider_account_id)))
+  const ticketConfigured = !!config.enabled && activeProducts.length > 0 && (!needsPayout || selectedPayout)
+  const ticketResolution = !config.enabled ? 'Enable Ticket Sales' : !activeProducts.length ? 'Create an active ticket product' : 'Connect and select a verified payout account'
+  const openRsvp = event.invite_mode === 'open'
+
   const ticketTested = done(progress, 'ticket_test')
   const guestsWithPass = guestRows.filter((guest) => guest.qr_token || guest.invite_token || guest.ticket_token).length
   const passTested = done(progress, 'pass_test')
@@ -44,9 +50,9 @@ export function phaseTwoReadiness({ event = {}, progress = {}, selectedOutcomes 
 
   const stateById = {
     audience: { complete: hasAudience && duplicateCount === 0, blocked: false, evidence: hasAudience ? `${guestRows.length} guest${guestRows.length === 1 ? '' : 's'} · ${duplicateCount ? `${duplicateCount} possible duplicate${duplicateCount === 1 ? '' : 's'} to review` : 'no duplicate flags'}` : 'No audience records yet' },
-    rsvp: { complete: rsvpConfigured && rsvpTested, blocked: !hasAudience, evidence: `${rsvpConfigured ? `Public link ready · ${questionRows.length} custom question${questionRows.length === 1 ? '' : 's'}` : 'RSVP settings or public link incomplete'} · ${rsvpTested ? 'test verified' : 'test pending'}` },
-    tickets: { complete: ticketConfigured && ticketTested, blocked: !config.enabled || !verifiedPayouts.length, evidence: `${activeProducts.length} active product${activeProducts.length === 1 ? '' : 's'} · ${verifiedPayouts.length} verified payout account${verifiedPayouts.length === 1 ? '' : 's'} · ${ticketTested ? 'test verified' : 'test pending'}` },
-    pass: { complete: guestsWithPass > 0 && passTested, blocked: !hasAudience && !activeProducts.length, evidence: `${guestsWithPass} guest${guestsWithPass === 1 ? '' : 's'} with pass credentials · ${passTested ? 'delivery verified' : 'delivery test pending'}` },
+    rsvp: { complete: rsvpConfigured && rsvpTested, blocked: !rsvpConfigured || (!openRsvp && !hasAudience), dependencies: openRsvp ? ['questions'] : ['guests','questions'], evidence: `${rsvpConfigured ? `Public link ready · ${questionRows.length} custom question${questionRows.length === 1 ? '' : 's'}` : 'RSVP settings or public link incomplete'} · ${rsvpTested ? 'test verified' : 'test pending'}` },
+    tickets: { complete: ticketConfigured && ticketTested, blocked: !ticketConfigured, resolution:ticketResolution, dependencies:needsPayout ? ['ticketConfig','ticketProducts','payoutAccounts'] : ['ticketConfig','ticketProducts'], evidence: `${activeProducts.length} active product${activeProducts.length === 1 ? '' : 's'} · ${needsPayout ? (selectedPayout ? 'selected payout account verified' : 'selected payout account required') : (activeProducts.length ? 'free-only: payout not required' : 'no active products')} · ${ticketTested ? 'test verified' : 'test pending'}` },
+    pass: { dependencies:selectedOutcomes.includes('tickets')?['guests','ticketProducts']:['guests'], complete: guestsWithPass > 0 && passTested, blocked: !hasAudience && !activeProducts.length, evidence: `${guestsWithPass} guest${guestsWithPass === 1 ? '' : 's'} with pass credentials · ${passTested ? 'delivery verified' : 'delivery test pending'}` },
     channels: { complete: enabledChannels.length > 0 && channelTested, blocked: enabledChannels.length === 0, evidence: `${enabledChannels.length ? enabledChannels.join(', ') : 'No delivery channel enabled'} · ${channelTested ? 'controlled test verified' : 'controlled test pending'}` },
     automation: { complete: automationConfigured && automationTested, blocked: enabledChannels.length === 0, evidence: `${routingConfigured ? 'routing saved' : 'routing not saved'} · ${scheduleRows.length} scheduled communication${scheduleRows.length === 1 ? '' : 's'} · ${automationTested ? 'test verified' : 'test pending'}` },
   }
@@ -54,5 +60,5 @@ export function phaseTwoReadiness({ event = {}, progress = {}, selectedOutcomes 
   const complete = visible.filter((recipe) => recipe.complete).length
   const blocked = visible.filter((recipe) => recipe.blocked).length
   const next = visible.find((recipe) => !recipe.complete) || null
-  return { recipes: visible, complete, total: visible.length, blocked, next, enabledChannels, dataFailures }
+  return { ...finalizeReadiness(2, visible, dataFailures), enabledChannels }
 }

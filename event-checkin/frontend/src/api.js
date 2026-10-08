@@ -1939,6 +1939,7 @@ export const api = {
   getSetupRecommendations: (eventType) => req('GET', `/setup/recommendations?event_type=${encodeURIComponent(eventType || '')}`),
   eventCreationLimits: () => req('GET', '/events/creation-limits'),
   getSetupProgress: (eventId) => req('GET', `/setup/progress?event_id=${eventId}`),
+  recordSetupEvidence: (body) => req('POST', '/setup/evidence', body),
   setSetupProgress: (eventId, stepKey, status) => req('POST', `/setup/progress`, { event_id: eventId, step_key: stepKey, status }),
   marketingMe: () => marketingReq('GET', '/me'),
   marketingDashboard: () => marketingReq('GET', '/dashboard'),

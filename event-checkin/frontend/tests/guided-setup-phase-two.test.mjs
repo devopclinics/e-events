@@ -14,7 +14,7 @@ test('RSVP remains blocked until an audience exists', () => {
 })
 
 test('ticket sales requires enabled config, active product, verified payout and test', () => {
-  const result = phaseTwoReadiness({ selectedOutcomes: ['tickets'], progress: { phase2_ticket_test: 'completed' }, ticketConfig: { config: { enabled: true } }, ticketProducts: [{ active: true }], payoutAccounts: [{ status: 'verified' }] })
+  const result = phaseTwoReadiness({ selectedOutcomes: ['tickets'], progress: { phase2_ticket_test: 'completed' }, ticketConfig: { config: { enabled: true, provider:'stripe', provider_account_id:'acct-1' } }, ticketProducts: [{ active: true }], payoutAccounts: [{ status: 'verified', provider:'stripe', provider_account_id:'acct-1' }] })
   assert.equal(result.recipes.find((row) => row.id === 'tickets').complete, true)
 })
 

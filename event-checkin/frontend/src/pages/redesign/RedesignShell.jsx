@@ -1,3 +1,4 @@
+import {guideHref,readGuideResume,SETUP_STAGES} from '../guideNavigation.mjs'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useTheme } from '../../context/ThemeContext'
@@ -544,6 +545,8 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
   flags.anyAddon = flags.venueAccess || flags.seating || flags.orders || flags.logistics || flags.registry || flags.festiome || flags.speakers || flags.partners || flags.reminders
 
   const eventName = event?.name || (currentEventId ? 'Loading…' : 'No event selected')
+  const resume=readGuideResume(currentEventId,user?.id)
+  const setupHref=guideHref(currentEventId,user?.id)
   const visibleTopLinks = TOP_LINKS.filter((l) => !l.gate || l.gate({ user, event, ticketingMaster }))
 
   function handleShellError(error, errorInfo) {
@@ -566,7 +569,7 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
 
           <nav className="rr-topbar-links">
             {visibleTopLinks.map((l) => (
-              <Link key={l.id} to={l.to} className={topActive === l.id ? 'active' : ''}>
+              <Link key={l.id} to={l.id==='guide'?setupHref:l.to} className={topActive === l.id ? 'active' : ''}>
                 {l.label}
               </Link>
             ))}
@@ -607,7 +610,7 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
         {menu && !withEventSidebar && (
           <div className="rr-topbar-drawer">
             {visibleTopLinks.map((l) => (
-              <Link key={l.id} to={l.to} onClick={() => setMenu(false)} className={topActive === l.id ? 'active' : ''}>
+              <Link key={l.id} to={l.id==='guide'?setupHref:l.to} onClick={() => setMenu(false)} className={topActive === l.id ? 'active' : ''}>
                 <Icon name={l.icon} size={15} /> {l.label}
               </Link>
             ))}
@@ -626,7 +629,7 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
               <nav>
                 <div className="rr-sidebar-mobile-global">
                   {visibleTopLinks.map((l) => (
-                    <Link key={l.id} to={l.to} onClick={() => setMenu(false)} className={topActive === l.id ? 'active' : ''}>
+                    <Link key={l.id} to={l.id==='guide'?setupHref:l.to} onClick={() => setMenu(false)} className={topActive === l.id ? 'active' : ''}>
                       <Icon name={l.icon} size={15} /><span>{l.label}</span>
                     </Link>
                   ))}
@@ -636,7 +639,7 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
                   if (accessMissing && !discoverable && !['admin', 'event_manager'].includes(user?.role)) return null
                   if (icon === 'grp') return <small key={label + i}>{label.toUpperCase()}</small>
                   return (
-                    <Link key={label} to={accessMissing ? '/communications-redesign?tab=settings' : to} className={eventActive === id ? 'active' : ''}>
+                    <Link key={label} to={id==='guide'?setupHref:accessMissing ? '/communications-redesign?tab=settings' : to} className={eventActive === id ? 'active' : ''}>
                       <Icon name={icon} size={15} /><span>{label}</span>
                       {accessMissing ? <b>Enable</b> : count != null && <b>{count}</b>}
                     </Link>
@@ -648,6 +651,7 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
         )}
 
         <main className={`rr-main ${withEventSidebar ? '' : 'rr-main-wide'}`}>
+          {resume?.task && location.pathname!=='/setup-redesign' && <Link className="guide-return" to={setupHref} style={{display:'block',padding:12,marginBottom:12}}>← Return to {SETUP_STAGES.find(([id])=>id===resume.view)?.[1] || 'Setup Guide'}</Link>}
           <RedesignRouteBoundary onError={handleRouteError}>
             {children}
           </RedesignRouteBoundary>

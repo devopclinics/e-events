@@ -1,3 +1,4 @@
+import { finalizeReadiness } from './guideReadiness.mjs'
 export const PHASE_FOUR_PROGRESS_PREFIX = 'phase4_'
 export const PHASE_FOUR_RECIPES = [
   { id:'team',number:'4.1',title:'Set up the event team',outcome:'team',route:'/team-redesign?tab=team',action:'Open Team Management',description:'Invite collaborators, assign event access, roles, permissions and service ownership, then verify the handoff.' },
@@ -30,7 +31,7 @@ export function phaseFourReadiness({event={},progress={},selectedOutcomes=[],mem
   planner:{complete:plannerReady&&checked(progress,'planner_review'),blocked:!plannerReady,evidence:`${plannerReady?'Planner data available':'Starter plan missing'} · ${checked(progress,'planner_review')?'readiness reviewed':'review pending'}`},
   tasks:{complete:taskRows.length>0&&assignedTasks===taskRows.length,blocked:taskRows.length===0,evidence:`${taskRows.length} task${taskRows.length===1?'':'s'} · ${assignedTasks} assigned`},
   seating:{complete:tableRows.length>0&&floorReady&&checked(progress,'seating_test'),blocked:tableRows.length===0,evidence:`${tableRows.length} table${tableRows.length===1?'':'s'} · ${floorReady?'floor plan ready':'floor plan missing'} · ${checked(progress,'seating_test')?'conflict check verified':'conflict check pending'}`},
-  orders:{complete:menus.length>0&&menuItems>0&&checked(progress,'orders_test'),blocked:menus.length===0,evidence:`${menus.length} categor${menus.length===1?'y':'ies'} · ${menuItems} item${menuItems===1?'':'s'} · ${checked(progress,'orders_test')?'fulfillment view verified':'fulfillment test pending'}`},
+  orders:{...(menus.length===0||menuItems===0?{route:'/addons-redesign?tab=orders',action:'Configure menu and choices'}:{}),complete:menus.length>0&&menuItems>0&&checked(progress,'orders_test'),blocked:menus.length===0||menuItems===0,evidence:`${menus.length} categor${menus.length===1?'y':'ies'} · ${menuItems} item${menuItems===1?'':'s'} · ${checked(progress,'orders_test')?'fulfillment view verified':'fulfillment test pending'}`},
   logistics:{complete:shipmentRows.length>0&&checked(progress,'logistics_test'),blocked:shipmentRows.length===0,evidence:`${shipmentRows.length} shipment group${shipmentRows.length===1?'':'s'} · ${checked(progress,'logistics_test')?'vendor flow verified':'vendor flow pending'}`},
   access:{complete:zoneRows.length>0&&gateRows.length>0&&checked(progress,'access_test'),blocked:zoneRows.length===0||gateRows.length===0,evidence:`${zoneRows.length} zone${zoneRows.length===1?'':'s'} · ${gateRows.length} gate${gateRows.length===1?'':'s'} · ${checked(progress,'access_test')?'credential tests verified':'credential tests pending'}`},
   checkin:{complete:qrGuests>0&&checked(progress,'checkin_test'),blocked:qrGuests===0,evidence:`${qrGuests} guest${qrGuests===1?'':'s'} with pass credentials · ${checked(progress,'checkin_test')?'multi-device rehearsal verified':'rehearsal pending'}`},
@@ -40,5 +41,5 @@ export function phaseFourReadiness({event={},progress={},selectedOutcomes=[],mem
   finance:{complete:donations.length>0&&checked(progress,'finance_review'),blocked:donations.length===0,evidence:`${verified.length} confirmed · ${pending.length} pending · ${auditRows.length} audit entr${auditRows.length===1?'y':'ies'} · ${checked(progress,'finance_review')?'totals reconciled':'reconciliation pending'}`},
  }
  const visible=recipes.map(recipe=>({...recipe,...state[recipe.id]})),complete=visible.filter(x=>x.complete).length,blocked=visible.filter(x=>x.blocked).length
- return {recipes:visible,complete,total:visible.length,blocked,next:visible.find(x=>!x.complete)||null,dataFailures}
+  return { ...finalizeReadiness(4, visible, dataFailures) }
 }

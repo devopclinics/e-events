@@ -1,3 +1,4 @@
+import { finalizeReadiness } from './guideReadiness.mjs'
 export const PHASE_THREE_PROGRESS_PREFIX = 'phase3_'
 
 export const PHASE_THREE_RECIPES = [
@@ -53,5 +54,5 @@ export function phaseThreeReadiness({ event = {}, progress = {}, selectedOutcome
   const visible = recipes.map((recipe) => ({ ...recipe, ...stateById[recipe.id] }))
   const complete = visible.filter((recipe) => recipe.complete).length
   const blocked = visible.filter((recipe) => recipe.blocked).length
-  return { recipes: visible, complete, total: visible.length, blocked, next: visible.find((recipe) => !recipe.complete) || null, dataFailures }
+  return { ...finalizeReadiness(3, visible, dataFailures) }
 }

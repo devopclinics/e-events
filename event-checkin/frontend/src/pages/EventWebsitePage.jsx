@@ -1,3 +1,4 @@
+import { eventCalendarDays, eventCalendarLabel } from './eventCalendar.mjs'
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { useCurrentEvent, registerEventChangeGuard } from '../hooks/useCurrentEvent'
@@ -60,7 +61,7 @@ function ImportDialog({children,onClose}){const ref=useRef();useEffect(()=>{ref.
 const editable = value => ({slug:value.slug,template_family:value.template_family,content:value.content})
 const signature = value => JSON.stringify(editable(value))
 const sectionsFor = c => [['#about','Event story',c.intro_title||c.intro_summary],['#programme','Programme',(c.visible_sections||[]).includes('programme')],['#tracks','Audience tracks',(c.visible_sections||[]).includes('tracks')&&c.tracks?.length],['#speakers','Speakers',c.speakers?.length],['#venue','Venue',c.venue||c.venue_facts?.length],['#registration','Registration',c.registration_facts?.length],['#faq','FAQs',c.faqs?.length],['#contact','Contact',c.contact_email],['#connect','Connected services',(c.visible_sections||[]).includes('connect')]].filter(x=>x[2])
-const displayDate = c => value => value ? new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeZone:c.timezone||'UTC'}).format(new Date(value)) : 'Date not set'
+const displayDate = c => value => eventCalendarLabel(value, c.timezone)
 const errorText = e => e?.message || 'The request failed. Please try again.'
 
 export default function EventWebsitePage() {
@@ -105,7 +106,7 @@ function WebsiteEditor({eventId}) {
   const featuredCount=(content.sessions||[]).filter(item=>item.featured===true).length
   const appliedTemplate=saved?.template_family
   const sources=Object.fromEntries(Object.entries(catalog).filter(([key])=>key!=='section').map(([key,value])=>[key,value.available?value.url:'']))
-  const eventSpanDays=content.start_date&&content.end_date?Math.round((new Date(content.end_date.slice(0,10))-new Date(content.start_date.slice(0,10)))/86400000)+1:null
+  const eventSpanDays = eventCalendarDays(content.start_date, content.end_date, content.timezone)
   const canLeave=()=> !operation.current && (!dirty||window.confirm('Leave with unsaved website changes? A recovery copy will remain in this browser.'))
   useEffect(()=>registerEventChangeGuard(canLeave),[dirty])
   useEffect(()=>{

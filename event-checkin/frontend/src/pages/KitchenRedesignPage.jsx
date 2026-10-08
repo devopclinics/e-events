@@ -1,3 +1,6 @@
+import {MealTimingControl} from './SetupFeatureControls'
+import {useEventDetails} from '../hooks/useEventDetails'
+import {useAuth} from '../context/AuthContext'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
@@ -37,6 +40,8 @@ function OrderCard({ order, working, multiCategory, onServe, onToggleCategory })
 
 export default function KitchenRedesignPage() {
   const [eventId, setEventId] = useCurrentEvent()
+  const {event:fullEvent,refresh:refreshEvent}=useEventDetails(eventId)
+  const {user}=useAuth()
   const [events, setEvents] = useState([])
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -105,7 +110,7 @@ export default function KitchenRedesignPage() {
   const event = events.find((item) => item.id === eventId)
   const served = guests.filter((g) => g.meal_served).length
 
-  return <RedesignShell topActive="orders"><div className="kn-page">
+  return <RedesignShell topActive="orders"><div className="kn-page">{['admin','event_manager'].includes(user?.role)&&<><MealTimingControl event={fullEvent} onRefresh={refreshEvent}/><a className="rr-btn secondary" href="/addons-redesign?tab=orders">Configure menu and choices →</a></>}
     <div className="kn-header"><div><h2>Kitchen Display</h2><p className="kn-subtitle">{text(event?.name, 'Orders')} · refreshes every 20 seconds</p></div>
       {events.length > 1 && <select className="rr-select" value={eventId} onChange={(e) => setEventId(e.target.value)}><option value="">Select event</option>{events.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select>}</div>
     {error && <ErrorRetryState message={error} onRetry={load}/>}

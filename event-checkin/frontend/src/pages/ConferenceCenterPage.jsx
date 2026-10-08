@@ -1,3 +1,4 @@
+import {useSearchParams} from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import RedesignShell, { Modal } from './redesign/RedesignShell'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
@@ -7,7 +8,8 @@ import './ConferenceCenterPage.css'
 const TABS=[['overview','Overview'],['calls','Calls & abstracts'],['tracks','Tracks'],['speakers','Speaker operations'],['partners','Exhibitors & sponsors'],['gallery','Photo gallery'],['integrations','Integrations'],['templates','Shared templates']]
 const OPS={speakers:['meeting','release'],gallery:['gallery'],integrations:['integration']}
 export default function ConferenceCenterPage(){
- const [eventId]=useCurrentEvent(),[data,setData]=useState(null),[tab,setTab]=useState('overview'),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[editor,setEditor]=useState(null),[submission,setSubmission]=useState(null),galleryInput=useRef(null)
+ const [eventId]=useCurrentEvent(),[data,setData]=useState(null),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[editor,setEditor]=useState(null),[submission,setSubmission]=useState(null),galleryInput=useRef(null)
+ const [params,setParams]=useSearchParams();const tab=TABS.some(([id])=>id===params.get('tab'))?params.get('tab'):'overview';const setTab=value=>setParams({tab:value})
  const load=async()=>{if(!eventId)return;try{setData(await api.getConferenceCenter(eventId))}catch(e){setMessage(e.message)}}
  useEffect(()=>{load()},[eventId])
  const saveProfile=async(patch)=>{setBusy(true);try{await api.updateConferenceProfile(eventId,{...data.profile,...patch});await load();setMessage('Conference settings saved.')}catch(e){setMessage(e.message)}finally{setBusy(false)}}

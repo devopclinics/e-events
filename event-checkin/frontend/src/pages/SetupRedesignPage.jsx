@@ -1,4 +1,8 @@
-import { useEffect, useState } from 'react'
+import {useSearchParams} from 'react-router-dom'
+import {useAuth} from '../context/AuthContext'
+import {SETUP_STAGES,readGuideResume,saveGuideResume} from './guideNavigation.mjs'
+import './GuideStage.css'
+import { useEffect, useRef, useState } from 'react'
 import RedesignShell, { Icon } from './redesign/RedesignShell'
 import { ErrorRetryState, LoadingSkeleton } from './redesign/RedesignPrimitives'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
@@ -53,111 +57,6 @@ const FEATURES = [
   { id: 'experience', label: 'Experience program', desc: 'Session-based event content' },
   { id: 'selfcheckin', label: 'Self check-in kiosk', desc: 'Guests check themselves in' },
   { id: 'planner', label: 'Event planner', desc: 'Budget, vendors, milestones, and run of show' },
-]
-
-const GUIDED_STEPS = [
-  {
-    id: 'team', label: 'Invite your team',
-    desc: 'Add co-hosts, event managers, and scanners.',
-    fields: [
-      { label: 'Team member email', placeholder: 'colleague@email.com', type: 'email' },
-      { label: 'Role', type: 'select', options: ['Event manager', 'Scanner', 'Viewer'] },
-    ],
-  },
-  {
-    id: 'messaging', label: 'Set up messaging',
-    desc: 'Choose the channels this event may use. Provider credentials remain controlled by platform settings.',
-    fields: [
-      { label: 'Delivery channels', type: 'select', options: ['Email only', 'Email + SMS', 'Email + WhatsApp', 'Email + SMS + WhatsApp'] },
-    ],
-  },
-  {
-    id: 'ticketing', label: 'Configure ticket sales',
-    desc: 'Create ticket products, prices, sale windows, and payment settings.',
-    fields: [], modes: ['ticketed', 'hybrid'], href: '/ticketing-redesign', linkLabel: 'Open ticket sales',
-  },
-  {
-    id: 'rsvp', label: 'Create RSVP questions',
-    desc: 'Collect custom answers from your guests on the RSVP form.',
-    fields: [
-      { label: 'Question', placeholder: 'e.g. Dietary preference?' },
-      { label: 'Type', type: 'select', options: ['Short text', 'Multiple choice', 'Yes / No'] },
-    ],
-  },
-  {
-    id: 'planner', label: 'Build your event plan',
-    desc: 'Generate countdown milestones for the budget, guest launch, vendors, run of show, and check-in.',
-    fields: [], href: '/planner-redesign', linkLabel: 'Open planner',
-  },
-  {
-    id: 'multiinvitee', label: 'Multi-invitee',
-    desc: 'Let each guest bring additional guests (plus-ones).',
-    fields: [
-      { label: 'Max additional guests per invite', type: 'select', options: ['0 (disabled)', '1', '2', '3', '4', '5'] },
-    ],
-  },
-  {
-    id: 'tables', label: 'Set up tables',
-    desc: 'Create table groups and assign seats.',
-    fields: [
-      { label: 'Number of tables', placeholder: '10', type: 'number' },
-      { label: 'Seats per table', placeholder: '8', type: 'number' },
-    ],
-  },
-  {
-    id: 'menu', label: 'Add menu items',
-    desc: 'Enter food / drink options for your guests to choose.',
-    fields: [
-      { label: 'Item name', placeholder: 'Jollof rice' },
-      { label: 'Category', type: 'select', options: ['Main course', 'Starter', 'Dessert', 'Drink', 'Other'] },
-    ],
-  },
-  {
-    id: 'registry', label: 'Set up gift registry',
-    desc: 'Add monetary contributions or physical gift items.',
-    fields: [
-      { label: 'Item name', placeholder: 'Kitchen appliance' },
-      { label: 'Target amount (optional)', placeholder: '₦50,000', type: 'number' },
-    ],
-  },
-  {
-    id: 'logistics', label: 'Configure deliveries',
-    desc: 'Add packing list categories for vendor shipments.',
-    fields: [
-      { label: 'Category', placeholder: 'Décor' },
-      { label: 'Expected delivery date', type: 'date' },
-    ],
-  },
-  {
-    id: 'speakers', label: 'Add a guest speaker',
-    desc: 'Add your first speaker — manage the full lineup and public page from Add-ons.',
-    fields: [
-      { label: 'Speaker name', placeholder: 'Jane Doe' },
-      { label: 'Title / role (optional)', placeholder: 'CEO, Acme' },
-    ],
-  },
-  {
-    id: 'partners', label: 'Add a partner',
-    desc: 'Add your first partner or sponsor — manage the full list and categories from Add-ons.',
-    fields: [
-      { label: 'Partner name', placeholder: 'Grand Hall Catering' },
-    ],
-  },
-  {
-    id: 'festiome', label: 'FestioMe guest app',
-    desc: 'Enable the personalised in-app event experience for your guests. Welcome wording can then be edited in Design Studio.',
-    fields: [],
-  },
-  {
-    id: 'experience', label: 'Experience program',
-    desc: 'Enable Experience, then build its workflow and program from the Experience page.',
-    fields: [],
-  },
-  {
-    id: 'review', label: 'Review & go live',
-    desc: 'Check your setup summary and activate the event.',
-    fields: [],
-  },
 ]
 
 function WizardPhase({ onComplete, notify }) {
@@ -431,284 +330,31 @@ function WizardPhase({ onComplete, notify }) {
   )
 }
 
-const SETUP_FEATURE_FIELDS = {seating:'seating_enabled',orders:'menu_enabled',logistics:'logistics_enabled',registry:'registry_enabled',speakers:'speaker_enabled',partners:'partner_enabled',access:'venue_access_enabled',festiome:'festiome_addon_enabled',experience:'experience_enabled',planner:'planner_enabled',live:'engagement_enabled'}
-function GuidedSetupPhase({ eventId, notify, onEventUnavailable }) {
-  const [event, setEvent] = useState(null)
-  const [states, setStates] = useState(() =>
-    Object.fromEntries(GUIDED_STEPS.map((s) => [s.id, 'pending']))
-  )
-  const [open, setOpen] = useState('team')
-  const [fieldVals, setFieldVals] = useState({})
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState('')
-
-  async function loadProgress() {
-    if (!eventId) {
-      setLoading(false)
+export default function SetupRedesignPage() {
+  const [eventId, setCurrentEvent] = useCurrentEvent()
+  const {user}=useAuth()
+  const [params,setParams]=useSearchParams()
+  const previousEvent=useRef(eventId)
+  const requested=params.get('view') || readGuideResume(eventId,user?.id)?.view || (eventId?'guide':'wizard')
+  const phase=SETUP_STAGES.some(([id])=>id===requested)?requested:'guide'
+  const [toast,setToast]=useState(null)
+  const stageIndex=SETUP_STAGES.findIndex(([id])=>id===phase)
+  function setPhase(next){setParams({view:next})}
+  useEffect(()=>{
+    if(previousEvent.current!==eventId){
+      previousEvent.current=eventId
+      const saved=readGuideResume(eventId,user?.id)
+      setParams({view:saved?.view || (eventId?'guide':'wizard'),...(saved?.task?{task:saved.task}:{})},{replace:true})
       return
     }
-    setLoading(true)
-    setError('')
-    try {
-      const result = await api.getSetupProgress(eventId)
-      setStates((prev) => ({ ...prev, ...(result.steps || {}) }))
-    } catch (e) {
-      // A stale eventId left in localStorage from a previous account/org (see
-      // useCurrentEvent.js) 404s here rather than loading — send the user back
-      // to step 1 instead of stranding them on a "Try again" that can never work.
-      if (e.status === 404) {
-        onEventUnavailable()
-        return
-      }
-      setError(e.message || 'Setup progress could not be loaded')
-    } finally {
-      setLoading(false)
+    if(!params.get('view')){
+      const saved=readGuideResume(eventId,user?.id)
+      setParams({view:phase,...(saved?.view===phase&&saved?.task?{task:saved.task}:{})},{replace:true})
+      return
     }
-  }
-
-  useEffect(() => {
-    loadProgress()
-    if (eventId) api.listEvents().then((events) => setEvent(events.find((row) => row.id === eventId) || null)).catch(() => setEvent(null))
-  }, [eventId])
-
-  const mode = event?.attendance_mode || 'rsvp'
-  const steps = GUIDED_STEPS.filter((step) => !step.modes || step.modes.includes(mode)).filter((step) => {
-    if (step.id === 'rsvp') return ['rsvp', 'hybrid'].includes(mode)
-    if (step.id === 'multiinvitee') return ['rsvp', 'hybrid'].includes(mode)
-    return true
-  })
-
-  function setStepState(id, state) {
-    setStates((prev) => ({ ...prev, [id]: state }))
-  }
-
-  async function saveStepConfiguration(stepId) {
-    const value = (index) => fieldVals[`${stepId}-${index}`] || ''
-    if (stepId === 'team') {
-      if (!value(0)) throw new Error('Enter a team member email')
-      const account = await api.checkTeamEmail(value(0))
-      if (!account.exists && !window.confirm(`${value(0)} does not have a Festio account yet. Create and send the team invitation anyway?`)) return false
-      const selectedRole = value(1) || 'Viewer'
-      const orgMember = await api.inviteOrgMember(eventId, { email: value(0), role: selectedRole === 'Event manager' ? 'admin' : 'staff' })
-      await api.assignMember(eventId, orgMember.user.id)
-      if (selectedRole === 'Event manager') {
-        await api.updateMemberPermissions(eventId, orgMember.user.id, { event_role: 'manager', access_level: 'edit' })
-      } else {
-        await api.updateMemberPermissions(eventId, orgMember.user.id, { event_role: 'staff', access_level: selectedRole === 'Viewer' ? 'view' : 'edit' })
-      }
-    } else if (stepId === 'messaging') {
-      const selected = value(0) || 'Email only'
-      await api.toggleFeatures(eventId, {
-        notify_email: true,
-        notify_sms: selected.includes('SMS'),
-        notify_whatsapp: selected.includes('WhatsApp'),
-      })
-    } else if (stepId === 'rsvp') {
-      if (!value(0)) throw new Error('Enter an RSVP question')
-      const type = value(1) === 'Yes / No' ? 'boolean' : value(1) === 'Multiple choice' ? 'select' : 'text'
-      await api.createRSVPQuestion(eventId, { question: value(0), question_type: type, is_required: false, sort_order: 0 })
-    } else if (stepId === 'multiinvitee') {
-      const limit = Number.parseInt(value(0), 10) || 0
-      await api.updateInviteSettings(eventId, { rsvp_multi_invitee_enabled: limit > 0, rsvp_multi_invitee_limit: Math.max(1, limit || 1) })
-    } else if (stepId === 'tables') {
-      const count = Number.parseInt(value(0), 10)
-      const capacity = Number.parseInt(value(1), 10)
-      if (!count || !capacity) throw new Error('Enter the number of tables and seats per table')
-      await api.bulkCreateTables(eventId, [{ group_name: 'Main tables', category: 'main', table_count: count, table_capacity: capacity }])
-    } else if (stepId === 'menu') {
-      if (!value(0)) throw new Error('Enter a menu item name')
-      const category = await api.createMenuCategory(eventId, { name: value(1) || 'Other', selection_type: 'single', is_required: false, sort_order: 0 })
-      await api.addMenuItem(eventId, category.id, { name: value(0), description: '' })
-    } else if (stepId === 'registry') {
-      if (!value(0)) throw new Error('Enter a registry item name')
-      await api.createRegistryItem(eventId, { kind: value(1) ? 'fund' : 'item', title: value(0), amount_minor: value(1) ? Math.round(Number(value(1)) * 100) : null })
-    } else if (stepId === 'logistics') {
-      if (!value(0)) throw new Error('Enter a delivery category')
-      await api.createShipment(eventId, { name: value(0), phase: 'pre', notes: value(1) ? `Expected delivery: ${value(1)}` : null })
-    } else if (stepId === 'speakers') {
-      if (!value(0)) throw new Error('Enter a speaker name')
-      await api.createSpeaker(eventId, { name: value(0), title: value(1) || null, social_links: [] })
-    } else if (stepId === 'partners') {
-      if (!value(0)) throw new Error('Enter a partner name')
-      await api.createPartner(eventId, { name: value(0) })
-    } else if (stepId === 'festiome') {
-      await api.toggleFeatures(eventId, { festiome_addon_enabled: true })
-    } else if (stepId === 'experience') {
-      await api.toggleFeatures(eventId, { experience_enabled: true })
-    } else if (stepId === 'ticketing') {
-      const products = await api.ticketingProducts(eventId)
-      if (!products.length) throw new Error('Create at least one ticket product before completing this step')
-    } else if (stepId === 'planner') {
-      await api.toggleFeatures(eventId, { planner_enabled: true })
-      if (event) await api.plannerCreateStarterPlan(eventId, {
-        event_name: event.name, event_type: event.event_type,
-        attendance_mode: mode, event_date: event.event_date.slice(0, 10), venue_name: event.venue_name,
-      })
-    } else if (stepId === 'review') {
-      await api.changeStatus(eventId, 'active')
-    }
-  }
-
-  async function handleSave(stepId) {
-    if (!eventId || busy) return
-    setBusy(stepId)
-    try {
-      const saved = await saveStepConfiguration(stepId)
-      if (saved === false) return
-      await api.setSetupProgress(eventId, stepId, 'completed')
-      setStepState(stepId, 'completed')
-      notify(`${steps.find((s) => s.id === stepId)?.label || 'Step'} saved`)
-      const idx = steps.findIndex((s) => s.id === stepId)
-      const next = steps[idx + 1]
-      if (next) setOpen(next.id)
-    } catch (e) {
-      notify(e.message || 'Setup step could not be saved', true)
-    } finally {
-      setBusy('')
-    }
-  }
-
-  async function handleSkip(stepId) {
-    if (!eventId || busy) return
-    setBusy(stepId)
-    try {
-      await api.setSetupProgress(eventId, stepId, 'skipped')
-      setStepState(stepId, 'skipped')
-      const idx = steps.findIndex((s) => s.id === stepId)
-      const next = steps[idx + 1]
-      if (next) setOpen(next.id)
-    } catch (e) {
-      notify(e.message || 'Setup step could not be skipped', true)
-    } finally {
-      setBusy('')
-    }
-  }
-
-  async function resumeFeature(feature) {
-    setBusy(`feature:${feature}`)
-    try {
-      if(feature==='rsvp')await api.updateInviteSettings(eventId,{rsvp_enabled:true})
-      else if(feature==='selfcheckin')await api.setSelfCheckin(eventId,true)
-      else if(SETUP_FEATURE_FIELDS[feature])await api.toggleFeatures(eventId,{[SETUP_FEATURE_FIELDS[feature]]:true})
-      else throw new Error('Open service settings to finish this feature.')
-      const rows=await api.listEvents();setEvent(rows.find(row=>row.id===eventId)||null)
-      notify('Feature enabled. Review its settings before using it.')
-    }catch(e){notify(e.message || 'This feature still needs setup or a pass upgrade.',true)}finally{setBusy('')}
-  }
-  async function resumePreferences() {
-    setBusy('preferences')
-    const preferences = event.setup_preferences || {}
-    const channels = preferences.channels || []
-    const results = await Promise.allSettled([
-      api.toggleFeatures(eventId, {notify_email:channels.includes('email'), notify_sms:channels.includes('sms'), notify_whatsapp:channels.includes('whatsapp')}),
-      api.setBillingCurrency(eventId, preferences.currency),
-    ])
-    const errors = results.flatMap((result,index)=>result.status==='rejected' ? [`${index===0?'Communication channels':'Currency'}: ${result.reason?.message || 'Could not save'}`] : [])
-    try { const rows=await api.listEvents(); setEvent(rows.find(row=>row.id===eventId)||null) } catch {}
-    setBusy('')
-    notify(errors.length?errors.join(' · '):'Communication channels and currency saved.',!!errors.length)
-  }
-  const completedCount = steps.filter((step) => states[step.id] === 'completed').length
-
-  if (!eventId) return <div className="rr-panel"><div className="rd-panel-body">Create or select an event before starting guided setup.</div></div>
-  if (loading) return <div className="rr-panel"><div className="rd-panel-body"><LoadingSkeleton rows={6} /></div></div>
-  if (error) return <div className="rr-panel"><div className="rd-panel-body"><ErrorRetryState message={error} onRetry={loadProgress} /></div></div>
-
-  return (
-    <div className="su-guided">
-      {!!event?.setup_preferences?.features?.length && <section className="rr-panel" style={{padding:18,marginBottom:18}}><h2>Your requested features</h2><p>Included features may still need configuration. Enabling a service does not finish its setup.</p>{event.setup_preferences.features.map(id=>{const active=id==='rsvp'?event.rsvp_enabled:id==='selfcheckin'?event.self_checkin_enabled:event[SETUP_FEATURE_FIELDS[id]];return <div key={id} style={{display:'flex',gap:12,alignItems:'center',margin:'8px 0'}}><strong>{FEATURES.find(f=>f.id===id)?.label || id}</strong><span>{active?'Enabled · review settings':'Requested · needs activation'}</span>{!active&&<button className="rr-btn secondary" disabled={!!busy} onClick={()=>resumeFeature(id)}>Retry activation</button>}</div>})}<p>Requested channels: {(event.setup_preferences.channels || []).join(', ') || 'none'} · Currency: {event.setup_preferences.currency || 'not selected'}</p><button className="rr-btn secondary" disabled={!!busy || !event.setup_preferences.currency} onClick={resumePreferences}>Apply requested channels &amp; currency</button><p><a href="/communications-redesign?tab=settings">Review service settings →</a></p></section>}
-      {event?.menu_enabled && <section className="rr-panel" style={{padding:18,marginBottom:18}}><label>When can guests choose meals?<select className="rd-field" value={event.menu_selection_timing || 'after_admission'} onChange={async e=>{try{await api.toggleFeatures(eventId,{menu_selection_timing:e.target.value});setEvent({...event,menu_selection_timing:e.target.value});notify('Meal selection timing saved.')}catch(err){notify(err.message,true)}}}><option value="after_admission">After event check-in</option><option value="before_arrival">Before arrival, after registration confirmation</option></select></label><p>Serving still requires check-in. Served selections stay locked.</p></section>}
-      <div className="su-guided-header">
-        <div>
-          <h2>Guided setup</h2>
-          <p className="su-subtitle">{ATTENDANCE_MODES.find((item) => item.id === mode)?.label} workflow · {completedCount} of {steps.length} steps complete</p>
-        </div>
-        <div className="su-progress-bar-wrap">
-          <div className="su-progress-bar" style={{ width: `${(completedCount / steps.length) * 100}%` }} />
-        </div>
-      </div>
-      <div className="su-steps">
-        {steps.map((step, i) => {
-          const state = states[step.id]
-          const isOpen = open === step.id
-          return (
-            <div key={step.id} className={`su-step${isOpen ? ' open' : ''}${state === 'completed' ? ' done' : ''}${state === 'skipped' ? ' skipped' : ''}`}>
-              <button className="su-step-head" onClick={() => setOpen(isOpen ? null : step.id)}>
-                <span className="su-step-num">
-                  {state === 'completed' ? <Icon name="check" size={14} /> : state === 'skipped' ? '–' : i + 1}
-                </span>
-                <span className="su-step-label">{step.label}</span>
-                <div className="su-step-badges">
-                  {state === 'completed' && <span className="su-badge done">Completed</span>}
-                  {state === 'skipped' && <span className="su-badge skipped">Skipped</span>}
-                </div>
-                <Icon name="chevrondown" size={16} className={`su-step-chevron${isOpen ? ' rotated' : ''}`} />
-              </button>
-              {isOpen && (
-                <div className="su-step-body">
-                  <p className="su-step-desc">{step.desc}</p>
-                  {step.id === 'review' ? (
-                    <div className="su-review">
-                      <div className="su-review-grid">
-                        {steps.filter((s) => s.id !== 'review').map((s) => (
-                          <div key={s.id} className="su-review-row">
-                            <span className={`su-review-icon ${states[s.id] === 'completed' ? 'done' : states[s.id] === 'skipped' ? 'skipped' : 'pending'}`}>
-                              {states[s.id] === 'completed' ? '✅' : states[s.id] === 'skipped' ? '⏭' : '⏳'}
-                            </span>
-                            <strong>{s.label}</strong>
-                            <span className="su-review-status">{states[s.id] === 'completed' ? 'Done' : states[s.id] === 'skipped' ? 'Skipped' : 'Pending'}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <button className="rr-btn primary" style={{ marginTop: 16 }} onClick={() => handleSave('review')}>
-                        {busy === 'review' ? 'Activating…' : 'Go live'}
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      {step.fields.map((f, fi) => (
-                        <div key={fi}>
-                          <label className="rd-field-label">{f.label}</label>
-                          {f.type === 'select' ? (
-                            <select className="rd-field" value={fieldVals[`${step.id}-${fi}`] || ''} onChange={(e) => setFieldVals((p) => ({ ...p, [`${step.id}-${fi}`]: e.target.value }))}>
-                              <option value="">Select…</option>
-                              {(f.options || []).map((o) => <option key={o}>{o}</option>)}
-                            </select>
-                          ) : (
-                            <input className="rd-field" type={f.type || 'text'} placeholder={f.placeholder || ''} value={fieldVals[`${step.id}-${fi}`] || ''} onChange={(e) => setFieldVals((p) => ({ ...p, [`${step.id}-${fi}`]: e.target.value }))} />
-                          )}
-                        </div>
-                      ))}
-                      {step.href && <a className="rr-link-btn su-workspace-link" href={step.href}>{step.linkLabel} →</a>}
-                      <div className="su-step-actions">
-                        <button className="rr-btn primary" disabled={!!busy} onClick={() => handleSave(step.id)}>{busy === step.id ? 'Saving…' : 'Save & continue'}</button>
-                        <button className="rr-btn secondary" disabled={!!busy} onClick={() => handleSkip(step.id)}>Skip</button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-export default function SetupRedesignPage() {
-  const initialView = new URLSearchParams(window.location.search).get('view')
-  const [phase, setPhaseState] = useState(['outcomes', 'guide', 'audience', 'experience', 'operations', 'live', 'closeout'].includes(initialView) ? initialView : 'wizard')
-  const [eventId, setCurrentEvent] = useCurrentEvent()
-  const [toast, setToast] = useState(null)
-
-  function setPhase(next) {
-    setPhaseState(next)
-    const url = new URL(window.location.href)
-    url.searchParams.set('view', next)
-    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
-  }
+    saveGuideResume(eventId,user?.id,phase,params.get('task')||'')
+    document.querySelector('.su-phase-btn.active')?.scrollIntoView({block:'nearest',inline:'center'})
+  },[eventId,user?.id,phase,params.toString()])
 
   function notify(message, error = false) {
     setToast({ message, error })
@@ -716,8 +362,10 @@ export default function SetupRedesignPage() {
   }
 
   return (
-    <RedesignShell topActive="guide">
+    <RedesignShell topActive="guide" eventScoped>
       <div className="su-page">
+        <label className="guide-stage-mobile">Step {stageIndex+1} of 8 · {SETUP_STAGES[stageIndex][1]}<select aria-label="Setup stage" value={phase} onChange={e=>setPhase(e.target.value)}>{SETUP_STAGES.map(([id,label],i)=><option key={id} value={id}>{i+1}. {label}</option>)}</select></label>
+        <div className="guide-stage-controls"><button className="rr-btn secondary" disabled={stageIndex===0} onClick={()=>setPhase(SETUP_STAGES[stageIndex-1][0])}>Previous</button><button className="rr-btn secondary" disabled={stageIndex===7} onClick={()=>setPhase(SETUP_STAGES[stageIndex+1][0])}>Next stage</button></div>
         <div className="su-phase-bar" aria-label="Event setup stages">
           <button className={`su-phase-btn${phase === 'wizard' ? ' active' : ''}`} onClick={() => setPhase('wizard')}>
             <span className="su-phase-num">1</span> Create event
@@ -754,7 +402,7 @@ export default function SetupRedesignPage() {
           </>
         </div>
 
-        {phase === 'wizard' && <WizardPhase notify={notify} onComplete={(event) => { setCurrentEvent(event.id); setPhase('outcomes') }} />}
+        {phase === 'wizard' && <WizardPhase notify={notify} onComplete={(event) => { previousEvent.current=event.id; setCurrentEvent(event.id); setPhase('outcomes') }} />}
         {phase === 'outcomes' && <OutcomeLauncher eventId={eventId} notify={notify} onContinue={() => setPhase('guide')} />}
         {phase === 'guide' && <PhaseOneGuide eventId={eventId} onChooseOutcomes={() => setPhase('outcomes')} onCreateEvent={() => setPhase('wizard')} />}
         {phase === 'audience' && <GuidedSetupPhaseTwo eventId={eventId} notify={notify} onBack={() => setPhase('guide')} />}

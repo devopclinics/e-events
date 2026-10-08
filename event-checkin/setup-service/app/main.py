@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 import uuid
 from contextlib import asynccontextmanager
@@ -14,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint, select
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, String, UniqueConstraint, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -100,7 +99,7 @@ class Event(Base):
     is_paid: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
-# ── Guided-setup progress — the one table this service exclusively owns ─────
+# ── Guided-setup progress and evidence — tables this service exclusively owns ─────
 # Deliberately a SEPARATE DeclarativeBase from the mirrored tables above, so
 # its own create_all() at startup never touches (or races) backend's own
 # migration of the shared tables. No cross-Base foreign keys for the same
@@ -121,6 +120,21 @@ class SetupProgress(SetupBase):
     status: Mapped[str] = mapped_column(String(20), default="completed")  # "completed" | "skipped"
     completed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     completed_by_user_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+
+
+class SetupEvidence(SetupBase):
+    """Append-only organizer test records. Never confer live-service permissions."""
+    __tablename__ = "setup_task_evidence"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), index=True)
+    step_key: Mapped[str] = mapped_column(String(40), index=True)
+    result: Mapped[str] = mapped_column(String(20))
+    checks: Mapped[list] = mapped_column(JSON)
+    reference: Mapped[str] = mapped_column(String(500))
+    notes: Mapped[str] = mapped_column(String(2000), default="")
+    config_revision: Mapped[str] = mapped_column(String(80))
+    recorded_by: Mapped[str] = mapped_column(String(36))
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 @asynccontextmanager
@@ -507,7 +521,13 @@ async def get_progress(
 ):
     await require_event_admin(event_id, user, db, request)
     rows = (await db.execute(select(SetupProgress).where(SetupProgress.event_id == event_id))).scalars().all()
-    return {"steps": {r.step_key: r.status for r in rows}}
+    evidence = (await db.execute(select(SetupEvidence).where(SetupEvidence.event_id == event_id)
+        .order_by(SetupEvidence.recorded_at.desc(), SetupEvidence.id.desc()))).scalars().all()
+    return {"steps": {r.step_key: r.status for r in rows},
+            "legacy_checks": [{"step_key": r.step_key, "status": r.status,
+                "recorded_at": r.completed_at, "recorded_by": r.completed_by_user_id} for r in rows],
+            "evidence": [evidence_out(r) for r in evidence]}
+
 
 
 @app.post("/api/setup/progress", status_code=204)
@@ -528,3 +548,42 @@ async def set_progress(
     await db.execute(stmt)
     await db.commit()
     return None
+
+
+class EvidenceCheck(BaseModel):
+    label: str = Field(min_length=1, max_length=300)
+    passed: bool
+
+
+class EvidenceIn(BaseModel):
+    event_id: str
+    step_key: str = Field(pattern=r"^phase[2-6]_[a-z_]{1,30}$", max_length=40)
+    result: str = Field(pattern="^(passed|partial|failed)$")
+    checks: list[EvidenceCheck] = Field(min_length=1, max_length=20)
+    reference: str = Field(min_length=3, max_length=500)
+    notes: str = Field(default="", max_length=2000)
+    config_revision: str = Field(min_length=1, max_length=80)
+
+
+def evidence_out(row):
+    return {"id":row.id, "step_key":row.step_key, "result":row.result,
+            "checks":row.checks, "reference":row.reference, "notes":row.notes,
+            "config_revision":row.config_revision, "recorded_by":row.recorded_by,
+            "recorded_at":row.recorded_at, "source":"organizer_recorded"}
+
+
+@app.post("/api/setup/evidence", status_code=201)
+async def record_evidence(data: EvidenceIn, request: Request,
+                          user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    await require_event_admin(data.event_id, user, db, request)
+    if len(data.reference.strip()) < 3:
+        raise HTTPException(422, "Record the test reference or record ID")
+    if data.result == "passed" and not all(c.passed for c in data.checks):
+        raise HTTPException(422, "Complete every checklist item or record a partial test")
+    row = SetupEvidence(event_id=data.event_id, step_key=data.step_key, result=data.result,
+        checks=[c.model_dump() for c in data.checks], reference=data.reference.strip(),
+        notes=data.notes.strip(), config_revision=data.config_revision, recorded_by=user.id)
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return evidence_out(row)

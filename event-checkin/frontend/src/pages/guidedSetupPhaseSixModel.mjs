@@ -1,3 +1,4 @@
+import { finalizeReadiness } from './guideReadiness.mjs'
 export const PHASE_SIX_PROGRESS_PREFIX = 'phase6_'
 
 export const PHASE_SIX_RECIPES = [
@@ -24,10 +25,10 @@ export function phaseSixReadiness({ event, progress = {}, events = [], results =
     closeout: { complete: closed && checked(progress, 'closeout_review'), blocked: !closed, evidence: `${event?.status || 'unknown'} event status · ${checked(progress, 'closeout_review') ? 'closeout checklist verified' : 'closeout checklist pending'}` },
     reuse: { complete: duplicateCandidateCount > 0 && checked(progress, 'reuse_test'), blocked: eventRows.length === 0, evidence: `${duplicateCandidateCount} other event${duplicateCandidateCount === 1 ? '' : 's'} available for comparison · ${checked(progress, 'reuse_test') ? 'safe duplication tested' : 'duplication test pending'}` },
     help: { complete: checked(progress, 'help_review'), blocked: false, evidence: checked(progress, 'help_review') ? 'procedure, errors and next-step handoff reviewed' : 'contextual Help review pending' },
-    integrations: { complete: checked(progress, 'integration_test'), blocked: false, evidence: `${keyRows.length} API key${keyRows.length === 1 ? '' : 's'} · ${webhookRows.length} webhook${webhookRows.length === 1 ? '' : 's'} · ${integrationsConfigured ? 'configured connection evidence available' : 'no external connection configured'} · ${checked(progress, 'integration_test') ? 'connection lifecycle tested' : 'test pending'}` },
+    integrations: { notApplicable: integrationsConfigured === 0 && !dataFailures.some(f=>['apiKeys','webhooks'].includes(typeof f==='number'?['results','apiKeys','webhooks'][f]:f.key)), complete: checked(progress, 'integration_test'), blocked: false, evidence: `${keyRows.length} API key${keyRows.length === 1 ? '' : 's'} · ${webhookRows.length} webhook${webhookRows.length === 1 ? '' : 's'} · ${integrationsConfigured ? 'configured connection evidence available' : 'no external connection configured'} · ${checked(progress, 'integration_test') ? 'connection lifecycle tested' : 'test pending'}` },
   }
   const recipes = PHASE_SIX_RECIPES.map((recipe) => ({ ...recipe, ...states[recipe.id] }))
   const complete = recipes.filter((recipe) => recipe.complete).length
   const blocked = recipes.filter((recipe) => recipe.blocked).length
-  return { recipes, complete, total: recipes.length, blocked, next: recipes.find((recipe) => !recipe.complete) || null, dataFailures }
+  return { ...finalizeReadiness(6, recipes, dataFailures) }
 }

@@ -6,7 +6,8 @@ const base = { event: { id: 'event-1', status: 'active' }, progress: {}, events:
 
 test('phase six exposes the organizer closeout sequence only', () => {
   const state = phaseSixReadiness(base)
-  assert.equal(state.total, 5)
+  assert.equal(state.total, 4)
+  assert.equal(state.recipes.find(x=>x.id==='integrations').notApplicable,true)
   assert.deepEqual(state.recipes.map((item) => item.number), ['6.1', '6.2', '6.3', '6.4', '6.5'])
   assert.equal(PHASE_SIX_RECIPES.at(-1).id, 'integrations')
   assert.equal(state.recipes.some((item) => ['platform', 'media', 'analytics', 'rollout'].includes(item.id)), false)

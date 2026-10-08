@@ -83,8 +83,9 @@ export function phaseOneReadiness({ event, progress = {}, members = [], eventPas
   const blockers = Number(!foundationComplete) + Number(!outcomesComplete) + Number(entitlementBlocked) + Number(organizationBlocked)
   const next = !foundationComplete ? 'event'
     : !outcomesComplete ? 'outcomes'
+      : !venueComplete ? 'venue'
       : !teamComplete ? 'team'
         : entitlementBlocked ? 'capabilities'
-          : 'workspace'
+          : organizationBlocked ? 'organization' : 'workspace'
   return { selected, foundationComplete, venueComplete, teamComplete, outcomesComplete, gatedSelections, capabilityChecks, blockedCapabilities, entitlementBlocked, passActive, providerReady, organizationReasons, organizationBlocked, completed, total: facts.length, blockers, next, organizationReadable: !organizationBlocked }
 }

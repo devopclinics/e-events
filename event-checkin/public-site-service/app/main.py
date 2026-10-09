@@ -235,6 +235,23 @@ async def preview(token: str, db: AsyncSession = Depends(get_db)):
     return HTMLResponse(render_site(row.snapshot["content"], row.snapshot["family"], preview=True), headers={"Cache-Control": "private, no-store", "X-Robots-Tag": "noindex", "Content-Security-Policy": security_policy()})
 
 
+@app.get("/site/event/{event_id}")
+async def event_website(event_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """Expose only the current published address, never draft content."""
+    if not settings.enabled:
+        raise HTTPException(404, "Public websites are not enabled")
+    site = await db.scalar(select(Site).where(
+        Site.event_id == str(event_id), Site.enabled.is_(True),
+        Site.published_release_id.is_not(None),
+    ))
+    if not site or not await db.get(Release, site.published_release_id):
+        raise HTTPException(404, "Website not published")
+    from urllib.parse import quote
+    from fastapi.responses import JSONResponse
+    return JSONResponse({"url": "/site/" + quote(site.slug, safe="")},
+                        headers={"Cache-Control": "no-store"})
+
+
 @app.get("/site/{slug}", response_class=HTMLResponse)
 async def public_site(slug: str, db: AsyncSession = Depends(get_db)):
     if not settings.enabled: raise HTTPException(404, "Public websites are not enabled")

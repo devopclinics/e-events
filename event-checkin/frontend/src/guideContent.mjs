@@ -1432,6 +1432,7 @@ export const CONTENT = {
           "Open the personal GuestHub link in your confirmation message. If you cannot find it, use My GuestHub recovery with your registration email.",
           "Open My Pass and check the attendee name before showing the QR code. Open My Party to review only the people linked to your registration.",
           "Open Programme to view the published day, local time, room, speaker and session access.",
+          "Use Event website on Home or in Services to open the published event website in a new tab. The entry appears only when the organiser has published an enabled website; your GuestHub remains open.",
           "Open Services → Speakers when enabled. Profiles open inside GuestHub; use the return control to get back to event services.",
           "For enabled forms, meal choices, resources or Live activities, follow the available controls. Some services require approval, check-in or session attendance.",
           "Open Inbox or Communications for organizer updates and help. If information fails to load, retry without submitting a duplicate registration."

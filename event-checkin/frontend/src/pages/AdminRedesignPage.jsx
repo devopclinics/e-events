@@ -128,7 +128,7 @@ export default function AdminRedesignPage() {
     type: 'Conference', host: '',
     date: '', timezone: 'Africa/Lagos',
     multiDay: false, endDate: '', baseUrl: '',
-    venue: '', venueAddress: '', hotel: '', hotelAddress: '',
+    externalWebsiteUrl: '', venue: '', venueAddress: '', hotel: '', hotelAddress: '',
     admissionNote: '', description: '',
   })
   const manageRef = useRef(null)
@@ -181,6 +181,7 @@ export default function AdminRedesignPage() {
       baseUrl: event.checkin_base_url || '',
       venue: event.venue_name || '',
       venueAddress: event.venue_address || '',
+      externalWebsiteUrl: event.external_website_url || '',
       hotel: event.hotel_name || '',
       hotelAddress: event.hotel_address || '',
       admissionNote: event.admission_note || '',
@@ -206,6 +207,7 @@ export default function AdminRedesignPage() {
         checkin_base_url: eventForm.baseUrl.trim(),
         venue_name: eventForm.venue.trim() || null,
         venue_address: eventForm.venueAddress.trim() || null,
+        external_website_url: eventForm.externalWebsiteUrl.trim() || null,
         hotel_name: eventForm.hotel.trim() || null,
         hotel_address: eventForm.hotelAddress.trim() || null,
         admission_note: eventForm.admissionNote.trim() || null,
@@ -711,6 +713,7 @@ export default function AdminRedesignPage() {
             {eventForm.multiDay && <div><label className="rd-field-label">End date &amp; time</label><input className="rd-field" type="datetime-local" value={eventForm.endDate} onChange={(e) => setEventForm({ ...eventForm, endDate: e.target.value })} /></div>}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div><label className="rd-field-label">Venue</label><input className="rd-field" value={eventForm.venue} onChange={(e) => setEventForm({ ...eventForm, venue: e.target.value })} /></div>
+              <div style={{ gridColumn: '1 / -1' }}><label className="rd-field-label" htmlFor="external-event-website">External event website URL</label><input id="external-event-website" className="rd-field" type="url" maxLength={2000} placeholder="https://your-event.org" value={eventForm.externalWebsiteUrl} onChange={(e) => setEventForm({ ...eventForm, externalWebsiteUrl: e.target.value })} /><p className="rd-muted">GuestHub opens this website in a new tab. Leave blank to use your published Festio website.</p></div>
               <div><label className="rd-field-label">Venue address</label><input className="rd-field" value={eventForm.venueAddress} onChange={(e) => setEventForm({ ...eventForm, venueAddress: e.target.value })} /></div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>

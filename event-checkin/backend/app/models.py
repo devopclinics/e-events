@@ -399,6 +399,7 @@ class Event(Base):
     # back to UTC for server-rendered times until set.
     timezone: Mapped[str | None] = mapped_column(String(80), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    external_website_url: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     checkin_base_url: Mapped[str] = mapped_column(String(500))
     status: Mapped[str] = mapped_column(String(20), default="draft")
     seating_enabled: Mapped[bool] = mapped_column(Boolean, default=False)

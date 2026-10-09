@@ -1356,7 +1356,7 @@ Keep your event information and personal pass together.
 1. Open the personal GuestHub link in your confirmation message. If you cannot find it, use My GuestHub recovery with your registration email.
 2. Open My Pass and check the attendee name before showing the QR code. Open My Party to review only the people linked to your registration.
 3. Open Programme to view the published day, local time, room, speaker and session access.
-4. Use Event website on Home or in Services to open the published event website in a new tab. The entry appears only when the organiser has published an enabled website; your GuestHub remains open.
+4. Use Event website on Home or in Services to open the published event website in a new tab. Set External event website URL in Manage event → Edit event details to use your own http:// or https:// website. GuestHub prefers that address; leave it blank to use an enabled published Festio website. If neither is available, the entry is hidden. Your GuestHub remains open.
 5. Open Services → Speakers when enabled. Profiles open inside GuestHub; use the return control to get back to event services.
 6. For enabled forms, meal choices, resources or Live activities, follow the available controls. Some services require approval, check-in or session attendance.
 7. Open Inbox or Communications for organizer updates and help. If information fails to load, retry without submitting a duplicate registration.

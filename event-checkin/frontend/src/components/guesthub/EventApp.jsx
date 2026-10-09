@@ -56,7 +56,7 @@ export default function EventApp({
   markStepDone,
   markingStepId
 }) {
-  const websiteUrl = useEventWebsite(event.id, previewMock);
+  const websiteUrl = useEventWebsite(event.id, previewMock, event.external_website_url);
   const [appearance, setAppearance] = useState(() => storedAppearance(event.id, previewMock));
   const [appearanceNotice, setAppearanceNotice] = useState('');
   useEffect(() => { setAppearance(storedAppearance(event.id, previewMock)); setAppearanceNotice(''); }, [event.id, previewMock]);

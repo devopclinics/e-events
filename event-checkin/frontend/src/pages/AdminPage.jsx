@@ -8409,6 +8409,7 @@ function EventForm({ initial, onSave, onCancel }) {
     try {
       await onSave({
         ...form,
+        external_website_url: form.external_website_url?.trim() || null,
         event_date: zonedWallTimeToUtcISOString(form.event_date, form.timezone),
         event_end_date: form.spans_multiple_days && form.event_end_date
           ? zonedWallTimeToUtcISOString(form.event_end_date, form.timezone)
@@ -8462,6 +8463,11 @@ function EventForm({ initial, onSave, onCancel }) {
         <div>
           <label htmlFor="event-venue" className="block text-xs font-semibold text-gray-600 mb-1">Venue</label>
           <input id="event-venue" className={field} value={form.venue_name || ''} onChange={set('venue_name')} placeholder="e.g. Grand Ballroom" />
+        </div>
+        <div className="sm:col-span-2">
+          <label htmlFor="external-event-website" className="block text-xs font-semibold text-gray-600 mb-1">External event website URL</label>
+          <input id="external-event-website" className={field} type="url" maxLength={2000} value={form.external_website_url || ''} onChange={set('external_website_url')} placeholder="https://your-event.org" />
+          <p className="text-xs text-gray-500">GuestHub opens this website in a new tab. Leave blank to use your published Festio website.</p>
         </div>
         <div>
           <label htmlFor="event-venue-address" className="block text-xs font-semibold text-gray-600 mb-1">Venue address</label>

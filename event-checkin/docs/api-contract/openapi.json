@@ -4414,6 +4414,18 @@
             "title": "Experience Enabled",
             "type": "boolean"
           },
+          "external_website_url": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Website Url"
+          },
           "festiome_addon_enabled": {
             "default": false,
             "title": "Festiome Addon Enabled",
@@ -4678,6 +4690,18 @@
               }
             ],
             "title": "Event Type"
+          },
+          "external_website_url": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Website Url"
           },
           "hotel_address": {
             "anyOf": [
@@ -5101,6 +5125,18 @@
             "default": false,
             "title": "Experience Enabled",
             "type": "boolean"
+          },
+          "external_website_url": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Website Url"
           },
           "festiome_addon_enabled": {
             "default": false,
@@ -6518,6 +6554,18 @@
               }
             ],
             "title": "Event Type"
+          },
+          "external_website_url": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Website Url"
           },
           "hotel_address": {
             "anyOf": [
@@ -11525,6 +11573,18 @@
             "default": false,
             "title": "Experience Enabled",
             "type": "boolean"
+          },
+          "external_website_url": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Website Url"
           },
           "festiome_addon_enabled": {
             "default": false,

@@ -1,7 +1,28 @@
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+from pydantic import HttpUrl, TypeAdapter, BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 from datetime import datetime, timezone
 from typing import Any, Optional, Literal
 from zoneinfo import ZoneInfo, available_timezones
+
+
+def _validate_external_website_url(value):
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("Website address must be text")
+    value = value.strip()
+    if not value:
+        return None
+    if any(ord(char) < 32 or ord(char) == 127 for char in value) or "\\" in value:
+        raise ValueError("Enter a full http:// or https:// website address")
+    if not value.lower().startswith(("https://", "http://")):
+        raise ValueError("Enter a full http:// or https:// website address")
+    url = TypeAdapter(HttpUrl).validate_python(value)
+    if url.username is not None or url.password is not None:
+        raise ValueError("Website addresses must not include login credentials")
+    result = str(url)
+    if len(result) > 2000:
+        raise ValueError("Website address must be at most 2000 characters")
+    return result
 
 _VALID_TIMEZONES = available_timezones()
 
@@ -57,6 +78,8 @@ class TokenResponse(BaseModel):
 # ── Events ───────────────────────────────────────────────────────────────────
 
 class EventCreate(BaseModel):
+    _website_url = field_validator("external_website_url", mode="before")(_validate_external_website_url)
+    external_website_url: Optional[str] = Field(default=None, max_length=2000)
     setup_preferences: Optional[dict] = None
     name: str
     # Optional host/organizer/honoree label — blank for events with no such party.
@@ -124,6 +147,8 @@ class EventDuplicateIn(BaseModel):
 
 
 class EventUpdate(BaseModel):
+    _website_url = field_validator("external_website_url", mode="before")(_validate_external_website_url)
+    external_website_url: Optional[str] = Field(default=None, max_length=2000)
     name: Optional[str] = None
     couples_name: Optional[str] = None
     event_type: Optional[str] = None
@@ -168,6 +193,7 @@ class EventSourceUpdate(BaseModel):
 
 
 class EventOut(BaseModel):
+    external_website_url: Optional[str] = Field(default=None, max_length=2000)
     menu_selection_timing: str = "after_admission"
     setup_preferences: Optional[dict] = None
     model_config = ConfigDict(from_attributes=True)
@@ -2476,6 +2502,7 @@ class ScanResult(BaseModel):
 
 
 class EventBrief(BaseModel):
+    external_website_url: Optional[str] = Field(default=None, max_length=2000)
     guest_hub_layout: Optional[str] = None
     rsvp_landing_layout: Optional[Literal["current", "welcome"]] = None
     name: str
@@ -2771,6 +2798,7 @@ class GuestHubRecoveryResponse(BaseModel):
 
 
 class InvitePageOut(BaseModel):
+    external_website_url: Optional[str] = Field(default=None, max_length=2000)
     event_type: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 

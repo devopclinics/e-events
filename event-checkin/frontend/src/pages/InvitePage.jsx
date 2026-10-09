@@ -1460,7 +1460,7 @@ function FlowTools({ event, hub, journey, go, designTheme, guestContent, onOpenS
     moduleVisible('activity_progress') && (journey?.steps?.length || journey?.consent?.required || journey?.menu_selectable) && ['✓', 'My Experience', () => onOpenServices?.('experience')],
     ['?', 'Help & FAQ', () => onOpenServices?.('communications')],
   ].filter(Boolean)
-  return <section className="flow-section"><EventWebsiteLink eventId={event?.id} previewMock={previewMock} className="flow-secondary" /><div className="flow-tool-grid">{tools.map(([ic, label, action]) => <button key={label} onClick={action}><i>{ic}</i>{label}</button>)}</div></section>
+  return <section className="flow-section"><EventWebsiteLink eventId={event?.id} externalWebsiteUrl={event?.external_website_url} previewMock={previewMock} className="flow-secondary" /><div className="flow-tool-grid">{tools.map(([ic, label, action]) => <button key={label} onClick={action}><i>{ic}</i>{label}</button>)}</div></section>
 }
 
 function FlowNext({ event, segments, onProgramme }) {
@@ -2155,7 +2155,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
 
     const guidedView = (
       <section className="py-2">
-        <EventWebsiteLink eventId={event.id} previewMock={previewMock} className="mx-auto mb-3 block w-fit rounded-xl border px-4 py-2 font-bold" />
+        <EventWebsiteLink eventId={event.id} externalWebsiteUrl={event.external_website_url} previewMock={previewMock} className="mx-auto mb-3 block w-fit rounded-xl border px-4 py-2 font-bold" />
         {(journeyLayout || completeLayout) && flowServicesOpen && (
           <div className="mx-auto mb-3 w-full max-w-[560px]">
             <button type="button" onClick={() => setFlowServicesOpen('')} className="min-h-11 rounded-xl border px-4 py-2 text-sm font-extrabold" style={{ background: tone.panelStrong, borderColor: tone.border, color: tone.text }}>← Back to GuestHub home</button>

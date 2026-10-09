@@ -207,6 +207,7 @@ async def _invite_page_out(event: Event, db: AsyncSession) -> InvitePageOut:
     count = await _rsvp_count(event.id, db)
     return InvitePageOut(
         id=event.id,
+        external_website_url=event.external_website_url,
         name=event.name,
         couples_name=event.couples_name,
         event_type=event.event_type,

@@ -762,6 +762,7 @@ export interface EventBrief {
   couples_name: string
   event_date: string
   experience_enabled?: boolean
+  external_website_url?: (string) | null
   festiome_addon_enabled?: boolean
   festiome_enabled?: boolean
   guest_hub_layout?: (string) | null
@@ -800,6 +801,7 @@ export interface EventCreate {
   event_date: string
   event_end_date?: (string) | null
   event_type?: (string) | null
+  external_website_url?: (string) | null
   hotel_address?: (string) | null
   hotel_name?: (string) | null
   name: string
@@ -863,6 +865,7 @@ export interface EventOut {
   event_time_tbd?: boolean
   event_type?: (string) | null
   experience_enabled?: boolean
+  external_website_url?: (string) | null
   festiome_addon_enabled?: boolean
   festiome_enabled?: boolean
   festiome_id?: (string) | null
@@ -1045,6 +1048,7 @@ export interface EventUpdate {
   event_date?: (string) | null
   event_end_date?: (string) | null
   event_type?: (string) | null
+  external_website_url?: (string) | null
   hotel_address?: (string) | null
   hotel_name?: (string) | null
   name?: (string) | null
@@ -1417,7 +1421,6 @@ export interface GuestExperienceProgressOut {
 }
 
 export interface GuestHubRecoveryRequest {
-  destination?: "home" | "programme" | "festiome";
   email: string
   first_name?: string
   last_name?: string
@@ -1821,6 +1824,7 @@ export interface InvitePageOut {
   event_end_date?: (string) | null
   event_time_tbd?: boolean
   experience_enabled?: boolean
+  external_website_url?: (string) | null
   festiome_addon_enabled?: boolean
   festiome_enabled?: boolean
   guardian_designation_scope?: string

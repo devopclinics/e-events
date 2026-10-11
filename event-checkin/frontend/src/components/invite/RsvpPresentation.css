@@ -27,3 +27,13 @@
 .rsvp-welcome[data-custom-hero=true] .rw-hero{background:var(--rw-custom-hero-bg);color:var(--rw-custom-hero-ink)}
 .rsvp-welcome[data-custom-hero=true] .rw-compact-hero>div,.rsvp-welcome[data-custom-hero=true] .rw-compact-hero :is(.rw-lead,.rw-facts,.rw-eyebrow,.rw-compact-deadline){color:var(--rw-custom-hero-ink)}
 @media(max-width:800px){.rsvp-welcome:is([data-image-placement=left],[data-image-placement=right]) :is(.rf-editorial,.rf-tiles,.rf-festival,.rf-hexagonal,.rf-circular){grid-template-columns:1fr;grid-template-areas:'copy' 'image' 'facts' 'actions'}.rsvp-welcome[data-spacing=airy] main>.rw-section{padding-top:34px;padding-bottom:34px}}
+/* Explicit placement is supported consistently across every format. */
+.rsvp-welcome .rf-hero.rf-placement-override{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);grid-template-areas:'copy image';padding:36px;gap:30px;min-height:0;background:var(--rw-paper);color:var(--rw-paper-ink)}
+.rsvp-welcome .rf-placement-override>.rf-copy{grid-area:copy;min-width:0;color:inherit}
+.rsvp-welcome .rf-placement-override>.rf-artwork{grid-area:image;position:static;inset:auto;min-height:260px;max-height:420px;height:100%;border-radius:20px}
+.rsvp-welcome[data-image-placement=left] .rf-placement-override{grid-template-areas:'image copy'}
+.rsvp-welcome[data-image-placement=top] .rf-placement-override{grid-template-columns:1fr;grid-template-areas:'image' 'copy'}
+.rsvp-welcome[data-shape=circle] .rf-placement-override>.rf-artwork{border-radius:50%;aspect-ratio:1;height:auto;min-height:0}
+.rsvp-welcome[data-shape=square] .rf-placement-override>.rf-artwork{border-radius:0}
+.rsvp-welcome[data-custom-hero=true] .rf-placement-override{background:var(--rw-custom-hero-bg);color:var(--rw-custom-hero-ink)}
+@media(max-width:800px){.rsvp-welcome .rf-hero.rf-placement-override{padding:26px 22px;grid-template-columns:1fr;grid-template-areas:'copy' 'image'}.rsvp-welcome[data-image-placement=top] .rf-placement-override{grid-template-areas:'image' 'copy'}}

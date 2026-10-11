@@ -49,3 +49,6 @@
 .rsvp-welcome[data-image-placement=left] .rw-compact-hero.rw-with-artwork{grid-template-areas:'image copy'}
 .rsvp-welcome[data-image-placement=top] .rw-compact-hero.rw-with-artwork{grid-template-columns:1fr;grid-template-areas:'image' 'copy'}
 @media(max-width:800px){.rsvp-welcome:is([data-image-placement=left],[data-image-placement=right]) .rw-compact-hero.rw-with-artwork{grid-template-columns:1fr;grid-template-areas:'copy' 'image'}}
+.rsvp-welcome[data-shape=square] .rf-artwork{clip-path:none}
+.rsvp-welcome[data-shape=theme] .rf-circular.rf-placement-override>.rf-artwork{border-radius:50%;aspect-ratio:1;height:auto;min-height:0}
+.rsvp-welcome[data-shape=theme] .rf-hexagonal.rf-placement-override>.rf-artwork{clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);border-radius:0}

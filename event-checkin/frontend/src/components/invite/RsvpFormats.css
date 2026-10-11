@@ -1,0 +1,82 @@
+/* Format geometry is independent of brand colours; every text panel has its own contrast token. */
+.rsvp-welcome:not(.rw-format-compact) .rw-site{max-width:1180px}
+.rsvp-welcome .rf-hero{background:var(--rw-paper);color:var(--rw-paper-ink);padding:46px 42px;gap:36px}
+.rsvp-welcome .rf-hero :is(h1,.rw-lead,.rw-facts,.rw-eyebrow,.rw-compact-deadline){color:inherit}
+.rsvp-welcome .rf-hero h1{font-family:var(--rw-heading-font);font-size:clamp(36px,4.5vw,62px);margin:16px 0 22px;line-height:1.08}
+.rsvp-welcome .rf-intro{min-width:0}.rsvp-welcome .rf-intro .rw-lead{font-size:17px;line-height:1.65}
+.rsvp-welcome .rf-artwork{display:block;width:100%;height:100%;min-height:350px;max-height:520px;object-fit:cover;border-radius:22px;margin:0}
+.rsvp-welcome .rf-artwork-empty{position:relative;overflow:hidden;display:grid;place-items:center;background:var(--rw-primary);color:var(--rw-primary-ink)}
+.rsvp-welcome .rf-artwork-monogram{z-index:1;font-size:clamp(80px,12vw,160px);font-family:var(--rw-heading-font);font-weight:800;letter-spacing:-.06em}
+.rsvp-welcome .rf-artwork-shape{position:absolute;width:260px;height:260px;border:2px solid var(--rw-accent);border-radius:50%;right:-70px;top:-55px;box-shadow:0 0 0 55px #ffffff12,0 0 0 110px #ffffff0a}
+.rsvp-welcome .rf-facts{display:flex;flex-wrap:wrap;gap:12px;margin:24px 0}
+.rsvp-welcome .rf-facts>div{padding:12px 14px;border:1px solid currentColor;border-radius:12px;max-width:100%;min-width:0}
+.rsvp-welcome .rf-facts span{overflow-wrap:anywhere}.rsvp-welcome .rf-facts small{font-size:12px}
+.rsvp-welcome .rf-actions .rw-text{color:inherit}.rsvp-welcome .rf-actions .rw-compact-deadline{font-size:13px}
+/* Editorial: the split composition used by the reviewed mockup. */
+.rsvp-welcome .rf-editorial{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);align-items:center}
+.rsvp-welcome.rw-format-editorial{padding:24px 16px;background:var(--rw-paper)}
+.rsvp-welcome.rw-format-editorial .rw-site{border:0;box-shadow:none;border-radius:0}
+.rsvp-welcome.rw-format-editorial .rw-topbar{background:var(--rw-paper);color:var(--rw-paper-ink)}
+.rsvp-welcome.rw-format-editorial .rw-topbar .rw-brand small{color:inherit}
+.rsvp-welcome.rw-format-editorial .rw-section{background:var(--rw-paper);color:var(--rw-paper-ink)}
+.rsvp-welcome.rw-format-editorial .rw-bottom{border-top:1px solid var(--rw-line)}
+/* Spotlight: artwork spans the poster; copy is on an opaque inset panel. */
+.rsvp-welcome .rf-spotlight{position:relative;display:block;min-height:610px;padding:48px;background:var(--rw-primary)}
+.rsvp-welcome .rf-spotlight>.rf-artwork{position:absolute;inset:0;min-height:100%;max-height:none;border-radius:0}
+.rsvp-welcome .rf-spotlight>.rf-artwork-empty{display:flex;justify-content:flex-end;padding-right:70px}
+.rsvp-welcome .rf-poster-panel{position:relative;z-index:1;max-width:620px;padding:32px;border-radius:20px;background:var(--rw-surface);color:var(--rw-ink);box-shadow:0 20px 70px #0003}
+.rsvp-welcome .rf-poster-panel h1{font-size:clamp(36px,4vw,58px)}
+.rsvp-welcome.rw-format-spotlight .rw-overview{grid-template-columns:minmax(0,1fr) minmax(0,1fr);padding-top:42px}
+.rsvp-welcome.rw-format-spotlight .rw-site{border-radius:0}
+.rsvp-welcome.rw-format-spotlight .rw-about-card{border-radius:0;border:0;border-left:4px solid var(--rw-accent)}
+/* Invitation: a framed, centered card rather than a dashboard. */
+.rsvp-welcome .rf-invitation{display:block;padding:34px 42px}
+.rsvp-welcome .rf-invitation-frame{border:1px solid currentColor;outline:1px solid currentColor;outline-offset:-9px;padding:42px 44px;text-align:center;max-width:920px;margin:auto}
+.rsvp-welcome .rf-seal{width:64px;height:64px;border:1px solid currentColor;border-radius:50%;display:grid;place-items:center;font:32px var(--rw-heading-font);margin:0 auto 24px}
+.rsvp-welcome .rf-invitation .rf-intro{max-width:700px;margin:auto}
+.rsvp-welcome .rf-invitation h1{font-size:clamp(38px,5vw,68px)}
+.rsvp-welcome .rf-invitation .rf-facts,.rsvp-welcome .rf-invitation .rw-hero-actions{justify-content:center}
+.rsvp-welcome .rf-invitation .rf-facts>div{border:0;justify-content:center}
+.rsvp-welcome .rf-invitation .rf-artwork{margin:28px auto 0;min-height:180px;max-height:300px;height:240px;max-width:600px;border-radius:150px 150px 12px 12px}
+.rsvp-welcome.rw-format-invitation .rw-overview{grid-template-columns:1fr;text-align:center;max-width:920px;margin:auto}
+.rsvp-welcome.rw-format-invitation .rw-overview .rw-arrival{border-radius:0;max-width:650px;width:100%;margin:auto}
+.rsvp-welcome.rw-format-invitation .rw-about-card{border:0;padding:12px}
+.rsvp-welcome.rw-format-invitation .rw-section{max-width:920px;margin:auto}
+/* Briefing: a separate event-information rail and story column. */
+.rsvp-welcome .rf-briefing{grid-template-columns:minmax(250px,.75fr) minmax(0,1.7fr);padding:0;gap:0}
+.rsvp-welcome .rf-brief-rail{background:var(--rw-primary);color:var(--rw-primary-ink);padding:38px 28px;height:100%}
+.rsvp-welcome .rf-brief-rail .rf-facts{display:grid;gap:24px}
+.rsvp-welcome .rf-brief-rail .rf-facts>div{padding:0 0 20px;border:0;border-bottom:1px solid currentColor;border-radius:0}
+.rsvp-welcome .rf-brief-rail .rw-hero-actions{display:grid;gap:10px}
+.rsvp-welcome .rf-brief-rail .rw-btn{background:var(--rw-accent);color:var(--rw-accent-ink)}
+.rsvp-welcome .rf-brief-story{padding:40px;min-width:0}
+.rsvp-welcome .rf-brief-story .rf-artwork{min-height:160px;max-height:240px;height:220px;margin-top:28px;border-radius:4px}
+.rsvp-welcome.rw-format-briefing .rw-site,.rsvp-welcome.rw-format-briefing .rw-about-card,.rsvp-welcome.rw-format-briefing .rw-arrival{border-radius:4px}
+.rsvp-welcome.rw-format-briefing .rw-overview{grid-template-columns:minmax(0,1.7fr) minmax(0,1fr)}
+.rsvp-welcome.rw-format-briefing .rw-section{border-bottom:1px solid var(--rw-line)}
+/* Festival: asymmetric title, photo and a full-width fact strip. */
+.rsvp-welcome .rf-festival{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);grid-template-areas:'title image' 'facts facts';gap:18px;padding:24px}
+.rsvp-welcome .rf-festival-title{grid-area:title;background:var(--rw-primary);color:var(--rw-primary-ink);padding:32px;border-radius:28px 8px 28px 8px}
+.rsvp-welcome .rf-festival-title h1{font-size:clamp(40px,5vw,72px);font-weight:900}
+.rsvp-welcome .rf-festival-title .rw-btn{background:var(--rw-accent);color:var(--rw-accent-ink)}
+.rsvp-welcome .rf-festival-image{grid-area:image;min-width:0}.rsvp-welcome .rf-festival-image .rf-artwork{border-radius:8px 28px 8px 28px;max-height:none}
+.rsvp-welcome .rf-festival-facts{grid-area:facts;background:var(--rw-accent);color:var(--rw-accent-ink);padding:12px 24px;border-radius:14px}
+.rsvp-welcome .rf-festival-facts .rf-facts{margin:0;justify-content:space-between}.rsvp-welcome .rf-festival-facts .rf-facts>div{border:0}
+.rsvp-welcome.rw-format-festival .rw-site{border:0;border-radius:28px}
+.rsvp-welcome.rw-format-festival .rw-overview{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:18px;padding:0 24px 24px}
+.rsvp-welcome.rw-format-festival .rw-overview .rw-arrival{border-radius:8px 28px 8px 28px}
+.rsvp-welcome.rw-format-festival .rw-about-card{border-radius:28px 8px 28px 8px}
+@media(max-width:800px){
+.rsvp-welcome .rf-hero{gap:24px;padding:28px 22px}
+.rsvp-welcome .rf-editorial{grid-template-columns:1fr}.rsvp-welcome .rf-artwork{min-height:220px;max-height:320px}
+.rsvp-welcome .rf-spotlight{padding:26px 20px;min-height:560px}.rsvp-welcome .rf-poster-panel{padding:24px;max-width:none}
+.rsvp-welcome .rf-invitation{padding:24px 20px}.rsvp-welcome .rf-invitation-frame{padding:32px 20px}
+.rsvp-welcome .rf-briefing{display:flex;flex-direction:column;padding:0;gap:0}.rsvp-welcome .rf-brief-story{order:0;padding:28px 22px}.rsvp-welcome .rf-brief-rail{order:1;padding:26px 22px}
+.rsvp-welcome .rf-brief-rail .rf-facts{display:flex;gap:20px}.rsvp-welcome .rf-brief-rail .rw-hero-actions{display:flex}
+.rsvp-welcome .rf-festival{grid-template-columns:1fr;grid-template-areas:'title' 'image' 'facts';padding:18px;gap:14px}
+.rsvp-welcome .rf-festival-title{padding:26px 22px}.rsvp-welcome .rf-festival-image .rf-artwork{height:230px;min-height:200px}
+.rsvp-welcome .rf-festival-facts{padding:14px}.rsvp-welcome .rf-festival-facts .rf-facts{display:grid;gap:12px}
+.rsvp-welcome:is(.rw-format-spotlight,.rw-format-invitation,.rw-format-briefing,.rw-format-festival) .rw-overview{grid-template-columns:1fr}
+.rsvp-welcome.rw-format-festival .rw-overview{padding:0 18px 18px}
+}
+@media(prefers-reduced-motion:reduce){.rsvp-welcome{scroll-behavior:auto}}

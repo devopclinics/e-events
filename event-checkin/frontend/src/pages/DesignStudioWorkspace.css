@@ -9,3 +9,12 @@
 /* The website editor stays reachable from every guided step and preview surface. */
 .studio-heading-actions{flex-wrap:wrap}.studio-v2 .studio-heading .studio-heading-actions .studio-website-button{white-space:nowrap;min-height:48px;border-color:var(--s-green);color:var(--s-green)}
 @media(max-width:760px){.studio-heading{flex-wrap:wrap}.studio-heading-actions{width:100%;flex-direction:row;justify-content:flex-start;align-items:center;gap:8px}.studio-heading-actions button{min-height:48px}}
+/* Miniature compositions show structure, rather than repeating colour swatches. */
+.studio-theme-art{position:relative;isolation:isolate;overflow:hidden}.studio-theme-art b{position:relative;z-index:1;max-width:100%;overflow-wrap:anywhere}
+.studio-composition{position:absolute;inset:7px;display:none;gap:5px;opacity:.2;z-index:-1}.studio-composition>span{border:1px solid currentColor;border-radius:3px}
+.studio-theme-art:not(.studio-format-compact) .studio-composition{display:grid}.studio-format-editorial .studio-composition{grid-template-columns:1fr 1fr}.studio-format-editorial .studio-mini-facts{grid-column:1/-1;height:12px}.studio-format-editorial b{max-width:55%}
+.studio-format-spotlight .studio-composition{display:block!important;border:1px solid currentColor;background:linear-gradient(135deg,transparent,currentColor)}.studio-format-spotlight .studio-mini-copy{position:absolute;left:6px;top:8px;bottom:8px;width:65%;background:currentColor}.studio-format-spotlight b{font-size:13px}
+.studio-format-invitation{text-align:center}.studio-format-invitation .studio-composition{border:3px double currentColor;display:block!important;inset:8px}.studio-format-invitation i{margin-left:auto;margin-right:auto}
+.studio-format-briefing .studio-composition{grid-template-columns:1fr 2fr}.studio-format-briefing .studio-mini-copy{background:currentColor}.studio-format-briefing .studio-mini-facts{display:none}.studio-format-briefing b{padding-left:12px;font-size:13px}
+.studio-format-festival .studio-composition{grid-template-columns:1.5fr 1fr;transform:rotate(-4deg)}.studio-format-festival .studio-mini-copy{border-radius:12px 0}.studio-format-festival .studio-mini-art{border-radius:0 12px}.studio-format-festival .studio-mini-facts{grid-column:1/-1;background:currentColor;height:16px}.studio-format-festival b{font-size:15px;font-weight:900}
+.studio-theme small{line-height:1.45;white-space:normal}.studio-theme-art i{position:relative;z-index:1}

@@ -3,7 +3,7 @@
 Only templates with a real, supported surface contract belong in the Studio.
 The older 20-category × 5-style matrix looked like 100 different templates but
 was five layouts with renamed cards.  The catalog is deliberately curated to
-five distinct, production-supported families.  Legacy ids remain aliases so an
+production-supported families with five additional RSVP compositions.  Legacy ids remain aliases so an
 existing event keeps its appearance when the catalog is upgraded.
 """
 from functools import lru_cache
@@ -526,6 +526,17 @@ CURATED_FAMILIES = (
     ("pilgrimage", "Pilgrimage", "sacred", "Best for Hajj, Umrah, and other sacred journeys."),
 )
 
+# Additional families share proven flyer/pass/email renderers, but each has a
+# distinct public RSVP composition. Keep legacy aliases on the original six.
+RSVP_FORMAT_FAMILIES = (
+    ("editorial", "Editorial", "minimal", "Split story and artwork, with a compact event introduction."),
+    ("spotlight", "Spotlight", "photo-first", "A full-width poster with an inset invitation panel."),
+    ("invitation", "Invitation", "classic", "A centered, framed invitation with a monogram and photo."),
+    ("briefing", "Briefing", "minimal", "An event brief with a separate date, venue and registration rail."),
+    ("festival", "Festival", "festive", "An asymmetric collage of title, artwork and event-detail tiles."),
+)
+
+
 _REQUIRED_SURFACES = frozenset(SURFACES)
 _REQUIRED_LAYOUTS = frozenset({"eventPage", "flyer", "guestHub", "pass", "email"})
 _REQUIRED_COLORS = frozenset({"background", "surface", "primary", "accent", "text"})
@@ -579,10 +590,23 @@ def _curated_family(template_id: str, name: str, style_key: str, description: st
     return family
 
 
+def _rsvp_format_family(template_id: str, name: str, style_key: str, description: str) -> dict:
+    family = _curated_family(template_id, name, style_key, description)
+    family["aliases"] = []
+    family["style"] = f"{name} / RSVP format"
+    family["layout"] = {**family["layout"], "eventPage": f"rsvp-{template_id}", "rsvpFormat": template_id}
+    if template_id == "editorial":
+        family["defaultColors"] = {"background": "#F7F7F0", "surface": "#FFFFFF", "primary": "#194E40", "accent": "#F4D574", "text": "#183C32"}
+    elif template_id == "briefing":
+        family["defaultColors"] = {"background": "#EDF2F8", "surface": "#FFFFFF", "primary": "#173C65", "accent": "#B9D7F2", "text": "#17314D"}
+    return family
+
+
 @lru_cache(maxsize=1)
 def build_catalog() -> list[dict]:
     """The Studio picker: only the curated, production-ready families."""
     curated = [_curated_family(*family) for family in CURATED_FAMILIES]
+    curated.extend(_rsvp_format_family(*family) for family in RSVP_FORMAT_FAMILIES)
     invalid = [(template["id"], template_quality_issues(template)) for template in curated if template_quality_issues(template)]
     if invalid:
         detail = "; ".join(f"{template_id}: {', '.join(issues)}" for template_id, issues in invalid)

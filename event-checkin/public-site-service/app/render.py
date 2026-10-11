@@ -1,3 +1,4 @@
+from pathlib import Path
 from .community import (
     action,
     date_label,
@@ -29,7 +30,8 @@ def _render_site(content: dict, family: str, *, preview: bool = False) -> str:
     headline = e(content.get("headline", name))
     summary = e(content.get("summary", ""))
     eyebrow = e(content.get("eyebrow", ""))
-    date = " – ".join(filter(None, (content.get("start_date", ""), content.get("end_date", ""))))
+    start, end = content.get("start_date", ""), content.get("end_date", "")
+    date = " – ".join(filter(None, (start, end if end != start else "")))
     meta = " · ".join(e(x) for x in (date, content.get("venue", "")) if x)
     primary = e(content.get("primary_color", "#0d5c55"))
     accent = e(content.get("accent_color", "#d88945"))
@@ -86,6 +88,7 @@ def _render_site(content: dict, family: str, *, preview: bool = False) -> str:
     preview_bar = '<div class="preview">Preview — visitors cannot see this draft</div>' if preview else ""
     nav_links = navigation_markup(content)
     footer_links = navigation_markup(content, footer=True)
+    mobile_menu = f'<details class="mobile-site-menu"><summary>Menu</summary><div>{nav_links}</div></details>' if family == "modern-professional" and nav_links else ""
     family_label = {"conference-programme": "Build your agenda", "programme-showcase": "Explore every track", "immersive": "You are invited", "elegant-countdown": "The countdown is on"}.get(family, "Discover the event")
     logo = safe_url(content.get("logo_url"))
     brand = f'<img class="site-logo" src="{logo}" alt="{e(content.get("logo_alt") or "Event logo")}">' if logo else ""
@@ -137,7 +140,7 @@ footer{{padding:2rem 5vw;border-top:1px solid #ddd;display:flex;justify-content:
 @media(max-width:900px){{.feature{{grid-template-columns:1fr}}.feature.reverse{{direction:ltr}}}}
 @media(max-width:600px){{nav span,.site-links{{display:none}}.hero{{min-height:70vh}}h1{{font-size:3rem}}}}
 </style></head><body class="{escape(family)}" data-template="{escape(family)}">{preview_bar}
-<nav>{brand}<b>{name}</b><div class="site-links">{nav_links}</div><span>{escape(family_label)}</span></nav>
+<nav>{brand}<b>{name}</b><div class="site-links">{nav_links}</div>{mobile_menu}<span>{escape(family_label)}</span></nav>
 <header class="hero" style="{image_style}"><div class="hero-inner">{hero_inner}</div></header>
 <main>{main_sections}</main>
 <footer><a href="https://festio.events" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">Powered by Festio</a><div class="footer-links">{footer_links}</div></footer></body></html>'''
@@ -198,6 +201,8 @@ def render_site(content: dict, family: str, *, preview: bool = False) -> str:
     position = content.get("image_position") if content.get("image_position") in ("center", "top", "bottom", "left", "right") else "center"
     type_style = "body,h1,h2,h3{font-family:"+font+"}" if content.get("font_pairing") and (not modern or not content.get("use_template_style", True) or content.get("use_event_branding")) else ""
     style = "<style>"+type_style+"body .hero{background-size:"+fit+";background-position:"+position+";background-repeat:no-repeat}.hero-visual img{object-fit:"+fit+";object-position:"+position+"}.site-logo{max-width:140px;max-height:48px;object-fit:contain}.site-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.modern-professional .hero{background-color:var(--primary)}:focus-visible{outline:3px solid var(--accent);outline-offset:4px}@media(max-width:600px){.site-logo{max-width:90px}nav{flex-wrap:wrap}nav b{overflow-wrap:anywhere;min-width:0}}</style>"
+    if family != "community" and canonical_template(family) == "modern-professional":
+        style += "<style>" + Path(__file__).with_name("professional.css").read_text() + "</style>"
     if not modern:
         style += "<style>.programme-handoff{margin-top:28px;padding:24px;border:1px solid var(--border,#dce4db);border-radius:18px}.programme-handoff p{font-size:14px;margin:12px 0 0}.programme-handoff a{white-space:normal;text-align:center}.session-time small{display:block}.session-details summary{cursor:pointer;min-height:44px;padding:10px 0}.session-details p{white-space:pre-line;overflow-wrap:anywhere}</style>"
     if preview:

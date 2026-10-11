@@ -30,4 +30,8 @@
 /* Registration controls already use a light surface; their labels must match. */
 .rsvp-welcome .rw-registration{background:#fff;color:#183e34;--rw-ink:#183e34;--rw-muted:#596e65}
 .rsvp-welcome .rw-registration .rw-attendance>button{background:#f4f7f5!important;color:#183e34!important}
-.rsvp-welcome .rw-registration .guided-step-heading p,.rsvp-welcome .rw-registration .complete-form-steps i{color:#183e34}
+.rsvp-welcome .rw-registration .guided-step-heading p{color:#183e34}
+.rsvp-welcome .rw-registration .text-slate-400{color:#596e65}
+.rsvp-welcome .rw-registration .text-red-500{color:#b91c1c}
+.rsvp-welcome .rw-registration input::placeholder{color:#596e65;opacity:1}
+.rsvp-welcome .rw-registration .guided-registration-steps{color:#183e34}

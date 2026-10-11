@@ -80,3 +80,10 @@
 .rsvp-welcome.rw-format-festival .rw-overview{padding:0 18px 18px}
 }
 @media(prefers-reduced-motion:reduce){.rsvp-welcome{scroll-behavior:auto}}
+/* Override the legacy hero's direct-child ink without changing its layout. */
+.rsvp-welcome .rf-hero>div{color:inherit}
+.rsvp-welcome .rf-hero .rf-artwork-empty{color:var(--rw-primary-ink)}
+.rsvp-welcome .rf-hero>.rf-poster-panel{color:var(--rw-ink)}
+.rsvp-welcome .rf-hero>.rf-festival-title{color:var(--rw-primary-ink)}
+.rsvp-welcome .rf-hero>.rf-festival-facts{color:var(--rw-accent-ink)}
+.rsvp-welcome :is(.rf-editorial,.rf-festival){display:grid}

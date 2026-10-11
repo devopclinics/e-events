@@ -10,3 +10,20 @@
 
 .rsvp-welcome h1,.rsvp-welcome h2{font-family:var(--rw-heading-font,Georgia,serif)}
 .rsvp-welcome .rw-site,.rsvp-welcome .rw-topbar,.rsvp-welcome .rw-section{background:var(--rw-surface,#fff)}
+/* Use foregrounds matched to each surface, including dark theme palettes. */
+.rsvp-welcome .rw-site,.rsvp-welcome .rw-topbar,.rsvp-welcome .rw-section,.rsvp-welcome .rw-registration{color:var(--rw-ink)}
+.rsvp-welcome .rw-site :is(h1,h2,h3){color:inherit}
+.rsvp-welcome .rw-hero{color:var(--rw-hero-ink)}
+.rsvp-welcome .rw-hero>.rw-hero-copy,.rsvp-welcome .rw-hero>div,.rsvp-welcome .rw-hero .rw-lead,.rsvp-welcome .rw-hero .rw-facts,.rsvp-welcome .rw-hero>div>.rw-eyebrow{color:var(--rw-hero-ink)}
+.rsvp-welcome .rw-arrival,.rsvp-welcome .rw-programme{background:var(--rw-primary);color:var(--rw-primary-ink)}
+.rsvp-welcome .rw-arrival :is(p,.rw-eyebrow,.rw-date,.rw-secondary),.rsvp-welcome .rw-programme :is(p,.rw-eyebrow){color:var(--rw-primary-ink)}
+.rsvp-welcome .rw-btn{background:var(--rw-primary);color:var(--rw-primary-ink)}
+.rsvp-welcome .rw-gold{background:var(--rw-accent);color:var(--rw-accent-ink)}
+.rsvp-welcome .rw-outline{background:var(--rw-surface);color:var(--rw-ink)}
+.rsvp-welcome .rw-arrival .rw-secondary{background:transparent;color:var(--rw-primary-ink)}
+.rsvp-welcome .rw-section>.rw-heading>.rw-eyebrow,.rsvp-welcome .rw-bottom>div>.rw-eyebrow{color:var(--rw-ink)}
+.rsvp-welcome .rw-highlights article,.rsvp-welcome .rw-travel article,.rsvp-welcome .rw-help,.rsvp-welcome .rw-closing,.rsvp-welcome dialog{color:#183e34}
+.rsvp-welcome .rw-highlights article p,.rsvp-welcome .rw-travel article p,.rsvp-welcome .rw-help p,.rsvp-welcome .rw-closing p,.rsvp-welcome dialog p,.rsvp-welcome dialog .rw-small{color:#183e34}
+.rsvp-welcome .rw-brand-mark{color:#183e34}
+.rsvp-welcome .rw-footer{color:var(--rw-ink)}
+.rsvp-welcome dialog .rw-close{color:#183e34}

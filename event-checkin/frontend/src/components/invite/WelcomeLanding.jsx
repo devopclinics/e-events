@@ -1,6 +1,7 @@
 import { FONTS, imagePresentation } from '../design-studio/model.mjs'
 import { useEffect, useRef, useState } from 'react'
 import './WelcomeLanding.css'
+import { welcomeColors } from './themeContrast.mjs'
 
 const shapes = {
   calendar: <><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M7 3v4m10-4v4M3 11h18m-13 5h3" /></>,
@@ -37,8 +38,7 @@ export default function WelcomeLanding({ event, title, dateLabel, timeLabel, ven
   const coverPresentation = imagePresentation(designTheme,'rsvp')
   const cover = coverPresentation.visible ? external(designTheme?.cover_image_url || event.invite_cover_image) : ''
   const colors = designTheme?.colors || {}
-  const safeColor = (value, fallback) => /^#[a-f\d]{6}$/i.test(value || '') ? value : fallback
-  const style = { '--rw-primary': safeColor(colors.primary, '#194e3e'), '--rw-accent': safeColor(colors.accent, '#e9c968'), '--rw-paper': safeColor(colors.background, '#f8f7f1'), '--rw-surface':safeColor(colors.surface,'#ffffff'), '--rw-ink':safeColor(colors.text,'#183e34'), '--rw-heading-font':FONTS[designTheme?.font_pairing]||'Georgia,serif' }
+  const style = { ...welcomeColors(colors), '--rw-heading-font': FONTS[designTheme?.font_pairing] || 'Georgia,serif' }
   const registerLabel = returningGuest ? 'View my RSVP →' : 'Register / RSVP Now →'
   const showAbout = config.about?.show !== false
   const showVenue = config.details?.showVenue !== false && venue

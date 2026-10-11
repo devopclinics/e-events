@@ -13,7 +13,7 @@ def client(tmp_path, monkeypatch):
         c.headers['X-Internal-Token'] = 'format-test'
         yield c
 
-@pytest.mark.parametrize('format_id', ['editorial', 'spotlight', 'invitation', 'briefing', 'festival'])
+@pytest.mark.parametrize('format_id', ['editorial', 'spotlight', 'invitation', 'briefing', 'festival', 'infographic', 'tiles', 'circular', 'hexagonal', 'modern-unique'])
 def test_format_selection_is_private_until_published_and_restorable(client, format_id):
     path = '/api/v1/design/events/format-test'
     baseline = client.get(path + '/public-theme').json()

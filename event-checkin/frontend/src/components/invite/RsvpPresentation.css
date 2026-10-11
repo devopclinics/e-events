@@ -52,3 +52,5 @@
 .rsvp-welcome[data-shape=square] .rf-artwork{clip-path:none}
 .rsvp-welcome[data-shape=theme] .rf-circular.rf-placement-override>.rf-artwork{border-radius:50%;aspect-ratio:1;height:auto;min-height:0}
 .rsvp-welcome[data-shape=theme] .rf-hexagonal.rf-placement-override>.rf-artwork{clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);border-radius:0}
+/* Keep circular artwork square when a wide column would otherwise cap its height. */
+.rsvp-welcome[data-shape=circle] .rf-placement-override>.rf-artwork,.rsvp-welcome[data-shape=theme] .rf-circular.rf-placement-override>.rf-artwork{width:100%;max-width:420px;max-height:none;aspect-ratio:1;min-height:0;height:auto;justify-self:center;align-self:center}

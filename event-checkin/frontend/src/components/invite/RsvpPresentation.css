@@ -38,3 +38,14 @@
 .rsvp-welcome[data-custom-hero=true] .rf-placement-override{background:var(--rw-custom-hero-bg);color:var(--rw-custom-hero-ink)}
 @media(max-width:800px){.rsvp-welcome .rf-hero.rf-placement-override{padding:26px 22px;grid-template-columns:1fr;grid-template-areas:'copy' 'image'}.rsvp-welcome[data-image-placement=top] .rf-placement-override{grid-template-areas:'image' 'copy'}}
 .rsvp-welcome section[data-custom-color=true].rw-bottom details p{color:var(--rw-section-ink)}
+/* Existing Welcome colour themes support the same artwork controls. */
+.rsvp-welcome[data-shape=square] .rw-cover{border-radius:0}
+.rsvp-welcome[data-shape=rounded] .rw-cover{border-radius:24px}
+.rsvp-welcome[data-shape=circle] .rw-cover{border-radius:50%;aspect-ratio:1;height:auto;max-height:none;min-height:0}
+.rsvp-welcome[data-shape=hexagon] .rw-cover{clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);border-radius:0}
+.rsvp-welcome:is([data-image-placement=left],[data-image-placement=right],[data-image-placement=top]) .rw-compact-hero.rw-with-artwork{display:grid;grid-template-areas:'copy image'}
+.rsvp-welcome:is([data-image-placement=left],[data-image-placement=right],[data-image-placement=top]) .rw-compact-hero.rw-with-artwork>div{grid-area:copy}
+.rsvp-welcome:is([data-image-placement=left],[data-image-placement=right],[data-image-placement=top]) .rw-compact-hero.rw-with-artwork>.rw-cover{grid-area:image}
+.rsvp-welcome[data-image-placement=left] .rw-compact-hero.rw-with-artwork{grid-template-areas:'image copy'}
+.rsvp-welcome[data-image-placement=top] .rw-compact-hero.rw-with-artwork{grid-template-columns:1fr;grid-template-areas:'image' 'copy'}
+@media(max-width:800px){.rsvp-welcome:is([data-image-placement=left],[data-image-placement=right]) .rw-compact-hero.rw-with-artwork{grid-template-columns:1fr;grid-template-areas:'copy' 'image'}}

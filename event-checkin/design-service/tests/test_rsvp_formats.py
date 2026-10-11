@@ -37,10 +37,10 @@ def test_format_selection_is_private_until_published_and_restorable(client, form
 
 def test_catalog_additions_preserve_original_ids_and_supported_surfaces():
     catalog = build_catalog()
-    assert len(catalog) == 11
+    assert len(catalog) == 16
     assert [t['id'] for t in catalog[:6]] == ['flyer-led', 'signature', 'modern', 'celebration', 'formal', 'pilgrimage']
     assert get_template('general-modern-minimal')['id'] == 'modern'
     assert get_template('general-modern-luxury')['id'] == 'signature'
     for template in catalog:
         assert template_quality_issues(template) == []
-    assert len({t['layout']['eventPage'] for t in catalog[6:]}) == 5
+    assert len({t['layout']['eventPage'] for t in catalog[6:11]}) == 5

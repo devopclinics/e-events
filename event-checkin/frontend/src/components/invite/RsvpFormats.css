@@ -87,3 +87,25 @@
 .rsvp-welcome .rf-hero>.rf-festival-title{color:var(--rw-primary-ink)}
 .rsvp-welcome .rf-hero>.rf-festival-facts{color:var(--rw-accent-ink)}
 .rsvp-welcome :is(.rf-editorial,.rf-festival){display:grid}
+/* Infographic: numbered story and factual brief. */
+.rsvp-welcome .rf-infographic{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:0;padding:0}
+.rsvp-welcome .rf-infographic-story{padding:40px;border-left:8px solid var(--rw-accent)}
+.rsvp-welcome .rf-infographic-facts{padding:40px;background:var(--rw-primary);color:var(--rw-primary-ink)!important}
+.rsvp-welcome .rf-number{font-size:54px;font-weight:900;line-height:1.1;display:block;margin-bottom:20px}
+.rsvp-welcome .rf-infographic-facts .rf-facts{display:grid}.rsvp-welcome .rf-infographic-facts .rf-artwork{height:180px;min-height:180px;margin-top:24px}
+/* Tiles: four independently sized content regions. */
+.rsvp-welcome .rf-tiles{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);grid-template-areas:'story art' 'facts actions';gap:16px;padding:24px}
+.rsvp-welcome .rf-tile-story{grid-area:story;padding:30px;background:var(--rw-surface);color:var(--rw-ink)!important;border-radius:20px}
+.rsvp-welcome .rf-tile-art{grid-area:art}.rsvp-welcome .rf-tile-facts{grid-area:facts;padding:20px;background:var(--rw-accent);color:var(--rw-accent-ink)!important;border-radius:20px}
+.rsvp-welcome .rf-tile-actions{grid-area:actions;padding:24px;border:1px solid currentColor;border-radius:20px}.rsvp-welcome .rf-tile-actions .rw-hero-actions{margin-top:0}.rsvp-welcome .rf-tile-facts .rf-facts{margin:0}
+/* Circular: a portrait orbit and round detail markers. */
+.rsvp-welcome .rf-circular{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);grid-template-areas:'art story' 'facts facts';align-items:center}
+.rsvp-welcome .rf-orbit-art{grid-area:art}.rsvp-welcome .rf-orbit-art .rf-artwork{aspect-ratio:1;min-height:0;height:auto;max-height:none;border-radius:50%;outline:2px solid var(--rw-accent);outline-offset:10px}
+.rsvp-welcome .rf-orbit-story{grid-area:story}.rsvp-welcome .rf-orbit-facts{grid-area:facts}.rsvp-welcome .rf-orbit-facts .rf-facts{justify-content:center}.rsvp-welcome .rf-orbit-facts .rf-facts>div{border-radius:40px;padding:20px 28px}
+/* Hexagonal: geometric media; text stays in unrestricted readable panels. */
+.rsvp-welcome .rf-hexagonal{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);grid-template-areas:'story art' 'facts facts';align-items:center}
+.rsvp-welcome .rf-hex-story{grid-area:story}.rsvp-welcome .rf-hex-art{grid-area:art}.rsvp-welcome .rf-hex-art .rf-artwork{clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);aspect-ratio:1;min-height:0;height:auto;border-radius:0}
+.rsvp-welcome .rf-hex-facts{grid-area:facts;border-top:3px solid var(--rw-accent)}.rsvp-welcome .rf-hex-facts .rf-facts{justify-content:space-between}.rsvp-welcome .rf-hex-facts svg{background:var(--rw-accent);color:var(--rw-accent-ink);width:38px;height:38px;padding:7px;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)}
+/* Modern Edge: a typographic masthead and wide image band. */
+.rsvp-welcome .rf-modern-unique{display:block;padding:0}.rsvp-welcome .rf-modern-story{padding:42px}.rsvp-welcome .rf-modern-story h1{font-size:clamp(40px,7vw,92px);font-weight:900;max-width:950px}.rsvp-welcome .rf-modern-story .rw-lead{max-width:850px}.rsvp-welcome .rf-modern-art .rf-artwork{border-radius:0;height:280px;min-height:220px;max-height:320px}.rsvp-welcome .rf-modern-facts{padding:16px 42px;background:var(--rw-primary);color:var(--rw-primary-ink)!important}.rsvp-welcome .rf-modern-facts .rf-facts{margin:0}
+@media(max-width:800px){.rsvp-welcome .rf-infographic{grid-template-columns:1fr}.rsvp-welcome .rf-infographic-story,.rsvp-welcome .rf-infographic-facts{padding:28px 22px}.rsvp-welcome .rf-tiles{grid-template-columns:1fr;grid-template-areas:'story' 'art' 'facts' 'actions';padding:18px}.rsvp-welcome .rf-tile-story{padding:24px}.rsvp-welcome :is(.rf-circular,.rf-hexagonal){grid-template-columns:1fr;grid-template-areas:'story' 'art' 'facts';gap:28px}.rsvp-welcome .rf-orbit-art{padding:12px;max-width:350px;width:100%;margin:auto}.rsvp-welcome .rf-hex-art{max-width:350px;width:100%;margin:auto}.rsvp-welcome .rf-modern-story{padding:28px 22px}.rsvp-welcome .rf-modern-facts{padding:20px 22px}}

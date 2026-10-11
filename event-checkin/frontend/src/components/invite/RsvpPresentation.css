@@ -1,0 +1,29 @@
+/* Presentation settings affect public sections, never registration controls. */
+.rsvp-welcome[data-spacing=compact] main>.rw-section{padding-top:20px;padding-bottom:20px}
+.rsvp-welcome[data-spacing=airy] main>.rw-section{padding-top:48px;padding-bottom:48px}
+.rsvp-welcome[data-cards=list] :is(.rw-highlights,.rw-travel,.rw-overview){grid-template-columns:1fr}
+.rsvp-welcome[data-cards=list] .rw-highlights article{min-height:0;display:flex;gap:20px;align-items:center}
+.rsvp-welcome[data-cards=list] .rw-highlights .rw-tile{margin:0;flex:none}
+.rsvp-welcome[data-shape=square] :is(.rf-artwork,.rw-about-card,.rw-arrival,.rw-highlights article,.rw-travel article,.rw-tile){border-radius:0}
+.rsvp-welcome[data-shape=rounded] :is(.rf-artwork,.rw-about-card,.rw-arrival,.rw-highlights article,.rw-travel article){border-radius:24px;clip-path:none}
+.rsvp-welcome[data-shape=circle] .rf-artwork{border-radius:50%;clip-path:none;aspect-ratio:1;min-height:0;max-height:none;height:auto}
+.rsvp-welcome[data-shape=circle] .rw-tile{border-radius:50%}
+.rsvp-welcome[data-shape=hexagon] .rf-artwork{clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);border-radius:0}
+.rsvp-welcome[data-shape=hexagon] .rw-tile{clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);border-radius:0}
+/* Placement reorders media only; title and registration remain in reading order. */
+.rsvp-welcome[data-image-placement=left] :is(.rf-editorial,.rf-tiles,.rf-festival,.rf-hexagonal,.rf-circular){grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);grid-template-areas:'image copy' 'facts actions'}
+.rsvp-welcome[data-image-placement=right] :is(.rf-editorial,.rf-tiles,.rf-festival,.rf-hexagonal,.rf-circular){grid-template-areas:'copy image' 'facts actions'}
+.rsvp-welcome[data-image-placement=left] .rf-editorial>.rf-copy,.rsvp-welcome[data-image-placement=right] .rf-editorial>.rf-copy{grid-area:copy}
+.rsvp-welcome[data-image-placement=left] .rf-editorial>.rf-artwork,.rsvp-welcome[data-image-placement=right] .rf-editorial>.rf-artwork{grid-area:image}
+.rsvp-welcome:is([data-image-placement=left],[data-image-placement=right]) :is(.rf-tile-story,.rf-festival-title,.rf-orbit-story,.rf-hex-story){grid-area:copy}
+.rsvp-welcome:is([data-image-placement=left],[data-image-placement=right]) :is(.rf-tile-art,.rf-festival-image,.rf-orbit-art,.rf-hex-art){grid-area:image}
+.rsvp-welcome:is([data-image-placement=left],[data-image-placement=right]) :is(.rf-festival-facts,.rf-orbit-facts,.rf-hex-facts){grid-area:facts;grid-column:1/-1}
+.rsvp-welcome[data-image-placement=top] .rf-hero{display:flex;flex-direction:column;align-items:stretch}
+.rsvp-welcome[data-image-placement=top] :is(.rf-artwork,.rf-tile-art,.rf-festival-image,.rf-orbit-art,.rf-hex-art,.rf-modern-art){order:-1;max-height:350px}
+.rsvp-welcome[data-image-placement=top] .rf-spotlight>.rf-artwork{position:static;min-height:220px;height:260px;margin-bottom:20px}
+.rsvp-welcome[data-image-placement=top] .rf-poster-panel{max-width:none}
+/* Custom section colours apply to the outer panel; inner cards retain their own contrast. */
+.rsvp-welcome section[data-custom-color=true]>.rw-heading>.rw-eyebrow,.rsvp-welcome section[data-custom-color=true].rw-bottom>div>.rw-eyebrow{color:var(--rw-section-ink)}
+.rsvp-welcome[data-custom-hero=true] .rw-hero{background:var(--rw-custom-hero-bg);color:var(--rw-custom-hero-ink)}
+.rsvp-welcome[data-custom-hero=true] .rw-compact-hero>div,.rsvp-welcome[data-custom-hero=true] .rw-compact-hero :is(.rw-lead,.rw-facts,.rw-eyebrow,.rw-compact-deadline){color:var(--rw-custom-hero-ink)}
+@media(max-width:800px){.rsvp-welcome:is([data-image-placement=left],[data-image-placement=right]) :is(.rf-editorial,.rf-tiles,.rf-festival,.rf-hexagonal,.rf-circular){grid-template-columns:1fr;grid-template-areas:'copy' 'image' 'facts' 'actions'}.rsvp-welcome[data-spacing=airy] main>.rw-section{padding-top:34px;padding-bottom:34px}}

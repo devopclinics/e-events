@@ -534,6 +534,11 @@ RSVP_FORMAT_FAMILIES = (
     ("invitation", "Invitation", "classic", "A centered, framed invitation with a monogram and photo."),
     ("briefing", "Briefing", "minimal", "An event brief with a separate date, venue and registration rail."),
     ("festival", "Festival", "festive", "An asymmetric collage of title, artwork and event-detail tiles."),
+    ("infographic", "Infographic", "minimal", "A visual event brief with numbered facts and a vertical story."),
+    ("tiles", "Tiles", "festive", "An adaptable mosaic of story, artwork and information cards."),
+    ("circular", "Circular", "classic", "An orbit-inspired composition with circular artwork and badges."),
+    ("hexagonal", "Hexagonal", "minimal", "Geometric artwork and honeycomb-inspired information panels."),
+    ("modern-unique", "Modern Edge", "photo-first", "An oversized editorial headline, image band and clean fact strip."),
 )
 
 

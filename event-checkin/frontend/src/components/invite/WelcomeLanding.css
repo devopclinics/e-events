@@ -35,3 +35,18 @@
 .rsvp-welcome .rw-registration .text-red-500{color:#b91c1c}
 .rsvp-welcome .rw-registration input::placeholder{color:#596e65;opacity:1}
 .rsvp-welcome .rw-registration .guided-registration-steps{color:#183e34}
+
+/* Compact public entry; registration components and guest access are retained. */
+.rsvp-welcome .rw-compact-hero{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);align-items:center;gap:36px;padding:44px 42px}
+.rsvp-welcome .rw-compact-hero.rw-without-artwork{grid-template-columns:1fr}
+.rsvp-welcome .rw-compact-hero.rw-without-artwork>div{max-width:850px}
+.rsvp-welcome .rw-compact-hero .rw-cover{margin:0;max-height:420px;min-height:260px;border-radius:20px}
+.rsvp-welcome .rw-compact-hero h1{font-size:clamp(36px,4.5vw,60px)}
+.rsvp-welcome .rw-hero-actions{display:flex;align-items:center;gap:22px;flex-wrap:wrap;margin-top:24px}
+.rsvp-welcome .rw-compact-deadline{font-size:13px;margin-top:14px;color:var(--rw-hero-ink)}
+.rsvp-welcome .rw-overview{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:20px;scroll-margin-top:20px}
+.rsvp-welcome .rw-about-card{border:1px solid var(--rw-line);border-radius:20px;padding:28px;background:var(--rw-surface);color:var(--rw-ink)}
+.rsvp-welcome .rw-about-card h2{margin:10px 0 16px}.rsvp-welcome .rw-about-card p{margin-bottom:18px}.rsvp-welcome .rw-about-card .rw-eyebrow{color:inherit}
+.rsvp-welcome .rw-overview .rw-arrival{height:100%;box-shadow:none;border-top:0}.rsvp-welcome .rw-overview .rw-arrival .rw-btn{margin-top:20px;margin-bottom:0}
+.rsvp-welcome .rw-bottom{display:block}.rsvp-welcome .rw-bottom>div{max-width:850px}
+@media(max-width:700px){.rsvp-welcome .rw-compact-hero{grid-template-columns:1fr;padding:28px 22px;gap:24px}.rsvp-welcome .rw-compact-hero .rw-cover{min-height:180px;max-height:280px}.rsvp-welcome .rw-overview{grid-template-columns:1fr}.rsvp-welcome .rw-about-card{padding:22px}.rsvp-welcome .rw-hero-actions{gap:12px}}

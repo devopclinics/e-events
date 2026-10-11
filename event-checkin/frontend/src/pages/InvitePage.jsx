@@ -3596,7 +3596,7 @@ export default function InvitePage() {
   if (event.rsvp_landing_layout === 'welcome' && !hasGuestHub) {
     return <WelcomeLanding event={event} title={title} dateLabel={dateLabel} timeLabel={timeLabel}
       venue={venue} host={host} hostWebsite={hostWebsite} about={about} designTheme={designTheme}
-      deadline={deadline} returningGuest={!!prior || tokenMeta.already_responded}
+      previewMock={isStudioPreview} deadline={deadline} returningGuest={!!prior || tokenMeta.already_responded}
       registration={isStudioPreview ? rsvpPanel : <>
         {!isStudioPreview && <PublicTicketCheckout eventId={event.id} tone={tone} onAvailabilityChange={setPaidTicketsAvailable} />}
         {(isStudioPreview || paidTicketsAvailable === false) && rsvpPanel}

@@ -54,3 +54,10 @@
 .rsvp-welcome[data-shape=theme] .rf-hexagonal.rf-placement-override>.rf-artwork{clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);border-radius:0}
 /* Keep circular artwork square when a wide column would otherwise cap its height. */
 .rsvp-welcome[data-shape=circle] .rf-placement-override>.rf-artwork,.rsvp-welcome[data-shape=theme] .rf-circular.rf-placement-override>.rf-artwork{width:100%;max-width:420px;max-height:none;aspect-ratio:1;min-height:0;height:auto;justify-self:center;align-self:center}
+
+/* Wide banners need a full-width slot, rather than a narrow portrait column. */
+.rsvp-welcome[data-wide-cover=true] .rw-compact-hero.rw-with-artwork{display:grid;grid-template-columns:1fr;gap:28px}
+.rsvp-welcome[data-wide-cover=true] .rw-compact-hero>.rw-cover{grid-row:1;width:100%;height:auto;max-height:320px;min-height:0;border-radius:14px}
+.rsvp-welcome[data-wide-cover=true] .rw-compact-hero>div{max-width:900px}
+.rsvp-welcome[data-long-title=true] :is(.rw-compact-hero,.rf-hero) h1{font-size:clamp(32px,3.6vw,48px);line-height:1.12;overflow-wrap:normal;word-break:normal;text-wrap:balance}
+@media(max-width:700px){.rsvp-welcome[data-wide-cover=true] .rw-compact-hero{gap:22px}.rsvp-welcome[data-long-title=true] :is(.rw-compact-hero,.rf-hero) h1{font-size:32px}.rsvp-welcome[data-wide-cover=true] .rw-compact-hero>.rw-cover{max-height:220px}}

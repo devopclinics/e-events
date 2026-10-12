@@ -24,3 +24,8 @@
 .studio-format-circular .studio-mini-art{border-radius:50%;background:currentColor}.studio-format-circular .studio-composition{grid-template-columns:1fr 1fr}
 .studio-format-hexagonal .studio-mini-art{clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);background:currentColor}.studio-format-hexagonal .studio-composition{grid-template-columns:1fr 1fr}
 .studio-format-modern-unique .studio-composition{grid-template-rows:1fr 2fr 1fr}.studio-format-modern-unique .studio-mini-art{background:currentColor}
+
+/* Keep event titles readable in tiny composition thumbnails. */
+.studio-v2 .studio-theme-art{height:112px;min-height:112px;justify-content:flex-end}
+.studio-v2 .studio-theme-art b{font-size:12px;line-height:1.25;max-width:100%;max-height:45px;overflow:hidden;overflow-wrap:normal;word-break:normal;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;text-shadow:0 1px 2px #0002}
+.studio-v2 .studio-theme-art i{flex-shrink:0}

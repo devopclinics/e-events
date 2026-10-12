@@ -50,3 +50,5 @@
 .rsvp-welcome .rw-overview .rw-arrival{height:100%;box-shadow:none;border-top:0}.rsvp-welcome .rw-overview .rw-arrival .rw-btn{margin-top:20px;margin-bottom:0}
 .rsvp-welcome .rw-bottom{display:block}.rsvp-welcome .rw-bottom>div{max-width:850px}
 @media(max-width:700px){.rsvp-welcome .rw-compact-hero{grid-template-columns:1fr;padding:28px 22px;gap:24px}.rsvp-welcome .rw-compact-hero .rw-cover{min-height:180px;max-height:280px}.rsvp-welcome .rw-overview{grid-template-columns:1fr}.rsvp-welcome .rw-about-card{padding:22px}.rsvp-welcome .rw-hero-actions{gap:12px}}
+
+.rsvp-welcome .rw-invitation-details summary{font-size:18px;font-weight:700;cursor:pointer;padding:12px 0}.rsvp-welcome .rw-compact-hero .rw-cover{object-fit:contain;min-height:0;height:auto;max-height:560px;background:var(--rw-paper)}

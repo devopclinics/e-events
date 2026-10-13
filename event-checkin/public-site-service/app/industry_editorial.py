@@ -22,8 +22,15 @@ def render(content, *, preview=False):
     except (TypeError,ValueError):
         html=html.replace('10<br>NOV<span>2026</span>','DATE<span>TO FOLLOW</span>')
     html=html.replace('PAMCON 2026',name)
+    if content.get('headline') and content['headline'] != 'Where the event industry comes together.':
+        html=html.replace('Where the<br>event industry<br><em>comes together.</em>',escape(content['headline']))
+    if content.get('summary'):
+        html=html.replace('PAMCON 2026 brings Nigeria’s event professionals together to connect, exchange ideas and explore the next chapter of the industry.',escape(content['summary']))
     if content.get('venue') and content['venue'].strip().lower() not in ['venue to be confirmed','to be confirmed','tba','tbd']:
-        venue=escape(content['venue']);html=html.replace('VENUE TO BE CONFIRMED',venue.upper())
+        venue=escape(content['venue'])
+        html=html.replace('Venue details and directions will be added once the location is confirmed.','Find the location and arrival details below.')
+        html=html.replace('PAMAN will announce the confirmed venue. Directions will appear when a location is available.',venue)
+        html=html.replace('VENUE TO BE CONFIRMED',venue.upper())
         html=html.replace('Venue to be confirmed. No directions are published until the location is available.',venue)
         url=safe_url(content.get('venue_url'))
         if url:html=html.replace('<span class="eyebrow">LOCATION</span>', '<span class="eyebrow">LOCATION</span><p><a href="'+url+'" rel="noopener noreferrer" target="_blank">Open directions ↗</a></p>')
@@ -36,6 +43,15 @@ def render(content, *, preview=False):
             return '<a class="'+m.group(1)+'" href="'+target+'">'+label+'</a>' if target else '<span class="'+m.group(1)+'">Registration details coming soon</span>'
         html=re.sub(r'<button class="([^"]*)" onclick="showAction\(\)">([^<]*)</button>',action,html)
         html=re.sub(r'<dialog id="action">[\s\S]*?</dialog>','',html)
+        if hub:html=html.replace('</p><a class="btn" href="'+register+'">Register your interest ↗</a>', '</p><a class="btn" href="'+register+'">Register your interest ↗</a><p><a href="'+hub+'">Already registered? Open your programme ↗</a></p>',1)
+        links=[]
+        for key,label in [('festio_live_url','Festio Live'),('festiome_url','FestioMe')]:
+            url=safe_url(content.get(key))
+            if url:
+                from urllib.parse import urlparse
+                if key=='festiome_url' and urlparse(content[key]).path in ('/festiome','/festiome-redesign') and hub:url=hub+('&amp;' if '?' in hub else '?')+'destination=festiome'
+                links.append('<a href="'+url+'">'+label+' ↗</a>')
+        if links:html=html.replace('<span>Powered by Festio</span>', '<span>'+ ' · '.join(links)+' · Powered by Festio</span>')
     approved=[s for s in content.get('speakers',[]) if s.get('name') and 'to be confirmed' not in s['name'].lower() and 'demo' not in s['name'].lower()]
     if approved:
         import re
@@ -45,7 +61,7 @@ def render(content, *, preview=False):
         from urllib.parse import urlparse
         if directory:
             parsed=urlparse(content['speakers_directory_url']);path=parsed.path
-            if path.startswith('/speakers/') or path.startswith('/events/'):
+            if parsed.netloc in ('festio.events','staging.festio.events') and re.fullmatch(r'/speakers/[A-Za-z0-9-]+',path):
                 section=section.replace('</section>','<details><summary>View all speakers</summary><iframe title="Full event speaker lineup" src="'+escape(path)+'?embedded=1" loading="lazy" style="width:100%;height:700px;border:0"></iframe></details></section>')
         html=re.sub(r'<section class="section voices">[\s\S]*?</section>',lambda _:section,html,count=1)
     return html

@@ -10,7 +10,7 @@ def test_saved_destinations_and_preview_safety():
  assert 'onclick="showAction()"' not in html and 'DESIGN REVIEW' not in html
  preview=render_site(content(),'modern-professional',preview=True)
  assert 'Draft preview' in preview and 'onclick="showAction()"' in preview
- assert '10 November 2026' in html
+ assert 'November 10, 2026' in html
 
 def test_opt_in_and_escaped_event_name():
  c=content();c['event_name']='<script>alert(1)</script>'

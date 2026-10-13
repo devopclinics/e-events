@@ -9,7 +9,9 @@ def test_saved_destinations_and_preview_safety():
  assert 'href="https://festio.events/rsvp/registration#/guesthub"' in html
  assert 'onclick="showAction()"' not in html and 'DESIGN REVIEW' not in html
  preview=render_site(content(),'modern-professional',preview=True)
- assert 'Draft preview' in preview and 'onclick="showAction()"' in preview
+ assert 'Draft preview' in preview and 'aria-disabled="true"' in preview
+ assert 'onclick=' not in html and '<script>' not in html
+ assert '<details class="mobile-nav">' in html
  assert 'November 10, 2026' in html
 
 def test_opt_in_and_escaped_event_name():

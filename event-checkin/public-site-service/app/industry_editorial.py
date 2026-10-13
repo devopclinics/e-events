@@ -5,6 +5,11 @@ from .community import safe_url,date_label
 
 def render(content, *, preview=False):
     html=Path(__file__).with_name('industry_editorial.html').read_text()
+    import re
+    links=re.search(r'<div class="nav-links">([\s\S]*?)</div></nav>',html).group(1)
+    html=re.sub(r'<button class="menu"[\s\S]*?</button>',lambda _: '<details class="mobile-nav"><summary aria-label="Toggle navigation">Menu ☰</summary><div class="native-links">'+links+'</div></details>',html,count=1)
+    html=re.sub(r'<script>[\s\S]*?</script>','',html)
+    html=html.replace('</style>', '.mobile-nav{display:none}@media(max-width:760px){.mobile-nav{display:block}.mobile-nav summary{cursor:pointer;border:1px solid #ffffff50;border-radius:5px;padding:10px;list-style:none}.native-links{display:flex;position:absolute;z-index:5;top:100%;left:0;right:0;flex-direction:column;gap:22px;background:#221327;padding:24px}.native-links .btn{align-self:start}}</style>')
     name=escape(content.get('event_name') or 'Event')
     html=html.replace('<title>PAMCON 2026 — Modern website concept</title>', '<title>'+name+'</title>')
     html=html.replace('<div class="review">DESIGN REVIEW • Proposed PAMCON website • This mockup has not been published</div>', '<div class="review">Draft preview · Guest actions are disabled</div>' if preview else '')
@@ -52,6 +57,9 @@ def render(content, *, preview=False):
                 if key=='festiome_url' and urlparse(content[key]).path in ('/festiome','/festiome-redesign') and hub:url=hub+('&amp;' if '?' in hub else '?')+'destination=festiome'
                 links.append('<a href="'+url+'">'+label+' ↗</a>')
         if links:html=html.replace('<span>Powered by Festio</span>', '<span>'+ ' · '.join(links)+' · Powered by Festio</span>')
+    if preview:
+        html=re.sub(r' onclick="showAction\(\)"',' disabled aria-disabled="true"',html)
+        html=re.sub(r'<dialog id="action">[\s\S]*?</dialog>','',html)
     approved=[s for s in content.get('speakers',[]) if s.get('name') and 'to be confirmed' not in s['name'].lower() and 'demo' not in s['name'].lower()]
     if approved:
         import re

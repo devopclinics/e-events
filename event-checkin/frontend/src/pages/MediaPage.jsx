@@ -49,6 +49,9 @@ export const INTERNAL_DOCS = [
 ]
 
 export const PDFS = [
+  {title: 'Festio × PAMAN — Meeting Presentation (12 slides) — PowerPoint', description: 'Client-facing infographic presentation: full Festio capabilities, six PAMAN audiences and the proposed PAMCON partnership.', href: '/media/paman-meeting-presentation.pptx', filename: 'paman-meeting-presentation.pptx', type: 'PPTX'},
+  {title: 'Festio × PAMAN — Meeting Presentation (12 slides) — PDF', description: 'Client-facing infographic presentation: full Festio capabilities, six PAMAN audiences and the proposed PAMCON partnership.', href: '/media/paman-meeting-presentation.pdf', filename: 'paman-meeting-presentation.pdf', type: 'PDF'},
+
   {
     title: 'NCNMO Platform 2026 — Full Presentation (40 slides)',
     description: 'Complete Platform 2026 presentation: who Festio is for, the needs, the complete Festio platform, guest journey, ID card, Junior handoff, day-by-day flows, live demo screens, Knack comparison, RFID roadmap, staffing, readiness, rollout, and what NCNMO needs to provide. The first 25 slides are the main deck; the rest is appendix.',
@@ -101,6 +104,7 @@ export const PDFS = [
 ]
 
 export const HTML_ASSETS = [
+  {title: 'Festio × PAMAN — Meeting Presentation', description: 'Present or browse the 12-slide client deck. Includes the PAMAN proposition and varied infographic layouts.', href: '/media/paman-meeting-presentation.html', filename: 'paman-meeting-presentation.html', type: 'HTML'},
   {
     title: 'NCNMO Platform 2026 — Two-Page Overview HTML',
     description: 'Editable source for the concise NCNMO executive overview. Print this page to regenerate its two-page PDF.',
@@ -584,7 +588,7 @@ export default function MediaPage() {
       <MediaReviewComments />
 
       <section>
-        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">PDF downloads</h2>
+        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">Presentation & PDF downloads</h2>
         <div className="grid md:grid-cols-3 gap-4">
           {PDFS.map((asset) => <AssetCard key={asset.href} asset={asset} />)}
         </div>

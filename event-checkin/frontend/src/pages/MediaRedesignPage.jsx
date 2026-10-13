@@ -51,7 +51,7 @@ export default function MediaRedesignPage() {
       <div className="rr-section-title"><div><h2>Competitor pricing review comments</h2></div></div>
       <MediaReviewComments />
 
-      <div className="rr-section-title"><div><h2>PDF downloads</h2></div></div>
+      <div className="rr-section-title"><div><h2>Presentation & PDF downloads</h2></div></div>
       <div className="rr-grid3">
         {PDFS.map((asset) => <AssetCard key={asset.href} asset={asset} />)}
       </div>

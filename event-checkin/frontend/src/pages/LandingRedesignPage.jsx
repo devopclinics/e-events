@@ -188,6 +188,16 @@ const PEOPLE_STACK = [
   { initials: 'KB', name: 'Kemi Bello', role: 'Invited guest', status: 'pending' },
 ]
 
+const COMMUNITY_ICONS = {
+  'Staff broadcast': 'M4 10v4h4l9 5V5l-9 5H4Zm4 4 2 6M20 9v6',
+  'Volunteers channel': 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M17 4a4 4 0 0 1 0 8M22 21v-2a4 4 0 0 0-3-3.87',
+  'Gift registry': 'M3 8h18v4H3zM5 12v9h14v-9M12 8v13M12 8H8a3 3 0 1 1 3-3l1 3Zm0 0h4a3 3 0 1 0-3-3l-1 3Z',
+  'Logistics': 'M1 4h13v13H1zM14 9h5l3 4v4h-8M7 19a2 2 0 1 0-4 0 2 2 0 0 0 4 0ZM21 19a2 2 0 1 0-4 0 2 2 0 0 0 4 0Z',
+  'Speaker showcase': 'M12 15a4 4 0 0 0 4-4V6a4 4 0 0 0-8 0v5a4 4 0 0 0 4 4ZM5 11a7 7 0 0 0 14 0M12 18v4M8 22h8',
+  'Partner showcase': 'M3 5h18v16H3zM8 5V2h8v3M3 11h18M10 11v3h4v-3',
+  'Communication scheduler': 'M8 2v4M16 2v4M3 9h18M3 5h18v16H3zM12 12v4l3 2',
+}
+
 const COMMUNITY_CARDS = [
   { initials: 'SC', title: 'Staff broadcast', sub: 'To all attendees', body: 'Shuttle to the gala leaves the lobby at 6:45pm sharp. See you there.' },
   { initials: 'FW', title: 'Volunteers channel', sub: 'Private group', body: 'Registration desk needs two more hands for the 9am rush tomorrow.' },
@@ -607,10 +617,10 @@ export default function LandingRedesignPage() {
           </div>
           <div className="lr-community-strip">
             {COMMUNITY_CARDS.map((c) => (
-              <div className="lr-msg-bubble" key={c.title}>
-                <div className="lr-mb-head"><span className="lr-mb-ava">{c.initials}</span><div><strong>{c.title}</strong><span>{c.sub}</span></div></div>
+              <article className="lr-msg-bubble" key={c.title}>
+                <div className="lr-mb-head"><span className="lr-mb-ava" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d={COMMUNITY_ICONS[c.title]} /></svg></span><div><h3>{c.title}</h3><span>{c.sub}</span></div></div>
                 <p>{c.body}</p>
-              </div>
+              </article>
             ))}
           </div>
         </div>

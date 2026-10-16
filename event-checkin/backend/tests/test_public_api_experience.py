@@ -316,6 +316,8 @@ async def test_feedback_reminders_send(ctx, monkeypatch):
 
     async with _Session() as s:
         event = await s.get(Event, ev)
+        # A purchased tier and published workflow do not opt the event into it.
+        event.experience_enabled = True
         event.notify_email = True
         guest = (await s.execute(select(Guest).where(Guest.event_id == ev))).scalars().first()
         guest.email = "guest@example.com"

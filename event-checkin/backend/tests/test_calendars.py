@@ -381,6 +381,11 @@ async def test_resolve_unknown_token_404s(ctx):
 async def test_resolve_public_calendar_lists_curated_events(ctx):
     ctx.login(ctx.ids["user_a"])
     ev = ctx.ids["event_a"]
+    async with _Session() as s:
+        event = await s.get(Event, ev)
+        # This scenario lists an upcoming event; the shared fixture has a fixed date.
+        event.event_date = datetime.utcnow() + timedelta(days=30)
+        await s.commit()
     cal = (await ctx.client.post("/api/organizations/me/calendars", json={"title": "Upcoming", "visibility": "public"})).json()
     await ctx.client.post(f"/api/organizations/me/calendars/{cal['id']}/events/{ev}")
 
@@ -424,6 +429,11 @@ async def test_resolve_hides_past_events_when_flagged(ctx):
 async def test_resolve_private_calendar_prefill_and_returning_rsvp_status(ctx):
     ctx.login(ctx.ids["user_a"])
     ev = ctx.ids["event_a"]
+    async with _Session() as s:
+        event = await s.get(Event, ev)
+        # Keep the event visible regardless of when the suite runs.
+        event.event_date = datetime.utcnow() + timedelta(days=30)
+        await s.commit()
     list_id = (await ctx.client.post("/api/organizations/me/contact-lists", json={"name": "L"})).json()["id"]
     contact = (await ctx.client.post(f"/api/organizations/me/contact-lists/{list_id}/contacts",
                                       json={"first_name": "Jane", "email": "jane@example.com"})).json()

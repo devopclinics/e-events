@@ -72,6 +72,8 @@ async def test_bulk_assign_and_clear_household_works_regardless_of_how_guest_was
     ev = ctx.ids["event_a"]
     async with _Session() as s:
         e = await s.get(Event, ev)
+        # Exercise household assignment after a valid public registration.
+        e.status = "active"
         e.rsvp_enabled = True
         e.invite_mode = "open"
         await s.commit()

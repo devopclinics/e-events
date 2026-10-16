@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import RedesignShell from './redesign/RedesignShell';
 import LegacyStudio from './DesignStudioRedesignPage';
 import { useCurrentEvent } from '../hooks/useCurrentEvent';
@@ -20,9 +21,11 @@ const DEFAULT_COLORS={primary:'#194e3d',accent:'#dfbf75',background:'#f6f4eb',su
 function Dialog({title,onClose,children}){const ref=useRef();useEffect(()=>{ref.current.showModal()},[]);return <dialog className="studio-dialog" ref={ref} onCancel={onClose} aria-labelledby="studio-dialog-title"><header><h2 id="studio-dialog-title">{title}</h2><button aria-label="Close" onClick={onClose}>×</button></header><div>{children}</div></dialog>}
 export default function DesignStudioWorkspace(){const [eventId]=useCurrentEvent();if(new URLSearchParams(location.search).get('advanced')==='1')return <><div className="studio-return"><a href="/design-studio-redesign">← Guided Design Studio</a><span>Advanced tools · existing workflows</span></div><LegacyStudio/></>;return <Workspace key={eventId||'none'} eventId={eventId}/>}
 function Workspace({eventId}){
+ const {search}=useLocation();
  const {event}=useEventDetails(eventId);
  const [draft,setDraft]=useState(null),[saved,setSaved]=useState(null),[templates,setTemplates]=useState([]),[loadError,setLoadError]=useState('');
- const [step,setStep]=useState(0),[surface,setSurface]=useState(new URLSearchParams(location.search).get('surface')==='flyer'?'flyer':'rsvp'),[device,setDevice]=useState('desktop'),[mobilePreview,setMobilePreview]=useState(false),[keepBrand,setKeepBrand]=useState(false);
+ const [step,setStep]=useState(0),[surface,setSurface]=useState(['flyer','hub'].includes(new URLSearchParams(search).get('surface'))?new URLSearchParams(search).get('surface'):'rsvp'),[device,setDevice]=useState('desktop'),[mobilePreview,setMobilePreview]=useState(false),[keepBrand,setKeepBrand]=useState(false);
+ useEffect(()=>{const requested=new URLSearchParams(search).get('surface');if(['hub','flyer'].includes(requested)){setSurface(requested);setStep(requested==='hub'?1:0)}},[search]);
  const [saveState,setSaveState]=useState({status:'loading'}),[publishing,setPublishing]=useState(false),[uploading,setUploading]=useState(false),[publishError,setPublishError]=useState(''),[notice,setNotice]=useState(''),[modal,setModal]=useState(''),[versions,setVersions]=useState([]);
  const [downloading,setDownloading]=useState(false);
  const [previewUrl,setPreviewUrl]=useState(''),[previewError,setPreviewError]=useState(''),[flyerUrl,setFlyerUrl]=useState(''),[flyerLoading,setFlyerLoading]=useState(false),[scale,setScale]=useState(1);

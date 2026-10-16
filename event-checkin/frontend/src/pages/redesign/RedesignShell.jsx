@@ -8,6 +8,7 @@ import { api } from '../../api'
 import { RedesignShellBoundary, RedesignRouteBoundary } from './RedesignErrorBoundaries'
 import { logFallbackToLegacy, logRenderError } from './redesignTelemetry'
 import './RedesignShell.css'
+import { workspaceNavigation } from './workspaceNavigation.mjs'
 
 // ── shared dialog primitives, used across every redesign page ──────────
 // Real app mostly uses plain window.confirm() for destructive actions
@@ -308,15 +309,7 @@ export function Icon({ name, size = 18, className }) {
   return <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
 }
 
-// Mirrors the real top nav (App.jsx Nav, :85-203). Destinations point
-// directly at each item's redesign page — Check-in and Orders used to
-// route through their legacy URLs (/scanner, /kitchen) on the theory that
-// those live field tools weren't in scope yet, but ScannerRedesignPage and
-// KitchenRedesignPage are both fully wired now, so linking through legacy
-// only added a pointless RedesignGate redirect hop.
-//
-// `gate(ctx)` mirrors the exact visibility rules in the real Nav component
-// (App.jsx :104-136) — ctx is { user, event }. No gate = always shown.
+// Preserve destination-level visibility rules before grouping navigation.
 const TOP_LINKS = [
   { id: 'setup', label: 'Event Setup', to: '/admin-redesign', icon: 'calendar' },
   {
@@ -328,6 +321,9 @@ const TOP_LINKS = [
     id: 'design', label: 'Design Studio', to: '/design-studio-redesign', icon: 'palette',
     gate: ({ user, event }) => user?.role === 'admin',
   },
+  { id: 'guesthub', label: 'GuestHub', to: '/design-studio-redesign?surface=hub', icon: 'eye', gate: ({ user }) => user?.role === 'admin' },
+  { id: 'website', label: 'Event website', to: '/design-studio-redesign/website', icon: 'external', gate: ({ user }) => user?.role === 'admin' },
+  { id: 'live', label: 'Festio Live', to: '/live-redesign', icon: 'mic', gate: ({ user, event }) => ['admin', 'event_manager'].includes(user?.role) || !!event?.engagement_enabled },
   { id: 'results', label: 'Results', to: '/event-results-redesign', icon: 'barchart' },
   {
     id: 'planner', label: 'Planner', to: '/planner-redesign', icon: 'book',
@@ -443,7 +439,6 @@ function EventSwitcher({ events, currentEventId, onChange }) {
 
   return (
     <div className="rr-topbar-event" ref={wrapRef}>
-      <Icon name="calendar" size={12} />
       <button
         type="button"
         className="rr-topbar-event-trigger"
@@ -452,6 +447,7 @@ function EventSwitcher({ events, currentEventId, onChange }) {
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
       >
+        <Icon name="calendar" size={12} />
         <span>{current?.name || 'Choose an event…'}</span>
         <Icon name="chevrondown" size={12} />
       </button>
@@ -496,6 +492,9 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
   const [currentEventId, setCurrentEventId] = useCurrentEvent()
   const [events, setEvents] = useState([])
   const [menu, setMenu] = useState(false)
+  const headerRef = useRef(null)
+  const shellRef = useRef(null)
+  const accountRef = useRef(null)
   const [ticketingMaster, setTicketingMaster] = useState(false)
 
   useEffect(() => {
@@ -549,6 +548,31 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
   const setupHref=guideHref(currentEventId,user?.id)
   const visibleTopLinks = TOP_LINKS.filter((l) => !l.gate || l.gate({ user, event, ticketingMaster }))
 
+  const navigation = workspaceNavigation(visibleTopLinks, location, topActive)
+  const destination = (link) => link.id === 'guide' ? setupHref : link.to
+  useEffect(() => {
+    setMenu(false)
+    if (accountRef.current) accountRef.current.open = false
+  }, [location.pathname, location.search])
+  useEffect(() => {
+    function closeMenus(e) {
+      if (e.type === 'keydown' && e.key !== 'Escape') return
+      if (accountRef.current && (e.type === 'keydown' || !accountRef.current.contains(e.target))) accountRef.current.open = false
+      if (e.type === 'keydown') setMenu(false)
+    }
+    document.addEventListener('pointerdown', closeMenus)
+    document.addEventListener('keydown', closeMenus)
+    return () => { document.removeEventListener('pointerdown', closeMenus); document.removeEventListener('keydown', closeMenus) }
+  }, [])
+
+  useEffect(() => {
+    const header = headerRef.current
+    if (!header) return undefined
+    const observer = new ResizeObserver(() => shellRef.current?.style.setProperty('--workspace-header-height', `${header.getBoundingClientRect().height}px`))
+    observer.observe(header)
+    return () => observer.disconnect()
+  }, [])
+
   function handleShellError(error, errorInfo) {
     logRenderError({ module: 'shell', error: error?.message, errorInfo: errorInfo?.componentStack })
   }
@@ -560,22 +584,20 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
   return (
     <RedesignShellBoundary onError={handleShellError}>
 
-    <div className="admin-redesign rr">
-      <header className="rr-topbar">
+    <div className="admin-redesign rr" ref={shellRef}>
+      <header className="rr-topbar" ref={headerRef}>
         <div className="rr-topbar-inner">
           <Link to="/admin-redesign" className="rr-topbar-brand">
             <span className="rr-topbar-mark">F</span> Festio
           </Link>
 
-          <nav className="rr-topbar-links">
-            {visibleTopLinks.map((l) => (
-              <Link key={l.id} to={l.id==='guide'?setupHref:l.to} className={topActive === l.id ? 'active' : ''}>
-                {l.label}
-              </Link>
+          <nav className="rr-topbar-links rr-workspaces" aria-label="Main workspaces">
+            {navigation.groups.map(group => (
+              <Link key={group.id} to={destination(group.links[0])} className={navigation.activeGroup?.id === group.id ? 'active' : ''} aria-current={navigation.activeGroup?.id === group.id ? 'true' : undefined}>{group.label}</Link>
             ))}
           </nav>
 
-          {eventScoped && (
+          {(eventScoped || currentEventId) && (
             events.length > 0 ? (
               <EventSwitcher events={events} currentEventId={currentEventId} onChange={setCurrentEventId} />
             ) : (
@@ -586,36 +608,30 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
           )}
 
           <div className="rr-topbar-right">
+            <Link className="rr-scanner-shortcut" to="/scanner-redesign"><Icon name="ticket" size={14} /><span>Open scanner</span></Link>
             {user && (
-              <div className="rr-topbar-user">
-                <div><strong>{user.name}</strong><span>{user.role}</span></div>
-                <div className="rr-topbar-avatar">{user.name?.[0]?.toUpperCase() || '?'}</div>
-              </div>
-            )}
-            {user && (
-              <button
-                type="button"
-                className="rr-logout-btn"
-                onClick={logout}
-                title="Sign out"
-                aria-label="Sign out"
-              >
-                ↩ Sign out
-              </button>
+              <details className="rr-account" ref={accountRef}>
+                <summary aria-label="Organisation and account">
+                  <span className="rr-account-name">{user.name}<small>{user.role}</small></span>
+                  <span className="rr-topbar-avatar">{user.name?.[0]?.toUpperCase() || '?'}</span>
+                  <Icon name="chevrondown" size={12} />
+                </summary>
+                <nav className="rr-account-panel" aria-label="Organisation and account links">
+                  {navigation.accountLinks.map(link => <Link key={link.id} to={destination(link)} aria-current={navigation.activeId === link.id ? 'page' : undefined}><Icon name={link.icon} size={15} />{link.id === 'org' ? 'Organisation settings' : link.label}</Link>)}
+                  <button type="button" onClick={logout}><Icon name="external" size={15} />Sign out</button>
+                </nav>
+              </details>
             )}
             <ThemeToggle />
-            <button className="rr-menu" onClick={() => setMenu((v) => !v)} aria-label="Menu">☰</button>
+            {withEventSidebar && <button className="rr-menu" onClick={() => setMenu((v) => !v)} aria-label="Event tools" aria-expanded={menu}>☰</button>}
           </div>
         </div>
-        {menu && !withEventSidebar && (
-          <div className="rr-topbar-drawer">
-            {visibleTopLinks.map((l) => (
-              <Link key={l.id} to={l.id==='guide'?setupHref:l.to} onClick={() => setMenu(false)} className={topActive === l.id ? 'active' : ''}>
-                <Icon name={l.icon} size={15} /> {l.label}
-              </Link>
-            ))}
-          </div>
-        )}
+        <nav className="rr-mobile-workspaces" aria-label="Mobile workspaces">
+          {navigation.groups.map(group => <Link key={group.id} to={destination(group.links[0])} className={navigation.activeGroup?.id === group.id ? 'active' : ''} aria-current={navigation.activeGroup?.id === group.id ? 'true' : undefined}>{group.label}</Link>)}
+        </nav>
+        {navigation.activeGroup && <nav className="rr-workspace-tools" aria-label={`${navigation.activeGroup.label} tools`}>
+          {navigation.activeGroup.links.map(link => <Link key={link.id} to={destination(link)} className={navigation.activeId === link.id ? 'active' : ''} aria-current={navigation.activeId === link.id ? 'page' : undefined}><Icon name={link.icon} size={14} />{link.id === 'setup' ? 'Overview & setup' : link.label}</Link>)}
+        </nav>}
       </header>
 
       <div className={`rr-body ${withEventSidebar ? 'has-sidebar' : ''}`}>

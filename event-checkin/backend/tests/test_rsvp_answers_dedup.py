@@ -10,6 +10,8 @@ from conftest import _Session
 async def _open_event(ev):
     async with _Session() as s:
         e = await s.get(Event, ev)
+        # Public registration requires an activated event, not only RSVP enabled.
+        e.status = "active"
         e.rsvp_enabled = True
         e.invite_mode = "open"
         e.rsvp_require_approval = False

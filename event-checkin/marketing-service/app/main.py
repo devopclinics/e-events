@@ -14,10 +14,12 @@ import uuid
 import logging
 import asyncio
 import secrets
+import re
 from html import escape
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from typing import Any
+from typing import Literal
 from urllib.parse import quote
 
 import jwt
@@ -28,8 +30,8 @@ from cryptography.fernet import Fernet, InvalidToken
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, create_engine, func, inspect, select, text
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StrictBool
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, create_engine, func, inspect, select, text, update, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
@@ -103,7 +105,12 @@ class Lead(Base):
     tags: Mapped[list] = mapped_column(JSON, default=list)
     consent_email: Mapped[bool] = mapped_column(Boolean, default=False)
     consent_sms: Mapped[bool] = mapped_column(Boolean, default=False)
+    consent_whatsapp: Mapped[bool] = mapped_column(Boolean, default=False)
     unsubscribed: Mapped[bool] = mapped_column(Boolean, default=False)
+    automation_paused: Mapped[bool] = mapped_column(Boolean, default=False)
+    suppression_reason: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    last_inbound_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    handoff_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
     last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     next_follow_up_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -172,6 +179,52 @@ class AutomationLease(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
 
+class IngestReceipt(Base):
+    """Durable deduplication, committed in the same transaction as its effects.
+
+    Deliberately no lead FK: retain event tombstones after a lead is removed so
+    an old outbox replay cannot recreate a deleted person's profile.
+    """
+    __tablename__ = "marketing_ingest_receipts"
+    event_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(30))
+    payload_hash: Mapped[str] = mapped_column(String(64))
+    lead_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    prospect_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class PendingProspect(Base):
+    """Inbound sales contacts need not have a Festio account or an email.
+
+    Self-reported identity is stored for staff review, not treated as ownership
+    of an existing lead. No conversation body or media is persisted here.
+    """
+    __tablename__ = "marketing_pending_prospects"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    channel: Mapped[str] = mapped_column(String(20))
+    source_contact_id: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    festio_user_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    identity_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    opted_out: Mapped[bool] = mapped_column(Boolean, default=False)
+    owner_email: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    lead_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    last_inbound_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class SendAttempt(Base):
+    """A durable per-step claim prevents overlapping workers and crash retries."""
+    __tablename__ = "marketing_send_attempts"
+    id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    lead_id: Mapped[str] = mapped_column(String(36), index=True)
+    status: Mapped[str] = mapped_column(String(20), default="sending")
+    attempts: Mapped[int] = mapped_column(Integer, default=1)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+
+
 class FormRateLimit(Base):
     __tablename__ = "marketing_form_rate_limits"
     key: Mapped[str] = mapped_column(String(200), primary_key=True)
@@ -179,7 +232,30 @@ class FormRateLimit(Base):
     count: Mapped[int] = mapped_column(Integer, default=0)
 
 
+def preflight_lead_email_uniqueness() -> None:
+    """Fail before startup writes rather than choose or delete legacy leads."""
+    if not inspect(engine).has_table("marketing_leads"):
+        return
+    with engine.connect() as connection:
+        duplicate_groups = connection.scalar(text(
+            "SELECT count(*) FROM ("
+            "SELECT lower(email) FROM marketing_leads "
+            "GROUP BY lower(email) HAVING count(*) > 1"
+            ") AS duplicate_email_groups"
+        )) or 0
+    if duplicate_groups:
+        raise RuntimeError(
+            f"Marketing migration blocked: {duplicate_groups} duplicate normalized-email group(s); "
+            "manual review is required. Existing records were not modified."
+        )
+
+
+preflight_lead_email_uniqueness()
 Base.metadata.create_all(engine)
+
+if "prospect_id" not in {column["name"] for column in inspect(engine).get_columns("marketing_ingest_receipts")}:
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE marketing_ingest_receipts ADD COLUMN prospect_id VARCHAR(64)"))
 
 # Lightweight additive migration for the service-owned SQLite database. This
 # keeps upgrades independent from the main Festio schema and preserves leads.
@@ -198,17 +274,17 @@ with engine.begin() as connection:
         "demo_at": "DATETIME",
         "calendar_url": "TEXT",
         "deletion_requested_at": "DATETIME",
+        "consent_whatsapp": "BOOLEAN NOT NULL DEFAULT 0",
+        "automation_paused": "BOOLEAN NOT NULL DEFAULT 0",
+        "suppression_reason": "VARCHAR(100)",
+        "last_inbound_at": "DATETIME",
+        "handoff_requested_at": "DATETIME",
     }.items():
         if column not in lead_columns:
             connection.execute(text(f"ALTER TABLE marketing_leads ADD COLUMN {column} {definition}"))
     connection.execute(text("UPDATE marketing_leads SET stage_changed_at = COALESCE(stage_changed_at, updated_at, created_at)"))
-    # Normalize historical duplicates before enforcing the same invariant as the API.
-    duplicates = connection.execute(text("SELECT lower(email), min(id) FROM marketing_leads GROUP BY lower(email) HAVING count(*) > 1")).all()
-    for normalized_email, keep_id in duplicates:
-        duplicate_ids = [row[0] for row in connection.execute(text("SELECT id FROM marketing_leads WHERE lower(email)=:email AND id<>:keep"), {"email": normalized_email, "keep": keep_id}).all()]
-        for duplicate_id in duplicate_ids:
-            connection.execute(text("UPDATE marketing_activities SET lead_id=:keep WHERE lead_id=:duplicate"), {"keep": keep_id, "duplicate": duplicate_id})
-            connection.execute(text("DELETE FROM marketing_leads WHERE id=:duplicate"), {"duplicate": duplicate_id})
+    # The preflight above refuses duplicate groups before any schema/data writes.
+    # Never merge, move activities, or delete leads as a startup side effect.
     connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_marketing_leads_email_normalized ON marketing_leads(lower(email))"))
 
 access_columns = {column["name"] for column in inspect(engine).get_columns("marketing_access_grants")}
@@ -401,6 +477,107 @@ def audit(db: Session, identity: Identity | str, action: str, target_type: str, 
     db.add(AuditLog(actor=identity if isinstance(identity, str) else identity.email, action=action, target_type=target_type, target_id=target_id, data=data))
 
 
+def outbound_enabled() -> bool:
+    return os.getenv("MARKETING_OUTBOUND_ENABLED", "false").lower() in {"1", "true", "yes"}
+
+
+def require_outbound_enabled() -> None:
+    if not outbound_enabled():
+        raise HTTPException(503, "Marketing outbound is disabled")
+
+
+def pause_for_handoff(lead: Lead, reason: str) -> None:
+    lead.automation_paused = True
+    lead.handoff_requested_at = lead.handoff_requested_at or now()
+    lead.suppression_reason = reason
+    lead.next_follow_up_at = None
+
+
+def normalize_phone(value: str | None) -> str | None:
+    """Normalize only explicit international numbers; never guess a country."""
+    if value is None:
+        return None
+    value = str(value).strip()
+    if re.fullmatch(r"\+[0-9\s().-]+", value):
+        digits = re.sub(r"\D", "", value)
+        if 7 <= len(digits) <= 15:
+            return f"+{digits}"
+    return value
+
+
+def receipt_for(db: Session, event_id: Any, kind: str, payload: dict) -> tuple[IngestReceipt | None, bool]:
+    """Reserve an event ID before any effects. Caller commits the entire unit."""
+    if event_id is None:
+        return None, False  # Compatibility for older direct producers only.
+    if not isinstance(event_id, str) or not event_id.strip() or len(event_id) > 128:
+        raise HTTPException(400, "event_id must be a nonempty string of at most 128 characters")
+    digest = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
+    receipt = db.get(IngestReceipt, event_id)
+    if not receipt:
+        receipt = IngestReceipt(event_id=event_id, kind=kind, payload_hash=digest)
+        db.add(receipt)
+        try:
+            db.flush()
+            return receipt, False
+        except IntegrityError:
+            db.rollback()
+            receipt = db.get(IngestReceipt, event_id)
+            if not receipt:
+                raise
+    if receipt.kind != kind or receipt.payload_hash != digest:
+        raise HTTPException(409, "event_id was already used for different content")
+    return receipt, True
+
+
+def resolve_ingest_lead(db: Session, *, email: str | None = None, phone: str | None = None, subject: str | None = None) -> Lead | None:
+    """Never guess when identifiers match different people or a shared phone."""
+    matches = {}
+    phone = normalize_phone(phone)
+    # Local/ambiguous numbers are not safe identifiers for provider messages.
+    if phone and not re.fullmatch(r"\+[0-9]{7,15}", phone):
+        phone = None
+    for column, value in ((Lead.email, email), (Lead.phone, phone), (Lead.festio_user_id, subject)):
+        if value:
+            for row in db.scalars(select(Lead).where(column == value)).all():
+                matches[row.id] = row
+    if len(matches) > 1:
+        raise HTTPException(409, "Identifiers match multiple marketing leads")
+    return next(iter(matches.values()), None)
+
+
+def apply_inbound_intent(lead: Lead, channel: str, opted_out: bool, received_at: datetime | None = None) -> None:
+    lead.last_inbound_at = received_at or now()
+    pause_for_handoff(lead, "opt_out" if opted_out else "inbound_reply")
+    if opted_out:
+        field = {"email": "consent_email", "sms": "consent_sms", "whatsapp": "consent_whatsapp"}.get(channel)
+        if field:
+            setattr(lead, field, False)
+        if channel == "email":
+            lead.unsubscribed = True
+
+
+def associate_verified_prospects(db: Session, lead: Lead) -> None:
+    identifiers = [PendingProspect.email == lead.email]
+    if lead.phone:
+        identifiers.append(PendingProspect.phone == lead.phone)
+    if lead.festio_user_id:
+        identifiers.append(PendingProspect.festio_user_id == lead.festio_user_id)
+    pending = db.scalars(select(PendingProspect).where(PendingProspect.identity_verified.is_(True), PendingProspect.lead_id.is_(None), or_(*identifiers))).all()
+    for prospect in pending:
+        try:
+            resolved = resolve_ingest_lead(db, email=prospect.email, phone=prospect.phone, subject=prospect.festio_user_id)
+        except HTTPException:
+            continue  # Staff must review ambiguous identities; do not merge.
+        if not resolved or resolved.id != lead.id:
+            continue
+        prospect.lead_id = lead.id
+        apply_inbound_intent(lead, prospect.channel, prospect.opted_out, prospect.last_inbound_at)
+        db.query(IngestReceipt).filter(IngestReceipt.prospect_id == prospect.id).update({IngestReceipt.lead_id: lead.id}, synchronize_session=False)
+        for task in db.scalars(select(ModuleRecord).where(ModuleRecord.module == "tasks", ModuleRecord.payload["prospect_id"].as_string() == prospect.id)).all():
+            task.payload = {**task.payload, "lead_id": lead.id, "identity_status": "verified_associated"}
+            task.owner_email = lead.owner_email
+
+
 def visible_lead(db: Session, lead_id: str, identity: Identity) -> Lead:
     row = db.get(Lead, lead_id)
     if not row or (identity.owner_scoped and row.owner_email != identity.email):
@@ -417,10 +594,9 @@ def sequence_steps(record: ModuleRecord) -> list[dict]:
     return []
 
 
-# Only these kinds represent an actual send attempt for a sequence step. Delivery-status
-# webhooks (email_delivered/email_bounced/email_opened/...) copy the same sequence_id onto
-# their own Activity row, so counting every kind would double up a lead's step progress.
-EMAIL_ATTEMPT_KINDS = {"email_sent", "email_failed"}
+# Only a provider-accepted send advances a sequence. Failed/queued attempts and
+# delivery webhooks must never consume a step.
+EMAIL_ATTEMPT_KINDS = {"email_sent", "email_failed", "email_queued"}
 
 
 def lead_automation_map(db: Session, leads: list[Lead]) -> dict[str, dict | None]:
@@ -428,14 +604,15 @@ def lead_automation_map(db: Session, leads: list[Lead]) -> dict[str, dict | None
     many, whether it's finished, and the status/time of its most recent touch."""
     sequences = db.scalars(select(ModuleRecord).where(ModuleRecord.module == "sequences", ModuleRecord.status == "active")).all()
     lead_ids = [lead.id for lead in leads]
-    touches = db.scalars(select(Activity).where(Activity.lead_id.in_(lead_ids), Activity.kind.in_(EMAIL_ATTEMPT_KINDS))).all() if lead_ids else []
+    touches = db.scalars(select(Activity).where(Activity.lead_id.in_(lead_ids), Activity.kind.in_(EMAIL_ATTEMPT_KINDS), Activity.actor != "resend")).all() if lead_ids else []
     counts: dict[tuple[str, str], int] = {}
     last_touch: dict[tuple[str, str], Activity] = {}
     for touch in touches:
         sequence_id = (touch.data or {}).get("sequence_id")
         if not sequence_id: continue
         key = (touch.lead_id, sequence_id)
-        counts[key] = counts.get(key, 0) + 1
+        if touch.kind == "email_sent":
+            counts[key] = counts.get(key, 0) + 1
         if key not in last_touch or touch.created_at > last_touch[key].created_at:
             last_touch[key] = touch
     result: dict[str, dict | None] = {}
@@ -505,12 +682,21 @@ def safe_cta_url(value: Any) -> str:
 
 
 def send_follow_up(lead: Lead, sequence: ModuleRecord, step_index: int = 0) -> dict:
+    require_outbound_enabled()
+    if not lead.consent_email or lead.unsubscribed or lead.automation_paused or lead.suppression_reason or lead.deletion_requested_at:
+        raise HTTPException(409, "Lead is not eligible for marketing email")
     steps = sequence_steps(sequence)
     step = steps[min(step_index, len(steps) - 1)] if steps else {"subject": sequence.name, "cta": "Open Festio"}
     message = EmailMessage()
     message["From"] = os.getenv("EMAIL_FROM", "Festio <events@festio.events>")
     message["To"] = lead.email
     message["Subject"] = step.get("subject") or sequence.name
+    reply_domain = os.getenv("MARKETING_REPLY_DOMAIN", "")
+    if reply_domain and TOKEN_SECRET:
+        from .reply_routing import reply_address
+        address = reply_address(lead.id, TOKEN_SECRET, reply_domain)
+        if address:
+            message["Reply-To"] = address
     unsubscribe_url = f"https://festio.events/api/marketing/unsubscribe/{lead.id}"
     message["List-Unsubscribe"] = f"<{unsubscribe_url}>"
     message["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
@@ -530,15 +716,15 @@ def send_follow_up(lead: Lead, sequence: ModuleRecord, step_index: int = 0) -> d
     if resend_key:
         response = httpx.post(
             "https://api.resend.com/emails",
-            headers={"Authorization": f"Bearer {resend_key}"},
-            json={"from": message["From"], "to": [lead.email], "subject": message["Subject"], "text": message.get_body(preferencelist=("plain",)).get_content(), "html": message.get_body(preferencelist=("html",)).get_content(), "headers": {"List-Unsubscribe": f"<{unsubscribe_url}>", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"}, "tags": [{"name": "marketing_record_id", "value": sequence.id}]},
+            headers={"Authorization": f"Bearer {resend_key}", "Idempotency-Key": f"marketing/{lead.id}/{sequence.id}/{step_index}"},
+            json={"from": message["From"], "to": [lead.email], "subject": message["Subject"], "text": message.get_body(preferencelist=("plain",)).get_content(), "html": message.get_body(preferencelist=("html",)).get_content(), "headers": {"List-Unsubscribe": f"<{unsubscribe_url}>", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"}, "tags": [{"name": "marketing_record_id", "value": sequence.id}], **({"reply_to": str(message["Reply-To"])} if message["Reply-To"] else {})},
             timeout=20,
         )
         response.raise_for_status()
         return {"status": "sent", "provider": "resend", "provider_id": response.json().get("id")}
     host, user, password = os.getenv("SMTP_HOST", ""), os.getenv("SMTP_USER", ""), os.getenv("SMTP_PASSWORD", "")
     if not host or not user or not password:
-        return {"status": "queued", "provider": "none", "provider_id": None}
+        return {"status": "failed", "provider": "none", "provider_id": None, "error": "Email provider is not configured"}
     port = int(os.getenv("SMTP_PORT", "587"))
     with smtplib.SMTP(host, port, timeout=15) as smtp:
         if os.getenv("SMTP_TLS", "true").lower() in {"1", "true", "yes"}: smtp.starttls()
@@ -566,6 +752,7 @@ class LeadIn(BaseModel):
     tags: list[str] = Field(default_factory=list)
     consent_email: bool = False
     consent_sms: bool = False
+    consent_whatsapp: bool = False
     registered_at: datetime | None = None
 
 
@@ -626,6 +813,7 @@ async def submit_public_form(public_token: str, body: dict, request: Request, db
     if not lead:
         allowed={"name","phone","organization","event_type","event_date","guest_count","country","source","medium","campaign","referrer","landing_page"}
         values={key:value for key,value in body.items() if key in allowed};values["source"]=values.get("source") or f"form:{row.name}"
+        if "phone" in values: values["phone"] = normalize_phone(values["phone"])
         lead=Lead(email=email,owner_email=row.owner_email or default_owner_email(db),registered_at=now(),**values);db.add(lead);db.flush()
     db.add(Activity(lead_id=lead.id,kind="form_submitted",summary=f"Submitted {row.name}",actor="public_form",data={"form_id":row.id}))
     audit(db,"public_form","form.submitted","lead",lead.id,form_id=row.id);db.commit();return {"ok":True,"message":row.payload.get("success_message") or "Thanks. Our team will follow up shortly."}
@@ -637,41 +825,149 @@ def me(identity: Identity = Depends(decode_identity)): return identity.model_dum
 
 @app.post("/api/marketing/internal/ingest")
 def ingest(body: dict, identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
-    if not identity.is_superadmin: raise HTTPException(403, "Internal ingest requires platform authority")
-    email = (body.get("email") or "").lower()
+    if not identity.is_superadmin:
+        raise HTTPException(403, "Internal ingest requires platform authority")
+    email = str(body.get("email") or "").strip().lower()
     subject = str(body.get("festio_user_id") or "")
-    if not email: raise HTTPException(400, "Email is required")
-    row = db.scalar(select(Lead).where((Lead.festio_user_id == subject) | (Lead.email == email)))
-    if not row:
+    if not email or "@" not in email:
+        raise HTTPException(400, "A valid email is required")
+    for field in ("consent_email", "consent_sms", "consent_whatsapp"):
+        if field in body and not isinstance(body[field], bool):
+            raise HTTPException(400, f"{field} must be a boolean")
+    receipt, duplicate = receipt_for(db, body.get("event_id"), "lifecycle", body)
+    if duplicate:
+        row = db.get(Lead, receipt.lead_id) if receipt.lead_id else None
+        return {**(lead_out(row) if row else {"id": receipt.lead_id, "removed": True}), "ingest_duplicate": True}
+    lifecycle = str(body.get("lifecycle_event") or body.get("stage") or "registered")
+    row = resolve_ingest_lead(db, email=email, subject=subject)
+    created = row is None
+    if created:
         registered_at = body.get("registered_at")
         if isinstance(registered_at, str):
             try: registered_at = datetime.fromisoformat(registered_at.replace("Z", "+00:00"))
             except ValueError: registered_at = None
-        # consent_email intentionally left at its False default — no checkbox or other
-        # affirmative opt-in feeds this ingest call, so auto-consenting every signup to
-        # marketing email is not a defensible basis under GDPR/CAN-SPAM. Leads need a
-        # real opt-in path (e.g. a preferences page) before automation can reach them.
-        row = Lead(email=email, festio_user_id=subject or None, name=body.get("name") or "", source=body.get("source") or "website", stage=body.get("stage") or "registered", owner_email=default_owner_email(db), registered_at=registered_at or now(), last_active_at=now(), next_follow_up_at=now() + timedelta(hours=1))
-        db.add(row); db.flush(); db.add(Activity(lead_id=row.id, kind="registered", summary="Festio account registered", actor="festio"))
-    else:
-        row.last_active_at = now()
-        if body.get("name"): row.name = body["name"]
-        prev_stage = row.stage
-        if body.get("stage") and row.stage in {"registered", "event_created"}: row.stage = body["stage"]
-        if body.get("event_type"): row.event_type = body["event_type"]
-        if body.get("guest_count") is not None: row.guest_count = body["guest_count"]
-        if body.get("stage") == "event_created": row.score = max(row.score, 30)
-        # Re-enroll in sequences when stage advances so stage-specific follow-ups fire
-        if row.stage != prev_stage and row.consent_email and not row.unsubscribed:
-            row.next_follow_up_at = now()
-        if body.get("registered_at"):
-            try: row.registered_at = datetime.fromisoformat(str(body["registered_at"]).replace("Z", "+00:00"))
-            except ValueError: pass
-    if body.get("consent_email") is True and not row.unsubscribed:
-        row.consent_email = True
-    for field in ("source", "medium", "campaign", "referrer", "landing_page"):
-        if body.get(field): setattr(row, field, body[field])
-    db.commit(); db.refresh(row); return lead_out(row)
+        row = Lead(email=email, festio_user_id=subject or None, name=body.get("name") or "", source=body.get("source") or "website", stage=body.get("stage") or ("registered" if lifecycle == "signup_consent" else lifecycle), owner_email=default_owner_email(db), registered_at=registered_at or now(), last_active_at=now())
+        db.add(row)
+        db.flush()
+    elif subject:
+        if row.festio_user_id and row.festio_user_id != subject:
+            raise HTTPException(409, "Marketing lead is linked to a different account")
+        row.festio_user_id = subject
+    previous_stage = row.stage
+    row.last_active_at = now()
+    # Delayed registration events must not regress a lead's newer lifecycle.
+    rank = {"registered": 0, "demo_requested": 1, "event_created": 2, "activated": 3, "qualified": 4, "demo_booked": 5, "paid": 6, "customer": 7}
+    incoming_stage = body.get("stage") or lifecycle
+    if row.stage in rank and incoming_stage in rank and rank[incoming_stage] > rank[row.stage]:
+        row.stage = incoming_stage
+    if row.stage != previous_stage:
+        row.stage_changed_at = now()
+    for field in ("name", "phone", "organization", "event_type", "event_date", "country", "source", "medium", "campaign", "referrer", "landing_page"):
+        if body.get(field):
+            setattr(row, field, normalize_phone(body[field]) if field == "phone" else str(body[field]))
+    if body.get("guest_count") is not None:
+        try: row.guest_count = int(body["guest_count"])
+        except (ValueError, TypeError): raise HTTPException(400, "guest_count must be an integer")
+    if lifecycle == "event_created":
+        row.score = max(row.score, 30)
+    # Missing consent is not a grant or a revocation. Explicit opt-outs apply;
+    # a lifecycle event may not override a prior unsubscribe or suppression.
+    for field in ("consent_email", "consent_sms", "consent_whatsapp"):
+        if field in body and (body[field] is False or not row.unsubscribed):
+            setattr(row, field, body[field])
+    consent_fields = {field: body[field] for field in ("consent_email", "consent_sms", "consent_whatsapp") if field in body}
+    if consent_fields:
+        evidence = {"event_id": body.get("event_id"), "requested": consent_fields, "effective": {field: getattr(row, field) for field in consent_fields}, "occurred_at": str(body.get("occurred_at") or now().isoformat())[:50], "lifecycle_event": lifecycle[:80], "source": str(body.get("source") or "festio")[:100]}
+        db.add(Activity(lead_id=row.id, kind="consent_recorded", summary="Explicit channel consent recorded", actor="festio", data=evidence))
+        audit(db, identity, "consent.recorded", "lead", row.id, **evidence)
+    if not row.consent_email:
+        row.next_follow_up_at = None
+    elif not row.unsubscribed and not row.automation_paused and not row.suppression_reason and not row.deletion_requested_at:
+        if created or row.stage != previous_stage or row.next_follow_up_at is None:
+            row.next_follow_up_at = now() + timedelta(minutes=int(os.getenv("MARKETING_INITIAL_DELAY_MINUTES", "60")))
+    if lifecycle == "demo_requested":
+        pause_for_handoff(row, "demo_requested")
+        details = {field: str(body[field])[:limit] for field, limit in {"demo_request_id": 128, "preferred_time": 50, "timezone": 100, "event_name": 240, "message": 2000}.items() if body.get(field)}
+        db.add(ModuleRecord(module="tasks", name="Follow up on demo request", status="open", owner_email=row.owner_email, created_by="festio", payload={"lead_id": row.id, "source_event_id": body.get("event_id"), "booking_confirmed": False, **details}))
+    associate_verified_prospects(db, row)
+    db.add(Activity(lead_id=row.id, kind=lifecycle[:50], summary=f"Lifecycle: {lifecycle[:80]}", actor="festio", data={"event_id": body.get("event_id")}))
+    if receipt:
+        receipt.lead_id = row.id
+    db.commit()
+    db.refresh(row)
+    return {**lead_out(row), "ingest_duplicate": False}
+
+
+class ConversationIn(BaseModel):
+    event_id: str = Field(min_length=1, max_length=128)
+    channel: Literal["email", "whatsapp", "chat", "sms"]
+    event: Literal["message_received", "handoff_requested", "opt_out"] = "message_received"
+    email: EmailStr | None = None
+    phone: str | None = Field(default=None, max_length=40)
+    festio_user_id: str | None = Field(default=None, max_length=128)
+    identity_verified: StrictBool = False
+    source_contact_id: str | None = Field(default=None, min_length=1, max_length=512)
+    reply_token: str | None = Field(default=None, min_length=1, max_length=160)
+
+
+@app.post("/api/marketing/internal/conversations")
+def ingest_conversation(body: ConversationIn, identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
+    if not identity.is_superadmin:
+        raise HTTPException(403, "Internal conversation ingest requires platform authority")
+    if not any((body.email, body.phone, body.festio_user_id, body.source_contact_id)):
+        raise HTTPException(400, "A contact identifier is required")
+    receipt, duplicate = receipt_for(db, body.event_id, "conversation", body.model_dump())
+    if duplicate:
+        result = {"recorded": True, "duplicate": True, "lead_id": receipt.lead_id}
+        if receipt.prospect_id:
+            result.update(unmatched=receipt.lead_id is None, prospect_id=receipt.prospect_id)
+        return result
+    # Provider authenticity does not verify ownership of an arbitrary From /
+    # anonymous-chat email. Only a trusted adapter may assert verified identity.
+    row = None
+    if body.channel == "email" and body.reply_token and body.email:
+        from .reply_routing import verify_reply_token
+        bound_id = verify_reply_token(body.reply_token, TOKEN_SECRET)
+        bound_lead = db.get(Lead, bound_id) if bound_id else None
+        if bound_lead and bound_lead.email == str(body.email).lower():
+            row = bound_lead
+    if body.identity_verified:
+        resolved = resolve_ingest_lead(db, email=str(body.email).lower() if body.email else None, phone=body.phone, subject=body.festio_user_id)
+        if row and resolved and row.id != resolved.id:
+            raise HTTPException(409, "Reply token and verified identity do not match")
+        row = row or resolved
+    if not row:
+        contact_id = body.source_contact_id or (str(body.email or body.phone or body.festio_user_id) if body.identity_verified else body.event_id)
+        prospect_id = hashlib.sha256(f"{body.channel}:{body.identity_verified}:{contact_id}".encode()).hexdigest()
+        prospect = db.get(PendingProspect, prospect_id)
+        if not prospect:
+            prospect = PendingProspect(id=prospect_id, channel=body.channel, source_contact_id=body.source_contact_id, email=str(body.email).lower() if body.email else None, phone=normalize_phone(body.phone), festio_user_id=body.festio_user_id, identity_verified=body.identity_verified, opted_out=body.event == "opt_out", owner_email=default_owner_email(db))
+            db.add(prospect)
+            db.add(ModuleRecord(module="tasks", name=f"Review new {body.channel} prospect", status="open", owner_email=prospect.owner_email, created_by="conversation_ingest", payload={"prospect_id": prospect.id, "channel": body.channel, "source_contact_id": body.source_contact_id, "email": prospect.email, "phone": prospect.phone, "identity_status": "verified_unmatched" if body.identity_verified else "unverified", "opted_out": body.event == "opt_out", "automation_paused": True}))
+        else:
+            prospect.last_inbound_at = now()
+            prospect.opted_out = prospect.opted_out or body.event == "opt_out"
+            # Anonymous visitors often share contact details later. Retain the
+            # latest claims for staff, without promoting them to verified
+            # identity or changing which provider contact owns this prospect.
+            if not prospect.identity_verified:
+                if body.email: prospect.email = str(body.email).lower()
+                if body.phone: prospect.phone = normalize_phone(body.phone)
+                if body.festio_user_id: prospect.festio_user_id = body.festio_user_id
+            for task in db.scalars(select(ModuleRecord).where(ModuleRecord.module == "tasks", ModuleRecord.payload["prospect_id"].as_string() == prospect.id)).all():
+                task.status = "open"
+                task.payload = {**task.payload, "opted_out": prospect.opted_out, "email": prospect.email, "phone": prospect.phone}
+        receipt.prospect_id = prospect.id
+        audit(db, identity, "prospect.received", "prospect", prospect.id, channel=body.channel, event=body.event, identity_verified=body.identity_verified)
+        db.commit()
+        return {"recorded": True, "duplicate": False, "lead_id": None, "unmatched": True, "prospect_id": prospect.id}
+    apply_inbound_intent(row, body.channel, body.event == "opt_out")
+    receipt.lead_id = row.id
+    # No transcript or message text is retained by this endpoint.
+    db.add(Activity(lead_id=row.id, kind=f"{body.channel}_{body.event}", summary=f"{body.channel.title()} {body.event.replace('_', ' ')}", actor="conversation_ingest", data={"event_id": body.event_id, "channel": body.channel}))
+    audit(db, identity, "conversation.received", "lead", row.id, event_id=body.event_id, channel=body.channel, event=body.event)
+    db.commit()
+    return {"recorded": True, "duplicate": False, "lead_id": row.id}
 
 
 @app.get("/api/marketing/dashboard")
@@ -768,6 +1064,7 @@ def create_lead(body: LeadIn, identity: Identity = Depends(decode_identity), db:
     if row: raise HTTPException(409, "Lead already exists")
     values = body.model_dump()
     values["email"] = body.email.lower()
+    values["phone"] = normalize_phone(body.phone)
     if identity.owner_scoped: values["owner_email"] = identity.email
     row = Lead(**values)
     if row.consent_email:
@@ -783,12 +1080,16 @@ def create_lead(body: LeadIn, identity: Identity = Depends(decode_identity), db:
 @app.patch("/api/marketing/leads/{lead_id}")
 def update_lead(lead_id: str, body: dict, identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
     row = visible_lead(db, lead_id, identity)
+    for field in ("consent_email", "consent_sms", "consent_whatsapp", "automation_paused", "unsubscribed"):
+        if field in body and not isinstance(body[field], bool):
+            raise HTTPException(400, f"{field} must be a boolean")
     allowed = {c.name for c in Lead.__table__.columns} - {"id", "created_at", "updated_at", "festio_user_id", "stage_changed_at"}
     previous_stage, previous_score = row.stage, row.score
     for key, value in body.items():
         if identity.owner_scoped and key == "owner_email": continue
         if key in allowed:
-            if key in {"registered_at", "last_active_at", "next_follow_up_at"} and isinstance(value, str):
+            if key == "phone": value = normalize_phone(value)
+            if key in {"registered_at", "last_active_at", "next_follow_up_at", "last_inbound_at", "handoff_requested_at", "demo_at", "deletion_requested_at"} and isinstance(value, str):
                 try: value = datetime.fromisoformat(value.replace("Z", "+00:00"))
                 except ValueError: raise HTTPException(400, f"Invalid {key}")
             setattr(row, key, value)
@@ -800,8 +1101,10 @@ def update_lead(lead_id: str, body: dict, identity: Identity = Depends(decode_id
         db.add(Activity(lead_id=row.id, kind="stage_changed", summary=f"Stage changed from {previous_stage} to {row.stage}", actor=identity.email, data={"from": previous_stage, "to": row.stage}))
     if row.score != previous_score:
         db.add(Activity(lead_id=row.id, kind="score_changed", summary=f"Score changed from {previous_score} to {row.score}", actor=identity.email, data={"from": previous_score, "to": row.score}))
-    if any(key in body for key in ("consent_email", "consent_sms", "unsubscribed")):
-        audit(db, identity, "consent.changed", "lead", row.id, consent_email=row.consent_email, consent_sms=row.consent_sms, unsubscribed=row.unsubscribed)
+    if row.automation_paused or row.suppression_reason or row.unsubscribed or not row.consent_email or row.deletion_requested_at:
+        row.next_follow_up_at = None
+    if any(key in body for key in ("consent_email", "consent_sms", "consent_whatsapp", "unsubscribed")):
+        audit(db, identity, "consent.changed", "lead", row.id, consent_email=row.consent_email, consent_sms=row.consent_sms, consent_whatsapp=row.consent_whatsapp, unsubscribed=row.unsubscribed)
     db.add(Activity(lead_id=row.id, kind="updated", summary="Lead updated", actor=identity.email, data={"fields": list(body)})); audit(db, identity, "lead.updated", "lead", row.id, fields=list(body)); db.commit(); db.refresh(row)
     return {**lead_out(row), "automation": lead_automation_map(db, [row])[row.id]}
 
@@ -812,6 +1115,9 @@ def delete_lead(lead_id:str, identity:Identity=Depends(require_manager), db:Sess
     # SQLite does not enforce ORM cascades here, so remove owned timeline data
     # explicitly and retain a non-PII audit record of the cleanup.
     db.query(Activity).filter(Activity.lead_id==lead_id).delete(synchronize_session=False)
+    db.query(ModuleRecord).filter(ModuleRecord.module == "tasks", ModuleRecord.payload["lead_id"].as_string() == lead_id).delete(synchronize_session=False)
+    db.query(SendAttempt).filter(SendAttempt.lead_id == lead_id).delete(synchronize_session=False)
+    db.query(PendingProspect).filter(PendingProspect.lead_id == lead_id).delete(synchronize_session=False)
     audit(db,identity,"lead.deleted","lead",lead_id);db.delete(row);db.commit()
 
 
@@ -845,13 +1151,40 @@ MODULES = {"segments", "sequences", "campaigns", "content", "referrals", "tasks"
 @app.get("/api/marketing/modules/{module}")
 def list_records(module: str, identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
     if module not in MODULES: raise HTTPException(404, "Module not found")
-    return [record_out(r) for r in db.scalars(select(ModuleRecord).where(ModuleRecord.module == module).order_by(ModuleRecord.updated_at.desc())).all()]
+    query = select(ModuleRecord).where(ModuleRecord.module == module)
+    if identity.owner_scoped and module == "tasks":
+        query = query.where(ModuleRecord.owner_email == identity.email)
+    rows = db.scalars(query.order_by(ModuleRecord.updated_at.desc())).all()
+    return [record_out(row) for row in rows if task_visible(db, row, identity)]
+
+
+def task_visible(db: Session, row: ModuleRecord, identity: Identity) -> bool:
+    if row.module != "tasks" or not identity.owner_scoped:
+        return True
+    if row.owner_email != identity.email:
+        return False
+    lead_id = row.payload.get("lead_id")
+    if lead_id:
+        lead = db.get(Lead, lead_id)
+        return bool(lead and lead.owner_email == identity.email)
+    prospect_id = row.payload.get("prospect_id")
+    if prospect_id:
+        prospect = db.get(PendingProspect, prospect_id)
+        return bool(prospect and prospect.owner_email == identity.email)
+    return True
 
 
 @app.post("/api/marketing/modules/{module}")
 def create_record(module: str, body: RecordIn, identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
     if module not in MODULES: raise HTTPException(404, "Module not found")
     values = body.model_dump()
+    if identity.owner_scoped and module == "tasks":
+        values["owner_email"] = identity.email
+        if values["payload"].get("lead_id"):
+            visible_lead(db, str(values["payload"]["lead_id"]), identity)
+        if values["payload"].get("prospect_id"):
+            prospect = db.get(PendingProspect, values["payload"]["prospect_id"])
+            if not prospect or prospect.owner_email != identity.email: raise HTTPException(404, "Prospect not found")
     if module == "forms": values["payload"] = {**values.get("payload", {}), "public_token": values.get("payload", {}).get("public_token") or secrets.token_urlsafe(24)}
     row = ModuleRecord(module=module, created_by=identity.email, **values); db.add(row); db.flush(); audit(db, identity, "module.created", module, row.id, name=row.name); db.commit(); db.refresh(row); return record_out(row)
 
@@ -859,8 +1192,12 @@ def create_record(module: str, body: RecordIn, identity: Identity = Depends(deco
 @app.patch("/api/marketing/modules/{module}/{record_id}")
 def update_record(module: str, record_id: str, body: dict, identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
     row = db.get(ModuleRecord, record_id)
-    if not row or row.module != module: raise HTTPException(404, "Record not found")
+    if not row or row.module != module or not task_visible(db, row, identity): raise HTTPException(404, "Record not found")
     for key in ("name", "status", "owner_email", "payload", "scheduled_at"):
+        if identity.owner_scoped and module == "tasks":
+            if key == "owner_email": continue
+            if key == "payload" and key in body:
+                body[key] = {**body[key], **{field: row.payload[field] for field in ("lead_id", "prospect_id") if field in row.payload}}
         if key in body: setattr(row, key, body[key])
     audit(db, identity, "module.updated", module, row.id, fields=list(body)); db.commit(); db.refresh(row); return record_out(row)
 
@@ -868,6 +1205,7 @@ def update_record(module: str, record_id: str, body: dict, identity: Identity = 
 @app.delete("/api/marketing/modules/{module}/{record_id}", status_code=204)
 def delete_record(module: str, record_id: str, identity: Identity = Depends(require_manager), db: Session = Depends(db_session)):
     row = db.get(ModuleRecord, record_id)
+    if row and not task_visible(db, row, identity): raise HTTPException(404, "Record not found")
     if row and row.module == module: audit(db, identity, "module.deleted", module, row.id, name=row.name); db.delete(row); db.commit()
 
 
@@ -881,6 +1219,18 @@ def merge_leads(body: dict, identity: Identity = Depends(require_manager), db: S
     target.tags = list(dict.fromkeys([*(target.tags or []), *(source.tags or [])]))
     target.consent_email = target.consent_email or source.consent_email
     target.consent_sms = target.consent_sms or source.consent_sms
+    target.consent_whatsapp = target.consent_whatsapp or source.consent_whatsapp
+    target.unsubscribed = target.unsubscribed or source.unsubscribed
+    target.automation_paused = target.automation_paused or source.automation_paused
+    target.suppression_reason = target.suppression_reason or source.suppression_reason
+    target.handoff_requested_at = target.handoff_requested_at or source.handoff_requested_at
+    target.deletion_requested_at = target.deletion_requested_at or source.deletion_requested_at
+    if target.unsubscribed or target.automation_paused or target.suppression_reason or target.deletion_requested_at:
+        target.next_follow_up_at = None
+    db.query(IngestReceipt).filter(IngestReceipt.lead_id == source.id).update({IngestReceipt.lead_id: target.id}, synchronize_session=False)
+    db.query(PendingProspect).filter(PendingProspect.lead_id == source.id).update({PendingProspect.lead_id: target.id}, synchronize_session=False)
+    for task in db.scalars(select(ModuleRecord).where(ModuleRecord.module == "tasks", ModuleRecord.payload["lead_id"].as_string() == source.id)).all():
+        task.payload = {**task.payload, "lead_id": target.id}
     db.query(Activity).filter(Activity.lead_id == source.id).update({Activity.lead_id: target.id}, synchronize_session=False)
     audit(db, identity, "lead.merged", "lead", target.id, source_id=source.id); db.delete(source); db.commit(); db.refresh(target)
     return lead_out(target)
@@ -937,7 +1287,7 @@ def campaign_audience(campaign: ModuleRecord, db: Session) -> list[Lead]:
     reference = str(campaign.payload.get("segment_id") or campaign.payload.get("audience") or "")
     segment = db.get(ModuleRecord, reference) or db.scalar(select(ModuleRecord).where(ModuleRecord.module == "segments", ModuleRecord.name == reference))
     if not segment or segment.module != "segments": raise HTTPException(400, "Choose a valid saved segment before sending")
-    leads = db.scalars(select(Lead).where(Lead.consent_email.is_(True), Lead.unsubscribed.is_(False))).all()
+    leads = db.scalars(select(Lead).where(Lead.consent_email.is_(True), Lead.unsubscribed.is_(False), Lead.automation_paused.is_(False), Lead.suppression_reason.is_(None), Lead.deletion_requested_at.is_(None))).all()
     return [lead for lead in leads if lead_matches_segment(lead, segment)]
 
 
@@ -948,11 +1298,15 @@ def execute_campaign(campaign_id: str, dry_run: bool = Query(False), identity: I
     if not sequence_steps(campaign): raise HTTPException(400, "Add an email subject and message before sending")
     audience = campaign_audience(campaign, db)
     if dry_run: return {"dry_run": True, "eligible": len(audience), "recipients": [{"id": row.id, "email": row.email, "name": row.name} for row in audience[:100]]}
+    require_outbound_enabled()
     sent = failed = 0
     for lead in audience:
-        already_sent = db.scalar(select(func.count(Activity.id)).where(Activity.lead_id == lead.id, Activity.data["campaign_id"].as_string() == campaign.id)) or 0
+        already_sent = db.scalar(select(func.count(Activity.id)).where(Activity.lead_id == lead.id, Activity.kind == "email_sent", Activity.data["campaign_id"].as_string() == campaign.id)) or 0
         if already_sent: continue
-        try: delivery = send_follow_up(lead, campaign); sent += 1
+        try:
+            delivery = send_follow_up(lead, campaign)
+            if delivery.get("status") == "sent": sent += 1
+            else: failed += 1
         except Exception as exc:
             logger.exception("Campaign delivery failed"); delivery = {"status": "failed", "provider": "resend", "provider_id": None, "error": str(exc)[:240]}; failed += 1
         db.add(Activity(lead_id=lead.id, kind=f"email_{delivery['status']}", summary=f"Campaign {campaign.name}: {delivery['status']}", actor=identity.email, data={"campaign_id": campaign.id, **delivery}))
@@ -1084,41 +1438,69 @@ def analytics(days:int=30,identity:Identity=Depends(decode_identity),db:Session=
     return {"days":days,"total":len(leads),"sources":by_source,"campaigns":by_campaign,"daily":daily,"delivery":delivery,"campaign_delivery":campaign_delivery,"funnel":stages,"expected_pipeline_value":round(expected_pipeline,2)}
 
 
+def preferences_out(row: Lead | None, email: str) -> dict:
+    return {"email": email, **{field: bool(row and getattr(row, field)) for field in ("consent_email", "consent_sms", "consent_whatsapp", "unsubscribed")}}
+
+
+def apply_preferences(row: Lead, body: dict) -> None:
+    for field in ("consent_email", "consent_sms", "consent_whatsapp"):
+        if field in body:
+            if not isinstance(body[field], bool):
+                raise HTTPException(400, f"{field} must be a boolean")
+            setattr(row, field, body[field])
+    if "consent_email" in body:
+        row.unsubscribed = not row.consent_email
+    if not row.consent_email or row.unsubscribed or row.automation_paused or row.suppression_reason or row.deletion_requested_at:
+        row.next_follow_up_at = None
+    elif row.next_follow_up_at is None:
+        row.next_follow_up_at = now() + timedelta(minutes=int(os.getenv("MARKETING_INITIAL_DELAY_MINUTES", "60")))
+
+
 @app.get("/api/marketing/preferences/me")
-def get_preferences(identity:Identity=Depends(decode_identity),db:Session=Depends(db_session)):
-    row=db.scalar(select(Lead).where(Lead.email==identity.email));return {"email":identity.email,"consent_email":bool(row and row.consent_email),"consent_sms":bool(row and row.consent_sms),"unsubscribed":bool(row and row.unsubscribed)}
+def get_preferences(identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
+    row = db.scalar(select(Lead).where(Lead.email == identity.email))
+    return preferences_out(row, identity.email)
 
 
 @app.put("/api/marketing/preferences/me")
-def set_preferences(body:dict,identity:Identity=Depends(decode_identity),db:Session=Depends(db_session)):
-    row=db.scalar(select(Lead).where(Lead.email==identity.email))
-    if not row: raise HTTPException(404,"Marketing profile not found")
-    row.consent_email=bool(body.get("consent_email"));row.consent_sms=bool(body.get("consent_sms"));row.unsubscribed=not row.consent_email
-    db.add(Activity(lead_id=row.id,kind="consent_changed",summary="Communication preferences updated",actor=identity.email,data={"email":row.consent_email,"sms":row.consent_sms}));audit(db,identity,"consent.changed","lead",row.id,email=row.consent_email,sms=row.consent_sms);db.commit();return {"ok":True}
+def set_preferences(body: dict, identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
+    row = db.scalar(select(Lead).where(Lead.email == identity.email))
+    if not row: raise HTTPException(404, "Marketing profile not found")
+    apply_preferences(row, body)
+    preferences = preferences_out(row, identity.email)
+    db.add(Activity(lead_id=row.id, kind="consent_changed", summary="Communication preferences updated", actor=identity.email, data=preferences))
+    audit(db, identity, "consent.changed", "lead", row.id, **preferences)
+    db.commit()
+    return {"ok": True}
 
 
 @app.get("/api/marketing/internal/preferences/{email}")
-def internal_preferences(email:str,identity:Identity=Depends(decode_identity),db:Session=Depends(db_session)):
-    if not identity.is_superadmin: raise HTTPException(403,"Internal preference access requires platform authority")
-    row=db.scalar(select(Lead).where(Lead.email==email.lower()))
-    return {"email":email.lower(),"consent_email":bool(row and row.consent_email),"consent_sms":bool(row and row.consent_sms),"unsubscribed":bool(row and row.unsubscribed)}
+def internal_preferences(email: str, identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
+    if not identity.is_superadmin: raise HTTPException(403, "Internal preference access requires platform authority")
+    row = db.scalar(select(Lead).where(Lead.email == email.lower()))
+    return preferences_out(row, email.lower())
 
 
 @app.put("/api/marketing/internal/preferences/{email}")
-def internal_set_preferences(email:str,body:dict,identity:Identity=Depends(decode_identity),db:Session=Depends(db_session)):
-    if not identity.is_superadmin: raise HTTPException(403,"Internal preference access requires platform authority")
-    row=db.scalar(select(Lead).where(Lead.email==email.lower()))
+def internal_set_preferences(email: str, body: dict, identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
+    if not identity.is_superadmin: raise HTTPException(403, "Internal preference access requires platform authority")
+    row = db.scalar(select(Lead).where(Lead.email == email.lower()))
     if not row:
-        row=Lead(email=email.lower(),source="account_preferences",registered_at=now());db.add(row);db.flush()
-    row.consent_email=bool(body.get("consent_email"));row.consent_sms=bool(body.get("consent_sms"));row.unsubscribed=not row.consent_email
-    db.add(Activity(lead_id=row.id,kind="consent_changed",summary="Account communication preferences updated",actor=email.lower(),data={"email":row.consent_email,"sms":row.consent_sms}));audit(db,email.lower(),"consent.changed","lead",row.id,email=row.consent_email,sms=row.consent_sms);db.commit()
-    return {"email":email.lower(),"consent_email":row.consent_email,"consent_sms":row.consent_sms,"unsubscribed":row.unsubscribed}
+        row = Lead(email=email.lower(), source="account_preferences", registered_at=now())
+        db.add(row)
+        db.flush()
+    apply_preferences(row, body)
+    preferences = preferences_out(row, email.lower())
+    db.add(Activity(lead_id=row.id, kind="consent_changed", summary="Account communication preferences updated", actor=email.lower(), data=preferences))
+    audit(db, email.lower(), "consent.changed", "lead", row.id, **preferences)
+    db.commit()
+    return preferences
 
 
 @app.get("/api/marketing/providers")
 def provider_readiness(identity:Identity=Depends(decode_identity), db:Session=Depends(db_session)):
     social={platform:social_credentials(db,platform) for platform in SOCIAL_FIELDS}
-    return {"email":{"provider":"resend","configured":bool(os.getenv("RESEND_API_KEY"))},"sms":{"provider":"signalhouse","configured":bool(os.getenv("SIGNALHOUSE_API_KEY") and os.getenv("SIGNALHOUSE_FROM_NUMBER"))},"whatsapp":{"provider":"bird","configured":bool(os.getenv("BIRD_ACCESS_KEY") and os.getenv("BIRD_WORKSPACE_ID") and os.getenv("BIRD_WHATSAPP_CHANNEL_ID"))},"social":{"linkedin":bool(social["linkedin"]["access_token"] and social["linkedin"]["author_urn"]),"facebook":bool(social["facebook"]["access_token"] and social["facebook"]["page_id"]),"instagram":bool(social["instagram"]["access_token"] and social["instagram"]["user_id"])},"oauth_refresh":{"linkedin":all(social["linkedin"].get(key) for key in ("refresh_token","client_id","client_secret")),"facebook":all(social["facebook"].get(key) for key in ("access_token","app_id","app_secret")),"instagram":all(social["instagram"].get(key) for key in ("access_token","app_id","app_secret"))}}
+    return {"outbound_enabled":outbound_enabled(),"email":{"provider":"resend","configured":bool(os.getenv("RESEND_API_KEY"))},"sms":{"provider":"signalhouse","configured":bool(os.getenv("SIGNALHOUSE_API_KEY") and os.getenv("SIGNALHOUSE_FROM_NUMBER"))},"whatsapp":{"provider":"bird","configured":bool(os.getenv("BIRD_ACCESS_KEY") and os.getenv("BIRD_WORKSPACE_ID") and os.getenv("BIRD_WHATSAPP_CHANNEL_ID"))},"social":{"linkedin":bool(social["linkedin"]["access_token"] and social["linkedin"]["author_urn"]),"facebook":bool(social["facebook"]["access_token"] and social["facebook"]["page_id"]),"instagram":bool(social["instagram"]["access_token"] and social["instagram"]["user_id"])},"oauth_refresh":{"linkedin":all(social["linkedin"].get(key) for key in ("refresh_token","client_id","client_secret")),"facebook":all(social["facebook"].get(key) for key in ("access_token","app_id","app_secret")),"instagram":all(social["instagram"].get(key) for key in ("access_token","app_id","app_secret"))}}
 
 
 @app.get("/api/marketing/social-connections")
@@ -1184,6 +1566,7 @@ async def publish_social(body:SocialPublishIn, identity:Identity=Depends(require
     if platform not in {"linkedin","facebook","instagram"}: raise HTTPException(400,"Unsupported social platform")
     if body.dry_run:
         audit(db,identity,"social.validated","content",None,platform=platform);db.commit();return {"status":"validated","platform":platform,"dry_run":True}
+    require_outbound_enabled()
     async with httpx.AsyncClient(timeout=30) as client:
         if platform=="linkedin":
             credentials=social_credentials(db,"linkedin");token,author=await refreshed_social_token("linkedin",db),credentials["author_urn"]
@@ -1209,9 +1592,11 @@ async def publish_social(body:SocialPublishIn, identity:Identity=Depends(require
 
 @app.post("/api/marketing/leads/{lead_id}/sms")
 async def send_lead_sms(lead_id:str, body:dict, identity:Identity=Depends(decode_identity), db:Session=Depends(db_session)):
+    require_outbound_enabled()
     row=visible_lead(db,lead_id,identity); message=str(body.get("message") or "").strip()
     if not row.phone: raise HTTPException(400,"Lead has no phone number")
     if not row.consent_sms: raise HTTPException(409,"SMS consent is required")
+    if row.automation_paused or row.suppression_reason or row.deletion_requested_at: raise HTTPException(409,"Lead is suppressed or awaiting handoff")
     if not message: raise HTTPException(400,"Message is required")
     key,from_number=os.getenv("SIGNALHOUSE_API_KEY",""),os.getenv("SIGNALHOUSE_FROM_NUMBER","")
     if not all((key,from_number)): raise HTTPException(503,"SignalHouse SMS is not configured")
@@ -1225,8 +1610,13 @@ async def send_lead_sms(lead_id:str, body:dict, identity:Identity=Depends(decode
 @app.post("/api/marketing/internal/delivery")
 def ingest_delivery(body:dict, identity:Identity=Depends(decode_identity), db:Session=Depends(db_session)):
     if not identity.is_superadmin: raise HTTPException(403, "Internal delivery ingest requires platform authority")
+    receipt, duplicate = receipt_for(db, body.get("event_id"), "delivery", body)
+    if duplicate: return {"recorded": True, "duplicate": True}
     email=(body.get("email") or "").lower(); row=db.scalar(select(Lead).where(Lead.email==email))
-    if not row: return {"recorded":False}
+    if not row:
+        db.rollback()
+        return {"recorded":False}
+    if receipt: receipt.lead_id = row.id
     event=str(body.get("event") or "delivered").replace("email.", "")
     provider_id = body.get("provider_id")
     prior = db.scalar(select(Activity).where(Activity.lead_id == row.id, Activity.data["provider_id"].as_string() == provider_id).order_by(Activity.created_at.desc())) if provider_id else None
@@ -1238,55 +1628,172 @@ def ingest_delivery(body:dict, identity:Identity=Depends(decode_identity), db:Se
         row.unsubscribed = True
         row.consent_email = False
         row.next_follow_up_at = None
+        row.suppression_reason = "email_complaint" if event == "complained" else "email_hard_bounce"
     db.commit()
     return {"recorded":True}
 
 
-@app.post("/api/marketing/automation/run")
-def run_automation(dry_run: bool = Query(False), lead_id: str | None = Query(None), identity: Identity = Depends(require_manager), db: Session = Depends(db_session)):
-    """Enroll due leads and queue consent-safe follow-ups from active sequences.
-    lead_id scopes this to a single lead (used by the per-card "send now" trigger)
-    instead of every due lead platform-wide — without it, clicking one card could
-    also fire real sends to unrelated leads that happened to already be due."""
-    sequences = db.scalars(select(ModuleRecord).where(ModuleRecord.module == "sequences", ModuleRecord.status == "active")).all()
-    lead_stmt = select(Lead).where(Lead.unsubscribed.is_(False), Lead.next_follow_up_at <= now())
+def claim_sequence_step(db: Session, lead: Lead, sequence: ModuleRecord, step_index: int) -> SendAttempt | None:
+    key = f"{lead.id}/{sequence.id}/{step_index}"
+    attempt = db.get(SendAttempt, key)
+    max_attempts = max(1, int(os.getenv("MARKETING_MAX_SEND_ATTEMPTS", "5")))
+    if attempt:
+        if attempt.status == "sent":
+            return None
+        if attempt.status == "sending" and attempt.updated_at.replace(tzinfo=timezone.utc) > now() - timedelta(minutes=2):
+            return None  # Another worker is still dispatching this exact step.
+        if attempt.status in {"sending", "uncertain"}:
+            attempt.status = "uncertain"
+            pause_for_handoff(lead, "delivery_outcome_unknown")
+            db.commit()
+            return None
+        if attempt.attempts >= max_attempts:
+            pause_for_handoff(lead, "delivery_retry_exhausted")
+            db.commit()
+            return None
+        claimed = db.execute(update(SendAttempt).where(SendAttempt.id == key, SendAttempt.status == "failed").values(status="sending", attempts=SendAttempt.attempts + 1, updated_at=now()))
+        if not claimed.rowcount:
+            db.rollback()
+            return None
+    else:
+        attempt = SendAttempt(id=key, lead_id=lead.id, status="sending", attempts=1)
+        db.add(attempt)
+    try:
+        db.commit()  # Persist before contacting any provider, not after.
+    except IntegrityError:
+        db.rollback()
+        return None
+    db.refresh(attempt)
+    return attempt
+
+
+def next_step_delay_hours(sequence: ModuleRecord, steps: list[dict], sent_index: int) -> float:
+    current = steps[sent_index]
+    if current.get("next_delay_hours") is not None:
+        return max(0, float(current["next_delay_hours"]))
+    following = steps[sent_index + 1]
+    if following.get("delay_hours") is not None:
+        # Seeded delay_hours are cumulative offsets: 0, 24, 72, 168.
+        return max(0, float(following["delay_hours"]) - float(current.get("delay_hours") or 0))
+    return max(0, float(sequence.payload.get("cadence_days", 3)) * 24)
+
+
+def still_due(lead: Lead, sequence: ModuleRecord, identity: Identity) -> bool:
+    return bool(
+        lead.consent_email and not lead.unsubscribed and not lead.automation_paused
+        and not lead.suppression_reason and not lead.deletion_requested_at
+        and lead.next_follow_up_at and lead.next_follow_up_at.replace(tzinfo=timezone.utc) <= now()
+        and (not sequence.payload.get("stage") or sequence.payload["stage"] == lead.stage)
+        and sequence.status == "active"
+        and (not identity.owner_scoped or lead.owner_email == identity.email)
+    )
+
+
+def release_unsent_claim(db: Session, attempt: SendAttempt) -> None:
+    """A stale eligibility snapshot is not a provider failure or an attempt."""
+    if attempt.attempts <= 1:
+        db.delete(attempt)
+    else:
+        attempt.status = "failed"
+        attempt.attempts -= 1
+    db.commit()
+
+
+def run_automation_service(db: Session, identity: Identity, *, dry_run: bool = False, lead_id: str | None = None) -> dict:
+    """Plain service callable shared by HTTP and scheduler; no FastAPI defaults."""
+    sequences = db.scalars(select(ModuleRecord).where(ModuleRecord.module == "sequences", ModuleRecord.status == "active").order_by(ModuleRecord.created_at, ModuleRecord.id)).all()
+    lead_stmt = select(Lead).where(Lead.unsubscribed.is_(False), Lead.consent_email.is_(True), Lead.automation_paused.is_(False), Lead.suppression_reason.is_(None), Lead.deletion_requested_at.is_(None), Lead.next_follow_up_at <= now())
     if lead_id:
         lead_stmt = lead_stmt.where(Lead.id == lead_id)
-    # MARKETING_SKIP_CONSENT_CHECK must never be set outside local/staging envs — it lets
-    # automation email leads without consent_email, which is a CAN-SPAM/GDPR violation in prod.
-    if not os.getenv("MARKETING_SKIP_CONSENT_CHECK"):
-        lead_stmt = lead_stmt.where(Lead.consent_email.is_(True))
+    if identity.owner_scoped:
+        lead_stmt = lead_stmt.where(Lead.owner_email == identity.email)
     leads = db.scalars(lead_stmt).all()
-    queued = 0
+    result = {"queued": 0, "sent": 0, "failed": 0, "eligible": len(leads), "active_sequences": len(sequences), "dry_run": dry_run, "outbound_enabled": outbound_enabled()}
+    if not dry_run and not outbound_enabled():
+        return {**result, "disabled": True}
     for lead in leads:
-        matching = next((s for s in sequences if not s.payload.get("stage") or s.payload.get("stage") == lead.stage), None)
-        if not matching: continue
-        sent_count = db.scalar(select(func.count(Activity.id)).where(Activity.lead_id == lead.id, Activity.kind.in_(EMAIL_ATTEMPT_KINDS), Activity.data["sequence_id"].as_string() == matching.id)) or 0
+        matching = next((seq for seq in sequences if not seq.payload.get("stage") or seq.payload.get("stage") == lead.stage), None)
+        if not matching:
+            continue
+        sent_count = db.scalar(select(func.count(Activity.id)).where(Activity.lead_id == lead.id, Activity.kind == "email_sent", Activity.actor != "resend", Activity.data["sequence_id"].as_string() == matching.id)) or 0
         steps = sequence_steps(matching)
-        if not steps:
-            # Sequence has no steps defined — skip to avoid infinite follow-up loop
-            lead.next_follow_up_at = None
-            continue
         max_touches = max(1, int(matching.payload.get("max_touches") or len(steps)))
-        if sent_count >= min(len(steps), max_touches):
-            lead.next_follow_up_at = None
+        if not steps or sent_count >= min(len(steps), max_touches):
+            if not dry_run:
+                # A lifecycle event may have advanced the lead after this
+                # batch was read. Never clear that newer stage's schedule.
+                db.execute(update(Lead).where(
+                    Lead.id == lead.id, Lead.stage == lead.stage,
+                    Lead.next_follow_up_at == lead.next_follow_up_at,
+                    Lead.owner_email == lead.owner_email,
+                    Lead.automation_paused.is_(False),
+                    Lead.suppression_reason.is_(None),
+                ).values(next_follow_up_at=None).execution_options(synchronize_session=False))
             continue
+        if sent_count == 0:
+            delay = max(0, float(steps[0].get("delay_hours") or 0))
+            anchor = (lead.stage_changed_at or lead.registered_at).replace(tzinfo=timezone.utc)
+            if anchor + timedelta(hours=delay) > now():
+                continue
         if dry_run:
-            queued += 1
+            result["queued"] += 1
             continue
-        try: delivery = send_follow_up(lead, matching, sent_count)
-        except Exception: delivery = {"status":"failed","provider":"resend","provider_id":None}
-        db.add(Activity(lead_id=lead.id, kind=f"email_{delivery['status']}", summary=f"Follow-up {delivery['status']} from {matching.name}", actor=identity.email, data={"sequence_id": matching.id, "step_index": sent_count, **delivery}))
-        lead.next_follow_up_at = now() + timedelta(hours=int((steps[sent_count].get("next_delay_hours") if steps and sent_count < len(steps) else None) or int(matching.payload.get("cadence_days", 3)) * 24))
-        queued += 1
-    if not dry_run: db.commit()
-    else: db.rollback()
-    return {"queued": queued, "eligible": len(leads), "active_sequences": len(sequences), "dry_run": dry_run}
+        db.refresh(lead)
+        db.refresh(matching)
+        if not still_due(lead, matching, identity):
+            continue
+        attempt = claim_sequence_step(db, lead, matching, sent_count)
+        if not attempt:
+            continue
+        db.refresh(lead)
+        db.refresh(matching)
+        if not still_due(lead, matching, identity):
+            release_unsent_claim(db, attempt)
+            continue
+        uncertain = False
+        try:
+            delivery = send_follow_up(lead, matching, sent_count)
+        except httpx.HTTPStatusError as exc:
+            # Explicit client rejection is retryable; a server error may have
+            # occurred after acceptance, so it needs reconciliation instead.
+            uncertain = exc.response.status_code >= 500
+            delivery = {"status": "failed", "provider": "resend", "provider_id": None, "error": f"Provider HTTP {exc.response.status_code}"}
+        except Exception:
+            uncertain = True
+            delivery = {"status": "failed", "provider": "unknown", "provider_id": None, "error": "Delivery outcome is unknown; manual reconciliation required"}
+        successful = delivery.get("status") == "sent"
+        attempt.status = "sent" if successful else ("uncertain" if uncertain else "failed")
+        activity_kind = "email_sent" if successful else "email_failed"
+        db.add(Activity(lead_id=lead.id, kind=activity_kind, summary=f"Follow-up {'sent' if successful else 'failed'} from {matching.name}", actor=identity.email, data={"sequence_id": matching.id, "step_index": sent_count, **delivery, "outcome_uncertain": uncertain}))
+        if successful:
+            result["sent"] += 1
+            if sent_count + 1 >= min(len(steps), max_touches):
+                lead.next_follow_up_at = None
+            else:
+                lead.next_follow_up_at = now() + timedelta(hours=next_step_delay_hours(matching, steps, sent_count))
+        else:
+            result["failed"] += 1
+            if uncertain:
+                pause_for_handoff(lead, "delivery_outcome_unknown")
+            elif attempt.attempts >= max(1, int(os.getenv("MARKETING_MAX_SEND_ATTEMPTS", "5"))):
+                pause_for_handoff(lead, "delivery_retry_exhausted")
+            else:
+                lead.next_follow_up_at = now() + timedelta(minutes=min(1440, 15 * (2 ** (attempt.attempts - 1))))
+        result["queued"] += 1
+        db.commit()  # Persist each result before processing the next lead.
+    if not dry_run:
+        db.commit()
+    return result
+
+
+@app.post("/api/marketing/automation/run")
+def run_automation(dry_run: bool = Query(False), lead_id: str | None = Query(None), identity: Identity = Depends(require_manager), db: Session = Depends(db_session)):
+    return run_automation_service(db, identity, dry_run=dry_run, lead_id=lead_id)
 
 
 @app.post("/api/marketing/leads/{lead_id}/gdpr-delete")
 def request_gdpr_deletion(lead_id:str, identity:Identity=Depends(require_manager), db:Session=Depends(db_session)):
-    row=visible_lead(db,lead_id,identity);row.deletion_requested_at=now();row.consent_email=False;row.consent_sms=False;row.unsubscribed=True;row.next_follow_up_at=None
+    row=visible_lead(db,lead_id,identity);row.deletion_requested_at=now();row.consent_email=False;row.consent_sms=False;row.consent_whatsapp=False;row.unsubscribed=True;row.next_follow_up_at=None
     audit(db,identity,"gdpr.deletion_requested","lead",row.id);db.commit();return {"scheduled":True,"purge_after_days":int(os.getenv("MARKETING_GDPR_GRACE_DAYS","30"))}
 
 
@@ -1294,20 +1801,30 @@ def run_gdpr_retention(db:Session, identity:Identity) -> int:
     grace=int(os.getenv("MARKETING_GDPR_GRACE_DAYS","30"));cutoff=now()-timedelta(days=max(0,grace));rows=db.scalars(select(Lead).where(Lead.deletion_requested_at.is_not(None),Lead.deletion_requested_at<=cutoff)).all()
     for row in rows:
         db.query(Activity).filter(Activity.lead_id==row.id).delete(synchronize_session=False)
+        db.query(ModuleRecord).filter(ModuleRecord.module == "tasks", ModuleRecord.payload["lead_id"].as_string() == row.id).delete(synchronize_session=False)
+        db.query(SendAttempt).filter(SendAttempt.lead_id == row.id).delete(synchronize_session=False)
+        db.query(PendingProspect).filter(PendingProspect.lead_id == row.id).delete(synchronize_session=False)
         audit(db,identity,"gdpr.lead_purged","lead",row.id);db.delete(row)
     db.commit();return len(rows)
 
 
 def acquire_lease(db:Session,name:str,seconds:int=840) -> bool:
-    holder=f"{os.getpid()}-{uuid.uuid4()}";expiry=now()+timedelta(seconds=seconds);row=db.get(AutomationLease,name)
-    if row and row.expires_at.replace(tzinfo=timezone.utc)>now(): return False
-    if row: row.holder,row.expires_at=holder,expiry
-    else: db.add(AutomationLease(name=name,holder=holder,expires_at=expiry))
+    holder=f"{os.getpid()}-{uuid.uuid4()}";expiry=now()+timedelta(seconds=seconds)
+    # Compare-and-swap expired leases; two schedulers cannot both renew one.
+    changed = db.execute(update(AutomationLease).where(AutomationLease.name == name, AutomationLease.expires_at <= now()).values(holder=holder, expires_at=expiry))
+    if changed.rowcount:
+        db.commit()
+        return True
+    if db.get(AutomationLease, name):
+        db.rollback()
+        return False
+    db.add(AutomationLease(name=name,holder=holder,expires_at=expiry))
     try: db.commit();return True
     except IntegrityError: db.rollback();return False
 
 
 async def run_scheduled_social(db:Session, identity:Identity) -> int:
+    if not outbound_enabled(): return 0
     rows=db.scalars(select(ModuleRecord).where(ModuleRecord.module=="content",ModuleRecord.status=="scheduled",ModuleRecord.scheduled_at.is_not(None),ModuleRecord.scheduled_at<=now())).all();published=0
     for row in rows:
         try:
@@ -1325,7 +1842,7 @@ def scheduled_automation() -> None:
             with SessionLocal() as db:
                 identity = Identity(subject="scheduler", email="automation@festio.events", name="Festio Automation", is_superadmin=True, role="superadmin")
                 if not acquire_lease(db,"marketing-scheduler"): continue
-                run_automation(dry_run=False, identity=identity, db=db)
+                run_automation_service(db, identity, dry_run=False)
                 asyncio.run(run_scheduled_social(db,identity))
                 run_gdpr_retention(db,identity)
         except Exception as exc:
@@ -1339,14 +1856,15 @@ def scheduled_automation() -> None:
 
 @app.on_event("startup")
 def start_scheduler():
-    threading.Thread(target=scheduled_automation, name="marketing-automation", daemon=True).start()
+    if os.getenv("MARKETING_SCHEDULER_ENABLED", "true").lower() in {"1", "true", "yes"}:
+        threading.Thread(target=scheduled_automation, name="marketing-automation", daemon=True).start()
 
 
 @app.post("/api/marketing/unsubscribe/{lead_id}")
 def unsubscribe(lead_id: str, db: Session = Depends(db_session)):
     row = db.get(Lead, lead_id)
     if not row: raise HTTPException(404, "Lead not found")
-    row.unsubscribed = True; row.consent_email = False; db.commit(); return {"ok": True}
+    row.unsubscribed = True; row.consent_email = False; row.next_follow_up_at = None; db.commit(); return {"ok": True}
 
 @app.get("/api/marketing/unsubscribe/{lead_id}", response_class=HTMLResponse)
 def unsubscribe_get(lead_id: str, db: Session = Depends(db_session)):
@@ -1356,6 +1874,7 @@ def unsubscribe_get(lead_id: str, db: Session = Depends(db_session)):
         return HTMLResponse("<h1>Not found</h1>", status_code=404)
     row.unsubscribed = True
     row.consent_email = False
+    row.next_follow_up_at = None
     db.commit()
     return HTMLResponse("""<!doctype html><html><head><meta charset="utf-8">
 <title>Unsubscribed \u2014 Festio</title>
@@ -1371,7 +1890,9 @@ h1{font-size:24px}p{color:#526070;line-height:1.6}a{color:#075b5d}</style></head
 def signalhouse_sms_webhook(body: dict, x_webhook_token: str | None = Header(default=None), db: Session = Depends(db_session)):
     """Record SignalHouse inbound opt-out replies in Festio's consent ledger."""
     configured_token = os.getenv("SIGNALHOUSE_WEBHOOK_TOKEN", "")
-    if configured_token and x_webhook_token != configured_token:
+    if not configured_token:
+        raise HTTPException(503, "SignalHouse webhook authentication is not configured")
+    if not x_webhook_token or not secrets.compare_digest(x_webhook_token, configured_token):
         raise HTTPException(401, "Invalid SignalHouse webhook token")
     payload = body.get("payload") or body
     sender = payload.get("sender") or {}
@@ -1382,11 +1903,14 @@ def signalhouse_sms_webhook(body: dict, x_webhook_token: str | None = Header(def
     if not phone or not message: return {"recorded": False}
     row = db.scalar(select(Lead).where(Lead.phone == phone))
     if not row: return {"recorded": False}
+    row.last_inbound_at = now()
+    pause_for_handoff(row, "inbound_reply")
     keyword = message.split()[0]
     if keyword in {"STOP", "STOPALL", "END", "QUIT", "UNSUBSCRIBE", "CANCEL"}:
         row.consent_sms = False
+        row.suppression_reason = "sms_opt_out"
         db.add(Activity(lead_id=row.id, kind="sms_unsubscribed", summary="SMS opt-out received", actor="signalhouse", data={"keyword": keyword}))
         audit(db, "signalhouse", "consent.sms_opt_out", "lead", row.id, keyword=keyword); db.commit()
         return {"recorded": True, "unsubscribed": True}
-    db.add(Activity(lead_id=row.id, kind="sms_received", summary="SMS reply received", actor="signalhouse", data={"message": message[:500]})); db.commit()
+    db.add(Activity(lead_id=row.id, kind="sms_received", summary="SMS reply received", actor="signalhouse", data={})); db.commit()
     return {"recorded": True, "unsubscribed": False}

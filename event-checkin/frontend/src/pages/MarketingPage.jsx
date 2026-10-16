@@ -1,3 +1,4 @@
+import { leadAutomationStatus } from "../lib/marketingConsent.mjs";
 import React, { Component, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api";
@@ -286,9 +287,22 @@ function LeadProfileFields({ lead, setLead, save }) {
             onChange={(event) => save({ consent_sms: event.target.checked })}
           />
         </label>
+        <label>
+          WhatsApp consent (read-only)
+          <input type="checkbox" checked={lead.consent_whatsapp === true} disabled aria-label="WhatsApp consent (read-only)" />
+          <small>Requires a separate explicit WhatsApp opt-in.</small>
+        </label>
         {textField("phone", "Phone")}
         {textField("organization", "Organization")}
         {textField("country", "Country")}
+      </div>
+      <div className="mk-automation-status" role="status">
+        <b>{leadAutomationStatus(lead)}</b>
+        {lead.suppression_reason && <p>Suppressed: {lead.suppression_reason}</p>}
+        {lead.automation_paused && <p>Automatic follow-up is paused.</p>}
+        {lead.handoff_requested_at && <p>Human review requested: {new Date(lead.handoff_requested_at).toLocaleString()}</p>}
+        {lead.last_inbound_at && <p>Last inbound message: {new Date(lead.last_inbound_at).toLocaleString()}</p>}
+        {lead.unsubscribed && <p>Unsubscribed. Do not resume automatic outreach.</p>}
       </div>
       <details className="mk-profile-section">
         <summary>Event intent and opportunity</summary>
@@ -1377,11 +1391,9 @@ function Leads() {
                             : "No touches sent yet"
                         }
                       >
-                        {r.automation.complete
-                          ? "Sequence complete"
-                          : `Ongoing · Step ${r.automation.step}/${r.automation.total_steps}`}
+                        {leadAutomationStatus(r)}
                         <small>{r.automation.sequence_name}</small>
-                        {!r.automation.complete && (
+                        {!r.automation.complete && !r.automation_paused && !r.suppression_reason && !r.handoff_requested_at && !r.unsubscribed && (
                           <small className="mk-automation-next">
                             Next: step {r.automation.step + 1}
                             {formatCountdown(r.next_follow_up_at, now)
@@ -1391,7 +1403,7 @@ function Leads() {
                         )}
                       </span>
                     ) : (
-                      <span className="mk-automation-pill none">Not enrolled</span>
+                      <span className="mk-automation-pill none">{leadAutomationStatus(r)}</span>
                     )}
                   </td>
                 </tr>
@@ -1423,9 +1435,7 @@ function Leads() {
                   <div className="mk-automation-status-row">
                     <span>{selected.automation.sequence_name}</span>
                     <b>
-                      {selected.automation.complete
-                        ? "Complete"
-                        : `Ongoing · Step ${selected.automation.step}/${selected.automation.total_steps}`}
+                      {leadAutomationStatus(selected)}
                     </b>
                   </div>
                   <div className="mk-automation-status-track">
@@ -1440,13 +1450,13 @@ function Leads() {
                       ? `Last touch: ${selected.automation.last_touch_status} · ${new Date(selected.automation.last_touch_at).toLocaleString()}`
                       : "No touches sent yet"}
                   </p>
-                  {!selected.automation.complete && (
+                  {!selected.automation.complete && !selected.automation_paused && !selected.suppression_reason && !selected.handoff_requested_at && !selected.unsubscribed && (
                     <p>
                       Next: step {selected.automation.step + 1} of{" "}
                       {selected.automation.total_steps}
                       {selected.next_follow_up_at
                         ? ` — ${formatCountdown(selected.next_follow_up_at, now)} (${new Date(selected.next_follow_up_at).toLocaleString()})`
-                        : ""}
+                        : " · No follow-up scheduled"}
                     </p>
                   )}
                 </>

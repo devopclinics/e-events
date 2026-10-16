@@ -56,7 +56,7 @@ async function uploadWebsiteAsset(eventId, file) {
   return res.json()
 }
 
-async function req(method, path, body, timeoutMs) {
+async function req(method, path, body, timeoutMs, extraHeaders = {}) {
   const token = await getToken()
   const opts = {
     method,
@@ -65,6 +65,7 @@ async function req(method, path, body, timeoutMs) {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(() => { try { const value = localStorage.getItem(ATTRIBUTION_KEY); return value ? { 'X-Festio-Attribution': encodeURIComponent(value) } : {} } catch { return {} } })(),
       ...(body ? { 'Content-Type': 'application/json' } : {}),
+      ...extraHeaders,
     },
   }
   if (body) opts.body = JSON.stringify(body)
@@ -553,7 +554,8 @@ async function downloadFile(path, filename, { withAuth = true } = {}) {
 }
 
 export const api = {
-  submitDemoRequest: (body) => req('POST', '/demo-requests', body),
+  submitDemoRequest: (body, idempotencyKey) => req('POST', '/demo-requests', body, undefined,
+    idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
 
   // Events
   listEvents: (status) => req('GET', status ? `/events?status=${encodeURIComponent(status)}` : '/events'),

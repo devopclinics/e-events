@@ -287,9 +287,12 @@ async def fulfill_paid_order(body: PaidOrderFulfillment, background_tasks: Backg
             paid_ticket_pass_design=(body.delivery_settings or {}).get("pass_design") or {},
         )
         db.add(guest); created.append(guest)
+    from ..services.marketing_client import ingest_org_lifecycle, lifecycle_event_id
+    await ingest_org_lifecycle(
+        db, event.org_id, stage="customer", event_type=event.event_type,
+        event_id=lifecycle_event_id("ticket_order", body.order_id),
+    )
     await db.commit()
-    from ..services.marketing_client import ingest_org_lifecycle
-    await ingest_org_lifecycle(db, event.org_id, stage="customer", event_type=event.event_type)
     for guest in created:
         await db.refresh(guest)
     delivery_allowed = not body.delivery_settings.get("email_enabled", True) or recipient_allowed("email", body.buyer_email)

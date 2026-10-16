@@ -656,6 +656,11 @@
             "contentMediaType": "application/octet-stream",
             "title": "File",
             "type": "string"
+          },
+          "mapping": {
+            "default": "{}",
+            "title": "Mapping",
+            "type": "string"
           }
         },
         "required": [
@@ -2352,7 +2357,7 @@
           "balance": {
             "default": 0,
             "title": "Balance",
-            "type": "integer"
+            "type": "number"
           },
           "spent": {
             "default": 0,
@@ -2513,7 +2518,7 @@
           "credits": {
             "$ref": "#/components/schemas/DashboardCredits",
             "default": {
-              "balance": 0,
+              "balance": 0.0,
               "spent": 0
             }
           },
@@ -2762,6 +2767,39 @@
       },
       "DemoRequestCreate": {
         "properties": {
+          "consent_email": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consent Email"
+          },
+          "consent_sms": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consent Sms"
+          },
+          "consent_whatsapp": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consent Whatsapp"
+          },
           "contact_name": {
             "maxLength": 120,
             "minLength": 2,
@@ -2870,9 +2908,20 @@
             "default": true,
             "title": "Ok",
             "type": "boolean"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "status": {
+            "const": "requested",
+            "default": "requested",
+            "title": "Status",
+            "type": "string"
           }
         },
         "required": [
+          "request_id",
           "message"
         ],
         "title": "DemoRequestOut",
@@ -4762,6 +4811,18 @@
             ],
             "title": "Rsvp Capacity"
           },
+          "setup_preferences": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Setup Preferences"
+          },
           "timezone": {
             "maxLength": 80,
             "minLength": 1,
@@ -5038,6 +5099,11 @@
           "created_at": {
             "format": "date-time",
             "title": "Created At",
+            "type": "string"
+          },
+          "credit_scope": {
+            "default": "event",
+            "title": "Credit Scope",
             "type": "string"
           },
           "daily_checkin_enabled": {
@@ -5350,10 +5416,15 @@
             "title": "Menu Enabled",
             "type": "boolean"
           },
+          "menu_selection_timing": {
+            "default": "after_admission",
+            "title": "Menu Selection Timing",
+            "type": "string"
+          },
           "message_credits": {
             "default": 0,
             "title": "Message Credits",
-            "type": "integer"
+            "type": "number"
           },
           "my_access_level": {
             "default": "view",
@@ -5734,6 +5805,18 @@
             "default": false,
             "title": "Separate Admission Access Enabled",
             "type": "boolean"
+          },
+          "setup_preferences": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Setup Preferences"
           },
           "source_last_error": {
             "anyOf": [
@@ -8789,6 +8872,16 @@
       "GuestHubRecoveryRequest": {
         "additionalProperties": false,
         "properties": {
+          "destination": {
+            "default": "home",
+            "enum": [
+              "home",
+              "programme",
+              "festiome"
+            ],
+            "title": "Destination",
+            "type": "string"
+          },
           "email": {
             "format": "email",
             "title": "Email",
@@ -9295,6 +9388,11 @@
               }
             ],
             "title": "Invite Token"
+          },
+          "is_junior": {
+            "default": false,
+            "title": "Is Junior",
+            "type": "boolean"
           },
           "is_vip": {
             "default": false,
@@ -10464,7 +10562,6 @@
         "type": "object"
       },
       "GuestUpdate": {
-        "description": "Partial edit of a guest from the admin guest-edit modal (ported from prod).",
         "properties": {
           "email": {
             "anyOf": [
@@ -10487,6 +10584,17 @@
               }
             ],
             "title": "First Name"
+          },
+          "is_junior": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Junior"
           },
           "is_vip": {
             "anyOf": [
@@ -10520,6 +10628,31 @@
               }
             ],
             "title": "Phone"
+          },
+          "rsvp_guest_type": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rsvp Guest Type"
+          },
+          "rsvp_relationship": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rsvp Relationship"
           },
           "seat_number": {
             "anyOf": [
@@ -11568,6 +11701,17 @@
             "default": false,
             "title": "Event Time Tbd",
             "type": "boolean"
+          },
+          "event_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Type"
           },
           "experience_enabled": {
             "default": false,
@@ -26373,6 +26517,26 @@
     "/api/demo-requests": {
       "post": {
         "operationId": "submit_demo_request_api_demo_requests_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 8,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -26695,6 +26859,30 @@
           }
         ],
         "summary": "Create Event",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/api/events/creation-limits": {
+      "get": {
+        "operationId": "creation_limits_api_events_creation_limits_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Creation Limits",
         "tags": [
           "events"
         ]
@@ -29441,6 +29629,16 @@
               "title": "Event Id",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "attach_to_design",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Attach To Design",
+              "type": "boolean"
+            }
           }
         ],
         "requestBody": {
@@ -29543,6 +29741,18 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "default": {},
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -29626,6 +29836,108 @@
           }
         ],
         "summary": "Render Flyer",
+        "tags": [
+          "design"
+        ]
+      }
+    },
+    "/api/events/{event_id}/design/restore": {
+      "post": {
+        "operationId": "restore_design_version_api_events__event_id__design_restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Restore Design Version",
+        "tags": [
+          "design"
+        ]
+      }
+    },
+    "/api/events/{event_id}/design/versions": {
+      "get": {
+        "operationId": "design_versions_api_events__event_id__design_versions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Design Versions",
         "tags": [
           "design"
         ]
@@ -33073,6 +33385,22 @@
               "title": "Workflow Id",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "replace_workflow_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Replace Workflow Id"
+            }
           }
         ],
         "responses": {
@@ -36099,6 +36427,63 @@
         ]
       }
     },
+    "/api/events/{event_id}/guests/send-preview": {
+      "post": {
+        "operationId": "preview_invites_api_events__event_id__guests_send_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "default": {},
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Invites",
+        "tags": [
+          "guests"
+        ]
+      }
+    },
     "/api/events/{event_id}/guests/template": {
       "get": {
         "description": "Downloadable guest-list template. Columns reflect the event's enabled\nadd-ons (ticket_type for venue access, ship_* for logistics), so what the\nclient fills in is exactly what upload / URL import / live sync ingest.",
@@ -36166,6 +36551,16 @@
             "schema": {
               "title": "Event Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "preview",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Preview",
+              "type": "boolean"
             }
           }
         ],
@@ -37860,6 +38255,16 @@
             "schema": {
               "title": "Event Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_drafts",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Drafts",
+              "type": "boolean"
             }
           }
         ],
@@ -46229,6 +46634,18 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -46274,6 +46691,18 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -46350,6 +46779,117 @@
         ]
       }
     },
+    "/api/events/{event_id}/website/render-preview": {
+      "post": {
+        "operationId": "render_website_preview_api_events__event_id__website_render_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Render Website Preview",
+        "tags": [
+          "event-websites"
+        ]
+      }
+    },
+    "/api/events/{event_id}/website/restore/{release_id}": {
+      "post": {
+        "operationId": "restore_website_api_events__event_id__website_restore__release_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "release_id",
+            "required": true,
+            "schema": {
+              "title": "Release Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Restore Website",
+        "tags": [
+          "event-websites"
+        ]
+      }
+    },
     "/api/events/{event_id}/website/rollback/{release_id}": {
       "post": {
         "operationId": "rollback_website_api_events__event_id__website_rollback__release_id__post",
@@ -46373,6 +46913,18 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -46418,6 +46970,18 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -54163,6 +54727,78 @@
         ]
       }
     },
+    "/api/webhooks/prospects/chatwoot": {
+      "post": {
+        "operationId": "prospect_chatwoot_webhook_api_webhooks_prospects_chatwoot_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "title": "Response Prospect Chatwoot Webhook Api Webhooks Prospects Chatwoot Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Prospect Chatwoot Webhook",
+        "tags": [
+          "prospect-webhooks"
+        ]
+      }
+    },
+    "/api/webhooks/prospects/resend": {
+      "post": {
+        "operationId": "prospect_resend_webhook_api_webhooks_prospects_resend_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "title": "Response Prospect Resend Webhook Api Webhooks Prospects Resend Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Prospect Resend Webhook",
+        "tags": [
+          "prospect-webhooks"
+        ]
+      }
+    },
     "/api/webhooks/resend": {
       "get": {
         "operationId": "resend_webhook_health_api_webhooks_resend_get",
@@ -54246,7 +54882,6 @@
     },
     "/api/webhooks/whatsapp/meta": {
       "get": {
-        "description": "Respond to Meta's webhook verification challenge.",
         "operationId": "verify_meta_whatsapp_webhook_api_webhooks_whatsapp_meta_get",
         "parameters": [
           {
@@ -54306,7 +54941,6 @@
         ]
       },
       "post": {
-        "description": "Acknowledge incoming Meta WhatsApp webhook events.\n\nThe app can process message/status events here later. For setup, Meta only\nrequires a fast 200 response so webhook delivery is acknowledged.",
         "operationId": "receive_meta_whatsapp_webhook_api_webhooks_whatsapp_meta_post",
         "responses": {
           "200": {

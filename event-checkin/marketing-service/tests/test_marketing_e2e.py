@@ -95,7 +95,7 @@ def test_unsubscribe_bounce_and_sms_stop(tmp_path):
     client.post("/api/marketing/internal/delivery", headers=headers, json={"email": "consent@example.com", "event": "email.complained"})
     assert client.get("/api/marketing/leads?q=consent", headers=headers).json()[0]["consent_email"] is False
 
-    stopped = client.post("/api/marketing/sms/webhook", json={"payload": {"sender": {"contact": {"identifierValue": "+15551234567"}}, "body": {"text": {"text": "STOP"}}}})
+    stopped = client.post("/api/marketing/sms/webhook", headers={"X-Webhook-Token": "test-webhook-token"}, json={"payload": {"sender": {"contact": {"identifierValue": "+15551234567"}}, "body": {"text": {"text": "STOP"}}}})
     assert stopped.json() == {"recorded": True, "unsubscribed": True}
     assert client.get("/api/marketing/leads?q=consent", headers=headers).json()[0]["consent_sms"] is False
 

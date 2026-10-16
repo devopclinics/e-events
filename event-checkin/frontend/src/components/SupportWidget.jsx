@@ -1,61 +1,92 @@
-import { useEffect } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../context/AuthContext'
+import { chatWidgetConfig, selectChatSession, widgetUrl, validSupportIdentity, connectChatFrame } from '../lib/chatWidget.mjs'
+import './SupportWidget.css'
 
-const CHATWOOT_BASE_URL = import.meta.env.VITE_CHATWOOT_BASE_URL || ''
-const CHATWOOT_WEBSITE_TOKEN = import.meta.env.VITE_CHATWOOT_WEBSITE_TOKEN || ''
+const config = chatWidgetConfig(import.meta.env, window.location.origin)
 
-// Loads Chatwoot's widget SDK (self-hosted, see support-service/README.md for
-// the one-time Chatwoot setup that produces the website token) and identifies
-// the logged-in organizer so agents see who's asking, not an anonymous
-// visitor. Renders nothing — Chatwoot injects its own floating bubble.
-export default function SupportWidget() {
-  const { user } = useAuth()
+function ChatSession({ session }) {
+  const [available, setAvailable] = useState(session.mode === 'sales')
+  const [identity, setIdentity] = useState(null)
+  const [open, setOpen] = useState(false)
+  const [started, setStarted] = useState(false)
+  const [ready, setReady] = useState(false)
+  const [delayed, setDelayed] = useState(false)
+  const frame = useRef(null)
+  const launcher = useRef(null)
+  const closeButton = useRef(null)
 
   useEffect(() => {
-    if (!user || !CHATWOOT_BASE_URL || !CHATWOOT_WEBSITE_TOKEN) return
+    if (session.mode !== 'support') return
     let cancelled = false
+    // The existing server-side switch and signed organizer identity remain
+    // mandatory. Anonymous sales never calls either authenticated endpoint.
+    api.platformSettings().then(async ({ support_chat_enabled }) => {
+      if (cancelled || support_chat_enabled !== true) return
+      const signedIdentity = await api.supportIdentify()
+      if (cancelled || !validSupportIdentity(signedIdentity)) return
+      setIdentity(signedIdentity)
+      setAvailable(true)
+    }).catch(() => {}) // Chat being unavailable must never block the app.
+    return () => { cancelled = true }
+  }, [session])
 
-    // Console-controlled kill switch, independent of support-service's own
-    // health — lets an operator hide the widget instantly without a redeploy.
-    api.platformSettings()
-      .then(({ support_chat_enabled }) => {
-        if (cancelled || !support_chat_enabled) return
-        load()
-      })
-      .catch(() => {})   // settings lookup failing never blocks the app
+  function close() {
+    setOpen(false)
+    launcher.current?.focus()
+  }
 
+  useLayoutEffect(() => {
+    if (!started || !frame.current) return
+    const disconnect = connectChatFrame({ frame: frame.current, session, identity, onReady: () => setReady(true), onClose: close })
+    const timer = window.setTimeout(() => setDelayed(true), 15000)
     return () => {
-      cancelled = true
-      window.removeEventListener('chatwoot:ready', identify)
+      disconnect()
+      window.clearTimeout(timer)
     }
+  }, [started, session, identity])
 
-    function load() {
-      if (window.$chatwoot) {
-        identify()
-        return
-      }
+  useEffect(() => {
+    if (!open) return
+    closeButton.current?.focus()
+    const onKey = (event) => { if (event.key === 'Escape') close() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
 
-      const script = document.createElement('script')
-      script.src = `${CHATWOOT_BASE_URL}/packs/js/sdk.js`
-      script.defer = true
-      script.async = true
-      script.onload = () => {
-        window.chatwootSDK?.run({ websiteToken: CHATWOOT_WEBSITE_TOKEN, baseUrl: CHATWOOT_BASE_URL })
-      }
-      document.body.appendChild(script)
-      window.addEventListener('chatwoot:ready', identify)
-    }
+  if (!available) return null
+  const title = session.mode === 'sales' ? 'Chat with Festio sales' : 'Festio support'
+  return (
+    <div className="festio-chat">
+      <button ref={launcher} type="button" className="festio-chat-launcher" aria-expanded={open} aria-controls="festio-chat-panel" onClick={() => { setStarted(true); setOpen((value) => !value) }}>
+        {title}
+      </button>
+      {started && (
+        <section id="festio-chat-panel" className="festio-chat-panel" role="dialog" aria-label={title} hidden={!open}>
+          <header><strong>{title}</strong><button ref={closeButton} type="button" aria-label="Close chat" onClick={close}>×</button></header>
+          {!ready && <p role="status">{delayed ? 'Chat is taking longer than expected. You can close it and try again later.' : 'Connecting to chat…'}</p>}
+          <iframe
+            ref={frame}
+            src={widgetUrl(session)}
+            title={title}
+            referrerPolicy="no-referrer"
+            sandbox="allow-scripts allow-same-origin allow-forms"
+          />
+        </section>
+      )}
+    </div>
+  )
+}
 
-    function identify() {
-      api.supportIdentify()
-        .then(({ identifier, identifier_hash, name, email, org_name, plan }) => {
-          window.$chatwoot?.setUser(identifier, { name, email, identifier_hash })
-          window.$chatwoot?.setCustomAttributes({ org_name, plan })
-        })
-        .catch(() => {})   // support being unavailable never blocks the app
-    }
-  }, [user])
-
-  return null
+export default function SupportWidget() {
+  const { user, loading } = useAuth()
+  const { pathname } = useLocation()
+  const session = useMemo(() => selectChatSession({ user, loading, pathname, config }), [user, loading, pathname])
+  if (!session) return null
+  // Unmounting destroys the iframe and its bridge on route, login/logout, or
+  // account changes. No Chatwoot SDK global or cookie is shared between modes.
+  const key = `${session.mode}:${user?.id || 'anonymous'}:${user?.org_id || user?.organization_id || ''}:${pathname}`
+  return <ChatSession key={key} session={session} />
 }

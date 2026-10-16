@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react'
+import MarketingEmailConsent from '../components/MarketingEmailConsent'
+import { marketingConsent, DEMO_REQUEST_RECEIVED, demoRequestAttempt } from '../lib/marketingConsent.mjs'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
@@ -246,6 +248,9 @@ function DemoContactForm() {
     contact_name: '', email: '', phone: '', organization: '',
     event_name: '', guest_count: '', preferred_time: defaultDemoTime(), message: '',
   })
+  const [marketingEmail, setMarketingEmail] = useState(false)
+  const attempt = useRef(null)
+  const submitting = useRef(false)
   const [status, setStatus] = useState('idle') // idle | loading | success
   const [error, setError] = useState('')
 
@@ -255,11 +260,14 @@ function DemoContactForm() {
 
   async function submit(e) {
     e.preventDefault()
+    if (submitting.current) return
+    submitting.current = true
     setStatus('loading')
     setError('')
     try {
-      await api.submitDemoRequest({
+      const body = {
         ...form,
+        ...marketingConsent(marketingEmail),
         guest_count: form.guest_count ? Number(form.guest_count) : null,
         preferred_time: new Date(form.preferred_time).toISOString(),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
@@ -267,11 +275,17 @@ function DemoContactForm() {
         organization: form.organization || null,
         event_name: form.event_name || null,
         message: form.message || null,
-      })
+      }
+      attempt.current = demoRequestAttempt(attempt.current, body)
+      const result = await api.submitDemoRequest(body, attempt.current.key)
+      if (result?.ok !== true || result.status !== 'requested') throw new Error('We could not confirm receipt of your demo request. Please try again.')
+      attempt.current = null
       setStatus('success')
     } catch (err) {
       setError(err.message || 'Could not send your request.')
       setStatus('idle')
+    } finally {
+      submitting.current = false
     }
   }
 
@@ -280,7 +294,7 @@ function DemoContactForm() {
       <div className="lr-contact-form lr-contact-success">
         <div className="lr-p-status ok" style={{ width: 40, height: 40, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 18 }}>&#10003;</div>
         <h3>Request received</h3>
-        <p>Check your inbox for confirmation. We&apos;ll follow up shortly with a meeting link.</p>
+        <p>{DEMO_REQUEST_RECEIVED}</p>
       </div>
     )
   }
@@ -325,6 +339,7 @@ function DemoContactForm() {
         <span>What should we cover?</span>
         <textarea value={form.message} onChange={(e) => setField('message', e.target.value)} placeholder="RSVP, QR passes, check-in, seating, venue access..." />
       </label>
+      <MarketingEmailConsent checked={marketingEmail} onChange={setMarketingEmail} disabled={status === 'loading'} />
       {error && <p className="lr-contact-error">{error}</p>}
       <button className="lr-btn primary lg" disabled={status === 'loading'} type="submit">
         {status === 'loading' ? 'Sending...' : 'Send request'}
@@ -679,7 +694,7 @@ export default function LandingRedesignPage() {
           <div>
             <span className="lr-eyebrow"><i /> Talk to an event specialist</span>
             <h2>See Festio on your event.</h2>
-            <p className="lr-lead" style={{ maxWidth: 'none' }}>Tell us what you&apos;re planning and pick a preferred time. We&apos;ll send a calendar hold and follow up with the meeting link.</p>
+            <p className="lr-lead" style={{ maxWidth: 'none' }}>Tell us what you&apos;re planning and suggest a preferred time. This is a request, not a confirmed booking. Our team will contact you to arrange a time.</p>
           </div>
           <DemoContactForm />
         </div>

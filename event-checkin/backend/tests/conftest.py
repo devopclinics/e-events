@@ -67,9 +67,9 @@ def _reset_public_rate_limits():
 @pytest.fixture(autouse=True)
 def _outbox_modules_use_test_db(monkeypatch):
     from app import main as main_module
-    from app.services import festiome_outbox, webhook_outbox, scheduled_communication_outbox, inbound_email_outbox
+    from app.services import marketing_outbox, festiome_outbox, webhook_outbox, scheduled_communication_outbox, inbound_email_outbox
     from services import shortlinks
-    for module in (main_module, festiome_outbox, webhook_outbox, scheduled_communication_outbox, inbound_email_outbox, shortlinks):
+    for module in (main_module, marketing_outbox, festiome_outbox, webhook_outbox, scheduled_communication_outbox, inbound_email_outbox, shortlinks):
         monkeypatch.setattr(module, "AsyncSessionLocal", _Session)
 
 _engine = create_async_engine(
@@ -161,3 +161,29 @@ async def ctx():
 
     app.dependency_overrides.clear()
     _current["user"] = None
+
+
+@pytest.fixture
+def signed_resend(ctx, monkeypatch):
+    """Post a locally signed Resend delivery receipt; never contact a provider."""
+    import base64
+    import hashlib
+    import hmac
+    import json
+    import time
+    import uuid
+    secret_bytes = b"local-test-resend-signature-key"
+    monkeypatch.setattr(settings, "resend_webhook_secret", "whsec_" + base64.b64encode(secret_bytes).decode())
+
+    async def post(payload, *, svix_id=None):
+        content = json.dumps(payload).encode()
+        identity = svix_id or f"msg_{uuid.uuid4().hex}"
+        timestamp = str(int(time.time()))
+        signature = base64.b64encode(hmac.new(
+            secret_bytes, b".".join([identity.encode(), timestamp.encode(), content]), hashlib.sha256,
+        ).digest()).decode()
+        return await ctx.client.post("/api/webhooks/resend", content=content, headers={
+            "content-type": "application/json", "svix-id": identity,
+            "svix-timestamp": timestamp, "svix-signature": f"v1,{signature}",
+        })
+    return post

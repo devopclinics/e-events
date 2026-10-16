@@ -2976,3 +2976,39 @@ class GuestProfileAudit(Base):
     before: Mapped[dict] = mapped_column(JSON)
     after: Mapped[dict] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class MarketingOutbox(Base):
+    """Immutable CRM capture, committed with its source business operation."""
+    __tablename__ = "marketing_outbox"
+    __table_args__ = (Index("ix_marketing_outbox_due", "status", "next_attempt_at"),)
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    endpoint: Mapped[str] = mapped_column(String(30))
+    payload: Mapped[dict] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_error: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class DemoRequest(Base):
+    """A requested demo time, not an availability check or confirmed booking."""
+    __tablename__ = "demo_requests"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    idempotency_key: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    payload_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    contact_name: Mapped[str] = mapped_column(String(120))
+    email: Mapped[str] = mapped_column(String(255), index=True)
+    phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    organization: Mapped[str | None] = mapped_column(String(140), nullable=True)
+    event_name: Mapped[str | None] = mapped_column(String(140), nullable=True)
+    guest_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    preferred_time: Mapped[datetime] = mapped_column(DateTime)
+    timezone: Mapped[str] = mapped_column(String(80), default="America/Chicago")
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default="requested")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

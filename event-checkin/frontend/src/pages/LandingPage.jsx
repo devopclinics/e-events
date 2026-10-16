@@ -1,3 +1,5 @@
+import MarketingEmailConsent from '../components/MarketingEmailConsent'
+import { marketingConsent, DEMO_REQUEST_RECEIVED, demoRequestAttempt } from '../lib/marketingConsent.mjs'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTheme } from '../context/ThemeContext'
@@ -693,6 +695,9 @@ function DemoRequestForm() {
     preferred_time: defaultDemoTime(),
     message: '',
   })
+  const [marketingEmail, setMarketingEmail] = useState(false)
+  const attempt = useRef(null)
+  const submitting = useRef(false)
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
 
@@ -702,11 +707,14 @@ function DemoRequestForm() {
 
   async function submit(e) {
     e.preventDefault()
+    if (submitting.current) return
+    submitting.current = true
     setStatus('loading')
     setError('')
     try {
-      await api.submitDemoRequest({
+      const body = {
         ...form,
+        ...marketingConsent(marketingEmail),
         guest_count: form.guest_count ? Number(form.guest_count) : null,
         preferred_time: new Date(form.preferred_time).toISOString(),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
@@ -714,11 +722,17 @@ function DemoRequestForm() {
         organization: form.organization || null,
         event_name: form.event_name || null,
         message: form.message || null,
-      })
+      }
+      attempt.current = demoRequestAttempt(attempt.current, body)
+      const result = await api.submitDemoRequest(body, attempt.current.key)
+      if (result?.ok !== true || result.status !== 'requested') throw new Error('We could not confirm receipt of your demo request. Please try again.')
+      attempt.current = null
       setStatus('success')
     } catch (err) {
       setError(err.message || 'Could not send demo request.')
       setStatus('idle')
+    } finally {
+      submitting.current = false
     }
   }
 
@@ -731,7 +745,7 @@ function DemoRequestForm() {
           <p className="text-xs font-black uppercase tracking-[0.24em] text-teal-200">Book a demo</p>
           <h2 className="mt-4 text-4xl font-black tracking-tight sm:text-5xl">See Festio on your event workflow.</h2>
           <p className="mt-5 max-w-xl text-base leading-8 text-slate-300">
-            Tell us what you are planning and pick a preferred time. We will send a calendar hold from Festio and follow up with the meeting link.
+            Tell us what you are planning and suggest a preferred time. This is a request, not a confirmed booking. Our team will contact you to arrange a time.
           </p>
           <div className="mt-8 grid gap-3 text-sm font-bold text-slate-200 sm:grid-cols-2">
             {['RSVP setup', 'QR check-in', 'Design Studio', 'Experience workflows'].map((item) => (
@@ -751,7 +765,7 @@ function DemoRequestForm() {
                 </div>
                 <h3 className="mt-4 text-2xl font-black">Demo request received</h3>
                 <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-600 dark:text-slate-300">
-                  Check your inbox for the Festio confirmation and calendar hold. We will confirm the meeting link shortly.
+                  {DEMO_REQUEST_RECEIVED}
                 </p>
                 <a href={`mailto:${CONTACT_EMAIL}`} className="mt-6 inline-flex rounded-xl border border-slate-300 px-5 py-3 text-sm font-extrabold text-slate-700 hover:border-teal-400 dark:border-white/10 dark:text-slate-200">Email Festio</a>
               </div>
@@ -795,6 +809,7 @@ function DemoRequestForm() {
                   What should we cover?
                   <textarea value={form.message} onChange={(e) => setField('message', e.target.value)} className={`${inputClass} mt-2 min-h-28 resize-y`} placeholder="RSVP, QR passes, check-in, seating, Experience workflows..." />
                 </label>
+                <MarketingEmailConsent checked={marketingEmail} onChange={setMarketingEmail} disabled={status === 'loading'} />
                 {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">{error}</div>}
                 <button disabled={status === 'loading'} className="inline-flex min-h-12 items-center justify-center rounded-xl bg-teal-500 px-6 py-3 text-sm font-black text-slate-950 transition hover:bg-teal-400 disabled:opacity-60">
                   {status === 'loading' ? 'Sending...' : 'Send demo request'}

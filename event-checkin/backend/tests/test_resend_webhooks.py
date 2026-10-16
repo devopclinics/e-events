@@ -9,7 +9,7 @@ from app.config import settings
 
 
 @pytest.mark.asyncio
-async def test_resend_webhook_acknowledges_when_secret_not_configured(ctx, monkeypatch):
+async def test_resend_webhook_rejects_when_secret_not_configured(ctx, monkeypatch):
     monkeypatch.setattr(settings, "resend_webhook_secret", "")
 
     resp = await ctx.client.post(
@@ -17,8 +17,7 @@ async def test_resend_webhook_acknowledges_when_secret_not_configured(ctx, monke
         json={"type": "email.delivered", "data": {"email_id": "email_123", "to": ["guest@example.com"]}},
     )
 
-    assert resp.status_code == 200
-    assert resp.json() == {"ok": True}
+    assert resp.status_code == 503
 
 
 @pytest.mark.asyncio
@@ -69,14 +68,11 @@ async def test_resend_webhook_accepts_valid_signature(ctx, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_resend_webhook_persists_and_links_by_tags(ctx, monkeypatch):
-    monkeypatch.setattr(settings, "resend_webhook_secret", "")
+async def test_resend_webhook_persists_and_links_by_tags(ctx, signed_resend):
     ctx.login(ctx.ids["user_a"])
 
     guest = (await ctx.client.get(f"/api/events/{ctx.ids['event_a']}/guests")).json()[0]
-    resp = await ctx.client.post(
-        "/api/webhooks/resend",
-        json={
+    resp = await signed_resend({
             "id": "evt_delivered_1",
             "type": "email.delivered",
             "created_at": "2026-07-06T12:00:00.000Z",
@@ -101,14 +97,11 @@ async def test_resend_webhook_persists_and_links_by_tags(ctx, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_resend_webhook_links_by_event_and_recipient_without_guest_tag(ctx, monkeypatch):
-    monkeypatch.setattr(settings, "resend_webhook_secret", "")
+async def test_resend_webhook_links_by_event_and_recipient_without_guest_tag(ctx, signed_resend):
     ctx.login(ctx.ids["user_a"])
 
     guest = (await ctx.client.get(f"/api/events/{ctx.ids['event_a']}/guests")).json()[0]
-    resp = await ctx.client.post(
-        "/api/webhooks/resend",
-        json={
+    resp = await signed_resend({
             "id": "evt_delivered_by_recipient_1",
             "type": "email.delivered",
             "created_at": "2026-07-06T12:00:00.000Z",
@@ -129,3 +122,33 @@ async def test_resend_webhook_links_by_event_and_recipient_without_guest_tag(ctx
     linked = next(g for g in guests if g["id"] == guest["id"])
     assert linked["email_delivery_status"] == "delivered"
     assert linked["email_delivery_kind"] == "invitation"
+
+
+@pytest.mark.asyncio
+async def test_missing_secret_cannot_persist_or_suppress_leads(ctx, monkeypatch):
+    from sqlalchemy import select
+    from app.models import EmailDeliveryEvent, MarketingOutbox
+    from conftest import _Session
+    monkeypatch.setattr(settings, "resend_webhook_secret", "")
+    response = await ctx.client.post("/api/webhooks/resend", json={
+        "type": "email.complained", "data": {"email_id": "forged", "to": ["prospect@example.com"]},
+    })
+    assert response.status_code == 503
+    async with _Session() as db:
+        assert await db.scalar(select(EmailDeliveryEvent.id)) is None
+        assert await db.scalar(select(MarketingOutbox.id)) is None
+
+
+@pytest.mark.asyncio
+async def test_invalid_signature_cannot_persist_or_suppress_leads(ctx, monkeypatch):
+    from sqlalchemy import select
+    from app.models import EmailDeliveryEvent, MarketingOutbox
+    from conftest import _Session
+    monkeypatch.setattr(settings, "resend_webhook_secret", "configured-test-secret")
+    response = await ctx.client.post("/api/webhooks/resend", json={
+        "type": "email.bounced", "data": {"email_id": "forged", "to": ["prospect@example.com"]},
+    })
+    assert response.status_code == 400
+    async with _Session() as db:
+        assert await db.scalar(select(EmailDeliveryEvent.id)) is None
+        assert await db.scalar(select(MarketingOutbox.id)) is None

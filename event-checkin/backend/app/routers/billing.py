@@ -292,12 +292,15 @@ async def _fulfill(db: AsyncSession, provider: str, reference: str, event_id: st
             org_id=event.org_id, event_id=event.id, provider=provider, reference=reference,
             tier_key=tier_key, amount=0, currency="", status="paid",
         ))
+    from ..services.marketing_client import ingest_org_lifecycle, lifecycle_event_id
+    await ingest_org_lifecycle(
+        db, event.org_id, stage="paid", event_type=event.event_type,
+        event_id=lifecycle_event_id("paid", provider, reference),
+    )
     await db.commit()
     if settings.organization_entitlements_v2:
         from .. import entitlements
         await entitlements.reload_addon_policy_cache(db)
-    from ..services.marketing_client import ingest_org_lifecycle
-    await ingest_org_lifecycle(db, event.org_id, stage="paid", event_type=event.event_type)
     logger.info("billing: applied %s to event %s via %s", tier_key, event.id, provider)
 
 

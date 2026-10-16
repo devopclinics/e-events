@@ -8,6 +8,10 @@ if (!/^https:\/\/staging\.festio\.events\/?$/.test(baseURL) && !/^http:\/\/(127\
 
 export default defineConfig({
   testDir: './e2e',
+  // Node's .test.mjs files run with node --test, not Playwright's loader.
+  testMatch: '**/*.spec.js',
+  // This fixture-only suite has its own local server/config, never staging.
+  testIgnore: '**/engagement-foundations.spec.js',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,

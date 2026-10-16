@@ -1,0 +1,11 @@
+# Local credentials are never repository content.
+.env
+**/.env
+**/.env.local
+**/.env.*.local
+event-checkin/meta token
+
+# Local validation environments and caches.
+.venv/
+**/__pycache__/
+**/*.pyc

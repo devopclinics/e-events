@@ -1,4 +1,4 @@
-from pydantic import HttpUrl, TypeAdapter, BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+from pydantic import HttpUrl, TypeAdapter, BaseModel, ConfigDict, EmailStr, Field, StrictBool, field_validator, model_validator
 from datetime import datetime, timezone
 from typing import Any, Optional, Literal
 from zoneinfo import ZoneInfo, available_timezones
@@ -556,10 +556,19 @@ class DemoRequestCreate(BaseModel):
     preferred_time: datetime
     timezone: Optional[str] = Field(default=None, max_length=80)
     message: Optional[str] = Field(default=None, max_length=1200)
+    # Omitting a flag preserves an existing preference; only explicit booleans
+    # can grant or revoke the selected channel. A phone number is not consent.
+    consent_email: Optional[StrictBool] = None
+    consent_sms: Optional[StrictBool] = None
+    consent_whatsapp: Optional[StrictBool] = None
+
+    _timezone_valid = field_validator("timezone")(_validate_iana_timezone)
 
 
 class DemoRequestOut(BaseModel):
     ok: bool = True
+    request_id: str
+    status: Literal["requested"] = "requested"
     message: str
 
 

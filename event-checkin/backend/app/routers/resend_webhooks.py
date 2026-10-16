@@ -164,7 +164,9 @@ async def receive_resend_webhook(
 ) -> dict[str, bool]:
     payload = await request.body()
 
-    if settings.resend_webhook_secret and not _verify_svix_signature(
+    if not settings.resend_webhook_secret:
+        raise HTTPException(status_code=503, detail="Resend webhook verification is not configured")
+    if not _verify_svix_signature(
         payload,
         request.headers,
         settings.resend_webhook_secret,
@@ -176,6 +178,8 @@ async def receive_resend_webhook(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
+    if not isinstance(event, dict) or not isinstance(event.get("data") or {}, dict):
+        raise HTTPException(status_code=400, detail="Invalid Resend webhook payload")
     event_type = event.get("type") or event.get("event") or "unknown"
     data = event.get("data") or {}
     tags = _tags_to_dict(data.get("tags") or event.get("tags"))
@@ -186,7 +190,10 @@ async def receive_resend_webhook(
         guest_id=tags.get("guest_id") or tags.get("guest-id"),
         recipient=recipient,
     )
-    provider_event_id = event.get("id")
+    # Svix authenticates this delivery identifier with the body and timestamp.
+    # Resend payloads do not always contain an event.id, and email_id identifies
+    # a message (not one delivery event). Provider retries reuse svix-id.
+    provider_event_id = request.headers["svix-id"]
     if provider_event_id:
         existing = await db.scalar(
             select(EmailDeliveryEvent.id)
@@ -213,7 +220,16 @@ async def receive_resend_webhook(
         occurred_at=_parse_datetime(event.get("created_at") or data.get("created_at")),
     )
     db.add(delivery)
+    from ..services.marketing_client import ingest_marketing_delivery, lifecycle_event_id
     try:
+        await db.flush()
+        await ingest_marketing_delivery(
+            db, recipient, event_type, data.get("email_id") or data.get("id"),
+            event_id=lifecycle_event_id("resend", str(provider_event_id or delivery.id)),
+            occurred_at=delivery.occurred_at.replace(tzinfo=timezone.utc).isoformat(),
+            bounce_type=(str(data["bounce"].get("type") or "").strip().lower() or None)
+            if isinstance(data.get("bounce"), dict) else None,
+        )
         await db.commit()
     except IntegrityError:
         await db.rollback()
@@ -226,8 +242,6 @@ async def receive_resend_webhook(
         data.get("to"),
         guest_id,
     )
-    from ..services.marketing_client import ingest_marketing_delivery
-    await ingest_marketing_delivery(recipient, event_type, data.get("email_id") or data.get("id"))
     return {"ok": True}
 
 

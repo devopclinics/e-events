@@ -1,0 +1,3 @@
+# Credential dumps must never be rendered inline in review/export diffs.
+# This does not remove earlier history or revoke any credential.
+"event-checkin/meta token" -diff linguist-generated=true

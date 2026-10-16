@@ -64,6 +64,43 @@ def delete_firebase_user(firebase_uid: str | None) -> None:
         _log.warning("Firebase delete(%s) failed: %s", firebase_uid, e)
 
 
+async def _capture_registration(db: AsyncSession, user: User, request: Request) -> None:
+    """Capture signup and its explicit consent once, including auth-state races.
+
+    Firebase's auth listener can provision the user before the signup page sends
+    its checkbox values. A separate stable consent event allows that second
+    request, without letting later logins replay an old grant after opt-out.
+    """
+    from .services.marketing_client import ingest_marketing_lead, lifecycle_event_id
+    try:
+        raw = request.headers.get("x-festio-attribution", "")
+        attribution = json.loads(unquote(raw)) if len(raw) <= 10000 else {}
+    except (ValueError, TypeError):
+        attribution = {}
+    if not isinstance(attribution, dict):
+        attribution = {}
+    # Match the Marketing schema so valid signup capture cannot be stranded
+    # by overlong attribution supplied in a browser header.
+    attribution_limits = {"source": 100, "medium": 100, "campaign": 160, "referrer": 500, "landing_page": 500}
+    fields = {
+        key: attribution[key][:limit] for key, limit in attribution_limits.items()
+        if isinstance(attribution.get(key), str) and attribution[key]
+    }
+    await ingest_marketing_lead(
+        db, user, stage="registered", registered_at=user.created_at.isoformat() if user.created_at else None,
+        event_id=lifecycle_event_id("registered", user.id), **{"source": "website", **fields},
+    )
+    consent = {
+        key: attribution[key] for key in ("consent_email", "consent_sms", "consent_whatsapp")
+        if type(attribution.get(key)) is bool
+    }
+    if consent:
+        await ingest_marketing_lead(
+            db, user, stage="registered", lifecycle_event="signup_consent", **fields, **consent,
+            event_id=lifecycle_event_id("signup_consent", user.id),
+        )
+
+
 async def get_current_user(
     request: Request,
     creds: HTTPAuthorizationCredentials = Depends(bearer),
@@ -99,6 +136,7 @@ async def get_current_user(
 
     is_super = bool(email) and email in _superadmin_emails()
 
+    created_user = not user
     if not user:
         # New account → provision a personal Organization and make them its owner.
         user = User(
@@ -114,6 +152,7 @@ async def get_current_user(
         db.add(org)
         await db.flush()
         db.add(Membership(org_id=org.id, user_id=user.id, role="owner"))
+        await _capture_registration(db, user, request)
         await db.commit()
         await db.refresh(user)
     elif is_super and not user.is_platform_superadmin:
@@ -130,22 +169,11 @@ async def get_current_user(
     if not user.is_active:
         raise HTTPException(403, "This account has been suspended. Contact support.")
 
-    attribution = {}
-    try:
-        attribution = json.loads(unquote(request.headers.get("x-festio-attribution", "")))
-    except (ValueError, TypeError):
-        attribution = {}
-    allowed_attribution = {key: attribution.get(key) for key in ("source", "medium", "campaign", "referrer", "landing_page") if attribution.get(key)}
-    # Consent is accepted only as an explicit boolean from the authenticated
-    # registration request. Missing values always remain opted out.
-    if attribution.get("consent_email") is True:
-        allowed_attribution["consent_email"] = True
-    from .services.marketing_client import ingest_marketing_lead
-    asyncio.create_task(ingest_marketing_lead(
-        user, stage="registered", source="website",
-        registered_at=user.created_at.isoformat() if user.created_at else None,
-        **allowed_attribution,
-    ))
+    if not created_user:
+        # Local idempotent capture only. No untracked task or Marketing HTTP is
+        # launched from authentication, and repeat logins retain the first row.
+        await _capture_registration(db, user, request)
+        await db.commit()
 
     return user
 

@@ -6,7 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from .database import engine
 from .config import settings
-from .routers import event_forms
+from .engagement_config import engagement_settings
+from .routers import event_forms, prospect_webhooks
 from .routers import events, guests, scanner, dashboard, seating, menu, logistics, registry, speakers, partners, reminders, scheduled_communications, access, trials, demo, classify, messaging, meta_whatsapp, resend_webhooks, templates as templates_router, self_checkin, experience, tasks, public_sites, donations, live_content, conference_center
 from .routers import auth as auth_router
 from .routers import invite as invite_router
@@ -33,7 +34,7 @@ from .routers import redesign_telemetry as redesign_telemetry_router
 from .routers import training as training_router
 from .routers import wa_template_submissions as wa_template_submissions_router
 from . import sync_poller, db_migrate, entitlements
-from .services import engagement_sync_outbox, festiome_outbox, webhook_outbox, reminder_outbox, scheduled_communication_outbox, inbound_email_outbox
+from .services import marketing_outbox, engagement_sync_outbox, festiome_outbox, webhook_outbox, reminder_outbox, scheduled_communication_outbox, inbound_email_outbox
 from services import wa_template_poller
 from . import routers
 from . import storage
@@ -113,6 +114,9 @@ async def lifespan(app: FastAPI):
         if run_wa_template_poller else None
     )
 
+    # Safe rollout: capture persists even while dispatch remains disabled.
+    marketing_outbox_task = asyncio.create_task(marketing_outbox.run()) if engagement_settings.marketing_outbox_enabled else None
+
     # Start the Redis SSE fan-in subscriber (no-op unless REDIS_URL is set) so
     # dashboard events published by any replica reach the connections on this one.
     await routers.start_sse_subscriber()
@@ -125,6 +129,12 @@ async def lifespan(app: FastAPI):
             await cache_refresh_task
         except asyncio.CancelledError:
             pass
+        if marketing_outbox_task is not None:
+            marketing_outbox_task.cancel()
+            try:
+                await marketing_outbox_task
+            except asyncio.CancelledError:
+                pass
         if poller_task is not None:
             poller_task.cancel()
             try:
@@ -259,6 +269,7 @@ app.include_router(demo.router, prefix="/api", tags=["demo"])
 app.include_router(admin_router.router, prefix="/api/admin", tags=["admin"])
 app.include_router(messaging.router, prefix="/api/messaging", tags=["messaging"])
 app.include_router(meta_whatsapp.router, prefix="/api/webhooks", tags=["webhooks"])
+app.include_router(prospect_webhooks.router, prefix="/api/webhooks", tags=["prospect-webhooks"])
 app.include_router(resend_webhooks.router, prefix="/api/webhooks", tags=["webhooks"])
 app.include_router(xwireless_webhooks_router.router, prefix="/api/webhooks", tags=["webhooks"])
 app.include_router(templates_router.router, prefix="/api/events", tags=["templates"])

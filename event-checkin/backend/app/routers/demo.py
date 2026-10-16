@@ -1,13 +1,22 @@
 """Public demo requests from the marketing site."""
 import html
-import uuid
-from datetime import datetime, timedelta, timezone
+import hashlib
+import json
+from typing import Annotated
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
 from ..schemas import DemoRequestCreate, DemoRequestOut
+from ..database import get_db
+from ..ratelimit import rate_limit
+from ..models import DemoRequest
+from ..services.marketing_client import enqueue_marketing_payload, lifecycle_event_id
 from services.email_service import send_simple_email
 
 router = APIRouter()
@@ -38,73 +47,77 @@ def _as_utc(dt: datetime, tz_name: str | None = None) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
-def _ics_escape(value: str) -> str:
-    return (
-        str(value or "")
-        .replace("\\", "\\\\")
-        .replace(";", "\\;")
-        .replace(",", "\\,")
-        .replace("\n", "\\n")
-    )
-
-
-def _ics_datetime(dt: datetime) -> str:
-    return _as_utc(dt).strftime("%Y%m%dT%H%M%SZ")
-
-
-def _calendar_invite(body: DemoRequestCreate) -> bytes:
-    start = _as_utc(body.preferred_time, body.timezone)
-    end = start + timedelta(minutes=30)
-    uid = f"demo-{uuid.uuid4()}@festio.events"
-    description = "\n".join([
-        f"Name: {body.contact_name}",
-        f"Email: {body.email}",
-        f"Phone: {body.phone or '-'}",
-        f"Organization: {body.organization or '-'}",
-        f"Event: {body.event_name or '-'}",
-        f"Expected guests: {body.guest_count or '-'}",
-        "",
-        body.message or "",
-    ]).strip()
-    ics = "\r\n".join([
-        "BEGIN:VCALENDAR",
-        "VERSION:2.0",
-        "PRODID:-//Festio//Demo Request//EN",
-        "CALSCALE:GREGORIAN",
-        "METHOD:REQUEST",
-        "BEGIN:VEVENT",
-        f"UID:{uid}",
-        f"DTSTAMP:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
-        f"DTSTART:{_ics_datetime(start)}",
-        f"DTEND:{_ics_datetime(end)}",
-        "SUMMARY:Festio demo",
-        "LOCATION:Video call",
-        f"DESCRIPTION:{_ics_escape(description)}",
-        "ORGANIZER;CN=Festio:mailto:events@festio.events",
-        f"ATTENDEE;CN={_ics_escape(body.contact_name)};ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:{body.email}",
-        "END:VEVENT",
-        "END:VCALENDAR",
-        "",
-    ])
-    return ics.encode("utf-8")
-
-
 def _display_time(body: DemoRequestCreate) -> str:
     local = _as_utc(body.preferred_time, body.timezone).astimezone(_timezone(body.timezone))
     return local.strftime("%A, %B %-d, %Y at %-I:%M %p %Z")
 
 
-@router.post("/demo-requests", response_model=DemoRequestOut, status_code=201)
-async def submit_demo_request(body: DemoRequestCreate, background_tasks: BackgroundTasks):
+def _response(request: DemoRequest) -> DemoRequestOut:
+    return DemoRequestOut(
+        request_id=request.id,
+        message="Demo request received. Your preferred time is not yet confirmed; our team will contact you.",
+    )
+
+
+def _replay(request: DemoRequest, digest: str) -> DemoRequestOut:
+    if request.payload_digest != digest:
+        raise HTTPException(409, "This submission key was already used for a different demo request.")
+    return _response(request)
+
+
+@router.post(
+    "/demo-requests", response_model=DemoRequestOut, status_code=201,
+    dependencies=[Depends(rate_limit(limit=5, window=60, scope="demo_request", key="client_ip"))],
+)
+async def submit_demo_request(
+    body: DemoRequestCreate, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db),
+    idempotency_key: Annotated[str | None, Header(min_length=8, max_length=128)] = None,
+):
+    # The client retains a random key across retries of the same submission.
+    # Store only its digest, and reject key reuse with a different payload.
+    key = hashlib.sha256(idempotency_key.encode()).hexdigest() if idempotency_key else None
+    digest = hashlib.sha256(json.dumps(body.model_dump(mode="json"), sort_keys=True).encode()).hexdigest()
+    if key:
+        existing = await db.scalar(select(DemoRequest).where(DemoRequest.idempotency_key == key))
+        if existing:
+            return _replay(existing, digest)
+    preferred_time = _as_utc(body.preferred_time, body.timezone)
+    request = DemoRequest(
+        **body.model_dump(exclude={"preferred_time", "timezone", "consent_email", "consent_sms", "consent_whatsapp"}),
+        preferred_time=preferred_time.replace(tzinfo=None), timezone=body.timezone or "America/Chicago",
+        status="requested", idempotency_key=key, payload_digest=digest,
+    )
+    db.add(request)
+    try:
+        await db.flush()
+    except IntegrityError:
+        # Concurrent requests with the same key cannot both queue emails.
+        await db.rollback()
+        existing = await db.scalar(select(DemoRequest).where(DemoRequest.idempotency_key == key)) if key else None
+        if existing:
+            return _replay(existing, digest)
+        raise
+    consent = {
+        field: getattr(body, field) for field in ("consent_email", "consent_sms", "consent_whatsapp")
+        if getattr(body, field) is not None
+    }
+    await enqueue_marketing_payload(db, {
+        "email": str(body.email), "name": body.contact_name, "phone": body.phone,
+        "organization": body.organization, "guest_count": body.guest_count,
+        "stage": "demo_requested", "lifecycle_event": "demo_requested", "source": "website_demo",
+        "demo_request_id": request.id, "preferred_time": preferred_time.isoformat(),
+        "timezone": request.timezone, "event_name": body.event_name, "message": body.message,
+        **consent,
+    }, event_id=lifecycle_event_id("demo_requested", request.id))
+    # A success response always means the request and CRM capture are durable.
+    # Email is a transactional acknowledgement, never a booking confirmation.
+    await db.commit()
     when = _display_time(body)
-    calendar = _calendar_invite(body)
-    attachment = [("festio-demo.ics", calendar, "text/calendar")]
 
     confirmation = (
         f"<p>Hi {_clean(body.contact_name)},</p>"
-        "<p>Thanks for booking a Festio demo. We received your request and will confirm the meeting link shortly.</p>"
+        "<p>Thanks for requesting a Festio demo. We received your request. This is not a confirmed booking; our team will contact you to arrange a time.</p>"
         f"<p><strong>Preferred time:</strong> {_clean(when)}</p>"
-        "<p>A calendar hold is attached so you can save the time.</p>"
         "<p>— The Festio team</p>"
     )
     background_tasks.add_task(
@@ -113,7 +126,7 @@ async def submit_demo_request(body: DemoRequestCreate, background_tasks: Backgro
         "Your Festio demo request",
         confirmation,
         None,
-        attachment,
+        None,
         None,
         "demo_request_confirmation",
     )
@@ -143,4 +156,4 @@ async def submit_demo_request(body: DemoRequestCreate, background_tasks: Backgro
             "demo_request_operator",
         )
 
-    return DemoRequestOut(message="Demo request received. Check your email for the calendar hold.")
+    return _response(request)

@@ -153,6 +153,7 @@ export interface Body_upload_gallery_image_api_events__event_id__conference_cent
 
 export interface Body_upload_guests_api_events__event_id__guests_upload_post {
   file: string
+  mapping?: string
 }
 
 export interface Body_upload_logo_api_events__event_id__upload_logo_post {
@@ -529,6 +530,9 @@ export interface Definition {
 }
 
 export interface DemoRequestCreate {
+  consent_email?: (boolean) | null
+  consent_sms?: (boolean) | null
+  consent_whatsapp?: (boolean) | null
   contact_name: string
   email: string
   event_name?: (string) | null
@@ -543,6 +547,8 @@ export interface DemoRequestCreate {
 export interface DemoRequestOut {
   message: string
   ok?: boolean
+  request_id: string
+  status?: string
 }
 
 export interface DonationAuditEntryOut {
@@ -808,6 +814,7 @@ export interface EventCreate {
   notify_sms?: (boolean) | null
   notify_whatsapp?: (boolean) | null
   rsvp_capacity?: (number) | null
+  setup_preferences?: (Record<string, unknown>) | null
   timezone: string
   venue_address?: (string) | null
   venue_name?: (string) | null
@@ -854,6 +861,7 @@ export interface EventOut {
   checkout_enabled?: boolean
   couples_name: string
   created_at: string
+  credit_scope?: string
   daily_checkin_enabled?: boolean
   default_guest_table_group_id?: (string) | null
   description: (string) | null
@@ -894,6 +902,7 @@ export interface EventOut {
   logo_url?: (string) | null
   manual_checkin_enabled?: boolean
   menu_enabled: boolean
+  menu_selection_timing?: string
   message_credits?: number
   my_access_level?: string
   my_access_role?: string
@@ -949,6 +958,7 @@ export interface EventOut {
   section_mode_enabled?: boolean
   self_checkin_enabled?: boolean
   separate_admission_access_enabled?: boolean
+  setup_preferences?: (Record<string, unknown>) | null
   source_last_error?: (string) | null
   source_last_sync_at?: (string) | null
   source_last_warning?: (string) | null
@@ -1421,6 +1431,7 @@ export interface GuestExperienceProgressOut {
 }
 
 export interface GuestHubRecoveryRequest {
+  destination?: 'home' | 'programme' | 'festiome'
   email: string
   first_name?: string
   last_name?: string
@@ -1502,6 +1513,7 @@ export interface GuestOut {
   invite_sent_at: (string) | null
   invite_status?: (string) | null
   invite_token?: (string) | null
+  is_junior?: boolean
   is_vip?: boolean
   is_walk_in?: boolean
   last_name: string
@@ -1665,9 +1677,12 @@ export interface GuestTicketAssign {
 export interface GuestUpdate {
   email?: (string) | null
   first_name?: (string) | null
+  is_junior?: (boolean) | null
   is_vip?: (boolean) | null
   last_name?: (string) | null
   phone?: (string) | null
+  rsvp_guest_type?: (string) | null
+  rsvp_relationship?: (string) | null
   seat_number?: (string) | null
   sms_consent?: (boolean) | null
   table_id?: (string) | null
@@ -1823,6 +1838,7 @@ export interface InvitePageOut {
   event_date: string
   event_end_date?: (string) | null
   event_time_tbd?: boolean
+  event_type?: (string) | null
   experience_enabled?: boolean
   external_website_url?: (string) | null
   festiome_addon_enabled?: boolean

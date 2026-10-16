@@ -361,6 +361,11 @@ async def create_event(
             # above, so the event's legacy fallback fields must catch up too.
             snapshot_new_event(event, org)
 
+    from ..services.marketing_client import ingest_marketing_lead, lifecycle_event_id
+    await ingest_marketing_lead(
+        db, current_user, stage="event_created", event_type=event.event_type, guest_count=event.guest_cap,
+        event_id=lifecycle_event_id("event_created", event.id),
+    )
     await db.commit()
     if trial_granted_to_org:
         from .. import entitlements
@@ -369,11 +374,6 @@ async def create_event(
     background_tasks.add_task(
         _notify_operators_new_event, event.id, event.name,
         org.name if org else "", current_user.name, current_user.email,
-    )
-    from ..services.marketing_client import ingest_marketing_lead
-    background_tasks.add_task(
-        ingest_marketing_lead, current_user, stage="event_created",
-        event_type=event.event_type, guest_count=event.guest_cap,
     )
     return await _event_balance_out(event, db)
 
@@ -735,13 +735,13 @@ async def update_event(
         # Asynchronous outbox only; this never calls or waits for Festio Live.
         from ..services.engagement_sync_outbox import queue_active_program_sync
         await queue_active_program_sync(db, event)
-    await db.commit()
-    await db.refresh(event)
     from ..services.marketing_client import ingest_marketing_lead
     await ingest_marketing_lead(
-        current_user, stage="event_created", event_type=event.event_type,
-        guest_count=event.guest_cap,
+        db, current_user, stage="event_created", lifecycle_event="event_updated",
+        event_type=event.event_type, guest_count=event.guest_cap,
     )
+    await db.commit()
+    await db.refresh(event)
     return await _event_balance_out(event, db)
 
 
@@ -1274,11 +1274,14 @@ async def toggle_features(
         if order not in ("sequential", "random"):
             raise HTTPException(400, "seat_assignment_order must be 'sequential' or 'random'")
         event.seat_assignment_order = order
+    if any(bool(body.get(feature)) for feature in ("seating_enabled", "menu_enabled", "logistics_enabled", "registry_enabled", "venue_access_enabled", "experience_enabled", "festiome_addon_enabled", "planner_enabled", "engagement_enabled", "speaker_enabled", "partner_enabled", "reminders_enabled")):
+        from ..services.marketing_client import ingest_marketing_lead, lifecycle_event_id
+        await ingest_marketing_lead(
+            db, current_user, stage="activated", event_type=event.event_type,
+            event_id=lifecycle_event_id("activated", event.id),
+        )
     await db.commit()
     await db.refresh(event)
-    if any(bool(body.get(feature)) for feature in ("seating_enabled", "menu_enabled", "logistics_enabled", "registry_enabled", "venue_access_enabled", "experience_enabled", "festiome_addon_enabled", "planner_enabled", "engagement_enabled", "speaker_enabled", "partner_enabled", "reminders_enabled")):
-        from ..services.marketing_client import ingest_marketing_lead
-        await ingest_marketing_lead(current_user, stage="activated", event_type=event.event_type)
     return await _event_balance_out(event, db)
 
 

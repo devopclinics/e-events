@@ -5,6 +5,8 @@ import { auth } from '../firebase'
 import { googleSignIn } from '../auth/googleSignIn'
 import { useAuth } from '../context/AuthContext'
 import { setPreferredView } from '../App'
+import MarketingEmailConsent from '../components/MarketingEmailConsent'
+import { signupAttributionHeader } from '../lib/marketingConsent.mjs'
 
 function ViewPicker({ role, onPick }) {
   const views = [
@@ -51,6 +53,7 @@ export default function RegisterPage() {
   // omits this and keeps today's behavior.
   const goToRedesign = params.get('redesign') === '1'
   const [form, setForm] = useState({ name: '', email: '', password: '' })
+  const [marketingEmail, setMarketingEmail] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [pickerRole, setPickerRole] = useState(null)
@@ -81,10 +84,11 @@ export default function RegisterPage() {
       await updateProfile(cred.user, { displayName: form.name })
       // Sync with backend (creates the DB record)
       const token = await cred.user.getIdToken(true)
-      await fetch('/api/auth/me', { headers: {
+      const response = await fetch('/api/auth/me', { headers: {
         Authorization: `Bearer ${token}`,
-        'X-Festio-Attribution': encodeURIComponent(JSON.stringify({ consent_email: true })),
+        'X-Festio-Attribution': signupAttributionHeader(marketingEmail),
       } })
+      if (!response.ok) throw new Error('Account sync failed')
       setPickerRole('official')
     } catch (err) {
       setError(friendlyError(err.code))
@@ -98,7 +102,11 @@ export default function RegisterPage() {
     try {
       const cred = await googleSignIn()
       const token = await cred.user.getIdToken(true)
-      await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+      const response = await fetch('/api/auth/me', { headers: {
+        Authorization: `Bearer ${token}`,
+        'X-Festio-Attribution': signupAttributionHeader(marketingEmail),
+      } })
+      if (!response.ok) throw new Error('Account sync failed')
       setPickerRole('official')
     } catch (err) {
       if (err.code !== 'auth/popup-closed-by-user') setError(friendlyError(err.code))
@@ -135,6 +143,10 @@ export default function RegisterPage() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Create Account</h1>
           <p className="text-gray-500 dark:text-slate-400 text-sm mt-1">Create your organizer account</p>
+        </div>
+
+        <div className="mb-5">
+          <MarketingEmailConsent checked={marketingEmail} onChange={setMarketingEmail} disabled={loading} />
         </div>
 
         <button onClick={signUpWithGoogle} disabled={loading}

@@ -14,7 +14,7 @@ def load_app(tmp_path):
     module = importlib.import_module("app.main")
     token = jwt.encode({
         "sub": "e2e-admin", "email": "muritala@festio.events", "name": "Muritala",
-        "is_platform_superadmin": True, "iss": "guesthub", "aud": "marketing",
+        "is_platform_superadmin": True, "email_verified": True, "iss": "guesthub", "aud": "marketing",
         "iat": datetime.now(timezone.utc), "exp": datetime.now(timezone.utc) + timedelta(minutes=10),
     }, "test-secret", algorithm="HS256")
     return TestClient(module.app), {"Authorization": f"Bearer {token}"}
@@ -73,7 +73,7 @@ def test_superadmin_can_manage_masked_social_credentials(tmp_path):
     assert client.get("/api/marketing/providers", headers=headers).json()["social"]["linkedin"] is True
 
     client.post("/api/marketing/access", headers=headers, json={"email":"manager@example.com","role":"manager"})
-    manager_token = jwt.encode({"sub":"manager","email":"manager@example.com","name":"Manager","iss":"guesthub","aud":"marketing","iat":datetime.now(timezone.utc),"exp":datetime.now(timezone.utc)+timedelta(minutes=10)},"test-secret",algorithm="HS256")
+    manager_token = jwt.encode({"sub":"manager","email":"manager@example.com","name":"Manager","email_verified":True,"iss":"guesthub","aud":"marketing","iat":datetime.now(timezone.utc),"exp":datetime.now(timezone.utc)+timedelta(minutes=10)},"test-secret",algorithm="HS256")
     assert client.get("/api/marketing/social-connections", headers={"Authorization":f"Bearer {manager_token}"}).status_code == 403
 
 
@@ -140,7 +140,7 @@ def test_owner_scoped_access_only_sees_assigned_leads(tmp_path):
     client.post("/api/marketing/leads", headers=headers, json={"email":"mine@example.com","owner_email":"sales@example.com"})
     hidden = client.post("/api/marketing/leads", headers=headers, json={"email":"hidden@example.com","owner_email":"other@example.com"}).json()
     client.post("/api/marketing/access", headers=headers, json={"email":"sales@example.com","role":"marketer","owner_scoped":True})
-    token = jwt.encode({"sub":"sales-user","email":"sales@example.com","name":"Sales","iss":"guesthub","aud":"marketing","iat":datetime.now(timezone.utc),"exp":datetime.now(timezone.utc)+timedelta(minutes=10)},"test-secret",algorithm="HS256")
+    token = jwt.encode({"sub":"sales-user","email":"sales@example.com","name":"Sales","email_verified":True,"iss":"guesthub","aud":"marketing","iat":datetime.now(timezone.utc),"exp":datetime.now(timezone.utc)+timedelta(minutes=10)},"test-secret",algorithm="HS256")
     sales_headers={"Authorization":f"Bearer {token}"}
     rows=client.get("/api/marketing/leads",headers=sales_headers).json()
     assert [row["email"] for row in rows] == ["mine@example.com"]

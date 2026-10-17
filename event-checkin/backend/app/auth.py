@@ -9,7 +9,8 @@ from firebase_admin import credentials, auth as firebase_auth
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError, MultipleResultsFound
 
 import uuid
 
@@ -64,7 +65,9 @@ def delete_firebase_user(firebase_uid: str | None) -> None:
         _log.warning("Firebase delete(%s) failed: %s", firebase_uid, e)
 
 
-async def _capture_registration(db: AsyncSession, user: User, request: Request) -> None:
+async def _capture_registration(
+    db: AsyncSession, user: User, request: Request, *, email_verified: bool = False,
+) -> None:
     """Capture signup and its explicit consent once, including auth-state races.
 
     Firebase's auth listener can provision the user before the signup page sends
@@ -79,6 +82,11 @@ async def _capture_registration(db: AsyncSession, user: User, request: Request) 
         attribution = {}
     if not isinstance(attribution, dict):
         attribution = {}
+    # Proof is supplied only by the current verified token, never attribution.
+    # Version both namespaces: an old immutable outbox row without proof must
+    # not prevent a later verified capture, or become verified retroactively.
+    email_verified = email_verified is True
+    identity_namespace = "verified-email-v2" if email_verified else "unverified-email-v2"
     # Match the Marketing schema so valid signup capture cannot be stranded
     # by overlong attribution supplied in a browser header.
     attribution_limits = {"source": 100, "medium": 100, "campaign": 160, "referrer": 500, "landing_page": 500}
@@ -88,7 +96,8 @@ async def _capture_registration(db: AsyncSession, user: User, request: Request) 
     }
     await ingest_marketing_lead(
         db, user, stage="registered", registered_at=user.created_at.isoformat() if user.created_at else None,
-        event_id=lifecycle_event_id("registered", user.id), **{"source": "website", **fields},
+        event_id=lifecycle_event_id("registered", user.id, identity_namespace),
+        email_verified=email_verified, **{"source": "website", **fields},
     )
     consent = {
         key: attribution[key] for key in ("consent_email", "consent_sms", "consent_whatsapp")
@@ -97,7 +106,8 @@ async def _capture_registration(db: AsyncSession, user: User, request: Request) 
     if consent:
         await ingest_marketing_lead(
             db, user, stage="registered", lifecycle_event="signup_consent", **fields, **consent,
-            event_id=lifecycle_event_id("signup_consent", user.id),
+            event_id=lifecycle_event_id("signup_consent", user.id, identity_namespace),
+            email_verified=email_verified,
         )
 
 
@@ -106,6 +116,9 @@ async def get_current_user(
     creds: HTTPAuthorizationCredentials = Depends(bearer),
     db: AsyncSession = Depends(get_db),
 ) -> User:
+    # Request-local provenance must never survive from another token, request,
+    # or a cached ORM User. Email-authority routes require this exact identity.
+    request.state.verified_email_identity = None
     if not creds:
         raise HTTPException(401, "Not authenticated")
 
@@ -120,6 +133,7 @@ async def get_current_user(
 
     firebase_uid = decoded["uid"]
     email = (decoded.get("email") or "").lower()
+    email_verified = decoded.get("email_verified") is True
     name = decoded.get("name") or (decoded.get("email") or "user").split("@")[0]
 
     # Look up by firebase_uid first
@@ -127,14 +141,37 @@ async def get_current_user(
     user = result.scalar_one_or_none()
 
     if not user and email:
-        # Link existing account by email on first Firebase sign-in
-        result = await db.execute(select(User).where(User.email == email))
-        user = result.scalar_one_or_none()
+        # Even unverified claims must check collisions rather than creating a
+        # duplicate account. Matching an email alone never proves ownership.
+        result = await db.execute(select(User).where(func.lower(User.email) == email))
+        try:
+            user = result.scalar_one_or_none()
+        except MultipleResultsFound:
+            raise HTTPException(409, "This email matches more than one account. Contact support.") from None
         if user:
-            user.firebase_uid = firebase_uid
+            if not email_verified:
+                raise HTTPException(403, "Verify your email before linking an existing account, then sign in again.")
+            if user.firebase_uid is not None and user.firebase_uid != firebase_uid:
+                raise HTTPException(409, "This email is already linked to another sign-in account. Contact support.")
+            if user.firebase_uid is None:
+                # Compare-and-set prevents two first sign-ins from overwriting
+                # each other's link after both observed an unlinked account.
+                try:
+                    await db.execute(update(User).where(
+                        User.id == user.id, User.firebase_uid.is_(None), func.lower(User.email) == email,
+                    ).values(firebase_uid=firebase_uid).execution_options(synchronize_session=False))
+                except IntegrityError:
+                    await db.rollback()
+                    raise HTTPException(409, "Account changed during sign-in. Please sign in again.") from None
+                await db.refresh(user)
+                if user.firebase_uid != firebase_uid:
+                    raise HTTPException(409, "This email is already linked to another sign-in account. Contact support.")
             await db.commit()
 
-    is_super = bool(email) and email in _superadmin_emails()
+    # A UID-first login remains valid if Firebase's email changed, but it must
+    # not attest to the stale local address or grant an email-based privilege.
+    trusted_email = bool(email) and email_verified and (not user or user.email.lower() == email)
+    is_super = trusted_email and email in _superadmin_emails()
 
     created_user = not user
     if not user:
@@ -144,7 +181,13 @@ async def get_current_user(
             is_platform_superadmin=is_super,
         )
         db.add(user)
-        await db.flush()
+        try:
+            await db.flush()
+        except IntegrityError:
+            # Another request may have provisioned this UID/email after the
+            # initial reads. Fail closed; a retry resolves through UID first.
+            await db.rollback()
+            raise HTTPException(409, "Account changed during sign-in. Please sign in again.") from None
         org = Organization(
             name=f"{name}'s organization",
             slug=f"org-{uuid.uuid4().hex[:10]}",
@@ -152,7 +195,7 @@ async def get_current_user(
         db.add(org)
         await db.flush()
         db.add(Membership(org_id=org.id, user_id=user.id, role="owner"))
-        await _capture_registration(db, user, request)
+        await _capture_registration(db, user, request, email_verified=trusted_email)
         await db.commit()
         await db.refresh(user)
     elif is_super and not user.is_platform_superadmin:
@@ -169,12 +212,25 @@ async def get_current_user(
     if not user.is_active:
         raise HTTPException(403, "This account has been suspended. Contact support.")
 
+    if trusted_email:
+        request.state.verified_email_identity = (user.id, email)
+
     if not created_user:
         # Local idempotent capture only. No untracked task or Marketing HTTP is
         # launched from authentication, and repeat logins retain the first row.
-        await _capture_registration(db, user, request)
+        await _capture_registration(db, user, request, email_verified=trusted_email)
         await db.commit()
 
+    return user
+
+
+async def require_verified_current_email(
+    request: Request, user: User = Depends(get_current_user),
+) -> User:
+    """Allow email-based authority only with proof from this request's token."""
+    expected = (user.id, user.email.lower())
+    if not user.email or getattr(request.state, "verified_email_identity", None) != expected:
+        raise HTTPException(403, "Verify your current email address, then sign in again to use Marketing.")
     return user
 
 
@@ -397,7 +453,15 @@ async def verify_token_user(token: str, db: AsyncSession) -> User:
     email = (decoded.get("email") or "").lower()
     user = await db.scalar(select(User).where(User.firebase_uid == firebase_uid))
     if not user and email:
-        user = await db.scalar(select(User).where(User.email == email))
+        if decoded.get("email_verified") is not True:
+            raise HTTPException(403, "Verify your email before linking an existing account, then sign in again.")
+        result = await db.execute(select(User).where(func.lower(User.email) == email))
+        try:
+            user = result.scalar_one_or_none()
+        except MultipleResultsFound:
+            raise HTTPException(409, "This email matches more than one account. Contact support.") from None
+        if user and user.firebase_uid is not None and user.firebase_uid != firebase_uid:
+            raise HTTPException(409, "This email is already linked to another sign-in account. Contact support.")
     if not user:
         raise HTTPException(403, "User not found")
     if not user.is_active:

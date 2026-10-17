@@ -4,7 +4,8 @@ import firebase_admin
 from firebase_admin import auth as firebase_auth, credentials
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.exc import MultipleResultsFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import settings
@@ -31,11 +32,13 @@ def _superadmin_emails() -> set[str]:
 
 
 async def current_user(
+    request: Request,
     creds: HTTPAuthorizationCredentials = Depends(bearer),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     """Verifies the same Firebase ID token `backend` issues — no shared secret,
     no network hop back to `backend`. Matches messaging-service's approach."""
+    request.state.verified_email_identity = None
     if not creds:
         raise HTTPException(401, "Not authenticated")
     _ensure_firebase()
@@ -45,11 +48,22 @@ async def current_user(
         raise HTTPException(401, "Invalid or expired token")
     firebase_uid = decoded["uid"]
     email = (decoded.get("email") or "").lower()
+    email_verified = decoded.get("email_verified") is True
     user = await db.scalar(select(User).where(User.firebase_uid == firebase_uid))
     if not user and email:
-        user = await db.scalar(select(User).where(User.email == email))
+        if not email_verified:
+            raise HTTPException(403, "Verify your email before linking an existing account, then sign in again.")
+        result = await db.execute(select(User).where(func.lower(User.email) == email))
+        try:
+            user = result.scalar_one_or_none()
+        except MultipleResultsFound:
+            raise HTTPException(409, "This email matches more than one account. Contact support.") from None
+        if user and user.firebase_uid is not None and user.firebase_uid != firebase_uid:
+            raise HTTPException(409, "This email is already linked to another sign-in account. Contact support.")
     if not user or not user.is_active:
         raise HTTPException(403, "Access denied")
+    if email and email_verified and user.email.lower() == email:
+        request.state.verified_email_identity = (user.id, email)
     return user
 
 
@@ -67,7 +81,11 @@ async def require_dashboard_access(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
-    if user.is_platform_superadmin or user.email.lower() in _superadmin_emails():
+    verified_email = (
+        request is not None
+        and getattr(request.state, "verified_email_identity", None) == (user.id, user.email.lower())
+    )
+    if user.is_platform_superadmin or (verified_email and user.email.lower() in _superadmin_emails()):
         return event
     role = await db.scalar(
         select(Membership.role)

@@ -104,12 +104,14 @@ async def submit_demo_request(
     await enqueue_marketing_payload(db, {
         "email": str(body.email), "name": body.contact_name, "phone": body.phone,
         "organization": body.organization, "guest_count": body.guest_count,
-        "stage": "demo_requested", "lifecycle_event": "demo_requested", "source": "website_demo",
+        "lifecycle_event": "demo_requested", "source": "website_demo", "identity_verified": False,
         "demo_request_id": request.id, "preferred_time": preferred_time.isoformat(),
         "timezone": request.timezone, "event_name": body.event_name, "message": body.message,
         **consent,
-    }, event_id=lifecycle_event_id("demo_requested", request.id))
-    # A success response always means the request and CRM capture are durable.
+    }, endpoint="demo-requests", event_id=lifecycle_event_id("demo_requested", request.id))
+    # Anonymous contact details and checkbox claims are review evidence, never
+    # authority to match or update an existing Marketing lead.
+    # A success response means the request and unverified capture are durable.
     # Email is a transactional acknowledgement, never a booking confirmation.
     await db.commit()
     when = _display_time(body)

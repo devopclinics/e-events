@@ -1,3 +1,9 @@
 # Credential dumps must never be rendered inline in review/export diffs.
 # This does not remove earlier history or revoke any credential.
 "event-checkin/meta token" -diff linguist-generated=true
+# Removed legacy defaults must not be printed as old lines in credential cleanup diffs.
+event-checkin/backend/app/config.py -diff
+event-checkin/dashboard-service/app/config.py -diff
+event-checkin/support-service/app/main.py -diff
+event-checkin/messaging-service/app/main.py -diff
+event-checkin/setup-service/app/main.py -diff

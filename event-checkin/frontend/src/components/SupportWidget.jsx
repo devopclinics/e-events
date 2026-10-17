@@ -7,7 +7,11 @@ import './SupportWidget.css'
 
 const config = chatWidgetConfig(import.meta.env, window.location.origin)
 
-function ChatSession({ session }) {
+function ChatSession({ session: selectedSession }) {
+  const { mode, baseUrl, websiteToken } = selectedSession
+  // A same-account profile refresh may replace the selection object. Keep this
+  // iframe's bridge stable; real route/account changes remount via the key below.
+  const session = useMemo(() => ({ mode, baseUrl, websiteToken }), [mode, baseUrl, websiteToken])
   const [available, setAvailable] = useState(session.mode === 'sales')
   const [identity, setIdentity] = useState(null)
   const [open, setOpen] = useState(false)
@@ -15,6 +19,7 @@ function ChatSession({ session }) {
   const [ready, setReady] = useState(false)
   const [delayed, setDelayed] = useState(false)
   const frame = useRef(null)
+  const bridge = useRef(null)
   const launcher = useRef(null)
   const closeButton = useRef(null)
 
@@ -40,13 +45,21 @@ function ChatSession({ session }) {
 
   useLayoutEffect(() => {
     if (!started || !frame.current) return
-    const disconnect = connectChatFrame({ frame: frame.current, session, identity, onReady: () => setReady(true), onClose: close })
+    const connection = connectChatFrame({ frame: frame.current, session, identity, onReady: () => setReady(true), onClose: close })
+    bridge.current = connection
     const timer = window.setTimeout(() => setDelayed(true), 15000)
     return () => {
-      disconnect()
+      connection.disconnect()
+      if (bridge.current === connection) bridge.current = null
       window.clearTimeout(timer)
     }
   }, [started, session, identity])
+
+  useLayoutEffect(() => {
+    // Keep the retained iframe in sync with the panel on every path: launcher,
+    // Close, Escape, provider close, and reopen. The bridge queues pre-load state.
+    bridge.current?.setOpen(open)
+  }, [open, started, session, identity])
 
   useEffect(() => {
     if (!open) return

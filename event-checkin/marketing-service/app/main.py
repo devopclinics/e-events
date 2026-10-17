@@ -30,7 +30,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, StrictBool
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StrictBool, ValidationError
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, create_engine, func, inspect, select, text, update, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
@@ -443,7 +443,17 @@ def decode_identity(authorization: str | None = Header(default=None), db: Sessio
         data = jwt.decode(authorization[7:], TOKEN_SECRET, algorithms=["HS256"], audience="marketing", issuer="guesthub")
     except jwt.PyJWTError:
         raise HTTPException(401, "Invalid or expired Marketing session")
-    identity = Identity(subject=str(data["sub"]), email=(data.get("email") or "").lower(), name=data.get("name") or "", is_superadmin=bool(data.get("is_platform_superadmin")))
+    # Signing authenticates the issuer, not a human token's claimed mailbox.
+    # Reject old proof-less human sessions before looking up or binding grants.
+    # The existing backend's machine token has no human email proof; exempt
+    # only that exact signed service principal, not arbitrary superadmins.
+    backend_service = (
+        data.get("sub") == "festio-backend" and data.get("email") == "system@festio.events"
+        and data.get("is_platform_superadmin") is True
+    )
+    if not backend_service and data.get("email_verified") is not True:
+        raise HTTPException(403, "A verified email is required for Marketing access")
+    identity = Identity(subject=str(data["sub"]), email=(data.get("email") or "").lower(), name=data.get("name") or "", is_superadmin=data.get("is_platform_superadmin") is True)
     if identity.is_superadmin:
         identity.role = "superadmin"
         return identity
@@ -538,7 +548,8 @@ def resolve_ingest_lead(db: Session, *, email: str | None = None, phone: str | N
         phone = None
     for column, value in ((Lead.email, email), (Lead.phone, phone), (Lead.festio_user_id, subject)):
         if value:
-            for row in db.scalars(select(Lead).where(column == value)).all():
+            criterion = func.lower(Lead.email) == str(value).strip().lower() if column is Lead.email else column == value
+            for row in db.scalars(select(Lead).where(criterion)).all():
                 matches[row.id] = row
     if len(matches) > 1:
         raise HTTPException(409, "Identifiers match multiple marketing leads")
@@ -823,10 +834,146 @@ async def submit_public_form(public_token: str, body: dict, request: Request, db
 def me(identity: Identity = Depends(decode_identity)): return identity.model_dump()
 
 
+class UnverifiedDemoIn(BaseModel):
+    """Self-reported demo details, never an identity or effective consent grant."""
+    event_id: str = Field(min_length=1, max_length=128)
+    demo_request_id: str = Field(min_length=1, max_length=128)
+    email: EmailStr
+    name: str = Field(default="", max_length=120)
+    phone: str | None = Field(default=None, max_length=40)
+    organization: str | None = Field(default=None, max_length=140)
+    guest_count: int | None = Field(default=None, ge=1, le=100000)
+    preferred_time: datetime
+    timezone: str | None = Field(default=None, max_length=80)
+    event_name: str | None = Field(default=None, max_length=140)
+    message: str | None = Field(default=None, max_length=1200)
+    occurred_at: str | None = Field(default=None, max_length=50)
+    consent_email: StrictBool | None = None
+    consent_sms: StrictBool | None = None
+    consent_whatsapp: StrictBool | None = None
+
+
+def record_unverified_demo(body: dict, identity: Identity, db: Session) -> dict:
+    try:
+        request = UnverifiedDemoIn.model_validate(body)
+    except ValidationError:
+        raise HTTPException(400, "Invalid unverified demo request")
+    receipt, duplicate = receipt_for(db, request.event_id, "demo_request", body)
+    if duplicate:
+        return {"recorded": True, "duplicate": True, "lead_id": None,
+                "unmatched": True, "prospect_id": receipt.prospect_id}
+    # Do not resolve the submitted email/phone or accept a caller's assertion
+    # of verified identity. A public form cannot authorize lead mutations.
+    prospect = PendingProspect(
+        id=hashlib.sha256(f"demo_request:{request.event_id}".encode()).hexdigest(),
+        channel="email", source_contact_id=f"website_demo:{request.demo_request_id}",
+        email=str(request.email).lower(), phone=normalize_phone(request.phone),
+        identity_verified=False, owner_email=default_owner_email(db),
+    )
+    db.add(prospect)
+    claims = {field: getattr(request, field) for field in
+              ("consent_email", "consent_sms", "consent_whatsapp") if getattr(request, field) is not None}
+    details = request.model_dump(mode="json", exclude_none=True, exclude={
+        "event_id", "email", "phone", "consent_email", "consent_sms", "consent_whatsapp",
+    })
+    db.add(ModuleRecord(
+        module="tasks", name="Review unverified demo request", status="open",
+        owner_email=prospect.owner_email, created_by="demo_request_ingest",
+        payload={"prospect_id": prospect.id, "source_event_id": request.event_id,
+                 "source": "website_demo", "identity_status": "unverified",
+                 "email": prospect.email, "phone": prospect.phone,
+                 "booking_confirmed": False, "consent_claims": claims, **details},
+    ))
+    receipt.prospect_id = prospect.id
+    audit(db, identity, "demo_request.received", "prospect", prospect.id,
+          event_id=request.event_id, identity_verified=False)
+    db.commit()
+    return {"recorded": True, "duplicate": False, "lead_id": None,
+            "unmatched": True, "prospect_id": prospect.id}
+
+
+@app.post("/api/marketing/internal/demo-requests")
+def ingest_demo_request(body: dict, identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
+    if not identity.is_superadmin:
+        raise HTTPException(403, "Internal demo capture requires platform authority")
+    return record_unverified_demo(body, identity, db)
+
+
+def pending_identity_receipt(receipt: IngestReceipt, *, duplicate: bool) -> dict:
+    return {"recorded": True, "pending_identity": True, "duplicate": duplicate,
+            "ingest_duplicate": duplicate, "event_id": receipt.event_id,
+            "lead_id": None, "unmatched": True, "prospect_id": receipt.prospect_id}
+
+
+def record_unverified_lifecycle(body: dict, identity: Identity, db: Session, receipt: IngestReceipt | None) -> dict:
+    """Retain claimed account details for review, never for automatic promotion."""
+    if receipt is None:
+        raise HTTPException(400, "Unverified lifecycle capture requires an event_id")
+    prospect = PendingProspect(
+        id=hashlib.sha256(f"unverified_lifecycle:{receipt.event_id}".encode()).hexdigest(),
+        channel="email", source_contact_id=f"lifecycle:{receipt.event_id}",
+        email=str(body.get("email") or "").strip().lower(),
+        phone=normalize_phone(body.get("phone")),
+        festio_user_id=str(body.get("festio_user_id") or "") or None,
+        identity_verified=False, owner_email=default_owner_email(db),
+    )
+    db.add(prospect)
+    claims = {field: body[field] for field in
+              ("consent_email", "consent_sms", "consent_whatsapp") if field in body}
+    details = {field: str(body[field])[:limit] for field, limit in {
+        "name": 200, "organization": 240, "event_type": 100, "event_date": 30,
+        "guest_count": 20, "country": 80, "source": 100, "medium": 100,
+        "campaign": 160, "referrer": 2000, "landing_page": 2000,
+        "stage": 40, "lifecycle_event": 80, "occurred_at": 50, "registered_at": 50,
+    }.items() if body.get(field) is not None}
+    db.add(ModuleRecord(
+        module="tasks", name="Review unverified account activity", status="open",
+        owner_email=prospect.owner_email, created_by="lifecycle_ingest",
+        payload={"prospect_id": prospect.id, "source_event_id": receipt.event_id,
+                 "identity_status": "unverified", "automation_paused": True,
+                 "email": prospect.email, "phone": prospect.phone,
+                 "festio_user_id": prospect.festio_user_id,
+                 "consent_claims": claims, **details},
+    ))
+    receipt.prospect_id = prospect.id
+    audit(db, identity, "lifecycle.unverified", "prospect", prospect.id,
+          event_id=receipt.event_id, identity_verified=False)
+    db.commit()
+    return pending_identity_receipt(receipt, duplicate=False)
+
+
+def advance_lifecycle_stage(row: Lead, lifecycle: str, stage: str | None) -> None:
+    """Apply only monotonic business milestones, not contact or consent claims."""
+    row.last_active_at = now()
+    rank = {"registered": 0, "demo_requested": 1, "event_created": 2, "activated": 3,
+            "qualified": 4, "demo_booked": 5, "paid": 6, "customer": 7}
+    incoming_stage = stage or lifecycle
+    if row.stage in rank and incoming_stage in rank and rank[incoming_stage] > rank[row.stage]:
+        row.stage = incoming_stage
+        row.stage_changed_at = now()
+    if lifecycle == "event_created":
+        row.score = max(row.score, 30)
+
+
 @app.post("/api/marketing/internal/ingest")
 def ingest(body: dict, identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
     if not identity.is_superadmin:
         raise HTTPException(403, "Internal ingest requires platform authority")
+    # Already-queued public demo events predate the separate unverified
+    # endpoint. Route them before receipt reservation or any trusted lookup.
+    lifecycle = str(body.get("lifecycle_event") or body.get("stage") or "registered")
+    if lifecycle == "demo_requested" and body.get("source") == "website_demo":
+        event_id = body.get("event_id")
+        previous = db.get(IngestReceipt, event_id) if isinstance(event_id, str) else None
+        if previous and previous.kind == "lifecycle":
+            # A pre-fix request may already have committed while its producer
+            # lost the response. Acknowledge only the exact historical receipt;
+            # never reapply its lead changes or recreate a deleted lead.
+            receipt, _ = receipt_for(db, event_id, "lifecycle", body)
+            return {"recorded": True, "legacy_demo_receipt": True,
+                    "ingest_duplicate": True, "id": receipt.lead_id}
+        result = record_unverified_demo(body, identity, db)
+        return {**result, "ingest_duplicate": result["duplicate"]}
     email = str(body.get("email") or "").strip().lower()
     subject = str(body.get("festio_user_id") or "")
     if not email or "@" not in email:
@@ -836,10 +983,38 @@ def ingest(body: dict, identity: Identity = Depends(decode_identity), db: Sessio
             raise HTTPException(400, f"{field} must be a boolean")
     receipt, duplicate = receipt_for(db, body.get("event_id"), "lifecycle", body)
     if duplicate:
+        if receipt.prospect_id:
+            return pending_identity_receipt(receipt, duplicate=True)
         row = db.get(Lead, receipt.lead_id) if receipt.lead_id else None
         return {**(lead_out(row) if row else {"id": receipt.lead_id, "removed": True}), "ingest_duplicate": True}
-    lifecycle = str(body.get("lifecycle_event") or body.get("stage") or "registered")
+    if body.get("email_verified") is not True:
+        # Service authentication establishes the producer, not ownership of
+        # its claimed email. Older queued payloads have no verification field
+        # and must follow the same safe path as an explicitly unverified signup.
+        # A previously linked UID can still receive a narrow business milestone
+        # from a background job. Never look up its email, modify its identity or
+        # profile, adopt prospects, or apply even an opt-out from this path.
+        milestones = {"event_created", "event_updated", "activated", "paid", "customer"}
+        row = None
+        if subject and lifecycle in milestones and not any(
+            field in body for field in ("consent_email", "consent_sms", "consent_whatsapp")
+        ):
+            row = db.scalar(select(Lead).where(Lead.festio_user_id == subject))
+        if row is None:
+            return record_unverified_lifecycle(body, identity, db, receipt)
+        advance_lifecycle_stage(row, lifecycle, "event_created" if lifecycle == "event_updated" else lifecycle)
+        db.add(Activity(lead_id=row.id, kind=lifecycle[:50], summary=f"Lifecycle: {lifecycle[:80]}",
+                        actor="festio", data={"event_id": body.get("event_id"), "identity_scope": "linked_subject"}))
+        if receipt:
+            receipt.lead_id = row.id
+        db.commit()
+        db.refresh(row)
+        return {**lead_out(row), "ingest_duplicate": False}
     row = resolve_ingest_lead(db, email=email, subject=subject)
+    if row is not None and row.email.strip().lower() != email:
+        # Verification attests to the supplied email, not a stale CRM mailbox
+        # found only by subject. Do not apply that consent to a different address.
+        raise HTTPException(409, "Verified email does not match the Marketing lead")
     created = row is None
     if created:
         registered_at = body.get("registered_at")
@@ -852,24 +1027,33 @@ def ingest(body: dict, identity: Identity = Depends(decode_identity), db: Sessio
     elif subject:
         if row.festio_user_id and row.festio_user_id != subject:
             raise HTTPException(409, "Marketing lead is linked to a different account")
-        row.festio_user_id = subject
+        if not row.festio_user_id:
+            # Checking then assigning can overwrite a different account that
+            # linked the same email concurrently. Claim only an unlinked row,
+            # and re-read the winner before any profile or consent mutation.
+            try:
+                db.execute(update(Lead).where(
+                    Lead.id == row.id,
+                    func.lower(func.trim(Lead.email)) == email,
+                    or_(Lead.festio_user_id.is_(None), Lead.festio_user_id == ""),
+                ).values(festio_user_id=subject).execution_options(synchronize_session=False))
+                db.refresh(row)
+            except IntegrityError:
+                db.rollback()
+                raise HTTPException(409, "Marketing account link conflicts with an existing lead")
+            if row.festio_user_id != subject:
+                raise HTTPException(409, "Marketing lead is linked to a different account")
+            if row.email.strip().lower() != email:
+                raise HTTPException(409, "Verified email does not match the Marketing lead")
     previous_stage = row.stage
-    row.last_active_at = now()
     # Delayed registration events must not regress a lead's newer lifecycle.
-    rank = {"registered": 0, "demo_requested": 1, "event_created": 2, "activated": 3, "qualified": 4, "demo_booked": 5, "paid": 6, "customer": 7}
-    incoming_stage = body.get("stage") or lifecycle
-    if row.stage in rank and incoming_stage in rank and rank[incoming_stage] > rank[row.stage]:
-        row.stage = incoming_stage
-    if row.stage != previous_stage:
-        row.stage_changed_at = now()
+    advance_lifecycle_stage(row, lifecycle, body.get("stage"))
     for field in ("name", "phone", "organization", "event_type", "event_date", "country", "source", "medium", "campaign", "referrer", "landing_page"):
         if body.get(field):
             setattr(row, field, normalize_phone(body[field]) if field == "phone" else str(body[field]))
     if body.get("guest_count") is not None:
         try: row.guest_count = int(body["guest_count"])
         except (ValueError, TypeError): raise HTTPException(400, "guest_count must be an integer")
-    if lifecycle == "event_created":
-        row.score = max(row.score, 30)
     # Missing consent is not a grant or a revocation. Explicit opt-outs apply;
     # a lifecycle event may not override a prior unsubscribe or suppression.
     for field in ("consent_email", "consent_sms", "consent_whatsapp"):

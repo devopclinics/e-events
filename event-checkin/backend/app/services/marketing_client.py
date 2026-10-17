@@ -18,7 +18,7 @@ from ..config import settings
 from ..models import MarketingOutbox
 
 
-ENDPOINTS = frozenset({"ingest", "delivery", "conversations"})
+ENDPOINTS = frozenset({"ingest", "delivery", "conversations", "demo-requests"})
 
 
 def lifecycle_event_id(*parts: str) -> str:
@@ -61,8 +61,22 @@ async def enqueue_marketing_payload(
     return identity
 
 
-async def ingest_marketing_lead(db: AsyncSession, user, *, event_id: str | None = None, **fields) -> str:
-    payload = {"festio_user_id": user.firebase_uid or user.id, "email": user.email, "name": user.name, **fields}
+async def ingest_marketing_lead(
+    db: AsyncSession, user, *, event_id: str | None = None,
+    email_verified: bool = False, **fields,
+) -> str:
+    """Capture an account claim, not inferred ownership of its email address.
+
+    Only an authentication adapter with a matching, explicitly verified email
+    claim may pass True. A loaded User, including an organization owner in a
+    background job, does not prove mailbox ownership. Never let arbitrary
+    lifecycle fields replace the identity selected by the caller.
+    """
+    payload = {
+        **fields, "festio_user_id": user.firebase_uid or user.id,
+        "email": user.email, "name": user.name,
+        "email_verified": email_verified is True,
+    }
     return await enqueue_marketing_payload(db, payload, event_id=event_id)
 
 
@@ -89,6 +103,9 @@ async def ingest_org_lifecycle(db: AsyncSession, org_id: str, *, stage: str, **f
         return
     user = await db.get(User, membership.user_id)
     if user:
+        # Background ownership lookup supplies a subject, never a current
+        # authentication claim. Do not forward verification from loose fields.
+        fields.pop("email_verified", None)
         await ingest_marketing_lead(db, user, stage=stage, **fields)
 
 

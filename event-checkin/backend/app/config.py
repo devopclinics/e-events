@@ -1,12 +1,14 @@
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql+asyncpg://checkin:checkin@localhost/checkin"
+    # Runtime credentials are mandatory; no repository-backed fallback.
+    database_url: str = Field(..., repr=False)
     # Read-only Postgres role dashboard-service connects with (SELECT-only —
     # enforced at the DB layer, provisioned idempotently by db_migrate.py).
     # Must match dashboard-service's own DATABASE_URL password.
-    dashboard_ro_db_password: str = "dashboard_ro"
+    dashboard_ro_db_password: str = Field(..., repr=False)
     frontend_url: str = "http://localhost:5173"
     # Organization-scoped Event Pass rollout. Keep false in production until
     # staging migration, reconciliation and acceptance checks have passed.
@@ -151,7 +153,7 @@ class Settings(BaseSettings):
     xwireless_sender_id: str = "FESTIO"   # Approved sender ID in the portal
     xwireless_base_url: str = "https://secure.xwireless.net"
 
-    meta_whatsapp_webhook_verify_token: str = "festio-whatsapp-webhook"
+    meta_whatsapp_webhook_verify_token: str = ""
 
     # ClickSend (MMS-capable provider used in prod). Empty = disabled.
     clicksend_username: str = ""
@@ -209,7 +211,18 @@ class Settings(BaseSettings):
     # Enable Stripe Tax on checkout (requires Stripe Tax activated in dashboard).
     stripe_tax_enabled: bool = False
 
+    @field_validator("database_url", "dashboard_ro_db_password")
+    @classmethod
+    def require_database_credentials(cls, value: str) -> str:
+        # Validate presence without trimming or otherwise changing credentials.
+        if not value.strip():
+            raise ValueError("must be configured with a nonblank environment value")
+        return value
+
     class Config:
+        # Suppress values in displayed errors. Do not log errors()/json(),
+        # whose structured inputs may still contain credentials.
+        hide_input_in_errors = True
         env_file = ".env"
         extra = "ignore"  # tolerate unknown keys in .env / environment
 

@@ -124,20 +124,22 @@ function harness(session = sales, extra = {}) {
   let closed = 0
   const frame = { contentWindow: { postMessage: (payload, origin) => sent.push({ message: JSON.parse(payload.slice('chatwoot-widget:'.length)), origin }) } }
   const hostWindow = { addEventListener: (_, fn) => listeners.add(fn), removeEventListener: (_, fn) => listeners.delete(fn) }
-  const dispose = connectChatFrame({ frame, session, hostWindow, onReady: () => ready++, onClose: () => closed++, ...extra })
+  const connection = connectChatFrame({ frame, session, hostWindow, onReady: () => ready++, onClose: () => closed++, ...extra })
   const emit = (message, override = {}) => {
     const event = { data: `chatwoot-widget:${JSON.stringify(message)}`, origin: session.baseUrl, source: frame.contentWindow, ...override }
     for (const receive of listeners) receive(event)
   }
-  return { sent, emit, dispose, listeners, frame, ready: () => ready, closed: () => closed }
+  return { sent, emit, dispose: connection.disconnect, setOpen: connection.setOpen, listeners, frame, ready: () => ready, closed: () => closed }
 }
 
 test('anonymous bridge never forwards identity, attributes, cookies, or location even if supplied', () => {
   const h = harness(sales, { identity })
+  h.setOpen(true)
   h.emit({ event: 'loaded', config: { authToken: 'private-session' } })
   h.emit({ event: 'setAuthCookie', data: { widgetAuthToken: 'private-session' } })
   h.emit({ event: 'set-user', ...identity })
   assert.deepEqual(h.sent.map(({ message }) => message.event), ['config-set', 'toggle-open'])
+  assert.deepEqual(h.sent.at(-1).message, { event: 'toggle-open', isOpen: true })
   assert.ok(h.sent.every(({ origin }) => origin === sales.baseUrl))
   assert.doesNotMatch(JSON.stringify(h.sent), /private-session|organizer-1|Private Org|identifier|email|change-url|referrer/i)
   assert.equal(h.ready(), 1)
@@ -146,6 +148,7 @@ test('anonymous bridge never forwards identity, attributes, cookies, or location
 
 test('support bridge uses only the signed identity and expected organizer fields', () => {
   const h = harness(support, { identity: { ...identity, token: 'firebase-private-token' } })
+  h.setOpen(true)
   h.emit({ event: 'loaded' })
   assert.deepEqual(h.sent.map(({ message }) => message.event), ['config-set', 'set-user', 'set-custom-attributes', 'toggle-open'])
   assert.deepEqual(h.sent[1].message, { event: 'set-user', identifier: identity.identifier, user: { identifier_hash: identity.identifier_hash, name: identity.name, email: identity.email } })
@@ -153,9 +156,79 @@ test('support bridge uses only the signed identity and expected organizer fields
   assert.equal(validSupportIdentity({ ...identity, identifier_hash: '' }), false)
   h.dispose()
   const unsigned = harness(support)
+  unsigned.setOpen(true)
   unsigned.emit({ event: 'loaded' })
   assert.equal(unsigned.sent.length, 0)
+  assert.equal(unsigned.listeners.size, 0)
+  unsigned.dispose()
 })
+
+const visibility = (h) => h.sent.filter(({ message }) => message.event === 'toggle-open').map(({ message }) => message.isOpen)
+
+test('a newly loaded iframe defaults closed unless the host explicitly opened it', () => {
+  const h = harness()
+  h.emit({ event: 'loaded' })
+  assert.deepEqual(visibility(h), [false])
+  h.setOpen(true)
+  assert.deepEqual(visibility(h), [false, true])
+  h.dispose()
+})
+
+test('close before provider load sends the latest hidden state, not the initial launch intent', () => {
+  const h = harness()
+  h.setOpen(true)
+  h.setOpen(false)
+  assert.equal(h.sent.length, 0)
+  h.emit({ event: 'loaded' })
+  assert.deepEqual(visibility(h), [false])
+  h.setOpen(true)
+  h.emit({ event: 'loaded' })
+  assert.deepEqual(visibility(h), [false, true])
+  assert.equal(h.ready(), 1)
+  assert.equal(h.sent.filter(({ message }) => message.event === 'config-set').length, 1)
+  h.dispose()
+})
+
+test('several pre-load visibility changes coalesce to the last committed state', () => {
+  const h = harness()
+  for (const open of [true, false, true, false, true]) h.setOpen(open)
+  assert.equal(h.sent.length, 0)
+  h.emit({ event: 'loaded' })
+  assert.deepEqual(visibility(h), [true])
+  h.dispose()
+})
+
+test('retained iframe receives close/reopen transitions without reinitializing or sharing identity', () => {
+  const h = harness()
+  h.setOpen(true)
+  h.emit({ event: 'loaded' })
+  for (const open of [true, false, false, true, false, true]) h.setOpen(open)
+  assert.deepEqual(visibility(h), [true, false, true, false, true])
+  assert.equal(h.sent.filter(({ message }) => message.event === 'config-set').length, 1)
+  assert.ok(h.sent.every(({ origin }) => origin === sales.baseUrl))
+  assert.doesNotMatch(JSON.stringify(h.sent), /identifier|email|org_name|plan|cookie|token|referrer/i)
+  h.dispose()
+})
+
+for (const event of ['closeWindow', 'closeChat']) {
+  test(`provider ${event} callback can commit closed state and reopen the same iframe`, () => {
+    let h
+    let closed = 0
+    h = harness(sales, { onClose: () => { closed++; h.setOpen(false) } })
+    h.setOpen(true)
+    h.emit({ event: 'loaded' })
+    h.emit({ event }, { origin: 'https://attacker.example.test' })
+    h.emit({ event }, { source: {} })
+    assert.equal(closed, 0)
+    assert.deepEqual(visibility(h), [true])
+    h.emit({ event })
+    assert.equal(closed, 1)
+    assert.deepEqual(visibility(h), [true, false])
+    h.setOpen(true)
+    assert.deepEqual(visibility(h), [true, false, true])
+    h.dispose()
+  })
+}
 
 test('forged, malformed and repeated messages cannot initialize or control another frame', () => {
   const h = harness()
@@ -177,6 +250,7 @@ test('forged, malformed and repeated messages cannot initialize or control anoth
 
 test('route/logout disposal removes handlers and rejects late or previous-session messages', () => {
   const previous = harness(support, { identity })
+  previous.setOpen(true)
   previous.dispose()
   previous.emit({ event: 'loaded' })
   assert.equal(previous.listeners.size, 0)
@@ -187,4 +261,31 @@ test('route/logout disposal removes handlers and rejects late or previous-sessio
   next.emit({ event: 'loaded' })
   assert.equal(next.sent.length, 2)
   next.dispose()
+})
+
+test('disposing an open initialized frame closes it once and rejects even captured stale callbacks', () => {
+  const h = harness()
+  h.setOpen(true)
+  h.emit({ event: 'loaded' })
+  const [receive] = h.listeners
+  h.dispose()
+  assert.deepEqual(visibility(h), [true, false])
+  const sentBeforeLateEvents = h.sent.length
+  for (const event of ['loaded', 'closeWindow', 'closeChat']) receive({
+    origin: sales.baseUrl, source: h.frame.contentWindow, data: `chatwoot-widget:${JSON.stringify({ event })}`,
+  })
+  h.setOpen(true)
+  h.dispose()
+  assert.equal(h.sent.length, sentBeforeLateEvents)
+  assert.equal(h.closed(), 0)
+  assert.equal(h.ready(), 1)
+  assert.equal(h.listeners.size, 0)
+})
+
+test('disposing an already hidden frame does not resend visibility or keep a listener', () => {
+  const h = harness()
+  h.emit({ event: 'loaded' })
+  h.dispose()
+  assert.deepEqual(visibility(h), [false])
+  assert.equal(h.listeners.size, 0)
 })

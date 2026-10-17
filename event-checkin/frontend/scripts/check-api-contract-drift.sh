@@ -25,7 +25,7 @@ else
   echo "Exporting OpenAPI document from the local backend environment..."
   (
     cd "${repo_dir}/backend"
-    PYTHONPATH=. "$python_bin" scripts/export_openapi.py
+    PYTHONPATH=. "$python_bin" scripts/export_openapi.py --offline
   ) > "${tmp_dir}/openapi.json"
 fi
 

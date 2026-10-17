@@ -12,7 +12,7 @@ from datetime import UTC, date, datetime, timedelta
 
 import httpx
 import jwt
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -61,10 +61,11 @@ async def health(db: AsyncSession = Depends(get_db)):
 
 async def admin_event(
     event_id: str,
+    request: Request,
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Event:
-    return await require_dashboard_access(event_id, user, db)
+    return await require_dashboard_access(event_id, user, db, request)
 
 
 # ── scope parser ──────────────────────────────────────────────────────────────

@@ -1048,9 +1048,24 @@ def ingest(body: dict, identity: Identity = Depends(decode_identity), db: Sessio
     previous_stage = row.stage
     # Delayed registration events must not regress a lead's newer lifecycle.
     advance_lifecycle_stage(row, lifecycle, body.get("stage"))
-    for field in ("name", "phone", "organization", "event_type", "event_date", "country", "source", "medium", "campaign", "referrer", "landing_page"):
+    for field in ("name", "phone", "organization", "event_type", "event_date", "country"):
         if body.get(field):
             setattr(row, field, normalize_phone(body[field]) if field == "phone" else str(body[field]))
+    acquisition_fields = ("source", "medium", "campaign", "referrer", "landing_page")
+    # Registration also refreshes identity proof, including immutable events
+    # queued before attribution fixes. Preserve an existing acquisition tuple
+    # as a unit, including a website source or partially populated tuple: later
+    # login fields must not manufacture a mixed first touch. Only new leads or
+    # wholly empty legacy tuples accept registration acquisition; deliberate
+    # profile updates remain unchanged.
+    capture_acquisition = (
+        created or lifecycle not in {"registered", "signup_consent"}
+        or not any(getattr(row, field) for field in acquisition_fields)
+    )
+    if capture_acquisition:
+        for field in acquisition_fields:
+            if body.get(field):
+                setattr(row, field, str(body[field]))
     if body.get("guest_count") is not None:
         try: row.guest_count = int(body["guest_count"])
         except (ValueError, TypeError): raise HTTPException(400, "guest_count must be an integer")

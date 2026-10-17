@@ -7,25 +7,31 @@ COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts --legacy-peer-deps --userconfig=/dev/null
 COPY . .
 
-# Only public Firebase web configuration is accepted from repository variables.
+# Only public Firebase and existing support embed configuration is accepted
+# from repository variables. Never supply Chatwoot API/HMAC credentials here.
 ARG VITE_FIREBASE_API_KEY
 ARG VITE_FIREBASE_AUTH_DOMAIN
 ARG VITE_FIREBASE_PROJECT_ID
 ARG VITE_FIREBASE_STORAGE_BUCKET
 ARG VITE_FIREBASE_MESSAGING_SENDER_ID
 ARG VITE_FIREBASE_APP_ID
+ARG VITE_CHATWOOT_BASE_URL
+ARG VITE_CHATWOOT_WEBSITE_TOKEN
 ENV VITE_FIREBASE_API_KEY=$VITE_FIREBASE_API_KEY \
     VITE_FIREBASE_AUTH_DOMAIN=$VITE_FIREBASE_AUTH_DOMAIN \
     VITE_FIREBASE_PROJECT_ID=$VITE_FIREBASE_PROJECT_ID \
     VITE_FIREBASE_STORAGE_BUCKET=$VITE_FIREBASE_STORAGE_BUCKET \
     VITE_FIREBASE_MESSAGING_SENDER_ID=$VITE_FIREBASE_MESSAGING_SENDER_ID \
-    VITE_FIREBASE_APP_ID=$VITE_FIREBASE_APP_ID
+    VITE_FIREBASE_APP_ID=$VITE_FIREBASE_APP_ID \
+    VITE_CHATWOOT_BASE_URL=$VITE_CHATWOOT_BASE_URL \
+    VITE_CHATWOOT_WEBSITE_TOKEN=$VITE_CHATWOOT_WEBSITE_TOKEN
 # Not build args: this release cannot opt into public sales chat.
 ENV VITE_SALES_CHAT_ENABLED=false \
     VITE_SALES_CHAT_INBOX_VALIDATED=false \
     VITE_EVENT_WEBSITES_ENABLED=true \
     VITE_GUIDED_SETUP_ENABLED=false
 RUN node -e 'for (const key of ["API_KEY", "AUTH_DOMAIN", "PROJECT_ID", "STORAGE_BUCKET", "MESSAGING_SENDER_ID", "APP_ID"]) { const value = process.env["VITE_FIREBASE_" + key]; if (!value || /[\s\x00-\x1f]/.test(value)) throw new Error("Missing or invalid public Firebase config: " + key); }'
+RUN node --input-type=module -e 'import { chatWidgetConfig } from "./src/lib/chatWidget.mjs"; if (!chatWidgetConfig(process.env).support) throw new Error("Missing or invalid public support chat config");'
 RUN npm run build
 
 FROM nginx:1.25-alpine

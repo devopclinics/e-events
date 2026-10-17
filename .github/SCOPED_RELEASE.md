@@ -21,12 +21,31 @@ The reviewed full SHA must match the dispatch SHA, checkout, and fetched
 `event-checkin/VERSION`. A branch or tag dispatch is not sufficient.
 
 Before registry login or image upload, the helper checks all six existing public
-Firebase repository variables, creates all seven sanitized contexts, and
+Firebase repository variables and both existing public support embed variables,
+creates all seven sanitized contexts, and
 requires the expected public Docker Hub repository plus an explicit,
 component-specific tag-not-found response for every tag. Existing tags,
 redirects, authorization failures, unknown 404 bodies, network errors, and
 malformed responses block publication. Registry visibility and absence are
 preflight observations, not an atomic lock against other publishers.
+
+The frontend also requires `VITE_CHATWOOT_BASE_URL` (an HTTPS origin) and
+`VITE_CHATWOOT_WEBSITE_TOKEN` (the public website embed identifier) from GitHub
+Actions repository variables. An operator must verify that these identify the
+existing authenticated support inbox, not the anonymous sales inbox, and that
+its origin differs from the deployed Festio origin. Never put a Chatwoot API
+token, HMAC secret, or another credential in either variable. Missing or invalid
+values block publication instead of silently compiling support out of the app.
+The preflight also runs the exact frontend configuration parser before registry
+checks, avoiding Python/browser URL parsing differences (such as invalid IDNA).
+Variable presence and inbox identity still require operator review; this
+workflow does not retrieve, create, or change repository variables.
+
+These values are compiled by Vite, not read from the running nginx container.
+Providing them only as runtime environment variables cannot restore the widget.
+Support still requires an authenticated organizer route, the existing runtime
+`support_chat_enabled` switch, and signed support identity. Both sales-chat
+gates remain hard-false; no support/sales fallback or identity bridge is added.
 
 Contexts contain only allowlisted committed blobs. Dirty/untracked files,
 dotenv/npmrc files, nested secret/credential files, Git metadata, generated

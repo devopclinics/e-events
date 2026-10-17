@@ -9,6 +9,7 @@ source file must be reviewed and fixed upstream, never silently rewritten.
 
 import argparse
 import ast
+import ipaddress
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -17,6 +18,7 @@ import shlex
 import subprocess
 import tempfile
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
 from urllib.request import urlopen
 
 
@@ -37,6 +39,8 @@ FIREBASE_KEYS = (
     "VITE_FIREBASE_MESSAGING_SENDER_ID",
     "VITE_FIREBASE_APP_ID",
 )
+SUPPORT_CHAT_KEYS = ("VITE_CHATWOOT_BASE_URL", "VITE_CHATWOOT_WEBSITE_TOKEN")
+PUBLIC_FRONTEND_KEYS = FIREBASE_KEYS + SUPPORT_CHAT_KEYS
 FRONTEND_FILES = {
     "Dockerfile.scoped-release", "package.json", "package-lock.json",
     "index.html", "nginx.conf", "vite.config.js", "tailwind.config.js",
@@ -77,7 +81,7 @@ SUPPORT_FILES = {
 REQUIRED = {
     "backend": {"Dockerfile", "requirements.txt", "app/main.py", "app/config.py", "services/__init__.py"},
     "frontend": FRONTEND_FILES - {"jsconfig.json", "Dockerfile.scoped-release"}
-        | {"Dockerfile", "src/main.jsx", "src/firebase.js", "src/guideContent.mjs"},
+        | {"Dockerfile", "src/main.jsx", "src/firebase.js", "src/guideContent.mjs", "src/lib/chatWidget.mjs"},
     "marketing": {"Dockerfile", "requirements.txt", "app/main.py"},
     "dashboard": {"Dockerfile", "requirements.txt", "app/__init__.py", "app/main.py",
                   "app/auth.py", "app/config.py", "app/database.py", "app/models.py", "app/timeutil.py"},
@@ -130,11 +134,37 @@ def validate_source(repo, expected_sha, version, environ):
 
 
 def validate_public_config(environ):
-    invalid = [name for name in FIREBASE_KEYS if not environ.get(name)
+    invalid = [name for name in PUBLIC_FRONTEND_KEYS if not environ.get(name)
                or any(char.isspace() or ord(char) < 32 for char in environ[name])]
+    # Existing support embed identifiers are public browser configuration, not
+    # Chatwoot API/HMAC credentials. Never substitute the anonymous sales inbox.
+    base_key, token_key = SUPPORT_CHAT_KEYS
+    if base_key not in invalid:
+        try:
+            url = urlsplit(environ[base_key])
+            hostname = (url.hostname or "").removesuffix(".")
+            # Accept canonical IP literals and DNS names, not ambiguous browser
+            # numeric-host syntax or characters WHATWG URL would reject later.
+            if "[" in url.netloc or "]" in url.netloc:
+                ipaddress.IPv6Address(hostname)  # WHATWG does not accept IPvFuture hosts.
+            elif ":" in hostname or re.fullmatch(r"[0-9.]+", hostname):
+                ipaddress.ip_address(hostname)
+            elif (not all(re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?", label)
+                          for label in hostname.split("."))
+                  or re.fullmatch(r"(?:[0-9]+|0[xX][A-Fa-f0-9]*)", hostname.split(".")[-1])):
+                raise ValueError("Invalid support origin hostname")
+            if (url.scheme != "https" or not url.hostname or url.username or url.password
+                    or url.query or url.fragment or url.path.strip("/")
+                    or "\\" in environ[base_key] or "%" in environ[base_key]
+                    or "@" in url.netloc or url.port is not None and not 1 <= url.port <= 65535):
+                invalid.append(base_key)
+        except ValueError:
+            invalid.append(base_key)
+    if token_key not in invalid and not re.fullmatch(r"[A-Za-z0-9_-]{8,200}", environ[token_key]):
+        invalid.append(token_key)
     if invalid:
         # Names only. Never echo values, including values accidentally supplied as secrets.
-        raise ReleaseError("Missing or invalid public Firebase repository variables: " + ", ".join(invalid))
+        raise ReleaseError("Missing or invalid public frontend repository variables: " + ", ".join(invalid))
 
 
 def allowed(service, relative):

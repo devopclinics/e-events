@@ -117,6 +117,16 @@ are exact previously accepted receipts. Such a historical receipt is ACK-only,
 including after lead deletion: its original payload hash must match and no
 profile, consent or association is reapplied.
 
+For `registered` and `signup_consent`, an existing acquisition tuple (`source`,
+`medium`, `campaign`, `referrer`, `landing_page`) is preserved as a unit whenever
+any field is nonempty, including a bare `website` source. Fresh identity proof
+and explicit consent do not establish a new first touch. This also protects
+against already queued pre-fix events that supplied a default `website` source.
+New leads and wholly empty legacy tuples can capture the full supplied tuple;
+new leads without a source default to `website` only when created. The backend
+does not invent attribution when the signup header is absent. Deliberate
+`lead_updated` and staff edits retain their existing attribution-edit behavior.
+
 A narrow exception preserves background business milestones for an already
 linked, exact `festio_user_id`: `event_created`, `event_updated`, `activated`,
 `paid` and `customer` may update only stage, score and activity timing when no

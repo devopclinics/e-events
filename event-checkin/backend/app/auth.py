@@ -97,7 +97,9 @@ async def _capture_registration(
     await ingest_marketing_lead(
         db, user, stage="registered", registered_at=user.created_at.isoformat() if user.created_at else None,
         event_id=lifecycle_event_id("registered", user.id, identity_namespace),
-        email_verified=email_verified, **{"source": "website", **fields},
+        # No header means no new acquisition claim. Marketing supplies its
+        # website default only when creating a lead, not on identity refresh.
+        email_verified=email_verified, **fields,
     )
     consent = {
         key: attribution[key] for key in ("consent_email", "consent_sms", "consent_whatsapp")

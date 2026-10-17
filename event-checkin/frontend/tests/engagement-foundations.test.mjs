@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { marketingConsent, signupAttributionHeader, DEMO_REQUEST_RECEIVED, demoRequestAttempt, leadAutomationStatus } from '../src/lib/marketingConsent.mjs'
 import { chatWidgetConfig, selectChatSession, widgetUrl, validSupportIdentity, connectChatFrame } from '../src/lib/chatWidget.mjs'
 
@@ -80,6 +81,62 @@ test('sales requires both explicit gates and never falls back to the support inb
   assert.equal(chatWidgetConfig({ ...env, VITE_SALES_CHAT_BASE_URL: env.VITE_CHATWOOT_BASE_URL }).sales, null)
   assert.equal(chatWidgetConfig({ ...env, VITE_SALES_CHAT_ENABLED: 'false' }).support.websiteToken, env.VITE_CHATWOOT_WEBSITE_TOKEN)
   assert.equal(config.sales.websiteToken, env.VITE_SALES_CHAT_WEBSITE_TOKEN)
+})
+
+test('scoped release build environment preserves authenticated support with public sales hard-disabled', () => {
+  const dockerfile = readFileSync(new URL('../Dockerfile.scoped-release', import.meta.url), 'utf8')
+  const buildArgs = Object.fromEntries([...dockerfile.matchAll(/^ARG (\w+)$/gm)].map(([, name]) => [name, env[name] || 'synthetic-public-value']))
+  const compiledEnv = {}
+  // Resolve the actual Dockerfile's build-time ENV contract using only public
+  // synthetic inputs, with no dotenv, npm configuration, or real inbox access.
+  for (const [, assignments] of dockerfile.replace(/\\\n\s*/g, ' ').matchAll(/^ENV (.+)$/gm)) {
+    for (const assignment of assignments.split(/\s+/)) {
+      const [name, value] = assignment.split('=')
+      compiledEnv[name] = value.startsWith('$') ? buildArgs[value.slice(1)] : value
+    }
+  }
+  const releaseConfig = chatWidgetConfig(compiledEnv, 'https://festio.example.test')
+  assert.deepEqual(releaseConfig.support, config.support)
+  assert.equal(releaseConfig.sales, null)
+  assert.equal(compiledEnv.VITE_SALES_CHAT_ENABLED, 'false')
+  assert.equal(compiledEnv.VITE_SALES_CHAT_INBOX_VALIDATED, 'false')
+  for (const key of ['VITE_SALES_CHAT_BASE_URL', 'VITE_SALES_CHAT_WEBSITE_TOKEN']) assert.equal(Object.hasOwn(buildArgs, key), false)
+  const choose = (user, pathname, loading = false) => selectChatSession({ user, pathname, loading, config: releaseConfig })
+  assert.deepEqual(choose({ id: 'organizer-1' }, '/admin'), support)
+  assert.equal(choose({ id: 'organizer-1' }, '/admin', true), null)
+  for (const pathname of ['/', '/pricing', '/login', '/register', '/admin', '/rsvp/private-token']) assert.equal(choose(null, pathname), null)
+  for (const pathname of ['/', '/login', '/rsvp/private-token']) assert.equal(choose({ id: 'organizer-1' }, pathname), null)
+})
+
+test('authenticated support never falls back to a configured anonymous sales inbox', () => {
+  for (const key of ['VITE_CHATWOOT_BASE_URL', 'VITE_CHATWOOT_WEBSITE_TOKEN']) {
+    const missingSupport = chatWidgetConfig({ ...env, [key]: '' }, 'https://festio.example.test')
+    assert.equal(missingSupport.support, null)
+    assert.equal(missingSupport.sales.websiteToken, env.VITE_SALES_CHAT_WEBSITE_TOKEN)
+    assert.equal(selectChatSession({ user: { id: 'organizer-1' }, pathname: '/admin', loading: false, config: missingSupport }), null)
+  }
+})
+
+test('scoped workflow rejects invalid support configuration with the exact frontend parser before publication', () => {
+  const workflow = readFileSync(new URL('../../../.github/workflows/release-engagement.yml', import.meta.url), 'utf8')
+  const [, script] = workflow.match(/node --input-type=module -e '([^'\n]+chatWidgetConfig[^'\n]+)'/)
+  const cases = [
+    [env, true],
+    [{ ...env, VITE_CHATWOOT_BASE_URL: '' }, false],
+    [{ ...env, VITE_CHATWOOT_WEBSITE_TOKEN: '' }, false],
+    [{ ...env, VITE_CHATWOOT_WEBSITE_TOKEN: 'short' }, false],
+    ...['http://support.example.test', 'https://support.example.test/path', 'https://[v1.local]',
+      'https://xn--a.example.test', 'https://xn--abc.example.test'].map((value) => [{ ...env, VITE_CHATWOOT_BASE_URL: value }, false]),
+    [{ ...env, VITE_CHATWOOT_BASE_URL: 'https://xn--caf-dma.example.test' }, true],
+  ]
+  for (const [syntheticEnv, valid] of cases) {
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+      cwd: new URL('../../../', import.meta.url), env: syntheticEnv, encoding: 'utf8',
+    })
+    assert.equal(result.error, undefined)
+    assert.equal(result.status === 0, valid)
+    if (!valid) assert.match(result.stderr, /Missing or invalid public support chat config/)
+  }
 })
 
 test('unsafe or same-origin widget URLs are rejected before loading', () => {

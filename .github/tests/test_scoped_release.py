@@ -16,6 +16,10 @@ SPEC = importlib.util.spec_from_file_location("scoped_release", ROOT / ".github/
 release = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(release)
 SERVICES = ("backend", "frontend", "marketing", "dashboard", "support", "messaging", "setup")
+PUBLIC_CONFIG = {name: "synthetic-public-value" for name in release.FIREBASE_KEYS} | {
+    "VITE_CHATWOOT_BASE_URL": "https://support.example.test",
+    "VITE_CHATWOOT_WEBSITE_TOKEN": "organizer-inbox",
+}
 DASHBOARD_SETTINGS = """class Settings:
     dashboard_db_host: str
     dashboard_db_port: int = Field(ge=1, le=65535)
@@ -290,15 +294,46 @@ class RepositoryTests(unittest.TestCase):
 
 
 class ConfigurationTests(unittest.TestCase):
-    def test_public_config_requires_all_six_values_without_echoing_them(self):
-        config = {name: "synthetic-public-value" for name in release.FIREBASE_KEYS}
-        release.validate_public_config(config)
-        for name in release.FIREBASE_KEYS:
+    def test_public_config_requires_firebase_and_support_values_without_echoing_them(self):
+        release.validate_public_config(PUBLIC_CONFIG)
+        for name in release.PUBLIC_FRONTEND_KEYS:
             for invalid in (None, "", " ", "value\nINJECTED=1", "value\x00"):
                 with self.subTest(name=name, invalid=invalid), self.assertRaises(release.ReleaseError) as error:
-                    release.validate_public_config(config | {name: invalid})
+                    release.validate_public_config(PUBLIC_CONFIG | {name: invalid})
                 self.assertIn(name, str(error.exception))
-                self.assertNotIn("synthetic-public-value", str(error.exception))
+                for value in PUBLIC_CONFIG.values():
+                    self.assertNotIn(value, str(error.exception))
+
+    def test_firebase_only_config_cannot_silently_remove_authenticated_support(self):
+        config = {name: PUBLIC_CONFIG[name] for name in release.FIREBASE_KEYS}
+        # Even a configured sales inbox must not replace authenticated support.
+        config |= {"VITE_SALES_CHAT_BASE_URL": "https://sales.example.test",
+                   "VITE_SALES_CHAT_WEBSITE_TOKEN": "public-sales-inbox"}
+        with self.assertRaises(release.ReleaseError) as error:
+            release.validate_public_config(config)
+        for name in release.SUPPORT_CHAT_KEYS:
+            self.assertIn(name, str(error.exception))
+
+    def test_public_support_config_rejects_unsafe_origins_and_invalid_embed_identifiers(self):
+        cases = {
+            "VITE_CHATWOOT_BASE_URL": ("http://support.example.test", "javascript:alert(1)",
+                "https://", "https://u:synthetic-secret@support.example.test", "https://support.example.test/path",
+                "https://support.example.test/?private=value", "https://support.example.test/#private",
+                "https://support.example.test:invalid", "https://support.example.test:65536",
+                "https://support.example.test\\other", "https://support%2eexample.test",
+                "https://support>.example.test", "https://9999999999999999999", "https://support.0x999999999999",
+                "https://@support.example.test", "https://-invalid.example.test", "https://[v1.local]"),
+            "VITE_CHATWOOT_WEBSITE_TOKEN": ("short", "x" * 201, '"/><script>', "api:synthetic-secret"),
+        }
+        for name, values in cases.items():
+            for value in values:
+                with self.subTest(name=name, value=value), self.assertRaises(release.ReleaseError) as error:
+                    release.validate_public_config(PUBLIC_CONFIG | {name: value})
+                self.assertIn(name, str(error.exception))
+                self.assertNotIn(value, str(error.exception))
+        release.validate_public_config(PUBLIC_CONFIG | {"VITE_CHATWOOT_BASE_URL": "https://support.example.test:8443/"})
+        release.validate_public_config(PUBLIC_CONFIG | {"VITE_CHATWOOT_BASE_URL": "https://192.0.2.1/"})
+        release.validate_public_config(PUBLIC_CONFIG | {"VITE_CHATWOOT_BASE_URL": "https://[2001:db8::1]/"})
 
     def test_sensitive_names_and_path_traversal_fail_allowlist(self):
         for path in ("/src/app.js", "src/../../escape.js", "public/.ENV", "src/secret.json", "src/credentials.backup.json", "src/token-store.js", "public/service_account.json", "public/id_rsa", "public/key.pem", "public/.npmrc", "public/node_modules/x.js"):
@@ -540,10 +575,13 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("REGISTRY: dclinics/events", self.workflow)
 
     def test_public_config_passed_without_dotenv_and_sales_gates_hard_false(self):
-        for name in release.FIREBASE_KEYS:
+        for name in release.PUBLIC_FRONTEND_KEYS:
             self.assertIn(name + ": ${{ vars." + name + " }}", self.workflow)
             self.assertIn(name + "=${{ vars." + name + " }}", self.workflow)
             self.assertIn("ARG " + name, self.dockerfile)
+            self.assertIn(name + "=$" + name, self.dockerfile)
+        self.assertEqual(set(re.findall(r"^ARG (\w+)$", self.dockerfile, re.M)), set(release.PUBLIC_FRONTEND_KEYS))
+        self.assertEqual(set(re.findall(r"vars\.([A-Z_]+)", self.workflow)), set(release.PUBLIC_FRONTEND_KEYS))
         for name in ("VITE_SALES_CHAT_ENABLED", "VITE_SALES_CHAT_INBOX_VALIDATED"):
             self.assertIn(name + ': "false"', self.workflow)
             self.assertIn(name + "=false", self.dockerfile)
@@ -554,6 +592,14 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("npm ci --ignore-scripts --legacy-peer-deps --userconfig=/dev/null", self.dockerfile)
         self.assertNotIn("npm install", self.dockerfile)
         self.assertIn("Missing or invalid public Firebase config", self.dockerfile)
+        self.assertIn("Missing or invalid public support chat config", self.dockerfile)
+        self.assertIn('import { chatWidgetConfig } from "./src/lib/chatWidget.mjs"', self.dockerfile)
+        self.assertIn("if (!chatWidgetConfig(process.env).support)", self.dockerfile)
+        self.assertLess(self.dockerfile.index("Missing or invalid public support chat config"), self.dockerfile.index("RUN npm run build"))
+        self.assertIn('import { chatWidgetConfig } from "./event-checkin/frontend/src/lib/chatWidget.mjs"', self.workflow)
+        self.assertIn("if (!chatWidgetConfig(process.env).support)", self.workflow)
+        self.assertLess(self.workflow.index("Missing or invalid public support chat config"), self.workflow.index("--check-registry"))
+        self.assertLess(self.workflow.index("--source-only"), self.workflow.index("Missing or invalid public support chat config"))
         self.assertIn("RUN npm run build", self.dockerfile)
 
     def test_normal_ci_runs_offline_guards_without_registry_or_credentials(self):

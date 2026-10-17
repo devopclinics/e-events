@@ -73,7 +73,7 @@ async def test_outbox_retries_then_recovers_with_same_identity(ctx, monkeypatch,
     monkeypatch.setattr(settings, "planner_internal_token", "local-test-token")
     monkeypatch.setattr(settings, "marketing_service_url", "http://marketing.test")
     async with _Session() as db:
-        event_id = await marketing_client.enqueue_marketing_payload(db, {"email": "test@example.com"})
+        event_id = await marketing_client.enqueue_marketing_payload(db, {"email": "test@example.com", "email_verified": True})
         await db.commit()
     sent = []
     def failing(request):
@@ -95,7 +95,7 @@ async def test_outbox_retries_then_recovers_with_same_identity(ctx, monkeypatch,
         await db.commit()
     def success(request):
         sent.append(json.loads(request.content))
-        return httpx.Response(200, json={"recorded": True})
+        return httpx.Response(200, json={"id": "test-lead", "ingest_duplicate": False})
     assert await marketing_outbox.process_due(transport=httpx.MockTransport(success)) == 1
     row = (await _rows())[0]
     assert row.status == "delivered" and row.attempts == 2 and row.last_error is None

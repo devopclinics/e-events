@@ -16,9 +16,10 @@ from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Req
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from redis.asyncio import Redis
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, and_, delete, func, or_, select
+from sqlalchemy.exc import MultipleResultsFound
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -27,7 +28,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql+asyncpg://checkin:checkin@db/checkin"
+    database_url: str = Field(..., repr=False)
     redis_url: str = "redis://redis:6379/0"
     frontend_url: str = "http://localhost:5173"
     firebase_credentials: str = ""
@@ -64,6 +65,14 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         extra = "ignore"
+        hide_input_in_errors = True
+
+    @field_validator("database_url")
+    @classmethod
+    def require_database_url(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("DATABASE_URL must not be empty")
+        return value
 
 
 settings = Settings()
@@ -438,12 +447,22 @@ async def current_user(
         raise HTTPException(401, "Invalid or expired token")
     firebase_uid = decoded["uid"]
     email = (decoded.get("email") or "").lower()
+    email_verified = decoded.get("email_verified") is True
     user = await db.scalar(select(User).where(User.firebase_uid == firebase_uid))
     if not user and email:
-        user = await db.scalar(select(User).where(User.email == email))
+        if not email_verified:
+            raise HTTPException(403, "Verify your email before linking an existing account, then sign in again.")
+        result = await db.execute(select(User).where(func.lower(User.email) == email))
+        try:
+            user = result.scalar_one_or_none()
+        except MultipleResultsFound:
+            raise HTTPException(409, "This email matches more than one account. Contact support.") from None
+        if user and user.firebase_uid is not None and user.firebase_uid != firebase_uid:
+            raise HTTPException(409, "This email is already linked to another sign-in account. Contact support.")
     if not user or not user.is_active:
         raise HTTPException(403, "Access denied")
-    if email in _superadmin_emails() and not user.is_platform_superadmin:
+    trusted_email = bool(email) and email_verified and user.email.lower() == email
+    if trusted_email and email in _superadmin_emails() and not user.is_platform_superadmin:
         user.is_platform_superadmin = True
         await db.commit()
         await db.refresh(user)

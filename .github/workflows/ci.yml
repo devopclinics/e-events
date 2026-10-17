@@ -100,7 +100,7 @@ jobs:
           assert.equal(config.testMatch, 'engagement-foundations.spec.js')
           assert.equal(config.webServer.reuseExistingServer, false)
           NODE
-      - name: Run nine isolated engagement browser scenarios
+      - name: Run isolated engagement browser scenarios
         # This starts only the local fixture, not the app/backend or real providers.
         # Firebase/API calls are mocked; fake chat origins are fulfilled and all
         # other non-local requests are aborted before any network connection.
@@ -131,3 +131,55 @@ jobs:
         run: pip install -r requirements.txt pytest
       - name: Test consent-safe automation and ingestion
         run: python -m pytest -q
+
+  adapter-auth-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [dashboard, support, messaging, setup]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install selected adapter and isolated test dependencies
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: pip install -r "event-checkin/$SERVICE-service/requirements.txt" pytest pytest-asyncio aiosqlite httpx
+      - name: Test real adapter identity boundaries without providers
+        env:
+          FESTIO_ADAPTER_SERVICE: ${{ matrix.service }}
+          PYTHONDONTWRITEBYTECODE: "1"
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: |
+          cd "$(mktemp -d)"
+          python -m pytest -q -p pytest_asyncio.plugin -p no:cacheprovider "$GITHUB_WORKSPACE/event-checkin/adapter-auth-tests"
+      - name: Run existing adapter tests in isolated local fixtures
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: python event-checkin/adapter-auth-tests/run_isolated.py "$SERVICE"
+      - name: Test required read-only Dashboard configuration
+        if: matrix.service == 'dashboard'
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: |
+          cd "$(mktemp -d)"
+          python -m pytest -q -p no:cacheprovider "$GITHUB_WORKSPACE/event-checkin/dashboard-service/config_tests"
+
+  scoped-release-guards:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify scoped release safety offline
+        run: python3 -m unittest discover -s .github/tests -p 'test_scoped_release.py' -v

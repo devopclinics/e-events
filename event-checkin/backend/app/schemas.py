@@ -556,8 +556,8 @@ class DemoRequestCreate(BaseModel):
     preferred_time: datetime
     timezone: Optional[str] = Field(default=None, max_length=80)
     message: Optional[str] = Field(default=None, max_length=1200)
-    # Omitting a flag preserves an existing preference; only explicit booleans
-    # can grant or revoke the selected channel. A phone number is not consent.
+    # Anonymous checkbox claims are unverified review evidence only. They do
+    # not grant or revoke any existing lead preference. A phone is not consent.
     consent_email: Optional[StrictBool] = None
     consent_sms: Optional[StrictBool] = None
     consent_whatsapp: Optional[StrictBool] = None

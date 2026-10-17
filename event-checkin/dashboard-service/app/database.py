@@ -1,9 +1,17 @@
+from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from .config import settings
 
 engine = create_async_engine(
-    settings.database_url,
+    URL.create(
+        drivername="postgresql+asyncpg",
+        host=settings.dashboard_db_host,
+        port=settings.dashboard_db_port,
+        database=settings.dashboard_db_name,
+        username=settings.dashboard_db_user,
+        password=settings.dashboard_ro_db_password.get_secret_value(),
+    ),
     echo=False,
     pool_pre_ping=True,
     pool_recycle=1800,

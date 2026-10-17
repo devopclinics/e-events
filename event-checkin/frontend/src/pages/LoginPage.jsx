@@ -7,6 +7,7 @@ import { oidcSignIn } from '../auth/oidcSignIn'
 import { oidcProvider, oidcProviderLabel } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { getPreferredView, setPreferredView } from '../App'
+import { acquisitionAttributionHeaders } from '../lib/acquisitionAttribution.mjs'
 
 function ViewPicker({ role, onPick }) {
   const views = [
@@ -78,7 +79,7 @@ export default function LoginPage() {
     try {
       const cred = await signInWithEmailAndPassword(auth, form.email, form.password)
       const token = await cred.user.getIdToken()
-      const res = await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+      const res = await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}`, ...acquisitionAttributionHeaders() } })
       if (!res.ok) throw new Error(`Profile sync failed (${res.status})`)
       const dbUser = await res.json()
       afterSignIn(dbUser.role)
@@ -94,7 +95,7 @@ export default function LoginPage() {
     try {
       const cred = await googleSignIn()
       const token = await cred.user.getIdToken()
-      const res = await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+      const res = await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}`, ...acquisitionAttributionHeaders() } })
       if (!res.ok) throw new Error(`Profile sync failed (${res.status})`)
       const dbUser = await res.json()
       afterSignIn(dbUser.role)
@@ -110,7 +111,7 @@ export default function LoginPage() {
     try {
       const cred = await oidcSignIn()
       const token = await cred.user.getIdToken()
-      const res = await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+      const res = await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}`, ...acquisitionAttributionHeaders() } })
       if (!res.ok) throw new Error(`Profile sync failed (${res.status})`)
       const dbUser = await res.json()
       afterSignIn(dbUser.role)

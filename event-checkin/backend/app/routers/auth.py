@@ -8,7 +8,7 @@ from sqlalchemy import select
 from ..database import get_db
 from ..models import Event, User, Membership, EventUser, Organization
 from ..schemas import UserOut
-from ..auth import get_current_user, require_superadmin, _org_role
+from ..auth import get_current_user, require_superadmin, require_verified_current_email, _org_role
 from ..services.festiome_client import FestioMeClient, FestioMeUnavailable, get_festiome_client
 
 router = APIRouter()
@@ -197,7 +197,7 @@ async def live_token(
 
 
 @router.post("/marketing-token")
-async def marketing_token(user: User = Depends(get_current_user)):
+async def marketing_token(user: User = Depends(require_verified_current_email)):
     """Mint identity-only access for the isolated Marketing service.
 
     Marketing owns staff grants and performs the final authorization check.
@@ -215,6 +215,7 @@ async def marketing_token(user: User = Depends(get_current_user)):
         "is_platform_superadmin": bool(user.is_platform_superadmin),
         "iss": "guesthub",
         "aud": "marketing",
+        "email_verified": True,
         "iat": timestamp,
         "exp": timestamp + timedelta(minutes=15),
     }, settings.planner_internal_token, algorithm="HS256")
@@ -222,7 +223,7 @@ async def marketing_token(user: User = Depends(get_current_user)):
 
 
 @router.get("/marketing-preferences")
-async def get_marketing_preferences(user: User = Depends(get_current_user)):
+async def get_marketing_preferences(user: User = Depends(require_verified_current_email)):
     from ..services.marketing_client import marketing_preferences
     try:
         return await marketing_preferences(user.email)
@@ -231,7 +232,7 @@ async def get_marketing_preferences(user: User = Depends(get_current_user)):
 
 
 @router.put("/marketing-preferences")
-async def save_marketing_preferences(body: dict, user: User = Depends(get_current_user)):
+async def save_marketing_preferences(body: dict, user: User = Depends(require_verified_current_email)):
     from ..services.marketing_client import marketing_preferences
     try:
         return await marketing_preferences(user.email, body)

@@ -1,17 +1,5 @@
 import { auth } from './firebase'
-
-const ATTRIBUTION_KEY = 'festioMarketingAttribution'
-try {
-  const params = new URLSearchParams(window.location.search)
-  const source = params.get('utm_source')
-  if (source || params.get('utm_campaign') || params.get('ref')) {
-    localStorage.setItem(ATTRIBUTION_KEY, JSON.stringify({
-      source: source || (params.get('ref') ? 'referral' : 'website'),
-      medium: params.get('utm_medium'), campaign: params.get('utm_campaign'),
-      referrer: document.referrer || null, landing_page: window.location.href,
-    }))
-  }
-} catch { /* Storage can be unavailable in private browsing. */ }
+import { acquisitionAttributionHeaders } from './lib/acquisitionAttribution.mjs'
 
 const BASE = '/api'
 // Public base for guest-facing links. Prefer a build-time override, otherwise
@@ -63,7 +51,7 @@ async function req(method, path, body, timeoutMs, extraHeaders = {}) {
     ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(() => { try { const value = localStorage.getItem(ATTRIBUTION_KEY); return value ? { 'X-Festio-Attribution': encodeURIComponent(value) } : {} } catch { return {} } })(),
+      ...acquisitionAttributionHeaders(),
       ...(body ? { 'Content-Type': 'application/json' } : {}),
       ...extraHeaders,
     },

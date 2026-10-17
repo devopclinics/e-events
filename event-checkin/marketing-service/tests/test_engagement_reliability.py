@@ -1,5 +1,7 @@
 import asyncio
 import importlib
+from pathlib import Path
+import re
 from datetime import timedelta, timezone
 from unittest.mock import Mock
 
@@ -45,7 +47,8 @@ def get_lead(module, lead_id):
 
 
 def ingest(client, headers, **values):
-    return client.post("/api/marketing/internal/ingest", headers=headers, json={"email": "organizer@example.com", **values})
+    # These fixtures model the trusted adapter after verified authentication.
+    return client.post("/api/marketing/internal/ingest", headers=headers, json={"email": "organizer@example.com", "email_verified": True, **values})
 
 
 def test_lifecycle_receipt_is_atomic_idempotent_and_rejects_reuse(service):
@@ -265,6 +268,29 @@ def test_inflight_claim_prevents_overlapping_dispatch_and_crash_retry(service, m
     assert run(module)["queued"] == 0
     assert get_lead(module, lead_id).suppression_reason == "delivery_outcome_unknown"
     sender.assert_not_called()
+
+
+def test_image_off_defaults_prevent_scheduler_sends_and_retention(service, monkeypatch):
+    module, client, headers = service
+    dockerfile = Path(__file__).parents[1] / "Dockerfile"
+    defaults = dict(re.findall(r"(MARKETING_(?:OUTBOUND|SCHEDULER)_ENABLED)=(\w+)", dockerfile.read_text()))
+    assert defaults == {"MARKETING_OUTBOUND_ENABLED": "false", "MARKETING_SCHEDULER_ENABLED": "false"}
+    for name, value in defaults.items():
+        monkeypatch.setenv(name, value)
+    lead_id = due_lead(module)
+    thread, sender, retention = Mock(), Mock(), Mock()
+    monkeypatch.setattr(module.threading, "Thread", thread)
+    monkeypatch.setattr(module, "send_follow_up", sender)
+    monkeypatch.setattr(module, "run_gdpr_retention", retention)
+
+    module.start_scheduler()
+    result = run(module)
+
+    thread.assert_not_called()
+    sender.assert_not_called()
+    retention.assert_not_called()
+    assert result["disabled"] and result["sent"] == 0
+    assert get_lead(module, lead_id) is not None
 
 
 def test_scheduler_uses_plain_service_with_no_fastapi_query_defaults(service, monkeypatch):
@@ -497,7 +523,7 @@ def test_owner_scoped_staff_cannot_read_edit_or_delete_other_demo_tasks(service)
     tasks = client.get("/api/marketing/modules/tasks", headers=headers).json()
     task = next(task for task in tasks if task["payload"].get("lead_id") == lead["id"])
     client.post("/api/marketing/access", headers=headers, json={"email": "sales@example.com", "role": "manager", "owner_scoped": True})
-    token = jwt.encode({"sub": "sales", "email": "sales@example.com", "iss": "guesthub", "aud": "marketing", "iat": module.now(), "exp": module.now() + timedelta(minutes=10)}, "test-secret", algorithm="HS256")
+    token = jwt.encode({"sub": "sales", "email": "sales@example.com", "email_verified": True, "iss": "guesthub", "aud": "marketing", "iat": module.now(), "exp": module.now() + timedelta(minutes=10)}, "test-secret", algorithm="HS256")
     scoped = {"Authorization": f"Bearer {token}"}
     assert task["id"] not in {row["id"] for row in client.get("/api/marketing/modules/tasks", headers=scoped).json()}
     assert client.patch(f"/api/marketing/modules/tasks/{task['id']}", headers=scoped, json={"status": "complete"}).status_code == 404

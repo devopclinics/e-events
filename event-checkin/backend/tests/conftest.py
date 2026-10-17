@@ -4,6 +4,9 @@ Uses an in-memory SQLite DB and overrides get_db + get_current_user, so no
 Postgres, Firebase, or app lifespan (migrations/poller) is involved.
 """
 import asyncio
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from datetime import datetime
 
 import pytest
@@ -12,21 +15,31 @@ from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.main import app
-from app.database import Base, get_db
-from app.auth import get_current_user
-from app.models import Organization, Membership, User, Event, Guest
-from app.config import settings
+# Explicit offline-only values override inherited environment and dotenv
+# credentials. The application runtime itself has no credential defaults.
+for key in tuple(os.environ):
+    if key.lower() in {"database_url", "dashboard_ro_db_password"}:
+        del os.environ[key]
+os.environ["DATABASE_URL"] = "postgresql+asyncpg://localhost/festio_tests"
+os.environ["DASHBOARD_RO_DB_PASSWORD"] = "offline-test-placeholder"
+
+# Import-time Settings() must not read deployment dotenv files. The test suite
+# uses SQLite below and never runs the application lifespan or migrations.
+_original_cwd = Path.cwd()
+with TemporaryDirectory(prefix="festio-test-import-") as _import_dir:
+    try:
+        os.chdir(_import_dir)
+        from app.main import app
+        from app.database import Base, get_db
+        from app.auth import get_current_user
+        from app.models import Organization, Membership, User, Event, Guest
+        from app.config import settings
+    finally:
+        os.chdir(_original_cwd)
 
 
-# backend/.env carries REAL provider credentials (this checkout IS the staging
-# deploy — see OPERATIONS.md). Settings loads them unconditionally, and
-# services/email_service.py + services/messaging.py prefer whichever provider
-# has a non-empty key, so any unmocked send in a test would hit the real
-# account. Confirmed live during development: an unmocked test send got a real
-# 200 from https://api.resend.com/emails. This autouse fixture makes every
-# outbound-message provider structurally unreachable by default — a test that
-# genuinely wants to exercise a provider must explicitly monkeypatch it back.
+# Keep real outbound providers unreachable even if their environment variables
+# are inherited by pytest. Tests of a provider must explicitly monkeypatch it.
 @pytest.fixture(autouse=True)
 def _no_real_outbound_messages(monkeypatch):
     for field in (

@@ -66,11 +66,21 @@ export function validSupportIdentity(value) {
 // sessions have no identity callback or authenticated data in this bridge.
 // Keep the protocol covered by staging against the deployed Chatwoot version.
 export function connectChatFrame({ frame, session, identity, hostWindow = window, onReady = () => {}, onClose = () => {} }) {
-  if (session.mode === 'support' && !validSupportIdentity(identity)) return () => {}
+  if (session.mode === 'support' && !validSupportIdentity(identity)) return { setOpen: () => {}, disconnect: () => {} }
   let active = true
   let initialized = false
+  // The host's committed visibility is authoritative, including changes made
+  // before the provider loads. Never infer "open" merely from a loaded iframe.
+  let isOpen = false
   const send = (message) => {
     if (active) frame.contentWindow?.postMessage(`chatwoot-widget:${JSON.stringify(message)}`, session.baseUrl)
+  }
+  const setOpen = (value) => {
+    if (!active) return
+    const next = value === true
+    if (next === isOpen) return
+    isOpen = next
+    if (initialized) send({ event: 'toggle-open', isOpen })
   }
   function receive(event) {
     if (!active || event.origin !== session.baseUrl || event.source !== frame.contentWindow ||
@@ -85,7 +95,7 @@ export function connectChatFrame({ frame, session, identity, hostWindow = window
         send({ event: 'set-user', identifier, user: { identifier_hash, name, email } })
         send({ event: 'set-custom-attributes', customAttributes: { org_name, plan } })
       }
-      send({ event: 'toggle-open', isOpen: true })
+      send({ event: 'toggle-open', isOpen })
       onReady()
     } else if (initialized && ['closeWindow', 'closeChat'].includes(message?.event)) {
       onClose()
@@ -94,8 +104,13 @@ export function connectChatFrame({ frame, session, identity, hostWindow = window
     // SDK commands. In particular, never save or forward a conversation token.
   }
   hostWindow.addEventListener('message', receive)
-  return () => {
+  const disconnect = () => {
+    if (!active) return
+    // Best effort before the host removes the frame; stale callbacks and
+    // visibility updates cannot revive this session after teardown.
+    setOpen(false)
     active = false
     hostWindow.removeEventListener('message', receive)
   }
+  return { setOpen, disconnect }
 }

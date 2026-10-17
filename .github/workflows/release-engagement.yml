@@ -1,0 +1,224 @@
+name: Scoped engagement release
+
+# Intentionally separate from release.yml. No tag trigger, tag creation, latest
+# aliases, deployment, design image, or enabling of live providers.
+# Run only after the source commit is reviewed/merged to main. This packages
+# images; it does not establish deployed Chatwoot compatibility or enable chat.
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Full reviewed main commit SHA (must still be current main)
+        required: true
+        type: string
+      version:
+        description: Must exactly match the committed event-checkin/VERSION
+        required: true
+        type: string
+        default: "4.0.47"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scoped-engagement-release
+  cancel-in-progress: false
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      REGISTRY: dclinics/events
+      RELEASE_VERSION: ${{ inputs.version }}
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+      MARKETING_OUTBOUND_ENABLED: "false"
+      MARKETING_SCHEDULER_ENABLED: "false"
+      VITE_SALES_CHAT_ENABLED: "false"
+      VITE_SALES_CHAT_INBOX_VALIDATED: "false"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify reviewed main source before repository tests
+        run: |
+          python3 .github/scripts/prepare_scoped_release.py \
+            --expected-sha "$EXPECTED_SHA" --version "$RELEASE_VERSION" --source-only
+
+      - name: Test release guards offline
+        run: python3 -m unittest discover -s .github/tests -p 'test_scoped_release.py' -v
+
+      - name: Validate reviewed source and prepare sanitized contexts
+        env:
+          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+        run: |
+          python3 .github/scripts/prepare_scoped_release.py \
+            --expected-sha "$EXPECTED_SHA" \
+            --version "$RELEASE_VERSION" \
+            --output "$RUNNER_TEMP/festio-engagement-release" \
+            --check-registry
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      # Existing registry credential references only. No credential is read by
+      # the preparation helper, passed as a build arg, or included in a context.
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push backend version only
+        id: backend_image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ runner.temp }}/festio-engagement-release/backend
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          tags: ${{ env.REGISTRY }}:backend-${{ env.RELEASE_VERSION }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/devopclinics/e-events
+            io.festio.component=backend
+            org.opencontainers.image.revision=${{ env.EXPECTED_SHA }}
+            org.opencontainers.image.version=${{ env.RELEASE_VERSION }}
+
+      - name: Build and push frontend version only
+        id: frontend_image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ runner.temp }}/festio-engagement-release/frontend
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          tags: ${{ env.REGISTRY }}:frontend-${{ env.RELEASE_VERSION }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/devopclinics/e-events
+            io.festio.component=frontend
+            io.festio.sales-chat-enabled=false
+            io.festio.sales-chat-inbox-validated=false
+            io.festio.firebase-public-config-source=github-actions-repository-variables
+            org.opencontainers.image.revision=${{ env.EXPECTED_SHA }}
+            org.opencontainers.image.version=${{ env.RELEASE_VERSION }}
+          build-args: |
+            VITE_FIREBASE_API_KEY=${{ vars.VITE_FIREBASE_API_KEY }}
+            VITE_FIREBASE_AUTH_DOMAIN=${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+            VITE_FIREBASE_PROJECT_ID=${{ vars.VITE_FIREBASE_PROJECT_ID }}
+            VITE_FIREBASE_STORAGE_BUCKET=${{ vars.VITE_FIREBASE_STORAGE_BUCKET }}
+            VITE_FIREBASE_MESSAGING_SENDER_ID=${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+            VITE_FIREBASE_APP_ID=${{ vars.VITE_FIREBASE_APP_ID }}
+
+      - name: Build and push marketing version only
+        id: marketing_image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ runner.temp }}/festio-engagement-release/marketing
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          tags: ${{ env.REGISTRY }}:marketing-${{ env.RELEASE_VERSION }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/devopclinics/e-events
+            io.festio.component=marketing
+            org.opencontainers.image.revision=${{ env.EXPECTED_SHA }}
+            org.opencontainers.image.version=${{ env.RELEASE_VERSION }}
+
+      - name: Build and push dashboard version only
+        id: dashboard_image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ runner.temp }}/festio-engagement-release/dashboard
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          tags: ${{ env.REGISTRY }}:dashboard-${{ env.RELEASE_VERSION }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/devopclinics/e-events
+            io.festio.component=dashboard
+            org.opencontainers.image.revision=${{ env.EXPECTED_SHA }}
+            org.opencontainers.image.version=${{ env.RELEASE_VERSION }}
+
+      - name: Build and push support version only
+        id: support_image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ runner.temp }}/festio-engagement-release/support
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          tags: ${{ env.REGISTRY }}:support-${{ env.RELEASE_VERSION }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/devopclinics/e-events
+            io.festio.component=support
+            org.opencontainers.image.revision=${{ env.EXPECTED_SHA }}
+            org.opencontainers.image.version=${{ env.RELEASE_VERSION }}
+
+      - name: Build and push messaging version only
+        id: messaging_image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ runner.temp }}/festio-engagement-release/messaging
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          tags: ${{ env.REGISTRY }}:messaging-${{ env.RELEASE_VERSION }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/devopclinics/e-events
+            io.festio.component=messaging
+            org.opencontainers.image.revision=${{ env.EXPECTED_SHA }}
+            org.opencontainers.image.version=${{ env.RELEASE_VERSION }}
+
+      - name: Build and push setup version only
+        id: setup_image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ runner.temp }}/festio-engagement-release/setup
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          tags: ${{ env.REGISTRY }}:setup-${{ env.RELEASE_VERSION }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/devopclinics/e-events
+            io.festio.component=setup
+            org.opencontainers.image.revision=${{ env.EXPECTED_SHA }}
+            org.opencontainers.image.version=${{ env.RELEASE_VERSION }}
+
+      - name: Report publication results without retrying or deploying
+        if: always()
+        env:
+          BACKEND_RESULT: ${{ steps.backend_image.outcome }}
+          FRONTEND_RESULT: ${{ steps.frontend_image.outcome }}
+          MARKETING_RESULT: ${{ steps.marketing_image.outcome }}
+          DASHBOARD_RESULT: ${{ steps.dashboard_image.outcome }}
+          SUPPORT_RESULT: ${{ steps.support_image.outcome }}
+          MESSAGING_RESULT: ${{ steps.messaging_image.outcome }}
+          SETUP_RESULT: ${{ steps.setup_image.outcome }}
+          BACKEND_DIGEST: ${{ steps.backend_image.outputs.digest }}
+          FRONTEND_DIGEST: ${{ steps.frontend_image.outputs.digest }}
+          MARKETING_DIGEST: ${{ steps.marketing_image.outputs.digest }}
+          DASHBOARD_DIGEST: ${{ steps.dashboard_image.outputs.digest }}
+          SUPPORT_DIGEST: ${{ steps.support_image.outputs.digest }}
+          MESSAGING_DIGEST: ${{ steps.messaging_image.outputs.digest }}
+          SETUP_DIGEST: ${{ steps.setup_image.outputs.digest }}
+        run: |
+          python3 - <<'PY'
+          import os
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write("Scoped image publication results (no deployment):\n\n")
+              for service in ("backend", "frontend", "marketing", "dashboard", "support", "messaging", "setup"):
+                  result = os.environ.get(service.upper() + "_RESULT") or "not run"
+                  digest = os.environ.get(service.upper() + "_DIGEST") or "not reported"
+                  summary.write(f"- {service}: {result}; digest: {digest}\n")
+              summary.write("\nA failed push may leave a partial or uncertain registry result. "
+                            "Inspect all seven tags before retrying; do not overwrite existing tags. "
+                            "The preflight is not atomic protection against other publishers.\n")
+          PY

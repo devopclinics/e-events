@@ -9,8 +9,8 @@ name: API contract drift
 #
 # Runs with no database and no Docker — export_openapi.py only calls
 # app.openapi(), which introspects routes/schemas at import time and never
-# touches app.main's lifespan (where the only DB access happens), and every
-# Settings() field has a default, so a bare `pip install` is enough.
+# touches app.main's lifespan. The local exporter uses explicit --offline
+# fixtures, so CI does not need production database credentials or dotenv.
 
 on:
   push:

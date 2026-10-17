@@ -31,10 +31,76 @@ async def _deliver(row: MarketingOutbox, client: httpx.AsyncClient) -> None:
         headers={"Authorization": f"Bearer {_service_token()}"},
     )
     response.raise_for_status()
-    # A 2xx that says no lead was matched is not a successful capture. The
-    # registration/lead event may be in another replica's batch; retry later.
+    # A 2xx alone is not proof of durable capture. Each endpoint has a distinct
+    # receipt contract; reject malformed acknowledgements before the caller
+    # marks delivery and scrubs the only recoverable copy of the payload.
     result = response.json()
-    if not isinstance(result, dict) or result.get("recorded") is False:
+    if not isinstance(result, dict):
+        raise ValueError("Marketing did not record the event")
+    # Previously queued public demos used ingest. Keep its lifecycle precedence
+    # in sync with the service's legacy adapter, without weakening normal ingest.
+    legacy_demo = (
+        row.endpoint == "ingest" and row.payload.get("source") == "website_demo"
+        and (row.payload.get("lifecycle_event") or row.payload.get("stage")) == "demo_requested"
+    )
+    lead_id = result.get("id")
+    has_lead_id = isinstance(lead_id, str) and bool(lead_id.strip())
+    if row.endpoint == "demo-requests" or legacy_demo:
+        prospect_id = result.get("prospect_id")
+        recorded = (
+            result.get("recorded") is True and result.get("unmatched") is True
+            and "lead_id" in result and result["lead_id"] is None
+            and isinstance(prospect_id, str) and bool(prospect_id.strip())
+        )
+        # Old demo events may have committed before this trust boundary existed,
+        # but lost their ACK. Accept only the service's explicit receipt replay,
+        # including a retained deleted-lead ID, never a fresh lead response.
+        if legacy_demo and not recorded:
+            recorded = (
+                result.get("recorded") is True and result.get("legacy_demo_receipt") is True
+                and result.get("ingest_duplicate") is True and has_lead_id
+            )
+    elif row.endpoint == "ingest":
+        if any(key in result for key in ("pending_identity", "prospect_id", "unmatched", "lead_id")):
+            # Unverified account claims have their own durable receipt, not a
+            # lead. Require the complete, event-bound contract before scrubbing
+            # the source payload; a generic prospect or HTTP 200 is insufficient.
+            prospect_id = result.get("prospect_id")
+            recorded = (
+                result.get("pending_identity") is True
+                and result.get("recorded") is True and result.get("unmatched") is True
+                and "lead_id" in result and result["lead_id"] is None
+                and "id" not in result
+                and isinstance(prospect_id, str) and bool(prospect_id.strip())
+                and isinstance(result.get("duplicate"), bool)
+                and result.get("ingest_duplicate") is result["duplicate"]
+                and isinstance(result.get("event_id"), str)
+                and bool(result["event_id"].strip())
+                and result["event_id"] == row.payload.get("event_id")
+            )
+        else:
+            # Normal ingest returns a lead. A replay after deletion returns
+            # the retained ID with removed=True, also a valid acknowledgement.
+            lifecycle = row.payload.get("lifecycle_event") or row.payload.get("stage") or "registered"
+            subject = row.payload.get("festio_user_id")
+            subject_milestone = (
+                isinstance(subject, str) and bool(subject.strip())
+                and lifecycle in {"event_created", "event_updated", "activated", "paid", "customer"}
+                and not any(field in row.payload for field in ("consent_email", "consent_sms", "consent_whatsapp"))
+            )
+            recorded = (
+                has_lead_id
+                and ("recorded" not in result or result["recorded"] is True)
+                and (
+                    row.payload.get("email_verified") is True or subject_milestone
+                    or result.get("ingest_duplicate") is True
+                )
+            )
+    else:
+        # A persisted unmatched prospect is a valid conversation receipt. Only
+        # the literal boolean true proves recording, not 1, "true", or null.
+        recorded = result.get("recorded") is True
+    if not recorded:
         raise ValueError("Marketing did not record the event")
 
 

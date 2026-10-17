@@ -8,7 +8,7 @@
     "postbuild": "node scripts/gen-guide-html.mjs",
     "preview": "vite preview",
     "test:e2e": "playwright test",
-    "test:engagement": "node --test tests/engagement-foundations.test.mjs",
+    "test:engagement": "node --test tests/engagement-foundations.test.mjs tests/signup-acquisition.test.mjs",
     "test:e2e:engagement": "playwright test --config playwright.engagement.config.js",
     "test:e2e:staging": "E2E_BASE_URL=https://staging.festio.events playwright test",
     "test:e2e:staging:isolated": "./e2e/run-staging.sh",

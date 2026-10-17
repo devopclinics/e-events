@@ -1,3 +1,5 @@
+import { acquisitionAttribution } from './acquisitionAttribution.mjs'
+
 // Consent is affirmative, channel-specific, and never inferred from an email,
 // phone number, account creation, or a demo request. Unpresented channels are
 // omitted, preserving any preferences an existing lead previously recorded.
@@ -8,7 +10,7 @@ export function marketingConsent(emailOptIn = false) {
 }
 
 export function signupAttributionHeader(emailOptIn = false) {
-  return encodeURIComponent(JSON.stringify(marketingConsent(emailOptIn)))
+  return encodeURIComponent(JSON.stringify({ ...acquisitionAttribution(), ...marketingConsent(emailOptIn) }))
 }
 
 export const DEMO_REQUEST_RECEIVED = 'Your demo request has been received. Your preferred time is not confirmed yet; our team will contact you to arrange the meeting.'

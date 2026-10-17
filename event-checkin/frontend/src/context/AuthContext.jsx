@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { onAuthStateChanged, signOut as fbSignOut } from 'firebase/auth'
 import { auth } from '../firebase'
+import { acquisitionAttributionHeaders } from '../lib/acquisitionAttribution.mjs'
 
 const AuthContext = createContext(null)
 
@@ -34,7 +35,7 @@ export function AuthProvider({ children }) {
       try {
         const token = await firebaseUser.getIdToken()
         const res = await fetch('/api/auth/me', {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${token}`, ...acquisitionAttributionHeaders() },
         })
         if (res.ok) {
           setUser(await res.json())

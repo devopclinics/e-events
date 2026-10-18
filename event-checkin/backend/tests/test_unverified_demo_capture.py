@@ -63,7 +63,12 @@ async def test_actual_public_payload_cannot_update_existing_marketing_lead(ctx, 
     monkeypatch.setenv("MARKETING_SCHEDULER_ENABLED", "false")
     monkeypatch.setenv("MARKETING_OUTBOUND_ENABLED", "false")
     service_path = Path(__file__).resolve().parents[2] / "marketing-service/app/main.py"
-    spec = importlib.util.spec_from_file_location("isolated_demo_marketing", service_path)
+    from types import ModuleType
+    import sys
+    package = ModuleType("isolated_demo_marketing")
+    package.__path__ = [str(service_path.parent)]
+    monkeypatch.setitem(sys.modules, package.__name__, package)
+    spec = importlib.util.spec_from_file_location(package.__name__ + ".main", service_path)
     module = importlib.util.module_from_spec(spec)
     # Import independently so the backend's app package and configuration stay
     # untouched. This service uses only the test's separate temporary SQLite DB.

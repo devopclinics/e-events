@@ -152,7 +152,12 @@ def test_known_uid_background_milestones_ignore_email_profile_and_attribution_cl
     assert result["id"] == lead_id and result["stage"] == expected_stage
     after = snapshot(module, lead_id)
     changed = {key for key in before if before[key] != after[key]}
-    assert changed <= {"stage", "stage_changed_at", "score", "last_active_at", "updated_at"}
+    assert changed <= {"stage", "stage_changed_at", "score", "last_active_at", "updated_at", "next_follow_up_at"}
+    if expected_stage in {"registered", "event_created"} and result["consent_email"] and not result["automation_paused"]:
+        assert result["next_follow_up_at"] is not None
+        assert module.email_pilot.utc(result["next_follow_up_at"]) < module.now() + timedelta(minutes=61)
+    else:
+        assert result["next_follow_up_at"] is None
     assert snapshot(module, other_id) == other_before
     assert post(client, headers, body).json()["ingest_duplicate"] is True
     with module.SessionLocal() as db:

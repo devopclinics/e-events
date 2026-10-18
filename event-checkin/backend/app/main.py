@@ -324,3 +324,7 @@ else:
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+# Read-only pilot barrier; no scheduling or sending side effects.
+from .routers import marketing_email_readiness
+app.include_router(marketing_email_readiness.router)

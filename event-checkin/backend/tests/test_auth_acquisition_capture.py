@@ -44,7 +44,11 @@ def marketing_service(monkeypatch, tmp_path):
     monkeypatch.setenv("MARKETING_SCHEDULER_ENABLED", "false")
     monkeypatch.setenv("MARKETING_OUTBOUND_ENABLED", "false")
     path = Path(__file__).resolve().parents[2] / "marketing-service/app/main.py"
-    spec = importlib.util.spec_from_file_location("isolated_acquisition_marketing", path)
+    from types import ModuleType
+    package = ModuleType("isolated_acquisition_marketing")
+    package.__path__ = [str(path.parent)]
+    monkeypatch.setitem(sys.modules, package.__name__, package)
+    spec = importlib.util.spec_from_file_location(package.__name__ + ".main", path)
     module = importlib.util.module_from_spec(spec)
     monkeypatch.setitem(sys.modules, spec.name, module)
     spec.loader.exec_module(module)

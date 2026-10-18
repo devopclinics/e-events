@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from typing import Any
 from typing import Literal
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit, unquote, parse_qs
 
 import jwt
 import base64
@@ -41,6 +41,8 @@ TOKEN_SECRET = os.getenv("MARKETING_INTERNAL_TOKEN") or os.getenv("PLANNER_INTER
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {})
 SessionLocal = sessionmaker(engine, expire_on_commit=False)
 logger = logging.getLogger("festio.marketing")
+from . import email_pilot
+from .email_pilot import EmailBlocked
 
 
 class Base(DeclarativeBase): pass
@@ -252,6 +254,7 @@ def preflight_lead_email_uniqueness() -> None:
 
 preflight_lead_email_uniqueness()
 Base.metadata.create_all(engine)
+email_pilot.PilotBase.metadata.create_all(engine)
 
 if "prospect_id" not in {column["name"] for column in inspect(engine).get_columns("marketing_ingest_receipts")}:
     with engine.begin() as connection:
@@ -499,7 +502,7 @@ def require_outbound_enabled() -> None:
 def pause_for_handoff(lead: Lead, reason: str) -> None:
     lead.automation_paused = True
     lead.handoff_requested_at = lead.handoff_requested_at or now()
-    lead.suppression_reason = reason
+    lead.suppression_reason = lead.suppression_reason or reason
     lead.next_follow_up_at = None
 
 
@@ -565,6 +568,7 @@ def apply_inbound_intent(lead: Lead, channel: str, opted_out: bool, received_at:
             setattr(lead, field, False)
         if channel == "email":
             lead.unsubscribed = True
+            email_pilot.invalidate_consent(lead)
 
 
 def associate_verified_prospects(db: Session, lead: Lead) -> None:
@@ -689,11 +693,25 @@ def automation_dashboard_stats(db: Session) -> dict:
 
 def safe_cta_url(value: Any) -> str:
     url = str(value or "https://festio.events/admin-redesign").strip()
-    return url if url.startswith(("https://", "http://")) else "https://festio.events/admin-redesign"
+    decoded = unquote(url)
+    if any(ord(c) < 32 for c in decoded) or "\\" in decoded:
+        raise HTTPException(400, "Invalid CTA URL")
+    parsed = urlsplit(url)
+    if parsed.scheme == "https" and parsed.hostname and not parsed.username and not parsed.password:
+        return url
+    if parsed.scheme == "mailto" and re.fullmatch(r"[^\s@?]+@[^\s@?]+\.[^\s@?]+", parsed.path):
+        if not parsed.fragment and set(parse_qs(parsed.query)) <= {"subject"}:
+            return url
+    raise HTTPException(400, "Unsupported CTA URL scheme or destination")
 
 
-def send_follow_up(lead: Lead, sequence: ModuleRecord, step_index: int = 0) -> dict:
-    require_outbound_enabled()
+def send_follow_up(lead: Lead, sequence: ModuleRecord, step_index: int = 0, *, email_mode: str = "legacy", stop_requested=None) -> dict:
+    import sys
+    return email_pilot.send(sys.modules[__name__], lead, sequence, step_index, email_mode,
+                            stop_requested=stop_requested)
+
+
+def _deliver_follow_up(lead: Lead, sequence: ModuleRecord, step_index: int = 0) -> dict:
     if not lead.consent_email or lead.unsubscribed or lead.automation_paused or lead.suppression_reason or lead.deletion_requested_at:
         raise HTTPException(409, "Lead is not eligible for marketing email")
     steps = sequence_steps(sequence)
@@ -732,7 +750,10 @@ def send_follow_up(lead: Lead, sequence: ModuleRecord, step_index: int = 0) -> d
             timeout=20,
         )
         response.raise_for_status()
-        return {"status": "sent", "provider": "resend", "provider_id": response.json().get("id")}
+        provider_id = response.json().get("id")
+        if not isinstance(provider_id, str) or not provider_id.strip():
+            raise RuntimeError("Provider acceptance identifier missing; reconcile before retry")
+        return {"status": "sent", "provider": "resend", "provider_id": provider_id}
     host, user, password = os.getenv("SMTP_HOST", ""), os.getenv("SMTP_USER", ""), os.getenv("SMTP_PASSWORD", "")
     if not host or not user or not password:
         return {"status": "failed", "provider": "none", "provider_id": None, "error": "Email provider is not configured"}
@@ -955,6 +976,17 @@ def advance_lifecycle_stage(row: Lead, lifecycle: str, stage: str | None) -> Non
         row.score = max(row.score, 30)
 
 
+def schedule_lifecycle_followup(row: Lead, previous_stage: str, *, created: bool = False) -> None:
+    # Milestones may reset timing, but never grant consent or remove a newer stop.
+    if email_pilot.stopped(row):
+        row.next_follow_up_at = None
+    elif row.stage not in {"registered", "event_created"}:
+        if row.stage != previous_stage:
+            row.next_follow_up_at = None
+    elif created or row.stage != previous_stage or row.next_follow_up_at is None:
+        row.next_follow_up_at = now() + timedelta(minutes=int(os.getenv("MARKETING_INITIAL_DELAY_MINUTES", "60")))
+
+
 @app.post("/api/marketing/internal/ingest")
 def ingest(body: dict, identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
     if not identity.is_superadmin:
@@ -1002,7 +1034,11 @@ def ingest(body: dict, identity: Identity = Depends(decode_identity), db: Sessio
             row = db.scalar(select(Lead).where(Lead.festio_user_id == subject))
         if row is None:
             return record_unverified_lifecycle(body, identity, db, receipt)
+        previous_stage = row.stage
         advance_lifecycle_stage(row, lifecycle, "event_created" if lifecycle == "event_updated" else lifecycle)
+        schedule_lifecycle_followup(row, previous_stage)
+        import sys
+        email_pilot.capture_evidence(sys.modules[__name__], db, row, body)
         db.add(Activity(lead_id=row.id, kind=lifecycle[:50], summary=f"Lifecycle: {lifecycle[:80]}",
                         actor="festio", data={"event_id": body.get("event_id"), "identity_scope": "linked_subject"}))
         if receipt:
@@ -1074,21 +1110,23 @@ def ingest(body: dict, identity: Identity = Depends(decode_identity), db: Sessio
     for field in ("consent_email", "consent_sms", "consent_whatsapp"):
         if field in body and (body[field] is False or not row.unsubscribed):
             setattr(row, field, body[field])
+    if body.get("consent_email") is False:
+        # An explicit withdrawal is a stop, not a missing grant. Later queued
+        # lifecycle grants cannot silently undo it; preferences are deliberate.
+        row.unsubscribed = True
     consent_fields = {field: body[field] for field in ("consent_email", "consent_sms", "consent_whatsapp") if field in body}
     if consent_fields:
         evidence = {"event_id": body.get("event_id"), "requested": consent_fields, "effective": {field: getattr(row, field) for field in consent_fields}, "occurred_at": str(body.get("occurred_at") or now().isoformat())[:50], "lifecycle_event": lifecycle[:80], "source": str(body.get("source") or "festio")[:100]}
         db.add(Activity(lead_id=row.id, kind="consent_recorded", summary="Explicit channel consent recorded", actor="festio", data=evidence))
         audit(db, identity, "consent.recorded", "lead", row.id, **evidence)
-    if not row.consent_email:
-        row.next_follow_up_at = None
-    elif not row.unsubscribed and not row.automation_paused and not row.suppression_reason and not row.deletion_requested_at:
-        if created or row.stage != previous_stage or row.next_follow_up_at is None:
-            row.next_follow_up_at = now() + timedelta(minutes=int(os.getenv("MARKETING_INITIAL_DELAY_MINUTES", "60")))
+    schedule_lifecycle_followup(row, previous_stage, created=created)
     if lifecycle == "demo_requested":
         pause_for_handoff(row, "demo_requested")
         details = {field: str(body[field])[:limit] for field, limit in {"demo_request_id": 128, "preferred_time": 50, "timezone": 100, "event_name": 240, "message": 2000}.items() if body.get(field)}
         db.add(ModuleRecord(module="tasks", name="Follow up on demo request", status="open", owner_email=row.owner_email, created_by="festio", payload={"lead_id": row.id, "source_event_id": body.get("event_id"), "booking_confirmed": False, **details}))
     associate_verified_prospects(db, row)
+    import sys
+    email_pilot.capture_evidence(sys.modules[__name__], db, row, body)
     db.add(Activity(lead_id=row.id, kind=lifecycle[:50], summary=f"Lifecycle: {lifecycle[:80]}", actor="festio", data={"event_id": body.get("event_id")}))
     if receipt:
         receipt.lead_id = row.id
@@ -1115,6 +1153,17 @@ def ingest_conversation(body: ConversationIn, identity: Identity = Depends(decod
         raise HTTPException(403, "Internal conversation ingest requires platform authority")
     if not any((body.email, body.phone, body.festio_user_id, body.source_contact_id)):
         raise HTTPException(400, "A contact identifier is required")
+    # A supplied reply token is an exclusive identity binding, never a hint
+    # that may fall back to an attacker-controlled account/email assertion.
+    bound_lead = None
+    if body.reply_token:
+        from .reply_routing import verify_reply_token
+        bound_id = verify_reply_token(body.reply_token, TOKEN_SECRET)
+        bound_lead = db.get(Lead, bound_id) if bound_id else None
+        if body.channel != "email" or not body.email or not bound_lead or bound_lead.email != str(body.email).lower():
+            raise HTTPException(403, "Reply token and sender do not match")
+        if body.festio_user_id and body.festio_user_id != bound_lead.festio_user_id:
+            raise HTTPException(409, "Reply token and account do not match")
     receipt, duplicate = receipt_for(db, body.event_id, "conversation", body.model_dump())
     if duplicate:
         result = {"recorded": True, "duplicate": True, "lead_id": receipt.lead_id}
@@ -1123,13 +1172,7 @@ def ingest_conversation(body: ConversationIn, identity: Identity = Depends(decod
         return result
     # Provider authenticity does not verify ownership of an arbitrary From /
     # anonymous-chat email. Only a trusted adapter may assert verified identity.
-    row = None
-    if body.channel == "email" and body.reply_token and body.email:
-        from .reply_routing import verify_reply_token
-        bound_id = verify_reply_token(body.reply_token, TOKEN_SECRET)
-        bound_lead = db.get(Lead, bound_id) if bound_id else None
-        if bound_lead and bound_lead.email == str(body.email).lower():
-            row = bound_lead
+    row = bound_lead
     if body.identity_verified:
         resolved = resolve_ingest_lead(db, email=str(body.email).lower() if body.email else None, phone=body.phone, subject=body.festio_user_id)
         if row and resolved and row.id != resolved.id:
@@ -1317,6 +1360,7 @@ def delete_lead(lead_id:str, identity:Identity=Depends(require_manager), db:Sess
     db.query(ModuleRecord).filter(ModuleRecord.module == "tasks", ModuleRecord.payload["lead_id"].as_string() == lead_id).delete(synchronize_session=False)
     db.query(SendAttempt).filter(SendAttempt.lead_id == lead_id).delete(synchronize_session=False)
     db.query(PendingProspect).filter(PendingProspect.lead_id == lead_id).delete(synchronize_session=False)
+    db.query(email_pilot.IdentityEvidence).filter(email_pilot.IdentityEvidence.lead_id == lead_id).delete(synchronize_session=False)
     audit(db,identity,"lead.deleted","lead",lead_id);db.delete(row);db.commit()
 
 
@@ -1649,6 +1693,8 @@ def apply_preferences(row: Lead, body: dict) -> None:
             setattr(row, field, body[field])
     if "consent_email" in body:
         row.unsubscribed = not row.consent_email
+        if not row.consent_email:
+            email_pilot.invalidate_consent(row)
     if not row.consent_email or row.unsubscribed or row.automation_paused or row.suppression_reason or row.deletion_requested_at:
         row.next_follow_up_at = None
     elif row.next_follow_up_at is None:
@@ -1828,6 +1874,7 @@ def ingest_delivery(body:dict, identity:Identity=Depends(decode_identity), db:Se
         row.consent_email = False
         row.next_follow_up_at = None
         row.suppression_reason = "email_complaint" if event == "complained" else "email_hard_bounce"
+        email_pilot.invalidate_consent(row)
     db.commit()
     return {"recorded":True}
 
@@ -1898,7 +1945,7 @@ def release_unsent_claim(db: Session, attempt: SendAttempt) -> None:
     db.commit()
 
 
-def run_automation_service(db: Session, identity: Identity, *, dry_run: bool = False, lead_id: str | None = None) -> dict:
+def run_automation_service(db: Session, identity: Identity, *, dry_run: bool = False, lead_id: str | None = None, email_mode: str = "legacy", stop_requested=None) -> dict:
     """Plain service callable shared by HTTP and scheduler; no FastAPI defaults."""
     sequences = db.scalars(select(ModuleRecord).where(ModuleRecord.module == "sequences", ModuleRecord.status == "active").order_by(ModuleRecord.created_at, ModuleRecord.id)).all()
     lead_stmt = select(Lead).where(Lead.unsubscribed.is_(False), Lead.consent_email.is_(True), Lead.automation_paused.is_(False), Lead.suppression_reason.is_(None), Lead.deletion_requested_at.is_(None), Lead.next_follow_up_at <= now())
@@ -1907,13 +1954,26 @@ def run_automation_service(db: Session, identity: Identity, *, dry_run: bool = F
     if identity.owner_scoped:
         lead_stmt = lead_stmt.where(Lead.owner_email == identity.email)
     leads = db.scalars(lead_stmt).all()
+    if email_mode != "legacy":
+        import sys
+        email_pilot.config(email_mode)
+        pins = email_pilot.template_pins()
+        sequences = [seq for seq in sequences if seq.id in {pin["id"] for pin in pins.values()}]
+        leads = [lead for lead in leads if email_pilot.eligible(sys.modules[__name__], db, lead, email_mode)]
     result = {"queued": 0, "sent": 0, "failed": 0, "eligible": len(leads), "active_sequences": len(sequences), "dry_run": dry_run, "outbound_enabled": outbound_enabled()}
-    if not dry_run and not outbound_enabled():
+    gate = outbound_enabled() if email_mode == "legacy" else email_pilot.enabled(email_mode)
+    result.update(email_mode=email_mode, email_gate_enabled=gate)
+    if not dry_run and not gate:
         return {**result, "disabled": True}
     for lead in leads:
+        if stop_requested and stop_requested():
+            result["stopping"] = True
+            break
         matching = next((seq for seq in sequences if not seq.payload.get("stage") or seq.payload.get("stage") == lead.stage), None)
         if not matching:
             continue
+        if email_mode != "legacy":
+            email_pilot.approved_template(db, matching, lead.stage)
         sent_count = db.scalar(select(func.count(Activity.id)).where(Activity.lead_id == lead.id, Activity.kind == "email_sent", Activity.actor != "resend", Activity.data["sequence_id"].as_string() == matching.id)) or 0
         steps = sequence_steps(matching)
         max_touches = max(1, int(matching.payload.get("max_touches") or len(steps)))
@@ -1950,12 +2010,25 @@ def run_automation_service(db: Session, identity: Identity, *, dry_run: bool = F
             release_unsent_claim(db, attempt)
             continue
         uncertain = False
+        dispatch_stage = lead.stage
         try:
-            delivery = send_follow_up(lead, matching, sent_count)
+            if email_mode == "legacy":
+                delivery = send_follow_up(lead, matching, sent_count)
+            else:
+                delivery = send_follow_up(lead, matching, sent_count, email_mode=email_mode,
+                                          stop_requested=stop_requested)
+        except EmailBlocked:
+            release_unsent_claim(db, attempt)
+            continue
+        except HTTPException:
+            # Validation/eligibility exceptions in this function occur before
+            # provider submission, so they are not uncertain delivery attempts.
+            release_unsent_claim(db, attempt)
+            raise
         except httpx.HTTPStatusError as exc:
             # Explicit client rejection is retryable; a server error may have
             # occurred after acceptance, so it needs reconciliation instead.
-            uncertain = exc.response.status_code >= 500
+            uncertain = not 400 <= exc.response.status_code < 500
             delivery = {"status": "failed", "provider": "resend", "provider_id": None, "error": f"Provider HTTP {exc.response.status_code}"}
         except Exception:
             uncertain = True
@@ -1966,13 +2039,21 @@ def run_automation_service(db: Session, identity: Identity, *, dry_run: bool = F
         db.add(Activity(lead_id=lead.id, kind=activity_kind, summary=f"Follow-up {'sent' if successful else 'failed'} from {matching.name}", actor=identity.email, data={"sequence_id": matching.id, "step_index": sent_count, **delivery, "outcome_uncertain": uncertain}))
         if successful:
             result["sent"] += 1
-            if sent_count + 1 >= min(len(steps), max_touches):
+            db.refresh(lead)
+            if email_pilot.stopped(lead) or lead.stage != dispatch_stage:
+                # A stop/conversion committed while the provider was accepting.
+                # Preserve that newer state and its schedule.
+                pass
+            elif sent_count + 1 >= min(len(steps), max_touches):
                 lead.next_follow_up_at = None
             else:
                 lead.next_follow_up_at = now() + timedelta(hours=next_step_delay_hours(matching, steps, sent_count))
         else:
             result["failed"] += 1
-            if uncertain:
+            db.refresh(lead)
+            if email_pilot.stopped(lead) or lead.stage != dispatch_stage:
+                pass  # Do not restore a schedule after a concurrent stop or conversion.
+            elif uncertain:
                 pause_for_handoff(lead, "delivery_outcome_unknown")
             elif attempt.attempts >= max(1, int(os.getenv("MARKETING_MAX_SEND_ATTEMPTS", "5"))):
                 pause_for_handoff(lead, "delivery_retry_exhausted")
@@ -1990,6 +2071,20 @@ def run_automation(dry_run: bool = Query(False), lead_id: str | None = Query(Non
     return run_automation_service(db, identity, dry_run=dry_run, lead_id=lead_id)
 
 
+@app.post("/api/marketing/email-pilot/run")
+def run_email_pilot(dry_run: bool = Query(True), lead_id: str | None = Query(None),
+                    identity: Identity = Depends(require_superadmin), db: Session = Depends(db_session)):
+    return run_automation_service(db, identity, dry_run=dry_run, lead_id=lead_id, email_mode="pilot")
+
+
+@app.post("/api/marketing/email-test/run")
+def run_email_test(lead_id: str = Query(...), dry_run: bool = Query(True),
+                   identity: Identity = Depends(require_superadmin), db: Session = Depends(db_session)):
+    return run_automation_service(db, identity, dry_run=dry_run, lead_id=lead_id, email_mode="test")
+
+
+
+
 @app.post("/api/marketing/leads/{lead_id}/gdpr-delete")
 def request_gdpr_deletion(lead_id:str, identity:Identity=Depends(require_manager), db:Session=Depends(db_session)):
     row=visible_lead(db,lead_id,identity);row.deletion_requested_at=now();row.consent_email=False;row.consent_sms=False;row.consent_whatsapp=False;row.unsubscribed=True;row.next_follow_up_at=None
@@ -2003,6 +2098,7 @@ def run_gdpr_retention(db:Session, identity:Identity) -> int:
         db.query(ModuleRecord).filter(ModuleRecord.module == "tasks", ModuleRecord.payload["lead_id"].as_string() == row.id).delete(synchronize_session=False)
         db.query(SendAttempt).filter(SendAttempt.lead_id == row.id).delete(synchronize_session=False)
         db.query(PendingProspect).filter(PendingProspect.lead_id == row.id).delete(synchronize_session=False)
+        db.query(email_pilot.IdentityEvidence).filter(email_pilot.IdentityEvidence.lead_id == row.id).delete(synchronize_session=False)
         audit(db,identity,"gdpr.lead_purged","lead",row.id);db.delete(row)
     db.commit();return len(rows)
 
@@ -2055,15 +2151,39 @@ def scheduled_automation() -> None:
 
 @app.on_event("startup")
 def start_scheduler():
-    if os.getenv("MARKETING_SCHEDULER_ENABLED", "true").lower() in {"1", "true", "yes"}:
+    if os.getenv("MARKETING_SCHEDULER_ENABLED", "false").lower() in {"1", "true", "yes"}:
         threading.Thread(target=scheduled_automation, name="marketing-automation", daemon=True).start()
+
+
+_email_pilot_lifecycle_lock = threading.Lock()
+
+
+@app.on_event("startup")
+def start_email_pilot_scheduler():
+    import sys
+    from .email_pilot_scheduler import EmailPilotScheduler
+    with _email_pilot_lifecycle_lock:
+        clock = getattr(app.state, "email_pilot_scheduler", None)
+        if clock is None:
+            clock = EmailPilotScheduler(sys.modules[__name__])
+            app.state.email_pilot_scheduler = clock
+        clock.start()
+
+
+@app.on_event("shutdown")
+async def stop_email_pilot_scheduler():
+    clock = getattr(app.state, "email_pilot_scheduler", None)
+    if clock is not None:
+        await asyncio.to_thread(clock.stop)
 
 
 @app.post("/api/marketing/unsubscribe/{lead_id}")
 def unsubscribe(lead_id: str, db: Session = Depends(db_session)):
     row = db.get(Lead, lead_id)
     if not row: raise HTTPException(404, "Lead not found")
-    row.unsubscribed = True; row.consent_email = False; row.next_follow_up_at = None; db.commit(); return {"ok": True}
+    row.unsubscribed = True; row.consent_email = False; row.next_follow_up_at = None
+    email_pilot.invalidate_consent(row)
+    db.commit(); return {"ok": True}
 
 @app.get("/api/marketing/unsubscribe/{lead_id}", response_class=HTMLResponse)
 def unsubscribe_get(lead_id: str, db: Session = Depends(db_session)):
@@ -2074,6 +2194,7 @@ def unsubscribe_get(lead_id: str, db: Session = Depends(db_session)):
     row.unsubscribed = True
     row.consent_email = False
     row.next_follow_up_at = None
+    email_pilot.invalidate_consent(row)
     db.commit()
     return HTMLResponse("""<!doctype html><html><head><meta charset="utf-8">
 <title>Unsubscribed \u2014 Festio</title>

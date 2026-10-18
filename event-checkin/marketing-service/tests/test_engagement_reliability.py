@@ -317,8 +317,25 @@ def test_scheduler_uses_plain_service_with_no_fastapi_query_defaults(service, mo
     sender.assert_called_once()
 
 
+def configure_email_readiness(module, monkeypatch, domain="replies.example.com"):
+    monkeypatch.setenv("MARKETING_REPLY_DOMAIN", domain)
+    monkeypatch.setenv("MARKETING_EMAIL_READINESS_URL", "http://backend:8000/api/internal/marketing/email-readiness")
+    def signed_readiness(*args, **kwargs):
+        import jwt
+        moment = module.now()
+        fields = {"ready": True, "pending": 0, "failed": 0, "reply_routing_ready": True,
+                  "reply_domain": domain, "checked_at": moment.isoformat()}
+        proof = jwt.encode({**fields, "sub": "marketing-email-readiness-response",
+                            "iss": "festio-backend", "aud": "marketing-email-readiness-response",
+                            "jti": kwargs["params"]["challenge"], "iat": moment,
+                            "exp": moment + timedelta(seconds=5)}, module.TOKEN_SECRET, algorithm="HS256")
+        return httpx.Response(200, request=httpx.Request("GET", args[0]), json={**fields, "proof": proof})
+    monkeypatch.setattr(module.httpx, "get", Mock(side_effect=signed_readiness))
+
+
 def test_resend_stable_idempotency_key_and_no_config_is_failure(service, monkeypatch):
     module, client, headers = service
+    configure_email_readiness(module, monkeypatch)
     monkeypatch.setenv("MARKETING_OUTBOUND_ENABLED", "true")
     lead_id = due_lead(module)
     with module.SessionLocal() as db:
@@ -326,10 +343,17 @@ def test_resend_stable_idempotency_key_and_no_config_is_failure(service, monkeyp
         sequence = db.scalar(select(module.ModuleRecord).where(module.ModuleRecord.name == "New registration welcome"))
         assert module.send_follow_up(lead, sequence)["status"] == "failed"
         monkeypatch.setenv("RESEND_API_KEY", "synthetic-test-key")
-        provider = Mock(return_value=httpx.Response(200, request=httpx.Request("POST", "https://example.invalid"), json={"id": "fake-provider-id"}))
+        provider = Mock(side_effect=[
+            httpx.Response(400, request=httpx.Request("POST", "https://example.invalid")),
+            httpx.Response(200, request=httpx.Request("POST", "https://example.invalid"), json={"id": "fake-provider-id"}),
+        ])
         monkeypatch.setattr(module.httpx, "post", provider)
-        module.send_follow_up(lead, sequence, 0)
-        module.send_follow_up(lead, sequence, 0)
+        with pytest.raises(httpx.HTTPStatusError):
+            module.send_follow_up(lead, sequence, 0)
+        assert module.send_follow_up(lead, sequence, 0)["status"] == "sent"
+        with pytest.raises(module.email_pilot.EmailBlocked):
+            module.send_follow_up(lead, sequence, 0)
+        assert provider.call_count == 2  # One explicit rejection, one accepted; never resubmit accepted work.
         assert provider.call_args_list[0].kwargs["headers"]["Idempotency-Key"] == provider.call_args_list[1].kwargs["headers"]["Idempotency-Key"]
 
 
@@ -465,13 +489,13 @@ def test_reply_token_binds_email_reply_and_outbound_reply_to(service, monkeypatc
     body = {"event_id": "token:reply", "channel": "email", "email": lead["email"], "reply_token": token}
     assert client.post("/api/marketing/internal/conversations", headers=headers, json=body).json()["lead_id"] == lead["id"]
     assert get_lead(module, lead["id"]).automation_paused
-    mismatch = client.post("/api/marketing/internal/conversations", headers=headers, json={**body, "event_id": "token:mismatch", "email": "attacker@example.com"}).json()
-    assert mismatch["unmatched"] and mismatch["lead_id"] is None
-    malformed = client.post("/api/marketing/internal/conversations", headers=headers, json={**body, "event_id": "token:invalid", "reply_token": "invalid"}).json()
-    assert malformed["unmatched"]
+    mismatch = client.post("/api/marketing/internal/conversations", headers=headers, json={**body, "event_id": "token:mismatch", "email": "attacker@example.com"})
+    assert mismatch.status_code == 403
+    malformed = client.post("/api/marketing/internal/conversations", headers=headers, json={**body, "event_id": "token:invalid", "reply_token": "invalid"})
+    assert malformed.status_code == 403
     new_id = due_lead(module)
     monkeypatch.setenv("MARKETING_OUTBOUND_ENABLED", "true")
-    monkeypatch.setenv("MARKETING_REPLY_DOMAIN", "replies.example.com")
+    configure_email_readiness(module, monkeypatch)
     monkeypatch.setenv("RESEND_API_KEY", "test-only")
     provider = Mock(return_value=httpx.Response(200, request=httpx.Request("POST", "https://example.invalid"), json={"id": "reply-provider"}))
     monkeypatch.setattr(module.httpx, "post", provider)
@@ -598,3 +622,30 @@ def test_stale_sequence_completion_cannot_clear_new_lifecycle_schedule(service, 
     row = get_lead(module, lead_id)
     assert row.stage == "event_created"
     assert row.next_follow_up_at.replace(tzinfo=timezone.utc) == future
+
+def test_reply_binding_fails_closed_before_receipts_and_identity_fallback(service):
+    from app.reply_routing import make_reply_token
+
+    module, client, headers = service
+    lead = ingest(client, headers, event_id="bound:lead", consent_email=True).json()
+    bound = make_reply_token(lead["id"], module.TOKEN_SECRET)
+    baseline = get_lead(module, lead["id"])
+    original_state = (baseline.automation_paused, baseline.consent_email, baseline.unsubscribed)
+    body = {"event_id": "bound:attack", "channel": "email", "email": lead["email"], "reply_token": bound, "event": "opt_out"}
+    for changes, expected in [
+        ({"email": "attacker@example.com", "identity_verified": True}, 403),
+        ({"reply_token": "invalid", "identity_verified": True}, 403),
+        ({"festio_user_id": "another-account", "identity_verified": True}, 409),
+        ({"channel": "chat", "identity_verified": True}, 403),
+    ]:
+        response = client.post("/api/marketing/internal/conversations", headers=headers, json={**body, **changes})
+        assert response.status_code == expected
+        current = get_lead(module, lead["id"])
+        assert (current.automation_paused, current.consent_email, current.unsubscribed) == original_state
+    # Reuse the rejected event ID: no poisoned receipt prevents the valid stop.
+    first = client.post("/api/marketing/internal/conversations", headers=headers, json=body)
+    second = client.post("/api/marketing/internal/conversations", headers=headers, json=body)
+    assert first.status_code == second.status_code == 200
+    assert first.json()["lead_id"] == lead["id"] and second.json()["duplicate"]
+    current = get_lead(module, lead["id"])
+    assert current.automation_paused and current.unsubscribed and not current.consent_email

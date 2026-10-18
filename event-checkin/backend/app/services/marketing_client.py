@@ -72,8 +72,14 @@ async def ingest_marketing_lead(
     background job, does not prove mailbox ownership. Never let arbitrary
     lifecycle fields replace the identity selected by the caller.
     """
+    from ..models import Membership
+    organizer = await db.scalar(select(Membership.id).where(
+        Membership.user_id == user.id, Membership.role == "owner").limit(1))
     payload = {
-        **fields, "festio_user_id": user.firebase_uid or user.id,
+        **fields,
+        "account_registered_at": user.created_at.isoformat() if getattr(user, "created_at", None) else None,
+        "organizer_account": organizer is not None,
+        "festio_user_id": user.firebase_uid or user.id,
         "email": user.email, "name": user.name,
         "email_verified": email_verified is True,
     }

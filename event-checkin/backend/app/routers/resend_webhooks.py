@@ -275,12 +275,21 @@ async def receive_resend_inbound_webhook(
 
     try:
         event = json.loads(payload.decode("utf-8") or "{}")
-    except json.JSONDecodeError:
+    except (ValueError, UnicodeDecodeError):
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
+    if not isinstance(event, dict):
+        raise HTTPException(status_code=400, detail="Expected a JSON object")
     if event.get("type") != "email.received":
         return {"ok": True}
 
-    data = event.get("data") or {}
+    data = event.get("data")
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Invalid email metadata")
+    # One raw-body verification above, using the existing receiving authority.
+    # Only authenticated provider recipient metadata selects the sales path.
+    from app.services.resend_inbound_routing import dispatch_prospect_reply
+    if await dispatch_prospect_reply(data, db):
+        return {"ok": True}
     resend_email_id = str(data.get("email_id") or "").strip()
     svix_id = str(request.headers.get("svix-id") or "").strip()
     if not resend_email_id or not svix_id:

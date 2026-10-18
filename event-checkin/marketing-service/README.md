@@ -273,3 +273,174 @@ migration, idempotent lifecycle/demo/conversation/delivery ingestion, rollback,
 consent defaults/revocation, stage ordering, reply/opt-out suppression,
 ambiguous identities, outbound gates, sequence timing/progress, provider
 idempotency, concurrent send claims and crash/uncertain-outcome handoff.
+
+
+## Local-only bounded email pilot (not activated)
+
+This patch does not enable production automation. Pilot/test paths are email-only
+superadmin actions, dry-run by default. They do not start the existing scheduler,
+publish social content, send SMS/WhatsApp, execute campaigns, or run retention.
+Keep MARKETING_OUTBOUND_ENABLED and MARKETING_SCHEDULER_ENABLED false.
+
+Default-OFF controls and required nonsecret configuration:
+
+- MARKETING_EMAIL_PILOT_ENABLED=false
+- MARKETING_EMAIL_TEST_ENABLED=false
+- MARKETING_EMAIL_PILOT_ACCOUNTS: explicit JSON array of 1–10 immutable account
+  identifiers. No email/domain wildcard, dynamic segment, or automatic enrollment.
+- MARKETING_EMAIL_TEST_ACCOUNTS: JSON array containing at most one account, which
+  must be in the same pilot cohort.
+- MARKETING_EMAIL_PILOT_LAUNCH_AT: explicit timezone-qualified launch timestamp.
+  Account creation, verified proof, explicit consent evidence, and lead creation
+  must all be at/after launch and not in the future.
+- MARKETING_EMAIL_READINESS_URL: configured internal URL ending exactly in
+  /api/internal/marketing/email-readiness; no credentials, query or redirects.
+- MARKETING_REPLY_DOMAIN: already verified signed-reply receiving domain.
+
+New payload evidence is supplied only by the backend: source account creation,
+current explicitly verified email, and owner Membership proof. Older immutable
+payloads and historical leads are not backfilled or silently enrolled. A changed
+mailbox requires new verification and explicit consent; an account cap still
+applies across address changes. Source authority remains the existing internal
+service boundary, not public attribution headers.
+
+Schema: three additive, service-owned tables are created by the existing
+Marketing startup migration pattern:
+
+- marketing_email_identity_evidence: account/lead/current-mailbox binding,
+  original account registration, verification and consent receipt provenance.
+- marketing_email_caps: atomic recipient/account budgets and an immutable cohort
+  fingerprint per launch. No recipient data is stored in cap keys.
+- marketing_email_dispatches: durable per-step claims, acceptance identifiers and
+  uncertain outcomes. Existing per-sequence SendAttempt receipts remain in use.
+
+No existing row is enrolled/backfilled by migration. Rolling recipient AND account
+budgets allow at most one accepted marketing email per 24 hours across pilot,
+test, legacy sequences and manual campaigns. Existing accepted activity from the
+last 24h is also honored. Claims are committed before provider contact; failed
+explicit client rejections may be retried under the existing bounded retry rules,
+with the same idempotency identity. Unknown outcomes retain the cap indefinitely
+and pause the lead. Stale in-flight claims become uncertain, never automatic sends.
+There is deliberately no force-clear/retry endpoint; reconciliation needs operator
+review and a separate controlled procedure.
+
+Readiness fails closed unless signed-reply routing is configured, prospect ingress
+and CRM delivery are enabled, and the source backend reports zero pending/retry/
+failed/unknown outbox records. A purpose-bound short-lived token uses the existing
+internal signing key; no new credential is created. Checks occur before and after
+claiming, immediately before delivery. These are point-in-time distributed checks,
+not an atomic transaction with future inbound callbacks. A later reply/opt-out/
+conversion is preserved when acceptance is recorded; it prevents subsequent sends.
+Backend failures, malformed/stale responses or key mismatch block sending.
+
+The linked subject milestone path now resets event-created timing (including from
+an exhausted registration sequence), preserves consent and newer stop reasons,
+and clears old-stage schedules on conversion. CTA URLs allow validated HTTPS and
+mailto with subject only; unsupported schemes/credentials/control characters fail
+explicitly instead of substituting the admin URL.
+
+Review/activation prerequisites (not authorized by this patch):
+
+1. Review and separately approve publication/deployment and the additive schema;
+   confirm compatible backend/Marketing versions and internal-key configuration.
+   Old builds ignore the extra payload fields/tables, so downgrade loses pilot
+   support; keep all gates OFF during mixed-version operation.
+2. Review current templates/claims/links and exact cohort account identifiers.
+   Approve the launch time and explicit evidence; do not import historical users.
+3. Complete and verify real reply routing, receiving DNS/provider webhook setup,
+   unsubscribe and normal bounce handling using controlled contacts. This patch
+   does not configure DNS, provider access, credentials or message content.
+4. Reconcile the source backlog while outbound remains OFF. No ignored failed
+   records or freshness bypass is provided. Normal test callbacks retain normal
+   bounce suppression; there is no callback exclusion.
+5. Isolated test: POST /api/marketing/email-test/run?lead_id=...&dry_run=true.
+   Actual sending requires its separate email-test gate and explicit approval.
+   Pilot endpoint: POST /api/marketing/email-pilot/run, dry_run=true by default.
+   Automatic execution additionally requires MARKETING_EMAIL_PILOT_SCHEDULER_ENABLED=true.
+   It uses a separate 15-minute email-only clock and lease; it never invokes legacy
+   social or retention jobs. Test mode has no scheduler.
+6. Complete provider-domain readiness, monitoring, incident ownership and manual
+   uncertain-outcome reconciliation. Mocked tests do not establish real-provider
+   delivery or distributed-race guarantees.
+
+Scheduler absence now defaults OFF as well. Deletion/retention removes raw-account pilot identity evidence; hashed budgets and minimal dispatch tombstones remain to prevent duplicate/uncertain resend. Their reconciliation/retention policy requires operator review.
+
+Pilot/test sends require the existing Resend delivery path and never fall back to SMTP. No provider credentials are created or configured by the patch.
+
+Independent safety review hardening: MARKETING_EMAIL_PILOT_TEMPLATES must pin
+exactly the registered and event_created sequence IDs and SHA-256 fingerprints
+(template ID/module/name/full payload; canonical sorted UTF-8 JSON). Both pilot
+and test endpoints enforce these pins, including after taking a claim. Pins and
+account membership are immutable for the configured launch once a dispatch is
+reserved; edits/rotation require a separately reviewed new pilot plan. They cannot
+be silently substituted by another active sequence or newly edited content.
+Readiness now returns an authenticated five-second response bound to a fresh
+request challenge; unsigned JSON, replayed challenges, tampered proof, and stale
+responses fail closed at response receipt time. There is no new persistent key.
+Every send also respects unresolved older per-sequence claims across the same
+recipient/account. Explicit lifecycle email withdrawals remain unsubscribed until
+a deliberate preference change; delayed grant events cannot reverse that stop.
+Recipient/account changes and template changes after a claim cancel before delivery;
+known-unsent cancellations do not consume a provider retry. Failure bookkeeping
+preserves newer reply/unsubscribe/conversion schedules. These point-in-time checks
+cannot recall a message already submitted before a later stop arrives. Cohort
+bounds identify at most ten approved accounts; distinct-human identity still needs
+owner review, rather than being inferred from email addresses.
+
+## Separately gated email-only scheduler (local implementation, not activated)
+
+MARKETING_EMAIL_PILOT_SCHEDULER_ENABLED defaults false and requires the pilot
+send gate too. Startup validates the bounded cohort/pins but never sends; the
+first tick waits 900 seconds. A dedicated existing-table lease coalesces workers.
+The reviewed per-step/global claims remain the duplicate-prevention boundary if
+a worker/lease overlaps. Each tick uses the exact same pinned pilot service,
+fresh signed readiness, recipient/account cap and current stop checks.
+
+Shutdown sets a cooperative cancellation event and wakes the interval immediately.
+Cancellation or either clock/send gate becoming disabled stops before claiming,
+before provider contact, and between recipients. An already-submitted request
+cannot be recalled: it is allowed to finish bookkeeping, and no next recipient is
+started. Shutdown waits up to 30 seconds; forced termination leaves the persisted
+claim protected as uncertain rather than retryable. No scheduler bypass or forced
+claim release is supplied. Clock failures log only an exception class and the next
+tick remains gated; no secret, message body or contact identifier is logged.
+
+There is no new credential, table, external cron, or standing-send authorization.
+The only new configuration is this additional default-OFF clock flag. Its
+implementation/testing is complete locally; deployment, exact cohort/templates/
+launch, real reply/provider setup and actual recurring client sends still require
+their separate approvals/configuration.
+
+### Shared inbound reply dispatcher (local pilot patch)
+
+Keep the existing Resend receiving webhook at
+`/api/webhooks/resend/inbound` and its existing
+`RESEND_INBOUND_WEBHOOK_SECRET`. The endpoint verifies the raw callback once,
+then selects a path using only Resend's signed recipient metadata. Guest
+recipients retain the existing durable guest workflow and receipt handling.
+Do not register a second provider webhook or replace the guest signing secret.
+
+Configure Backend `PROSPECT_EMAIL_RECIPIENTS=reply@inbound.festio.events`
+and Marketing `MARKETING_REPLY_DOMAIN=inbound.festio.events`.
+Only that exact base plus a valid case-sensitive, lead-bound HMAC token routes
+to Marketing. A bare base address, invalid token, mixed guest/prospect
+recipients (including CC), or distinct prospect recipients fails closed.
+The prospect gate remains OFF by default; disabling it never sends sales
+replies into the guest workflow. The guest signing-secret fallback does not
+authorize the prospect path.
+
+The existing internal shared key verifies the token; no new key is introduced.
+Backend forwards minimal metadata with `identity_verified=false`, ignoring
+body-supplied account and identity claims. Marketing independently verifies the
+token and current sender mailbox before recording a receipt or stopping a lead;
+a mismatched token, sender or account cannot fall back to another identity.
+The durable outbox and Marketing receipt IDs deduplicate provider redelivery.
+No email body retrieval, new consent, provider mutation, or real send occurs
+in the dispatcher.
+
+The reply signing key must be nonblank in both services. Backend
+`PLANNER_INTERNAL_TOKEN` and Marketing `MARKETING_INTERNAL_TOKEN`
+(or its existing `PLANNER_INTERNAL_SERVICE_TOKEN` fallback) must reference the
+same existing Secret key `festio-secrets/PLANNER_INTERNAL_SERVICE_TOKEN`.
+Absent/null CC is allowed; non-list/non-string fields, including falsey
+objects, numbers and booleans, are rejected before either dispatch path.

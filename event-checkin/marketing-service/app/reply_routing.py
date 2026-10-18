@@ -11,7 +11,7 @@ import uuid
 
 
 def make_reply_token(lead_id: str, secret: str) -> str | None:
-    if not secret:
+    if not secret or not secret.strip():
         return None
     try:
         key = uuid.UUID(lead_id).hex

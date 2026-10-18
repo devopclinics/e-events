@@ -17,7 +17,7 @@ router = APIRouter()
 
 
 def require_marketing_readiness(authorization: str = Header("")):
-    if not settings.planner_internal_token:
+    if not settings.planner_internal_token or not settings.planner_internal_token.strip():
         raise HTTPException(503, "Email readiness authority unavailable")
     if not authorization.startswith("Bearer "):
         raise HTTPException(401, "Email readiness authentication required")

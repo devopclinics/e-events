@@ -649,3 +649,31 @@ def test_reply_binding_fails_closed_before_receipts_and_identity_fallback(servic
     assert first.json()["lead_id"] == lead["id"] and second.json()["duplicate"]
     current = get_lead(module, lead["id"])
     assert current.automation_paused and current.unsubscribed and not current.consent_email
+
+@pytest.mark.parametrize("change", ["mailbox", "delete"])
+def test_committed_reply_replay_is_acknowledged_after_identity_changes(service, change):
+    from app.reply_routing import make_reply_token
+    m, client, headers = service
+    lead = ingest(client, headers, event_id="durable-replay:lead", consent_email=True).json()
+    body = {"event_id": "durable-replay:reply", "channel": "email",
+            "email": lead["email"], "reply_token": make_reply_token(lead["id"], m.TOKEN_SECRET)}
+    assert client.post("/api/marketing/internal/conversations", headers=headers, json=body).status_code == 200
+    if change == "delete":
+        assert client.delete(f"/api/marketing/leads/{lead['id']}", headers=headers).status_code == 204
+    else:
+        with m.SessionLocal() as db:
+            db.get(m.Lead, lead["id"]).email = "changed@example.com"
+            db.commit()
+    replay = client.post("/api/marketing/internal/conversations", headers=headers, json=body)
+    assert replay.status_code == 200 and replay.json()["duplicate"]
+    changed = client.post("/api/marketing/internal/conversations", headers=headers,
+                          json={**body, "email": "attacker@example.com"})
+    assert changed.status_code == 409
+    first_time = client.post("/api/marketing/internal/conversations", headers=headers,
+                             json={**body, "event_id": "durable-replay:new"})
+    assert first_time.status_code == 403
+    with m.SessionLocal() as db:
+        assert db.scalar(select(func.count(m.IngestReceipt.event_id)).where(
+            m.IngestReceipt.event_id == body["event_id"])) == 1
+        assert db.scalar(select(func.count(m.Activity.id)).where(
+            m.Activity.kind == "email_message_received")) == (0 if change == "delete" else 1)

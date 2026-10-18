@@ -720,7 +720,8 @@ def test_ambiguous_provider_status_is_uncertain_in_every_ledger(pilot, status):
     assert get_lead(m, lead_id).automation_paused
     assert pilot[3].call_count == 1
 
-def test_pinned_invalid_cta_is_known_unsent_not_uncertain(pilot, monkeypatch):
+@pytest.mark.parametrize("invalid_url", ["javascript:invalid", "https://[example.com"])
+def test_pinned_invalid_cta_is_known_unsent_not_uncertain(pilot, monkeypatch, invalid_url):
     m, client, headers = pilot[:3]
     lead_id = add(pilot)
     _, sequence = objects(pilot, lead_id)
@@ -728,7 +729,7 @@ def test_pinned_invalid_cta_is_known_unsent_not_uncertain(pilot, monkeypatch):
         current = db.get(m.ModuleRecord, sequence.id)
         payload = dict(current.payload)
         steps = [dict(step) for step in payload["steps"]]
-        steps[0]["cta_url"] = "javascript:invalid"
+        steps[0]["cta_url"] = invalid_url
         current.payload = {**payload, "steps": steps}
         db.commit()
         digest = m.email_pilot.template_fingerprint(current)
@@ -744,3 +745,136 @@ def test_pinned_invalid_cta_is_known_unsent_not_uncertain(pilot, monkeypatch):
         assert db.scalar(select(func.count(m.SendAttempt.id))) == 0
         assert db.scalar(select(func.count(m.email_pilot.EmailDispatch.id))) == 0
     pilot[3].assert_not_called()
+
+@pytest.mark.parametrize("verified", [False, True])
+def test_delayed_ownership_grant_cannot_reverse_newer_revocation(pilot, monkeypatch, verified):
+    m, client, headers = pilot[:3]
+    clock = m.now()
+    monkeypatch.setattr(m, "now", lambda: clock)
+    lead_id = add(pilot)
+    with m.SessionLocal() as db:
+        registered = m.email_pilot.utc(db.get(m.email_pilot.IdentityEvidence, "account-0").registered_at).isoformat()
+    monkeypatch.setattr(m, "now", lambda: clock + timedelta(seconds=30))
+    common = {"email": "fixture-0@example.com", "festio_user_id": "account-0",
+              "account_registered_at": registered, "lifecycle_event": "event_updated"}
+    for event, owner, offset in [("newer-revocation", False, 20), ("older-grant", True, 10)]:
+        response = client.post("/api/marketing/internal/ingest", headers=headers, json={
+            **common, "event_id": event, "organizer_account": owner, "email_verified": verified,
+            "occurred_at": (clock + timedelta(seconds=offset)).isoformat()})
+        assert response.status_code == 200
+    with m.SessionLocal() as db:
+        proof = db.get(m.email_pilot.IdentityEvidence, "account-0")
+        assert not proof.organizer
+        assert m.email_pilot.utc(proof.ownership_at) == clock + timedelta(seconds=20)
+    assert run(pilot, lead_id)["sent"] == 0
+    pilot[3].assert_not_called()
+
+
+def test_ownership_revocation_before_first_verification_is_retained(pilot, monkeypatch):
+    m, client, headers = pilot[:3]
+    clock = m.now()
+    registered = (clock - timedelta(minutes=10)).isoformat()
+    monkeypatch.setattr(m, "now", lambda: clock + timedelta(seconds=30))
+    with m.SessionLocal() as db:
+        linked = m.Lead(email="fixture-0@example.com", festio_user_id="account-0",
+                        consent_email=True, registered_at=clock - timedelta(minutes=10),
+                        created_at=clock, stage="registered")
+        db.add(linked)
+        db.commit()
+        lead_id = linked.id
+    revoked = client.post("/api/marketing/internal/ingest", headers=headers, json={
+        "event_id": "revocation-before-proof", "email": "fixture-0@example.com",
+        "festio_user_id": "account-0", "email_verified": False, "organizer_account": False,
+        "lifecycle_event": "event_updated",
+        "occurred_at": (clock + timedelta(seconds=20)).isoformat()})
+    assert revoked.status_code == 200 and revoked.json()["id"] == lead_id
+    with m.SessionLocal() as db:
+        proof = db.get(m.email_pilot.IdentityEvidence, "account-0")
+        assert proof.verified_at is None and not proof.organizer
+        assert not m.email_pilot.eligible(m, db, db.get(m.Lead, lead_id), "pilot")
+    result = client.post("/api/marketing/internal/ingest", headers=headers, json={
+        "event_id": "late-first-verification", "email": "fixture-0@example.com",
+        "festio_user_id": "account-0", "email_verified": True, "organizer_account": True,
+        "account_registered_at": registered, "consent_email": True,
+        "occurred_at": (clock + timedelta(seconds=10)).isoformat(),
+        "lifecycle_event": "signup_consent"})
+    assert result.status_code == 200
+    with m.SessionLocal() as db:
+        proof = db.get(m.email_pilot.IdentityEvidence, "account-0")
+        assert proof.verified_at is not None and not proof.organizer
+    assert run(pilot, lead_id)["sent"] == 0
+    pilot[3].assert_not_called()
+
+
+@pytest.mark.parametrize("order", [(True, False), (False, True)])
+def test_equal_timestamp_ownership_conflict_revocation_wins(pilot, monkeypatch, order):
+    m, client, headers = pilot[:3]
+    clock = m.now()
+    monkeypatch.setattr(m, "now", lambda: clock)
+    lead_id = add(pilot)
+    monkeypatch.setattr(m, "now", lambda: clock + timedelta(seconds=30))
+    for index, owner in enumerate(order):
+        response = client.post("/api/marketing/internal/ingest", headers=headers, json={
+            "event_id": f"equal-owner-{index}", "email": "fixture-0@example.com",
+            "festio_user_id": "account-0", "email_verified": False,
+            "organizer_account": owner, "lifecycle_event": "event_updated",
+            "occurred_at": (clock + timedelta(seconds=10)).isoformat()})
+        assert response.status_code == 200
+    with m.SessionLocal() as db:
+        assert not db.get(m.email_pilot.IdentityEvidence, "account-0").organizer
+    assert run(pilot, lead_id)["sent"] == 0
+    pilot[3].assert_not_called()
+
+
+@pytest.mark.parametrize("secret", ["", " ", chr(9)])
+def test_blank_internal_key_blocks_before_readiness_or_send_claim(pilot, monkeypatch, secret):
+    m = pilot[0]
+    lead, sequence = objects(pilot, add(pilot))
+    monkeypatch.setattr(m, "TOKEN_SECRET", secret)
+    with pytest.raises(m.email_pilot.EmailBlocked):
+        m.send_follow_up(lead, sequence, email_mode="pilot")
+    pilot[3].assert_not_called()
+    pilot[4].assert_not_called()
+    with m.SessionLocal() as db:
+        assert db.scalar(select(func.count(m.SendAttempt.id))) == 0
+        assert db.scalar(select(func.count(m.email_pilot.EmailDispatch.id))) == 0
+
+
+def test_malformed_readiness_url_is_known_blocked_before_claim(pilot, monkeypatch):
+    m = pilot[0]
+    lead, sequence = objects(pilot, add(pilot))
+    monkeypatch.setenv("MARKETING_EMAIL_READINESS_URL", "https://[example.com")
+    with pytest.raises(m.email_pilot.EmailBlocked):
+        m.send_follow_up(lead, sequence, email_mode="pilot")
+    pilot[3].assert_not_called()
+    pilot[4].assert_not_called()
+
+
+def test_multi_recipient_campaign_releases_sqlite_writer_between_durable_claims(pilot, monkeypatch):
+    m = pilot[0]
+    lead_ids = [add(pilot, index=i) for i in range(2)]
+    monkeypatch.setenv("MARKETING_OUTBOUND_ENABLED", "true")
+    with m.SessionLocal() as db:
+        segment = m.ModuleRecord(module="segments", name="Synthetic saved segment",
+                                 status="active", created_by="test", payload={})
+        db.add(segment)
+        db.flush()
+        campaign = m.ModuleRecord(module="campaigns", name="Synthetic two-recipient campaign",
+            status="active", created_by="test",
+            payload={"segment_id": segment.id,
+                     "steps": [{"subject": "Synthetic", "body": "Synthetic", "cta_url": "https://example.test"}]})
+        db.add(campaign)
+        db.commit()
+        campaign_id = campaign.id
+    with m.SessionLocal() as db:
+        result = m.execute_campaign(campaign_id, dry_run=False, identity=identity(m), db=db)
+    assert result == {"eligible": 2, "sent": 2, "failed": 0}
+    assert pilot[3].call_count == 2
+    with m.SessionLocal() as db:
+        assert db.scalar(select(func.count(m.email_pilot.EmailDispatch.id))) == 2
+        assert db.scalar(select(func.count(m.Activity.id)).where(m.Activity.kind == "email_sent")) == 2
+        repeated = m.execute_campaign(campaign_id, dry_run=False, identity=identity(m), db=db)
+    assert repeated["sent"] == 0 and pilot[3].call_count == 2
+    for lead_id in lead_ids:
+        assert run(pilot, lead_id)["sent"] == 0
+    assert pilot[3].call_count == 2

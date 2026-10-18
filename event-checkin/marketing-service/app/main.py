@@ -696,7 +696,10 @@ def safe_cta_url(value: Any) -> str:
     decoded = unquote(url)
     if any(ord(c) < 32 for c in decoded) or "\\" in decoded:
         raise HTTPException(400, "Invalid CTA URL")
-    parsed = urlsplit(url)
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        raise HTTPException(400, "Invalid CTA URL")
     if parsed.scheme == "https" and parsed.hostname and not parsed.username and not parsed.password:
         return url
     if parsed.scheme == "mailto" and re.fullmatch(r"[^\s@?]+@[^\s@?]+\.[^\s@?]+", parsed.path):
@@ -1153,6 +1156,14 @@ def ingest_conversation(body: ConversationIn, identity: Identity = Depends(decod
         raise HTTPException(403, "Internal conversation ingest requires platform authority")
     if not any((body.email, body.phone, body.festio_user_id, body.source_contact_id)):
         raise HTTPException(400, "A contact identifier is required")
+    # Exact committed replays remain acknowledgements after deletion/mailbox
+    # changes. Validate the stored kind and payload hash; never reapply effects.
+    if body.event_id and db.get(IngestReceipt, body.event_id):
+        saved, _ = receipt_for(db, body.event_id, "conversation", body.model_dump())
+        result = {"recorded": True, "duplicate": True, "lead_id": saved.lead_id}
+        if saved.prospect_id:
+            result.update(unmatched=saved.lead_id is None, prospect_id=saved.prospect_id)
+        return result
     # A supplied reply token is an exclusive identity binding, never a hint
     # that may fall back to an attacker-controlled account/email assertion.
     bound_lead = None
@@ -1553,6 +1564,9 @@ def execute_campaign(campaign_id: str, dry_run: bool = Query(False), identity: I
         except Exception as exc:
             logger.exception("Campaign delivery failed"); delivery = {"status": "failed", "provider": "resend", "provider_id": None, "error": str(exc)[:240]}; failed += 1
         db.add(Activity(lead_id=lead.id, kind=f"email_{delivery['status']}", summary=f"Campaign {campaign.name}: {delivery['status']}", actor=identity.email, data={"campaign_id": campaign.id, **delivery}))
+        # Release this SQLite writer before the next independent durable cap
+        # claim. The pre-provider claim was already committed by send_follow_up.
+        db.commit()
     campaign.payload = {**campaign.payload, "last_executed_at": now().isoformat(), "sent": sent, "failed": failed}
     audit(db, identity, "campaign.executed", "campaigns", campaign.id, eligible=len(audience), sent=sent, failed=failed); db.commit()
     return {"eligible": len(audience), "sent": sent, "failed": failed}

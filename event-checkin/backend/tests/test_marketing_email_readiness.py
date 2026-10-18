@@ -121,3 +121,11 @@ async def test_blank_receiving_authority_is_not_ready(ctx, readiness_config, mon
         params={"reply_domain": "reply.example.test", "challenge": "a" * 32}, headers=auth())
     assert response.status_code == 200
     assert not response.json()["ready"] and not response.json()["reply_routing_ready"]
+
+@pytest.mark.parametrize("secret", ["", " ", chr(9)])
+async def test_blank_internal_readiness_key_cannot_authenticate_or_sign(ctx, readiness_config, monkeypatch, secret):
+    monkeypatch.setattr(settings, "planner_internal_token", secret)
+    response = await ctx.client.get("/api/internal/marketing/email-readiness",
+        params={"reply_domain": "reply.example.test", "challenge": "a" * 32}, headers=auth() if secret else {})
+    assert response.status_code == 503
+    assert "proof" not in response.json()

@@ -444,3 +444,12 @@ The reply signing key must be nonblank in both services. Backend
 same existing Secret key `festio-secrets/PLANNER_INTERNAL_SERVICE_TOKEN`.
 Absent/null CC is allowed; non-list/non-string fields, including falsey
 objects, numbers and booleans, are rejected before either dispatch path.
+
+Ownership evidence has its own source-event timestamp. Newer revocations win
+over delayed verified or unverified milestones; tied assertions fail closed to
+revocation. A revocation may create only an ownership tombstone before mailbox
+verification, which remains ineligible until every required proof exists.
+Blank internal keys cannot authenticate readiness or permit a send. Committed
+reply receipts acknowledge exact replays after deletion/mailbox changes without
+reapplying effects. Campaign result transactions close before the next durable
+recipient claim, and malformed CTA parsing remains a known-unsent failure.

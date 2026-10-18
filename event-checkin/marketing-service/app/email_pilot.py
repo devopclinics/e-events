@@ -27,12 +27,13 @@ class IdentityEvidence(PilotBase):
     __tablename__ = "marketing_email_identity_evidence"
     account_id: Mapped[str] = mapped_column(String(128), primary_key=True)
     lead_id: Mapped[str] = mapped_column(String(36), unique=True)
-    recipient_key: Mapped[str] = mapped_column(String(80))
-    registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    recipient_key: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    registered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     consent_event_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     consented_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     organizer: Mapped[bool] = mapped_column(Boolean, default=False)
+    ownership_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class EmailCap(PilotBase):
@@ -113,9 +114,11 @@ def invalidate_consent(lead):
 
 
 def capture_evidence(m, db, lead, body):
-    """Only authenticated immutable lifecycle input can supply this evidence.
+    """Retain ordered ownership independently of verified mailbox evidence.
 
-    Old payloads missing proof remain ineligible. No existing lead is backfilled.
+    An ownership revocation can arrive before first verification. Its minimal
+    tombstone must survive until older queued verification/milestones arrive.
+    Missing proof still never enrolls or backfills an existing lead.
     """
     account = lead.festio_user_id
     if not account:
@@ -123,29 +126,35 @@ def capture_evidence(m, db, lead, body):
     row = db.get(IdentityEvidence, account)
     occurred = utc(body.get("occurred_at"))
     registered = utc(body.get("account_registered_at"))
-    if body.get("email_verified") is True and registered and occurred and body.get("event_id"):
-        if row is None:
-            row = IdentityEvidence(account_id=account, lead_id=lead.id,
-                                   recipient_key=key("email:", lead.email.strip().lower()),
-                                   registered_at=registered, verified_at=occurred, organizer=False)
-            db.add(row)
-        # Never replace the source account creation date or another lead link.
-        if row.lead_id != lead.id or utc(row.registered_at) != registered:
+    verified = bool(body.get("email_verified") is True and registered and occurred and body.get("event_id"))
+    ownership = body.get("organizer_account")
+    if row is None and (verified or type(ownership) is bool):
+        row = IdentityEvidence(account_id=account, lead_id=lead.id, organizer=False)
+        db.add(row)
+    if row and row.lead_id != lead.id:
+        raise EmailBlocked("Conflicting source account evidence")
+    if verified:
+        if row.registered_at is not None and utc(row.registered_at) != registered:
             raise EmailBlocked("Conflicting source account evidence")
+        row.registered_at = registered
         recipient_key = key("email:", lead.email.strip().lower())
         if row.recipient_key != recipient_key:
-            if occurred < utc(row.verified_at):
+            if row.verified_at is not None and occurred < utc(row.verified_at):
                 raise EmailBlocked("Stale verification cannot rebind a mailbox")
             row.recipient_key = recipient_key
             row.consent_event_id, row.consented_at = None, None
-        row.verified_at = max(utc(row.verified_at), occurred)
-        if type(body.get("organizer_account")) is bool:
-            row.organizer = body["organizer_account"]
+        row.verified_at = max(utc(row.verified_at), occurred) if row.verified_at else occurred
         if body.get("consent_email") is True and lead.consent_email and not stopped(lead):
             row.consent_event_id = body["event_id"]
             row.consented_at = occurred
-    elif row and type(body.get("organizer_account")) is bool:
-        row.organizer = body["organizer_account"]  # Trusted linked business milestone, not email authority.
+    if row and type(ownership) is bool:
+        prior = utc(row.ownership_at)
+        if occurred and (prior is None or occurred > prior or (occurred == prior and ownership is False)):
+            row.organizer, row.ownership_at = ownership, occurred
+        elif not occurred and ownership is False:
+            # A grant without ordering evidence is never authority. An
+            # undated revocation conservatively blocks older queued grants.
+            row.organizer, row.ownership_at = False, max(prior, m.now()) if prior else m.now()
     if row and body.get("consent_email") is False:
         row.consent_event_id = None
         row.consented_at = None
@@ -160,7 +169,7 @@ def eligible(m, db, lead, mode):
             or proof.recipient_key != key("email:", lead.email.strip().lower())
             or not proof.organizer or not proof.consent_event_id):
         return False
-    stamps = [proof.registered_at, proof.verified_at, proof.consented_at, lead.created_at, lead.registered_at]
+    stamps = [proof.registered_at, proof.verified_at, proof.consented_at, proof.ownership_at, lead.created_at, lead.registered_at]
     current = m.now()
     if any(not utc(x) or utc(x) < launch or utc(x) > current for x in stamps):
         return False
@@ -210,8 +219,11 @@ def approved_template(db, sequence, stage):
 def readiness(m):
     domain = os.getenv("MARKETING_REPLY_DOMAIN", "").strip().lower()
     target = os.getenv("MARKETING_EMAIL_READINESS_URL", "")
-    parsed = urlsplit(target)
-    if (not domain or "@" in domain or not m.TOKEN_SECRET or not parsed.hostname
+    try:
+        parsed = urlsplit(target)
+    except ValueError:
+        raise EmailBlocked("Invalid backend readiness URL")
+    if (not domain or "@" in domain or not m.TOKEN_SECRET or not m.TOKEN_SECRET.strip() or not parsed.hostname
             or parsed.scheme not in {"http", "https"} or parsed.username or parsed.password
             or parsed.path != "/api/internal/marketing/email-readiness" or parsed.query or parsed.fragment):
         raise EmailBlocked("Verified reply routing and backend readiness URL required")

@@ -620,6 +620,14 @@
       },
       "AssistedMenuIn": {
         "properties": {
+          "clear_categories": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Clear Categories",
+            "type": "array"
+          },
           "combo": {
             "additionalProperties": {
               "type": "string"

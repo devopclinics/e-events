@@ -190,3 +190,89 @@ async def test_two_staff_can_share_one_table(ctx):
     for staff in [s['staff'],user]:
         ctx.login(staff);r=await ctx.client.get(url(s));assert [g['id'] for g in r.json()['guests']]==[s['guests'][0].id]
     ctx.login(ctx.ids['user_a']);r=await ctx.client.get(url(s));assert len([m for m in r.json()['team'] if any(a['table_id']==s['tables'][0].id for a in m['assignments'])])==2
+
+@pytest.mark.asyncio
+async def test_complete_table_manager_arrival_to_service_and_handover(ctx,monkeypatch):
+    s=await setup(ctx)
+    async with _Session() as db:
+        e=await db.get(Event,s['event_id']);e.notify_email=False;e.notify_sms=False;e.notify_whatsapp=False
+        g=await db.get(Guest,s['guests'][0].id);g.admitted=False;g.admitted_at=None;await db.commit()
+    assert (await configure(ctx,s,[table(s,can_checkin=True,can_manage_meals=True),table(s,1,can_manage_meals=True)])).status_code==200
+    ctx.login(s['staff']);guest=s['guests'][0]
+    assert (await ctx.client.post(url(s,f'/guests/{guest.id}/seated'),json={'seated':True})).status_code==409
+    scan=await ctx.client.post(url(s,'/scan'),json={'token':guest.qr_token});assert scan.status_code==200,scan.text;assert scan.json()['status']=='admitted'
+    assert (await ctx.client.post(url(s,f'/guests/{guest.id}/seated'),json={'seated':True})).status_code==200
+    body={'single':{s['category'].id:s['item'].id},'guest_agreed':True}
+    assert (await ctx.client.post(url(s,f'/guests/{guest.id}/menu'),json=body)).status_code==200
+    assert (await ctx.client.post(url(s,f'/guests/{guest.id}/services/{s["services"][0].id}/served'))).status_code==200
+    ws=(await ctx.client.get(url(s))).json();row=next(g for g in ws['guests'] if g['id']==guest.id)
+    assert row['admitted'] and row['seated_at'] and row['meal_services'][0]['served']
+    assert row['choices'][0]['item_id']==s['item'].id
+    from app.routers import tasks
+    notifications=[];monkeypatch.setattr(tasks,'_notify_assignee',lambda *args:notifications.append(args))
+    request={'assignment_id':ws['assignments'][0]['id'],'request_key':'full-handover-123','title':'Shift handover: water requested','priority':'high','assignee_user_id':s['staff'].id}
+    first=await ctx.client.post(url(s,'/requests'),json=request);again=await ctx.client.post(url(s,'/requests'),json=request)
+    assert first.status_code==200 and again.json()['task_id']==first.json()['task_id'] and len(notifications)==1
+    path=f"/api/events/{s['event_id']}/tasks/{first.json()['task_id']}"
+    for action in ['start','complete']:
+        result=await ctx.client.post(path+'/'+action);assert result.status_code==200,result.text
+    assert next(t for t in (await ctx.client.get(f"/api/events/{s['event_id']}/tasks")).json() if t['id']==first.json()['task_id'])['status']=='done'
+
+@pytest.mark.asyncio
+async def test_later_meal_can_be_chosen_without_changing_served_meal(ctx):
+    s=await setup(ctx);assert (await configure(ctx,s,[table(s,can_manage_meals=True)])).status_code==200
+    async with _Session() as db:
+        dinner=MenuCategory(event_id=s['event_id'],name='Dinner',selection_type='single',is_required=True,guest_visible=True,display_only=False)
+        db.add(dinner);await db.flush();item=MenuItem(event_id=s['event_id'],category_id=dinner.id,name='Dinner plate');db.add(item);await db.commit()
+    ctx.login(s['staff']);path=url(s,f"/guests/{s['guests'][0].id}/menu")
+    body={'single':{s['category'].id:s['item'].id,dinner.id:item.id},'guest_agreed':True}
+    assert (await ctx.client.post(path,json=body)).status_code==200
+    assert (await ctx.client.post(url(s,f"/guests/{s['guests'][0].id}/services/{s['services'][0].id}/served"))).status_code==200
+    # Dinner can be selected later even though lunch is served and legacy meal_served is true.
+    assert (await ctx.client.post(path,json={'single':{dinner.id:item.id},'guest_agreed':True})).status_code==200
+    ws=(await ctx.client.get(url(s))).json();row=next(g for g in ws['guests'] if g['id']==s['guests'][0].id)
+    assert row['locked_category_ids']==[s['category'].id] and not row['menu_selections_locked']
+    # Reposting unchanged served choices is harmless; changing them is forbidden.
+    assert (await ctx.client.post(path,json=body)).status_code==200
+    async with _Session() as db:
+        other=MenuItem(event_id=s['event_id'],category_id=s['category'].id,name='Different lunch');db.add(other);await db.commit()
+    assert (await ctx.client.post(path,json={**body,'single':{s['category'].id:other.id,dinner.id:item.id}})).status_code==400
+
+@pytest.mark.asyncio
+async def test_optional_choice_clear_and_legacy_lock(ctx):
+    s=await setup(ctx);assert (await configure(ctx,s,[table(s,can_manage_meals=True)])).status_code==200
+    async with _Session() as db:
+        c=await db.get(MenuCategory,s['category'].id);c.is_required=False;await db.commit()
+    ctx.login(s['staff']);path=url(s,f"/guests/{s['guests'][0].id}/menu")
+    assert (await ctx.client.post(path,json={'single':{s['category'].id:s['item'].id},'guest_agreed':True})).status_code==200
+    assert (await ctx.client.post(path,json={'clear_categories':[s['category'].id],'guest_agreed':True})).status_code==200
+    async with _Session() as db:
+        assert await db.scalar(select(func.count()).select_from(GuestMenuChoice).where(GuestMenuChoice.guest_id==s['guests'][0].id))==0
+        g=await db.get(Guest,s['guests'][0].id);g.meal_served=True;await db.commit()
+    assert (await ctx.client.post(path,json={'single':{s['category'].id:s['item'].id},'guest_agreed':True})).status_code==400
+
+@pytest.mark.asyncio
+async def test_conference_entry_exit_capacity_and_wrong_room(ctx):
+    s=await setup(ctx)
+    async with _Session() as db:
+        z=await db.get(Zone,s['zone'].id);z.capacity=1
+        other=Zone(event_id=s['event_id'],name='Other hall');db.add(other);await db.commit()
+    assert (await configure(ctx,s,[{'zone_id':s['zone'].id,'can_scan_zone':True}])).status_code==200
+    ctx.login(s['staff'])
+    async def scan(index,direction='in',zone=None):return await ctx.client.post(url(s,'/scan'),json={'token':s['guests'][index].qr_token,'zone_id':zone or s['zone'].id,'direction':direction})
+    assert (await scan(0,zone=other.id)).status_code==403
+    assert (await scan(0)).json()['status']=='ok'
+    assert (await scan(1)).json()['status']=='denied'
+    assert len((await ctx.client.get(url(s))).json()['zones'][0]['inside'])==1
+    assert (await scan(0,'out')).json()['status']=='ok'
+    assert (await ctx.client.get(url(s))).json()['zones'][0]['inside']==[]
+    assert (await scan(1)).json()['status']=='ok'
+
+@pytest.mark.asyncio
+async def test_each_operational_grant_is_independent(ctx):
+    s=await setup(ctx);assert (await configure(ctx,s,[table(s)])).status_code==200
+    ctx.login(s['staff']);g=s['guests'][0]
+    assert (await ctx.client.post(url(s,'/scan'),json={'token':g.qr_token})).status_code==403
+    assert (await ctx.client.post(url(s,f'/guests/{g.id}/menu'),json={'single':{s['category'].id:s['item'].id},'guest_agreed':True})).status_code==403
+    assert (await ctx.client.post(url(s,f'/guests/{g.id}/services/{s["services"][0].id}/served'))).status_code==403
+    assert (await ctx.client.post(url(s,f'/guests/{g.id}/seated'),json={'seated':True})).status_code==200

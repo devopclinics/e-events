@@ -5,12 +5,14 @@ import { createRequire } from 'node:module'
 import { runInNewContext } from 'node:vm'
 import { transformSync } from 'esbuild'
 import React from 'react'
+import { CONTENT } from '../src/guideContent.mjs'
 import { create, act } from 'react-test-renderer'
 const require = createRequire(import.meta.url)
 function harness(api, selection = 'event-a') {
   let selected = selection
   const modules = {
     '../api': { api },
+    '../guideContent.mjs': { CONTENT },
     '../hooks/useCurrentEvent': { useCurrentEvent: () => [selected] },
     './redesign/RedesignShell': ({ children }) => React.createElement('div', null, children),
     '../components/QrCameraScanner': () => null,
@@ -83,4 +85,46 @@ test('late response from a previous event never replaces the selected event rost
   await act(async () => pending.find(p => p.id === 'event-a').resolve(base()))
   assert.equal(button(root, 'Mark seated'), undefined)
   await act(async () => root.unmount())
+})
+
+test('in-page help reuses the shared instructions and shows setup only to organisers',async()=>{
+  const data=base(),h=harness({guestServices:async()=>data});let root
+  await act(async()=>{root=create(React.createElement(h.Page))})
+  assert.ok(root.root.findByProps({'aria-label':'Guest Services help'}))
+  assert.ok(root.root.findAllByType('summary').some(n=>text(n)==='Staff steps: arrival, meals and requests'))
+  assert.ok(!root.root.findAllByType('summary').some(n=>text(n).startsWith('Organiser setup')))
+  const content=text(root.root.findByProps({'aria-label':'Guest Services help'}))
+  assert.ok(content.includes(CONTENT.staff.topics.find(t=>t.id==='staff-guest-services').steps[0]))
+  await act(async()=>root.unmount())
+})
+
+test('served menu is read-only while a later meal remains editable',async()=>{
+ const data=base(),calls=[]
+ data.menu_categories=[{id:'lunch',name:'Lunch',is_required:true,selection_type:'single',items:[{id:'rice',name:'Rice'}]},{id:'dinner',name:'Dinner',is_required:false,selection_type:'single',items:[{id:'plate',name:'Dinner plate'}]}]
+ Object.assign(data.guests[0],{can_manage_meals:true,locked_category_ids:['lunch'],menu_selections_locked:false,choices:[{category_id:'lunch',item_id:'rice',name:'Rice'}]})
+ const h=harness({guestServices:async()=>data,assistGuestMenu:async(...args)=>calls.push(args)});let root
+ await act(async()=>{root=create(React.createElement(h.Page))})
+ await act(async()=>button(root,'Help choose menu').props.onClick())
+ assert.equal(root.root.findAllByProps({'aria-label':'Lunch'}).length,0)
+ await change(root.root.findByProps({'aria-label':'Dinner'}),'plate')
+ const agreed=root.root.findAllByType('input').find(n=>n.props.required&&n.props.type==='checkbox')
+ await act(async()=>agreed.props.onChange({target:{checked:true}}))
+ const form=root.root.findAllByType('form').find(f=>f.findAllByType('h3').some(h=>text(h)==='Help Ada choose'))
+ await act(async()=>form.props.onSubmit({preventDefault(){}}))
+ assert.equal(calls[0][2].single.dinner,'plate');assert.equal(calls[0][2].single.lunch,undefined);assert.equal(calls[0][2].guest_agreed,true)
+ await act(async()=>root.unmount())
+})
+
+test('clearing an optional menu choice explicitly tells the server to remove it',async()=>{
+ const data=base(),calls=[]
+ data.menu_categories=[{id:'dessert',name:'Dessert',is_required:false,selection_type:'single',items:[{id:'cake',name:'Cake'}]}]
+ Object.assign(data.guests[0],{can_manage_meals:true,choices:[{category_id:'dessert',item_id:'cake',name:'Cake'}]})
+ const h=harness({guestServices:async()=>data,assistGuestMenu:async(...args)=>calls.push(args)});let root
+ await act(async()=>{root=create(React.createElement(h.Page))})
+ await act(async()=>button(root,'Help choose menu').props.onClick())
+ await change(root.root.findByProps({'aria-label':'Dessert'}),'')
+ const agreed=root.root.findAllByType('input').find(n=>n.props.required&&n.props.type==='checkbox');await act(async()=>agreed.props.onChange({target:{checked:true}}))
+ const form=root.root.findAllByType('form').find(f=>f.findAllByType('h3').some(h=>text(h)==='Help Ada choose'));await act(async()=>form.props.onSubmit({preventDefault(){}}))
+ assert.deepEqual(Array.from(calls[0][2].clear_categories),['dessert']);assert.equal(calls[0][2].single.dessert,undefined)
+ await act(async()=>root.unmount())
 })

@@ -60,6 +60,7 @@ class SeatedIn(BaseModel):
 
 class AssistedMenuIn(GuestMenuSubmit):
     guest_agreed: bool = False
+    clear_categories: list[str] = Field(default_factory=list, max_length=100)
 
 
 class RequestIn(BaseModel):
@@ -126,10 +127,11 @@ async def workspace(event_id: str, db: AsyncSession = Depends(get_db), actor: Us
     out = []
     for g in guests:
         can_meals = can_write if is_supervisor else any(r.table_id == g.table_id and r.can_manage_meals for r in active)
+        locked_categories = sorted({s.category_id for s in services if fulfills.get((g.id,s.id)) and fulfills[(g.id,s.id)].fulfillment_status == 'served'})
         out.append({'id':g.id, 'name':f'{g.first_name} {g.last_name}'.strip(), 'table_id':g.table_id, 'table_name':table_names.get(g.table_id), 'seat_number':g.seat_number,
             'admitted':g.admitted, 'seated_at':seated[g.id].seated_at if g.id in seated and seated[g.id].table_id == g.table_id else None,
             'can_checkin':can_write if is_supervisor else any(r.table_id == g.table_id and r.can_checkin for r in active),
-            'can_manage_meals':can_meals, 'choices':by_guest.get(g.id,[]) if can_meals else [],
+            'can_manage_meals':can_meals, 'locked_category_ids':locked_categories if can_meals else [], 'menu_selections_locked':bool(g.meal_served and not locked_categories), 'choices':by_guest.get(g.id,[]) if can_meals else [],
             'meal_services':[{'id':s.id,'category_id':s.category_id,'name':s.name,'status':s.status,
                 'eligible':g.rsvp_status != 'declined' and (not fulfills.get((g.id,s.id)) or fulfills[(g.id,s.id)].eligibility_status == 'eligible'),
                 'served':bool(fulfills.get((g.id,s.id)) and fulfills[(g.id,s.id)].fulfillment_status == 'served')} for s in services] if can_meals else []})
@@ -201,7 +203,7 @@ async def assisted_menu(event_id: str, guest_id: str, body: AssistedMenuIn, db: 
     _,g=await event_and_guest(event_id,guest_id,actor,db,permission='can_manage_meals')
     if not body.guest_agreed: raise HTTPException(400,'Confirm the guest agreed to these selections')
     audit(db,event_id,actor,'assisted_menu',g.id,{'guest_agreed':True})
-    return await save_guest_menu(g,GuestMenuSubmit(**body.model_dump(exclude={'guest_agreed'})),db,actor_user_id=actor.id)
+    return await save_guest_menu(g,GuestMenuSubmit(**body.model_dump(exclude={'guest_agreed','clear_categories'})),db,actor_user_id=actor.id,category_locks=True,clear_category_ids=body.clear_categories)
 
 
 @router.post('/{event_id}/guest-services/guests/{guest_id}/services/{service_id}/served')

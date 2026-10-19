@@ -1268,7 +1268,7 @@ export const CONTENT = {
           "Select the event and open Guest Services. Check My assignments and the current shift before acting.",
           "Filter tables or choose Needs attention only. Expected, Checked in and Seated describe different stages; use Mark seated only after helping the guest reach the table.",
           "If check-in permission is enabled, scan the guest pass or paste its link. Only guests already assigned to your tables can be admitted here. Ask a supervisor to handle unassigned guests or table moves.",
-          "Choose Help choose menu, review options with the guest, confirm their agreement and save. Existing menu eligibility and selection locks still apply.",
+          "Choose Help choose menu, review options with the guest, confirm their agreement and save. Served meal categories stay locked; you can still choose a later, unserved meal. Clear an optional single or combo choice with its empty option, or uncheck all choices in an optional multiple-choice category, then save. Legacy served records without a specific category remain locked for supervisor review.",
           "When the meal is delivered, mark the specific meal service served. Each occurrence has its own completion; repeated taps do not create a second fulfilment. Closed, full or out-of-window services cannot be served here.",
           "For a conference room, choose the room and entry/exit direction before scanning. Existing ticket, capacity and guardian checks apply. This records venue movement, not session attendance.",
           "Use Request help or hand over work for water, accessibility assistance, housekeeping or delays. Choose a teammate or leave it in the team queue, then create the task.",

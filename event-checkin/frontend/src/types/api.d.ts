@@ -133,6 +133,7 @@ export interface AssignUserRequest {
 }
 
 export interface AssistedMenuIn {
+  clear_categories?: (string)[]
   combo?: Record<string, string>
   guest_agreed?: boolean
   multi?: Record<string, (string)[]>

@@ -4,6 +4,7 @@ import { api } from '../api'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import RedesignShell from './redesign/RedesignShell'
 import QrCameraScanner from '../components/QrCameraScanner'
+import { CONTENT } from '../guideContent.mjs'
 import './GuestServicesPage.css'
 
 export function passToken(raw) {
@@ -39,10 +40,27 @@ function AssignmentEditor({ member, locations, onSave, busy }) {
   </form>
 }
 
+function GuestServicesHelp({ canConfigure }) {
+  const staff = CONTENT.staff.topics.find(t => t.id === 'staff-guest-services')
+  const organizer = CONTENT.organizer.topics.find(t => t.id === 'org-guest-services')
+  const topic = (value, title) => <details key={value.id}><summary>{title}</summary><p>{value.intro}</p>{value.before && <p>{value.before}</p>}<ol>{value.steps.map((step, i) => <li key={i}>{step}</li>)}</ol><p><strong>Check:</strong> {value.check}</p><p>{value.troubleshoot}</p></details>
+  return <aside className="gs-panel gs-help" aria-label="Guest Services help">
+    <h2>How Guest Services works</h2>
+    <p>One person can cover several tables or rooms, and several staff can share a location. Your assignments and permissions decide which actions are available.</p>
+    <ul><li>Check in → help the guest to their table → mark seated.</li><li>Agree menu choices with the guest. Mark each meal served only after delivery.</li><li>Conference room scans record entry and exit; session attendance is separate.</li><li>Use the existing team Tasks for assistance, progress and shift handovers.</li></ul>
+    {canConfigure && topic(organizer, 'Organiser setup: staff, tables, rooms and shifts')}
+    {topic(staff, 'Staff steps: arrival, meals and requests')}
+    <p>Changes need an internet connection. Refresh if a guest moves tables or your shift changes.</p>
+  </aside>
+}
+
 function MenuEditor({ guest, categories, busy, save, close }) {
+  const locked = new Set(guest.locked_category_ids || [])
+  const [cleared, setCleared] = useState([])
   const [choices, setChoices] = useState(() => {
     const body = { single: {}, multi: {}, combo: {} }
     for (const c of categories) {
+      if (locked.has(c.id)) continue
       const selected = guest.choices.filter(x => x.category_id === c.id)
       if (c.selection_type === 'multi') { if (selected.length) body.multi[c.id] = selected.map(x => x.item_id) }
       else if (selected[0]) body[c.selection_type === 'combo' ? 'combo' : 'single'][c.id] = selected[0].combination_id || selected[0].item_id
@@ -50,9 +68,9 @@ function MenuEditor({ guest, categories, busy, save, close }) {
     return body
   })
   const [agreed, setAgreed] = useState(false)
-  return <form onSubmit={e => { e.preventDefault(); save({ ...choices, guest_agreed: agreed }) }}><h3>Help {guest.name} choose</h3>
-    {categories.map(c => <fieldset key={c.id} disabled={busy}><legend>{c.name}{c.is_required ? ' (required)' : ''}</legend>
-      {c.selection_type === 'multi' ? c.items.map(item => <label className="gs-check" key={item.id}><input type="checkbox" checked={(choices.multi[c.id] || []).includes(item.id)} onChange={e => setChoices(old => ({ ...old, multi: { ...old.multi, [c.id]: e.target.checked ? [...(old.multi[c.id] || []), item.id] : (old.multi[c.id] || []).filter(id => id !== item.id) } }))} />{item.name}</label>) : <select aria-label={c.name} required={c.is_required} value={choices[c.selection_type === 'combo' ? 'combo' : 'single'][c.id] || ''} onChange={e => { const type = c.selection_type === 'combo' ? 'combo' : 'single'; setChoices(old => { const next = { ...old, [type]: { ...old[type] } }; if (e.target.value) next[type][c.id] = e.target.value; else delete next[type][c.id]; return next }) }}><option value="">Choose…</option>{(c.selection_type === 'combo' ? c.combinations : c.items).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}
+  return <form onSubmit={e => { e.preventDefault(); save({ ...choices, guest_agreed: agreed, clear_categories: cleared }) }}><h3>Help {guest.name} choose</h3>
+    {categories.map(c => <fieldset key={c.id} disabled={busy || locked.has(c.id)}><legend>{c.name}{c.is_required ? ' (required)' : ''}</legend>
+      {locked.has(c.id) ? <p>Served — choices locked. {guest.choices.filter(x => x.category_id === c.id).map(x => x.name).join(', ')}</p> : c.selection_type === 'multi' ? c.items.map(item => <label className="gs-check" key={item.id}><input type="checkbox" checked={(choices.multi[c.id] || []).includes(item.id)} onChange={e => { const next = e.target.checked ? [...(choices.multi[c.id] || []), item.id] : (choices.multi[c.id] || []).filter(id => id !== item.id); const clear = !c.is_required && next.length === 0; setCleared(old => clear ? [...old.filter(id => id !== c.id), c.id] : old.filter(id => id !== c.id)); setChoices(old => { const result = { ...old, multi: { ...old.multi, [c.id]: next } }; if (clear) delete result.multi[c.id]; return result }) }} />{item.name}</label>) : <select aria-label={c.name} required={c.is_required} value={choices[c.selection_type === 'combo' ? 'combo' : 'single'][c.id] || ''} onChange={e => { const type = c.selection_type === 'combo' ? 'combo' : 'single'; setCleared(old => e.target.value ? old.filter(id => id !== c.id) : [...old.filter(id => id !== c.id), c.id]); setChoices(old => { const next = { ...old, [type]: { ...old[type] } }; if (e.target.value) next[type][c.id] = e.target.value; else delete next[type][c.id]; return next }) }}><option value="">Choose…</option>{(c.selection_type === 'combo' ? c.combinations : c.items).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}
     </fieldset>)}
     <label className="gs-check"><input type="checkbox" required checked={agreed} onChange={e => setAgreed(e.target.checked)} />The guest agreed to these selections</label>
     <div className="gs-actions"><button disabled={busy || !agreed}>Save guest’s choices</button><button type="button" disabled={busy} onClick={close}>Cancel</button></div>
@@ -110,6 +128,7 @@ export default function GuestServicesPage() {
   }
   return <RedesignShell topActive="guestservices" withEventSidebar eventActive="guestservices"><main className="gs-page">
     <header><p className="gs-eyebrow">EVENT OPERATIONS</p><h1>Guest Services</h1><p>Look after your tables and rooms, help guests choose meals and coordinate assistance.</p><Link to="/team-redesign?tab=tasks">Open team Tasks →</Link></header>
+    <GuestServicesHelp canConfigure={!!data?.can_configure} />
     {error && <div role="alert" className="gs-error">{error} <button disabled={busy} onClick={() => act(reload, 'Refreshed')}>Refresh</button></div>}
     {notice && <div role="status" className="gs-notice">{notice}</div>}
     {!eventId ? <p>Choose an event from the header.</p> : !data ? <p>Loading assignments…</p> : <>
@@ -132,7 +151,7 @@ export default function GuestServicesPage() {
         <section><div className="gs-actions"><h2>Guests at tables</h2><label>Table<select value={filter} onChange={e => setFilter(e.target.value)}><option value="all">All assigned tables</option>{tables.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label><label className="gs-check"><input type="checkbox" checked={attention} onChange={e => setAttention(e.target.checked)} />Needs attention only</label></div>
           {!guests.length && <p>No guests match this view.</p>}
           <div className="gs-guests">{guests.map(g => <article className="gs-panel" key={g.id}><h3>{g.name}</h3><p>{g.table_name}{g.seat_number ? ` · Seat ${g.seat_number}` : ''}</p><div className="gs-chips"><span>{g.admitted ? 'Checked in' : 'Expected'}</span><span>{g.seated_at ? 'Seated' : 'Not seated'}</span></div>
-            <div className="gs-actions">{g.admitted && !g.seated_at && <button disabled={busy || (data.is_supervisor && !data.can_configure)} onClick={() => act(() => api.markGuestSeated(eventId, g.id, true), `${g.name} marked seated`)}>Mark seated</button>}{g.seated_at && <button disabled={busy || (data.is_supervisor && !data.can_configure)} onClick={() => act(() => api.markGuestSeated(eventId, g.id, false), 'Seating confirmation corrected')}>Correct seating confirmation</button>}{g.can_manage_meals && data.menu_categories.length > 0 && <button disabled={busy} onClick={() => setMenuGuest(g.id)}>Help choose menu</button>}</div>
+            <div className="gs-actions">{g.admitted && !g.seated_at && <button disabled={busy || (data.is_supervisor && !data.can_configure)} onClick={() => act(() => api.markGuestSeated(eventId, g.id, true), `${g.name} marked seated`)}>Mark seated</button>}{g.seated_at && <button disabled={busy || (data.is_supervisor && !data.can_configure)} onClick={() => act(() => api.markGuestSeated(eventId, g.id, false), 'Seating confirmation corrected')}>Correct seating confirmation</button>}{g.can_manage_meals && data.menu_categories.length > 0 && <button disabled={busy || g.menu_selections_locked || data.menu_categories.every(c => (g.locked_category_ids || []).includes(c.id))} onClick={() => setMenuGuest(g.id)}>Help choose menu</button>}</div>
             {g.can_manage_meals && <><p>{g.choices.length ? g.choices.map(c => c.name).join(', ') : 'No menu choices recorded'}</p>{g.meal_services.map(s => <div className="gs-service" key={s.id}><span>{s.name} · {s.served ? 'Served' : !s.eligible ? 'Not eligible' : 'Awaiting service'}</span>{!s.served && <button disabled={busy || !s.eligible || s.status !== 'open' || !g.admitted} onClick={() => act(() => api.serveGuestMeal(eventId, g.id, s.id), `${s.name} marked served`)}>Mark served</button>}</div>)}</>}
             {menuGuest === g.id && <MenuEditor key={g.id} guest={g} categories={data.menu_categories} busy={busy} close={() => setMenuGuest(null)} save={body => act(async () => { await api.assistGuestMenu(eventId, g.id, body); if (current.current === eventId) setMenuGuest(null) }, 'Guest selections saved')} />}
           </article>)}</div>

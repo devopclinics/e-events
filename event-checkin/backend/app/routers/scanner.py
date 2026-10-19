@@ -1681,7 +1681,7 @@ async def submit_menu(qr_token: str, body: GuestMenuSubmit, db: AsyncSession = D
     return await save_guest_menu(guest, body, db)
 
 
-async def save_guest_menu(guest, body, db, *, actor_user_id=None):
+async def save_guest_menu(guest, body, db, *, actor_user_id=None, category_locks=False, clear_category_ids=()):
     """Shared guest and assisted selection rules; callers authorize the actor."""
     guest = await db.scalar(select(Guest).where(Guest.id == guest.id).with_for_update().execution_options(populate_existing=True))
     event = await db.get(Event, guest.event_id)
@@ -1691,7 +1691,15 @@ async def save_guest_menu(guest, body, db, *, actor_user_id=None):
         raise HTTPException(status_code=400, detail="Menu selection is only available while the event is active")
     if not guest.admitted and not (event.menu_selection_timing == "before_arrival" and guest.rsvp_status == "confirmed"):
         raise HTTPException(status_code=400, detail="Menu unlocks at check-in")
-    if guest.meal_served:
+    # Assisted service operates per category. Preserve the public guest flow's
+    # existing lock and fail closed for legacy served flags without occurrence data.
+    locked_categories = set()
+    if category_locks:
+        from ..models import MealService, GuestMealService
+        locked_categories = set((await db.scalars(select(MealService.category_id).join(
+            GuestMealService, GuestMealService.service_id == MealService.id).where(
+            GuestMealService.guest_id == guest.id, GuestMealService.fulfillment_status == "served"))).all())
+    if guest.meal_served and (not category_locks or not locked_categories):
         raise HTTPException(status_code=400, detail="Your meal has been served — selection is locked")
 
     # Index this event's categories by id for validation.
@@ -1700,15 +1708,25 @@ async def save_guest_menu(guest, body, db, *, actor_user_id=None):
     )).scalars().all()
     cats_by_id = {c.id: c for c in cats}
 
-    # Required-category check: every is_required category must have a choice.
+    clear_ids = set(clear_category_ids)
+    if any(cid not in cats_by_id for cid in clear_ids):
+        raise HTTPException(400, "Only selectable event categories can be cleared")
+    if any(cats_by_id[cid].is_required for cid in clear_ids):
+        raise HTTPException(400, "Required meal choices cannot be cleared")
+    if clear_ids & locked_categories:
+        raise HTTPException(400, "A served meal's choices are locked")
+
+    # Required-category check: fulfilled categories are already complete.
     submitted_cat_ids = set((body.single or {}).keys()) \
         | set((body.multi or {}).keys()) \
         | set((body.combo or {}).keys())
+    if clear_ids & submitted_cat_ids:
+        raise HTTPException(400, "Choose or clear a category, not both")
     for c in cats:
-        if c.is_required and c.id not in submitted_cat_ids:
+        if c.is_required and c.id not in submitted_cat_ids and c.id not in locked_categories:
             raise HTTPException(400, f"{c.name} is required — please make a selection")
 
-    touched_cat_ids: set[str] = set()
+    touched_cat_ids: set[str] = set(clear_ids)
     new_rows: list[GuestMenuChoice] = []
 
     # --- single ---
@@ -1749,6 +1767,18 @@ async def save_guest_menu(guest, body, db, *, actor_user_id=None):
             raise HTTPException(400, f"Combo {combo_id} doesn't belong to {cat.name}")
         touched_cat_ids.add(cat_id)
         new_rows.append(GuestMenuChoice(guest_id=guest.id, category_id=cat_id, combination_id=combo_id))
+
+    if locked_categories & touched_cat_ids:
+        existing = (await db.scalars(select(GuestMenuChoice).where(
+            GuestMenuChoice.guest_id == guest.id,
+            GuestMenuChoice.category_id.in_(locked_categories)))).all()
+        for cid in locked_categories & touched_cat_ids:
+            old = {(x.menu_item_id, x.combination_id) for x in existing if x.category_id == cid}
+            new = {(x.menu_item_id, x.combination_id) for x in new_rows if x.category_id == cid}
+            if old != new:
+                raise HTTPException(400, "A served meal's choices are locked")
+        touched_cat_ids -= locked_categories
+        new_rows = [x for x in new_rows if x.category_id not in locked_categories]
 
     # Replace existing choices for the touched categories.
     if touched_cat_ids:

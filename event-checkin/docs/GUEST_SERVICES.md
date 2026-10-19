@@ -30,6 +30,8 @@ Empty shifts mean ongoing responsibility. A shift ends exclusively at its end ti
 
 ## Staff flow
 
+The workspace includes organiser setup notes and staff instructions from the shared Help source, with expandable steps on the page.
+
 The mobile workspace lists assigned table guests and room occupants, expected/admitted/seated counts, menu selections and outstanding serving occurrences. Staff can mark seating, help select meals with guest agreement, mark a specific service served, or scan assigned table/room passes according to their grants. Staff do not move guests, override capacity or meal eligibility, edit event setup or export the guest directory through this workspace.
 
 Requests for water, accessibility assistance, housekeeping, delays or shift handover create one normal task. Assign it to an event teammate or leave it in the team queue. A client-generated request key and database uniqueness protect retries from creating duplicate tasks. Shared task notes should not contain sensitive guest information.
@@ -43,7 +45,7 @@ Room occupants come from the latest accepted directional zone movement. A room a
 - Scoped staff cannot bypass restrictions using the event-wide paid-member guest operations, guest-directory grants, legacy offline manifest, daily/checkout scans or Experience runtime routes.
 - New workspace responses omit guest contacts and pass credentials. Requests use existing event-team assignees.
 - Admission retains the canonical required-step and seating checks. Operational guest mutations require an Event Pass.
-- Guest and service row locks plus the existing unique fulfilment key prevent duplicate service records. Scoped serving checks eligibility, open state, serving window and capacity. Menu assistance respects existing guest selection locks.
+- Guest and service row locks plus the existing unique fulfilment key prevent duplicate service records. Scoped serving checks eligibility, open state, serving window and capacity. Assisted menu selection locks each served category while permitting later unserved categories. Optional choices can be explicitly cleared; required and served choices cannot. Legacy served flags without category records remain locked for supervisor review. The existing public guest selection policy is preserved.
 - `GuestSeatingPresence` confirms physical seating separately from admission and allocation. A guest moved to another table loses the old seating confirmation in the view. Corrections and assisted choices are auditable.
 - Migrations are additive: metadata creates the new tables; the existing auto-patcher adds the false-default scope column. No guest, task, seat, menu or attendance records are copied or backfilled.
 - The workspace requires a connection and refreshes every 20 seconds; it does not claim offline writes are saved.

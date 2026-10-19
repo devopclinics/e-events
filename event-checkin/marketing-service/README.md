@@ -542,3 +542,18 @@ uncertain. Retention jobs store immutable sequence identity, recover accepted
 claims after a worker crash without resending, and reconcile known provider
 outcomes without clearing a human takeover. Old checkpoint jobs lacking that
 identity become review-required rather than being guessed or silently replayed.
+
+Unresolved sales handoffs preserve encrypted authenticated source routing after
+an acknowledgement target is purged. Assigned operators/superadmins can use the
+staff UI's Review source routing action to open the original approved Chatwoot
+thread or inspect WhatsApp routing and current suppression/consent state. This
+never identifies a Festio account from email/phone. Context access is audited,
+excluded from ordinary backlog output, and purged on resolution. New inbound
+while paused reopens the owned case without resuming automation. Old cases with
+no context surface unavailable rather than inventing a pointer.
+
+Configure transport authority before enabling ingress. Queued replies bind to
+chat host/account/inbox or WhatsApp workspace/sender/destination; changing those
+values cannot retarget an old queued reply. Unbound checkpoint targets are held
+for review. Source links are shown only while that recorded authority still
+matches the configured source. Tokens/credentials are never exposed in context.

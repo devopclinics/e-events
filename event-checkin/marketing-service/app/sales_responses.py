@@ -78,6 +78,15 @@ def flag(name):
     return os.getenv(name, "false").lower() == "true"
 
 
+def transport_binding(channel, destination):
+    mapping = {"channel":channel,"destination":destination}
+    if channel=="chat":
+        mapping.update(url=os.getenv("MARKETING_SALES_CHAT_URL",""),account=os.getenv("MARKETING_SALES_CHAT_ACCOUNT",""))
+    else:
+        mapping.update(workspace=os.getenv("BIRD_WORKSPACE_ID",""),sender=os.getenv("MARKETING_SALES_WHATSAPP_SENDER",""))
+    return fingerprint(mapping)
+
+
 def authenticated_time(raw):
     try:
         value = datetime.fromisoformat(raw.replace("Z", "+00:00"))
@@ -164,11 +173,12 @@ def ingest(db, body, *, runtime=None):
     import json
     target = {"channel": body["channel"], "destination": body["destination"], "contact_id": body["contact_id"],
               "thread_id": str(body.get("thread_id") or ""), "account_id": str(body.get("transport_account_id") or "")}
+    target["binding"] = transport_binding(body["channel"],body["destination"])
     if any(len(value) > 512 for value in target.values()):
         raise HTTPException(422, "Transport metadata too long")
     if next_status!="opted_out":
         db.add(Target(id=reply.id, conversation_id=key, encrypted=cipher().encrypt(json.dumps(target).encode()).decode()))
-    if runtime and next_status=="handoff":
+    if runtime and next_status in {"handoff","paused"}:
         from types import SimpleNamespace
         from .organizer_journey import open_handoff
         open_handoff(runtime,db,SimpleNamespace(id="sales:"+key,owner_email=None),body["channel"],reply.id)

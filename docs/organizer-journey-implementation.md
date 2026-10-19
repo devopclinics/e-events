@@ -267,3 +267,29 @@ Resend delivery with exact event/guest/invitation tags. Provider acceptance and
 legacy unsigned guest-provider status callbacks never create first value. The
 operational Bird public-sales response adapter is separate; sending an anonymous
 sales reply is not a guest invitation outcome or an account-linking signal.
+
+### Final owned source routing and transport identity review
+
+The final operational check found that purging accepted reply targets could leave
+an assigned handoff operator without a usable conversation pointer. Unresolved
+sales cases now retain only encrypted authenticated routing metadata, not message
+content or a guessed Festio identity. Assigned operators/superadmins may explicitly
+read it through the audited case-context endpoint. Other operators/viewers are
+denied; normal backlog responses do not expose it. The staff UI can open the
+approved original Chatwoot conversation or display verified WhatsApp source
+routing, current takeover/opt-out state and guidance consent. Resolution clears
+the encrypted context; a new inbound receipt while paused reopens the owned case
+without resuming responses. No automated account lookup or staff reply was added.
+
+Queued targets now store a transport-authority fingerprint: chat host/account/
+inbox, or WhatsApp workspace/sender/destination. Dispatch refuses to retarget a
+queued message after that mapping changes. Staff source links also fail closed
+when the current mapping differs from the recorded authority. Old targets lacking
+this binding are held rather than guessed or backfilled.
+
+The final full Marketing run after these changes passed **306 tests**; final
+frontend run passed **148 tests** and build/postbuild passed. The preceding owned
+handoff/journey slice passed **43 tests**. Full Backend, Support and Ticketing
+results and the three unchanged Windows TestClient limits above still apply;
+there were no later Backend product changes after the 12-test schedule correction.
+The final changed-file scope remains 58. All deployment gates remain OFF.

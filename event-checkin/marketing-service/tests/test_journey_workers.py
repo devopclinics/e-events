@@ -443,3 +443,53 @@ def test_native_staff_chatwoot_notification_is_a_private_note_not_an_organizer_m
     assert workers.tick(m,notification_adapter=adapter)["notifications"]==0
     assert len(requests)==1
     with m.SessionLocal() as db:assert db.get(m.Lead,lead.id).automation_paused
+
+
+def test_owned_handoff_preserves_encrypted_source_context_after_ack_and_clears_on_resolution(service,monkeypatch):
+    import jwt
+    m,client,headers=service;enable(monkeypatch)
+    for key,value in {"MARKETING_SALES_CHAT_URL":"https://chat.synthetic.invalid","MARKETING_SALES_CHAT_ACCOUNT":"1","MARKETING_SALES_CHAT_TOKEN":"synthetic-token","MARKETING_HANDOFF_OWNER":"operator@example.com"}.items():monkeypatch.setenv(key,value)
+    with m.SessionLocal() as db:
+        db.add(m.AccessGrant(email="other@example.com",name="Other operator",role="marketer",active=True,granted_by="synthetic"));db.commit()
+    body={**inbound(),"intent":"handoff","contact_id":"chatwoot:1:2:42","thread_id":"15","transport_account_id":"1"}
+    assert client.post("/api/marketing/internal/sales-responses",headers=backend_headers(),json=body).status_code==200
+    adapter=workers.SalesAdapter(m,transport=httpx.MockTransport(lambda request:httpx.Response(200,json={"id":"synthetic-ack"})))
+    assert workers.tick(m,sales_adapter=adapter)["sent"]==1
+    with m.SessionLocal() as db:
+        case=db.scalar(select(journey.Handoff));case_id=case.id
+        assert db.get(sales.Target,body["event_id"]) is None
+        assert case.context_ciphertext and body["contact_id"] not in case.context_ciphertext
+    at=m.now()
+    other={"Authorization":"Bearer "+jwt.encode(dict(sub="other",email="other@example.com",email_verified=True,iss="guesthub",aud="marketing",iat=at,exp=at+timedelta(minutes=1)),m.TOKEN_SECRET,algorithm="HS256")}
+    assert client.get(f"/api/marketing/handoffs/{case_id}/context",headers=other).status_code==403
+    context=client.get(f"/api/marketing/handoffs/{case_id}/context",headers=headers).json()
+    assert context["contact_id"]==body["contact_id"] and context["source_url"]=="https://chat.synthetic.invalid/app/accounts/1/conversations/15"
+    assert context["conversation_status"]=="handoff"
+    assert "festio_user_id" not in context and "email" not in context
+    assert body["contact_id"] not in client.get("/api/marketing/handoffs",headers=headers).text
+    monkeypatch.setenv("MARKETING_SALES_CHAT_URL","https://changed.synthetic.invalid")
+    assert "source_url" not in client.get(f"/api/marketing/handoffs/{case_id}/context",headers=headers).json()
+    assert client.post(f"/api/marketing/handoffs/{case_id}/resolve",headers=headers).status_code==200
+    assert client.get(f"/api/marketing/handoffs/{case_id}/context",headers=headers).json()["available"] is False
+    with m.SessionLocal() as db:assert db.get(journey.Handoff,case_id).context_ciphertext is None
+    with m.SessionLocal() as db:
+        conversation=db.scalar(select(sales.Conversation));conversation.status="paused";db.commit()
+    assert client.post("/api/marketing/internal/sales-responses",headers=backend_headers(),json={**body,"event_id":"new-inbound-after-resolution"}).status_code==200
+    with m.SessionLocal() as db:
+        case=db.get(journey.Handoff,case_id)
+        assert case.status=="open" and case.context_ciphertext
+        assert db.scalar(select(sales.Conversation)).status=="paused"
+
+
+def test_queued_chat_cannot_be_retargeted_when_transport_host_changes(service,monkeypatch):
+    m,_,_=service;enable(monkeypatch)
+    for key,value in {"MARKETING_SALES_CHAT_URL":"https://original.synthetic.invalid","MARKETING_SALES_CHAT_ACCOUNT":"1","MARKETING_SALES_CHAT_TOKEN":"synthetic-token"}.items():monkeypatch.setenv(key,value)
+    with m.SessionLocal() as db:
+        reply=sales.ingest(db,{**inbound(),"thread_id":"15","transport_account_id":"1"});identity=reply.id
+    monkeypatch.setenv("MARKETING_SALES_CHAT_URL","https://replacement.synthetic.invalid")
+    requests=[]
+    adapter=workers.SalesAdapter(m,transport=httpx.MockTransport(lambda request:requests.append(request)))
+    assert workers.tick(m,sales_adapter=adapter)["sent"]==0 and not requests
+    with m.SessionLocal() as db:
+        row=db.get(sales.Reply,identity)
+        assert row.status=="prepared" and row.attempts==0

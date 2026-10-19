@@ -9,7 +9,7 @@ import os
 from datetime import datetime, timezone
 
 from fastapi import Depends, HTTPException
-from sqlalchemy import Column, String, Integer, JSON, select
+from sqlalchemy import Column, String, Integer, JSON, Text, select
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.exc import IntegrityError
 
@@ -42,6 +42,7 @@ class Handoff(Base):
     status = Column(String(30), nullable=False, default="open")
     notification = Column(String(30), nullable=False, default="pending")
     history = Column(JSON, nullable=False, default=list)
+    context_ciphertext = Column(Text, nullable=True)
 
 
 class CommerceFact(Base):
@@ -143,6 +144,11 @@ def open_handoff(m, db, lead, channel, event_id):
         case.attempts = 0
     if not any(item.get("event_id") == event_id for item in case.history):
         case.history = [*case.history, {"at": stamp(), "action": "received", "channel": channel, "event_id": event_id}]
+    if lead.id.startswith("sales:"):
+        from .sales_responses import Target
+        target=db.get(Target,event_id)
+        if target and target.conversation_id==lead.id[6:]:
+            case.context_ciphertext=target.encrypted
     # Notification is an explicit adapter operation; absent wiring is not success.
     if not case.owner:
         case.notification = "missing_owner"
@@ -174,6 +180,9 @@ def install(m):
     RetentionBase.metadata.create_all(m.engine)
     # Checkpoint upgrades are additive; no historical enrollment or repair.
     from sqlalchemy import inspect, text
+    if "context_ciphertext" not in {c["name"] for c in inspect(m.engine).get_columns(Handoff.__tablename__)}:
+        with m.engine.begin() as connection:
+            connection.execute(text("ALTER TABLE marketing_handoff_cases ADD COLUMN context_ciphertext TEXT"))
     if "sequence_id" not in {c["name"] for c in inspect(m.engine).get_columns("marketing_organizer_retention_jobs")}:
         with m.engine.begin() as connection:
             connection.execute(text("ALTER TABLE marketing_organizer_retention_jobs ADD COLUMN sequence_id VARCHAR(36)"))
@@ -390,6 +399,38 @@ def install(m):
                      conversation_id=c.lead_id[6:] if c.lead_id.startswith("sales:") else None, owner=c.owner, status=c.status,
                      notification=c.notification, attempts=c.attempts, generation=c.generation, history=c.history) for c in db.scalars(query)]
 
+    @m.app.get("/api/marketing/handoffs/{case_id}/context")
+    def handoff_context(case_id: str, identity=Depends(m.decode_identity), db=Depends(m.db_session)):
+        case=db.get(Handoff,case_id)
+        if not case or (not identity.is_superadmin and (case.owner!=identity.email or identity.role=="viewer")):
+            raise HTTPException(403,"Assigned operator required")
+        result={"available":False,"note":"Original source routing metadata is unavailable. Review the configured inbound inbox; do not infer account identity from contact details."}
+        if not case.lead_id.startswith("sales:"):
+            lead=db.get(m.Lead,case.lead_id)
+            if lead:
+                result={"available":True,"channel":"email","name":lead.name,"email":lead.email,"lead_id":lead.id,"note":"Read the original reply in the approved inbound inbox. Message content is not copied here."}
+        elif case.context_ciphertext:
+            try:
+                value=json.loads(sales_responses.cipher().decrypt(case.context_ciphertext.encode()))
+            except Exception:
+                raise HTTPException(503,"Source routing context cannot be decrypted")
+            result={"available":True,**{key:value.get(key) for key in ("channel","destination","contact_id","thread_id","account_id")},
+                "note":"Authenticated channel routing only; this does not identify a Festio account. Read the message in the approved source inbox."}
+            conversation=db.get(sales_responses.Conversation,case.lead_id[6:])
+            if conversation:
+                result["conversation_status"]=conversation.status
+                result["whatsapp_guidance_consent"]=conversation.consent==1 if conversation.channel=="whatsapp" else None
+            if value.get("channel")=="chat" and value.get("binding")==sales_responses.transport_binding("chat",value.get("destination")):
+                from .journey_workers import endpoint
+                if str(value.get("account_id","")).isdigit() and str(value.get("thread_id","")).isdigit():
+                    try:
+                        result["source_url"]=endpoint(os.getenv("MARKETING_SALES_CHAT_URL",""))+f"/app/accounts/{value['account_id']}/conversations/{value['thread_id']}"
+                    except HTTPException:
+                        pass
+        case.history=[*case.history,{"at":stamp(),"action":"source_context_viewed","actor":identity.email}]
+        db.commit()
+        return result
+
     @m.app.post("/api/marketing/handoffs/{case_id}/assign-owner")
     def assign_owner(case_id: str, body: dict, identity=Depends(m.decode_identity), db=Depends(m.db_session)):
         if not identity.is_superadmin:
@@ -467,6 +508,8 @@ def install(m):
         if not case.owner:
             raise HTTPException(409, "Assign an owner before resolving")
         case.status = "acknowledged" if action == "acknowledge" else "resolved"
+        if action=="resolve":
+            case.context_ciphertext=None
         case.history = [*case.history, {"at": stamp(), "action": action, "actor": identity.email}]
         # Resolving a case does not silently resume lead automation.
         db.commit()

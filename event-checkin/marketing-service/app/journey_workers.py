@@ -65,6 +65,8 @@ class SalesAdapter:
                 raise HTTPException(503,"Bound transport target cannot be decrypted")
         if value["channel"] != channel or value["destination"] != os.getenv("MARKETING_SALES_"+channel.upper()+"_DESTINATION"):
             raise HTTPException(409, "Transport destination changed")
+        if value.get("binding") != sales.transport_binding(channel,value["destination"]):
+            raise HTTPException(409, "Queued transport authority changed; do not retarget")
         headers = {"Idempotency-Key": idempotency_key}
         if channel == "chat":
             base = endpoint(os.getenv("MARKETING_SALES_CHAT_URL", ""))

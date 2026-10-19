@@ -1941,6 +1941,7 @@ export const api = {
   marketingDashboard: () => marketingReq('GET', '/dashboard'),
   marketingHandoffs: (includeResolved=false) => marketingReq('GET', `/handoffs?include_resolved=${includeResolved}`),
   marketingHandoffAction: (id, action, body) => marketingReq('POST', `/handoffs/${encodeURIComponent(id)}/${action}`, body),
+  marketingHandoffContext: id => marketingReq('GET', `/handoffs/${encodeURIComponent(id)}/context`),
   marketingResumeConversation: id => marketingReq('POST', `/sales-conversations/${encodeURIComponent(id)}/resume`),
   marketingSalesAttempts: id => marketingReq('GET', `/sales-conversations/${encodeURIComponent(id)}/attempts`),
   marketingReconcileReply: (id,body) => marketingReq('POST', `/sales-replies/${encodeURIComponent(id)}/reconcile`,body),

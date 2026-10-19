@@ -128,11 +128,11 @@ now uses fresh authenticated metadata; missing/malformed/stale/future timestamp
 STOP requests have separate regression coverage. No freshness check was relaxed.
 Multi-day email guidance uses the event-local end day, matching the UI.
 
-### Verified final results
+### Initial implementation verification (superseded by review below)
 
 | Check | Result |
 | --- | --- |
-| Broad backend regression | 543 passed |
+| Selected affected Backend regression | 543 passed |
 | Full Marketing regression | 294 passed |
 | Final journey/worker slice (including latest multi-day context) | 32 passed |
 | Final source/context/copy/commerce slice | 13 passed |

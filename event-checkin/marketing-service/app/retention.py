@@ -8,7 +8,7 @@ from datetime import timedelta
 
 import httpx
 import jwt
-from sqlalchemy import Column, String, Integer, select
+from sqlalchemy import Column, String, BigInteger, select, inspect, text
 from sqlalchemy.orm import DeclarativeBase
 
 from . import email_pilot, sales_responses
@@ -25,10 +25,19 @@ class RetentionJob(Base):
     lead_id = Column(String(36), nullable=False)
     event_id = Column(String(128), nullable=False)
     org_id = Column(String(128), nullable=False)
-    step = Column(Integer, nullable=False)
+    step = Column(BigInteger, nullable=False)
     sequence_id = Column(String(36), nullable=True)
     status = Column(String(30), nullable=False, default="pending")
     last_attempt_at = Column(String(40), nullable=True)
+
+
+def migrate_checkpoint(engine):
+    # Widen in place: changing the hash would change durable email identities.
+    if engine.dialect.name == "postgresql":
+        columns=inspect(engine).get_columns(RetentionJob.__tablename__)
+        if any(c["name"]=="step" and not isinstance(c["type"],BigInteger) for c in columns):
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE marketing_organizer_retention_jobs ALTER COLUMN step TYPE BIGINT"))
 
 
 def source_context(m, account_id, event_id):
@@ -43,12 +52,12 @@ def source_context(m, account_id, event_id):
     at = m.now()
     token = jwt.encode(dict(sub="marketing-email-readiness", iss="marketing-service", aud="marketing-email-readiness",
         jti=challenge, iat=at, exp=at+timedelta(seconds=10)), m.TOKEN_SECRET, algorithm="HS256")
-    response = httpx.get(target, params={"account_id": account_id, "event_id": event_id, "challenge": challenge},
-        headers={"Authorization": "Bearer "+token}, timeout=5, follow_redirects=False)
-    if response.status_code != 200:
-        raise email_pilot.EmailBlocked("Organizer ownership cannot be verified")
-    result = response.json()
     try:
+        response = httpx.get(target, params={"account_id": account_id, "event_id": event_id, "challenge": challenge},
+            headers={"Authorization": "Bearer "+token}, timeout=5, follow_redirects=False)
+        if response.status_code != 200:
+            raise ValueError("Context unavailable")
+        result = response.json()
         proof = jwt.decode(result["proof"], m.TOKEN_SECRET, algorithms=["HS256"], issuer="festio-backend", audience="organizer-context-response",
             options={"require": ["iat", "exp", "jti", "account_id", "event_id", "current_owner"]})
         checked = email_pilot.utc(proof.get("checked_at"))

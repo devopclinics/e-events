@@ -466,7 +466,28 @@ def send(m, lead, sequence, index=0, mode="legacy", stop_requested=None):
         elif mode != "legacy":
             from .journey_context import validate_current_event
             validate_current_event(m,lead)
-        result = m._deliver_follow_up(lead, sequence, index)
+        def pre_submit():
+            # Context/readiness HTTP is complete. Never submit an older ORM
+            # snapshot after a concurrent unsubscribe, takeover or identity edit.
+            if stop_requested and stop_requested():
+                raise EmailBlocked("Email pilot is stopping")
+            if mode == "legacy":
+                m.require_outbound_enabled()
+            elif not enabled(mode):
+                raise EmailBlocked("Email-only gate is disabled")
+            if sequence.payload.get("category")=="organizer_retention" and not (
+                    os.getenv("MARKETING_ORGANIZER_RETENTION_ENABLED","false").lower()=="true" and m.outbound_enabled()):
+                raise EmailBlocked("Organizer retention is disabled")
+            with m.SessionLocal() as fresh:
+                current=fresh.get(m.Lead,lead.id)
+                if (not current or stopped(current) or current.stage!=lead.stage
+                        or current.email.strip().lower()!=lead.email.strip().lower()
+                        or current.festio_user_id!=lead.festio_user_id
+                        or (mode!="legacy" and not eligible(m,fresh,current,mode,retention=sequence.payload.get("category")=="organizer_retention"))):
+                    raise EmailBlocked("Eligibility changed during context lookup")
+                if mode!="legacy":
+                    approved_template(fresh,sequence,stage_for(fresh,current))
+        result = m._deliver_follow_up(lead, sequence, index, pre_submit=pre_submit)
     except HTTPException:
         finish(m, claim, "cancelled")
         raise

@@ -6,10 +6,11 @@ Unknown outcomes require reconciliation; restart cannot retry them.
 """
 import hashlib
 import os
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import Column, String, Integer, JSON, Text, select, update, delete
+from sqlalchemy import Column, String, Integer, JSON, Text, select, update, delete, case, or_,func
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.exc import IntegrityError
 
@@ -50,6 +51,32 @@ class Target(Base):
     id = Column(String(128), primary_key=True)
     conversation_id = Column(String(64), nullable=False)
     encrypted = Column(Text, nullable=False)
+
+
+class DispatchGuard(Base):
+    """One durable claim and current-hour provider-attempt budget per contact."""
+    __tablename__ = "marketing_sales_dispatch_guards"
+    conversation_id = Column(String(64), primary_key=True)
+    active_reply = Column(String(128), nullable=True)
+    token = Column(String(36), nullable=True)
+    hour = Column(String(20), nullable=False)
+    attempts = Column(Integer, nullable=False, default=0)
+
+
+class QueueSchedule(Base):
+    __tablename__ = "marketing_journey_queue_schedule"
+    id = Column(String(160), primary_key=True)
+    next_at = Column(String(40), nullable=False)
+
+
+def release_claim(db, reply, *, unsent=False, token=None):
+    values={"active_reply":None}
+    if unsent:
+        values["attempts"]=case((DispatchGuard.attempts>0,DispatchGuard.attempts-1),else_=0)
+    query=update(DispatchGuard).where(DispatchGuard.conversation_id==reply.conversation_id,DispatchGuard.active_reply==reply.id)
+    if token is not None:
+        query=query.where(DispatchGuard.token==token)
+    db.execute(query.values(**values).execution_options(synchronize_session=False))
 
 
 def cipher():
@@ -243,10 +270,47 @@ def dispatch(db, reply_id, adapter, *, template=None, stop_requested=None):
     reason,content=dispatch_policy(row,reply,template)
     if reason:
         return reason
+    hour=clock().strftime("%Y-%m-%dT%H")
+    token=str(uuid.uuid4())
+    if not db.get(DispatchGuard,row.id):
+        # Conservatively account for pre-upgrade provider attempts this hour.
+        # This is a send-budget barrier, never an enrollment/provenance backfill.
+        start=clock().replace(minute=0,second=0,microsecond=0).isoformat()
+        observed=db.scalar(select(func.coalesce(func.sum(Reply.attempts),0)).where(
+            Reply.conversation_id==row.id,Reply.claimed_at>=start))
+        db.add(DispatchGuard(conversation_id=row.id,hour=hour,attempts=min(4,int(observed))))
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            return "conversation_busy"
+    unresolved=select(Reply.id).where(Reply.conversation_id==row.id,Reply.status.in_(("sending","unknown"))).exists()
+    serialized=db.execute(update(DispatchGuard).where(DispatchGuard.conversation_id==row.id,
+        DispatchGuard.active_reply.is_(None),~unresolved,
+        or_(DispatchGuard.hour!=hour,DispatchGuard.attempts<4)).values(active_reply=reply.id,token=token,hour=hour,
+        attempts=case((DispatchGuard.hour==hour,DispatchGuard.attempts+1),else_=1)).execution_options(synchronize_session=False))
+    if serialized.rowcount!=1:
+        db.rollback()
+        return "conversation_busy_or_limited"
     claimed = db.execute(update(Reply).where(Reply.id == reply_id, Reply.status.in_(("prepared", "rejected")), Reply.attempts < 3).values(status="sending", attempts=Reply.attempts + 1, claimed_at=clock().isoformat()))
-    db.commit()
     if claimed.rowcount != 1:
+        db.rollback()
         return "blocked"
+    db.commit()
+    owned=select(DispatchGuard.conversation_id).where(DispatchGuard.conversation_id==row.id,
+        DispatchGuard.active_reply==reply.id,DispatchGuard.token==token).exists()
+    def finish(values, *, unsent=False):
+        changed=db.execute(update(Reply).where(Reply.id==reply.id,Reply.status=="sending",owned)
+            .values(**values).execution_options(synchronize_session=False))
+        if changed.rowcount:
+            if values["status"] in {"prepared","cancelled","accepted","rejected"}:
+                release_claim(db,reply,unsent=unsent,token=token)
+            if values["status"]=="accepted":
+                db.execute(delete(Target).where(Target.id==reply.id))
+            if values["status"]=="unknown":
+                hold_conversation(db,row.id)
+        db.commit();db.expire_all();db.refresh(reply)
+        return bool(changed.rowcount)
     # The claim is not consent. Re-read stops and authenticated window timing
     # after the durable claim, immediately before transport contact.
     db.refresh(row)
@@ -254,32 +318,24 @@ def dispatch(db, reply_id, adapter, *, template=None, stop_requested=None):
     if stop_requested and stop_requested():
         reason="stopping"
     if reason:
-        reply.status="cancelled" if reason=="suppressed" else "prepared"
-        reply.attempts=max(0,reply.attempts-1)
-        db.commit()
+        finish({"status":"cancelled" if reason=="suppressed" else "prepared","attempts":max(0,reply.attempts-1)},unsent=True)
         return reason
     try:
-        result = adapter.send(channel=channel, contact_key=row.id, content=content, idempotency_key=reply.id)
+        result = adapter.send(channel=channel, contact_key=row.id, content=content, idempotency_key=reply.id,claim_token=token)
         state = result.get("status")
         if state == "accepted" and isinstance(result.get("provider_id"), str) and result["provider_id"]:
-            reply.status, reply.provider_id = "accepted", result["provider_id"][:128]
+            values={"status":"accepted","provider_id":result["provider_id"][:128]}
         elif state == "rejected":
-            reply.status = "rejected"
+            values={"status":"rejected"}
         else:
-            reply.status = "unknown"
+            values={"status":"unknown"}
     except HTTPException:
         # Configuration/target validation failed before transport contact.
-        reply.status, reply.attempts = "prepared", max(0, reply.attempts - 1)
-        db.commit()
-        return "unconfigured"
+        changed=finish({"status":"prepared","attempts":max(0,reply.attempts-1)},unsent=True)
+        return "unconfigured" if changed else "reconciliation_required"
     except Exception:
-        reply.status = "unknown"
-    if reply.status == "unknown":
-        hold_conversation(db,row.id)
-    if reply.status=="accepted":
-        db.execute(delete(Target).where(Target.id==reply.id))
-    db.commit()
-    return reply.status
+        values={"status":"unknown"}
+    return values["status"] if finish(values) else "reconciliation_required"
 
 
 def reconcile(db, reply_id, *, provider_id=None, definitely_not_sent=False):
@@ -294,5 +350,6 @@ def reconcile(db, reply_id, *, provider_id=None, definitely_not_sent=False):
         reply.status = "rejected"
     else:
         raise HTTPException(409, "Definitive provider evidence required")
+    release_claim(db,reply)
     db.commit()
     return reply.status

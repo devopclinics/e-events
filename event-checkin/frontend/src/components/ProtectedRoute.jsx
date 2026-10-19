@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
+import { authenticatedOrganizerReturn } from '../pages/organizerGuidance.mjs'
 
 const Spinner = () => (
   <div className="min-h-screen flex items-center justify-center">
@@ -19,7 +20,23 @@ export default function ProtectedRoute({
 }) {
   const { user, loading } = useAuth()
   const location = useLocation()
-  const [currentEventId] = useCurrentEvent()
+  const [currentEventId,setCurrentEvent] = useCurrentEvent()
+  const returnKey=location.pathname+location.search
+  const urlParams=new URLSearchParams(location.search)
+  const requestedEvent=urlParams.get('event')||urlParams.get('event_id')||urlParams.get('eventId')
+  const [eventReturn,setEventReturn]=useState({key:null,status:'checking'})
+  useEffect(()=>{
+    if(!user||!requestedEvent)return
+    let alive=true
+    setEventReturn({key:returnKey,status:'checking'})
+    api.listEvents().then(events=>{
+      if(!alive)return
+      const target=authenticatedOrganizerReturn(returnKey,events)
+      if(target)setCurrentEvent(requestedEvent)
+      setEventReturn({key:returnKey,status:target?'verified':'denied'})
+    }).catch(()=>{if(alive)setEventReturn({key:returnKey,status:'denied'})})
+    return()=>{alive=false}
+  },[user,returnKey,requestedEvent])
   // paidOnly: the route is a paid perk (Design Studio, Help) — allowed when the
   // selected event is paid (mirrors the nav's canUseDesignStudio flag), or the
   // user is a platform superadmin.
@@ -37,6 +54,12 @@ export default function ProtectedRoute({
   if (loading) return <Spinner />
 
   if (!user) return <Navigate to="/login" state={{organizerReturn:location.pathname+location.search}} replace />
+  // Never mount event tasks while a deep link still points at another event.
+  if(requestedEvent){
+    if(eventReturn.key!==returnKey||eventReturn.status==='checking')return <Spinner />
+    if(eventReturn.status==='denied')return <div role="alert">This event link is unavailable or access could not be verified.</div>
+    if(currentEventId!==requestedEvent)return <div role="alert">Review the pending event change before opening this link.</div>
+  }
   if (platformSuperadminOnly && !user.is_platform_superadmin) return <Navigate to="/admin" replace />
   if (adminOnly && user.role !== 'admin') return <Navigate to="/scanner" replace />
   if (setupOnly && !['admin', 'event_manager'].includes(user.role)) return <Navigate to="/scanner" replace />

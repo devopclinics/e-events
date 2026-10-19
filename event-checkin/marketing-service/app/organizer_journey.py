@@ -178,6 +178,8 @@ def install(m):
     sales_responses.Base.metadata.create_all(m.engine)
     from .retention import Base as RetentionBase
     RetentionBase.metadata.create_all(m.engine)
+    from .retention import migrate_checkpoint
+    migrate_checkpoint(m.engine)
     # Checkpoint upgrades are additive; no historical enrollment or repair.
     from sqlalchemy import inspect, text
     if "context_ciphertext" not in {c["name"] for c in inspect(m.engine).get_columns(Handoff.__tablename__)}:

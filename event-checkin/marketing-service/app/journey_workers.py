@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 import httpx
 import jwt
 from fastapi import HTTPException
-from sqlalchemy import select, update
+from sqlalchemy import select, update, or_, literal
 
 from . import sales_responses as sales
 from .organizer_journey import Handoff
@@ -54,7 +54,7 @@ class SalesAdapter:
     def __init__(self, m, *, transport=None):
         self.m, self.transport = m, transport
 
-    def send(self, *, channel, contact_key, content, idempotency_key):
+    def send(self, *, channel, contact_key, content, idempotency_key, claim_token=None):
         with self.m.SessionLocal() as db:
             target = db.get(sales.Target, idempotency_key)
             if not target or target.conversation_id != contact_key:
@@ -102,6 +102,10 @@ class SalesAdapter:
         with self.m.SessionLocal() as db:
             reply = db.get(sales.Reply, idempotency_key)
             row = db.get(sales.Conversation, contact_key)
+            guard=db.get(sales.DispatchGuard,contact_key)
+            if (not reply or reply.status!="sending" or not guard or guard.active_reply!=idempotency_key
+                    or not claim_token or guard.token!=claim_token):
+                raise HTTPException(409,"Stale conversation dispatch claim")
             try:
                 template = json.loads(os.getenv("MARKETING_SALES_WHATSAPP_APPROVED_TEMPLATE", "null"))
             except ValueError:
@@ -176,14 +180,26 @@ def tick(m, *, sales_adapter=None, notification_adapter=None, dry_run=False, sto
         if not dry_run:
             from types import SimpleNamespace
             from .organizer_journey import open_handoff
-            for row in db.scalars(select(sales.Conversation).where(sales.Conversation.status.in_(("paused","handoff"))).limit(20)):
+            for exhausted in db.scalars(select(sales.Reply).where(sales.Reply.status.in_(("prepared","rejected")),sales.Reply.attempts>=3).limit(20)):
+                exhausted.status="exhausted"
+                sales.hold_conversation(db,exhausted.conversation_id)
+                open_handoff(m,db,SimpleNamespace(id="sales:"+exhausted.conversation_id,owner_email=None),exhausted.payload["channel"],exhausted.id)
+            missing_case=~select(Handoff.id).where(Handoff.lead_id==literal("sales:")+sales.Conversation.id).exists()
+            for row in db.scalars(select(sales.Conversation).where(sales.Conversation.status.in_(("paused","handoff")),missing_case).limit(20)):
                 if not db.scalar(select(Handoff.id).where(Handoff.lead_id=="sales:"+row.id)):
                     reply=db.scalar(select(sales.Reply).where(sales.Reply.conversation_id==row.id).limit(1))
                     if reply:
                         open_handoff(m,db,SimpleNamespace(id="sales:"+row.id,owner_email=None),row.channel,reply.id)
         db.commit()
-        ids = list(db.scalars(select(sales.Reply.id).where(sales.Reply.status.in_(("prepared", "rejected"))).order_by(sales.Reply.claimed_at, sales.Reply.id).limit(20)))
-        cases = list(db.scalars(select(Handoff).where(Handoff.status != "resolved", Handoff.notification.in_(("pending", "failed", "unconfigured", "missing_owner"))).limit(20)))
+        schedule=sales.QueueSchedule
+        at=sales.clock().isoformat()
+        ids = list(db.scalars(select(sales.Reply.id).outerjoin(schedule,schedule.id==literal("reply:")+sales.Reply.id).where(
+            sales.Reply.status.in_(("prepared", "rejected")),sales.Reply.attempts<3,or_(schedule.next_at.is_(None),schedule.next_at<=at))
+            .order_by(schedule.next_at.asc().nullsfirst(),sales.Reply.id).limit(20)))
+        cases = list(db.scalars(select(Handoff).outerjoin(schedule,schedule.id==literal("case:")+Handoff.id).where(
+            Handoff.status != "resolved",Handoff.attempts<3,
+            Handoff.notification.in_(("pending", "failed", "unconfigured", "missing_owner")),or_(schedule.next_at.is_(None),schedule.next_at<=at))
+            .order_by(schedule.next_at.asc().nullsfirst(),Handoff.id).limit(20)))
         if dry_run:
             return {**result, "prepared_replies": len(ids), "handoff_backlog": len(cases)}
         if sales.flag("MARKETING_OUTBOUND_ENABLED") and sales.flag("MARKETING_HANDOFF_NOTIFICATIONS_ENABLED"):
@@ -191,13 +207,15 @@ def tick(m, *, sales_adapter=None, notification_adapter=None, dry_run=False, sto
             for case in cases:
                 if cancelled():
                     break
+                db.merge(schedule(id="case:"+case.id,next_at=at))
                 grant=db.scalar(select(m.AccessGrant).where(m.AccessGrant.email==case.owner)) if case.owner else None
                 owner_available=bool(case.owner and ((grant.active and grant.role!="viewer") if grant else case.owner==os.getenv("MARKETING_HANDOFF_OWNER")))
                 if not owner_available or not os.getenv("MARKETING_HANDOFF_DESTINATION"):
                     case.notification = "missing_owner" if not owner_available else "unconfigured"
+                    db.commit()
                     continue
                 generation = case.generation
-                claimed = db.execute(update(Handoff).where(Handoff.id == case.id, Handoff.generation == generation, Handoff.notification.in_(("pending", "failed", "unconfigured")), Handoff.attempts < 3).values(notification="sending", attempts=Handoff.attempts+1))
+                claimed = db.execute(update(Handoff).where(Handoff.id == case.id, Handoff.generation == generation, Handoff.notification.in_(("pending", "failed", "unconfigured", "missing_owner")), Handoff.attempts < 3).values(notification="sending", attempts=Handoff.attempts+1))
                 db.commit()
                 if not claimed.rowcount:
                     continue
@@ -236,6 +254,8 @@ def tick(m, *, sales_adapter=None, notification_adapter=None, dry_run=False, sto
                 result["knowledge_unapproved"] = True
                 break
             reply=db.get(sales.Reply,identity)
+            db.merge(schedule(id="reply:"+identity,next_at=at))
+            db.commit()
             if reply.payload.get("knowledge_sha256")!=os.getenv("MARKETING_SALES_KNOWLEDGE_SHA256"):
                 reply.status="review_required"
                 sales.hold_conversation(db,reply.conversation_id,"handoff")
@@ -243,6 +263,12 @@ def tick(m, *, sales_adapter=None, notification_adapter=None, dry_run=False, sto
                 continue
             outcome = sales.dispatch(db, identity, adapter, template=template, stop_requested=cancelled)
             result["sent"] += outcome == "accepted"
+            reply=db.get(sales.Reply,identity)
+            if outcome=="rejected" and reply.attempts>=3:
+                outcome="retry_limit"
+            if outcome in {"suppressed","retry_limit"}:
+                reply.status="cancelled" if outcome=="suppressed" else "exhausted"
+                db.commit()
             if outcome in {"unknown", "retry_limit"}:
                 from types import SimpleNamespace
                 from .organizer_journey import open_handoff

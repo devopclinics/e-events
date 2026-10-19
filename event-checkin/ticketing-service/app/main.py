@@ -925,7 +925,7 @@ async def create_order(event_id: str, body: OrderIn, db: AsyncSession = Depends(
     # $0 payment-mode Checkout Session, so there's no provider to hand this
     # to; complete the order directly instead of erroring out at checkout.
     if order.total == 0:
-        order.is_test = cfg.provider == "fake"
+        order.is_test = cfg.provider == "fake" or settings.environment.lower() != "production"
         order.status, order.paid_at = "paid", datetime.utcnow()
         for line in body.lines:
             products[line.product_id].sold += line.quantity

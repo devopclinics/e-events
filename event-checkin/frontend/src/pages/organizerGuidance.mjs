@@ -3,7 +3,8 @@ import {CHECKLISTS} from './guideChecklists.mjs'
 const WORKSPACES = new Set(['/marketing','/setup-redesign','/admin-redesign','/guests-redesign','/tickets-redesign',
   '/ticketing-redesign','/messaging-redesign','/design-redesign','/addons-redesign','/kitchen-redesign',
   '/planner-redesign','/team-redesign','/live-redesign','/results-redesign','/experience-redesign',
-  '/festiome-redesign','/guesthub-redesign','/checkin-redesign','/integrations-redesign'])
+  '/festiome-redesign','/guesthub-redesign','/checkin-redesign','/integrations-redesign',
+  '/design-studio-redesign','/design-studio-redesign/website','/communications-redesign','/conference-center'])
 
 // This validates navigation only. Destination APIs must still authorize the
 // selected event; a URL or local-storage resume entry never grants access.

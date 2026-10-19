@@ -128,7 +128,13 @@ def retention_guidance(m, db, lead):
 
 
 def open_handoff(m, db, lead, channel, event_id):
-    case = db.scalar(select(Handoff).where(Handoff.lead_id == lead.id))
+    # Serialize case/history mutations before reading even a cached instance.
+    # The no-op UPDATE obtains the write/row lock on SQLite and PostgreSQL;
+    # provider outcomes cannot be reset by a stale configuration snapshot.
+    from sqlalchemy import update
+    db.execute(update(Handoff).where(Handoff.lead_id==lead.id).values(generation=Handoff.generation)
+        .execution_options(synchronize_session=False))
+    case = db.scalar(select(Handoff).where(Handoff.lead_id == lead.id).execution_options(populate_existing=True))
     if not case:
         grant = db.scalar(select(m.AccessGrant).where(m.AccessGrant.email == lead.owner_email,
                           m.AccessGrant.active.is_(True), m.AccessGrant.role != "viewer"))
@@ -150,10 +156,11 @@ def open_handoff(m, db, lead, channel, event_id):
         if target and target.conversation_id==lead.id[6:]:
             case.context_ciphertext=target.encrypted
     # Notification is an explicit adapter operation; absent wiring is not success.
-    if not case.owner:
-        case.notification = "missing_owner"
-    elif not os.getenv("MARKETING_HANDOFF_DESTINATION"):
-        case.notification = "unconfigured"
+    if case.notification in {"pending","failed","missing_owner","unconfigured"}:
+        if not case.owner:
+            case.notification = "missing_owner"
+        elif not os.getenv("MARKETING_HANDOFF_DESTINATION"):
+            case.notification = "unconfigured"
     return case
 
 

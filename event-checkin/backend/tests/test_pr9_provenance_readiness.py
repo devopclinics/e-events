@@ -69,3 +69,19 @@ async def test_invite_settings_and_token_rotation_publish_new_configuration(ctx,
     async with _Session() as db:
         revisions={row.payload["config_revision"] for row in (await db.execute(select(MarketingOutbox).where(MarketingOutbox.endpoint=="organizer-milestones"))).scalars()}
         assert len(revisions)==2
+
+
+async def test_guardian_settings_route_publishes_configuration_revision(ctx,monkeypatch):
+    monkeypatch.setattr(engagement_settings,"marketing_outbox_enabled",True)
+    monkeypatch.setattr(settings,"planner_internal_token","synthetic")
+    monkeypatch.setattr(settings,"marketing_service_url","https://synthetic.invalid")
+    monkeypatch.setattr(settings,"organization_entitlements_v2",False)
+    ctx.login(ctx.ids["user_a"]);event_id=ctx.ids["event_a"]
+    async with _Session() as db:
+        event=await db.get(Event,event_id);event.is_test=False;event.is_paid=True;await db.commit()
+    for enabled in [False,True]:
+        response=await ctx.client.put(f"/api/events/{event_id}/access/guardian-authorizations",json={"enabled":enabled,"authorizations":[],"designation_scope":"party"})
+        assert response.status_code==200,response.text
+    async with _Session() as db:
+        revisions={row.payload["config_revision"] for row in (await db.execute(select(MarketingOutbox).where(MarketingOutbox.endpoint=="organizer-milestones"))).scalars()}
+        assert len(revisions)==2

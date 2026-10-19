@@ -14,7 +14,8 @@ from urllib.parse import urlsplit
 import httpx
 import jwt
 from fastapi import HTTPException
-from sqlalchemy import select, update, or_, literal
+from sqlalchemy import select, update, or_, literal,case,insert
+from sqlalchemy.exc import IntegrityError
 
 from . import sales_responses as sales
 from .organizer_journey import Handoff
@@ -25,6 +26,24 @@ def endpoint(value):
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise HTTPException(503, "A configured HTTPS destination is required")
     return value.rstrip("/")
+
+
+def schedule_work(db,identity,at):
+    """Atomic insert/update on both supported databases; never move backwards."""
+    table=sales.QueueSchedule.__table__
+    dialect=db.get_bind().dialect.name
+    values={"next_at":case((table.c.next_at<at,at),else_=table.c.next_at)}
+    if dialect in {"sqlite","postgresql"}:
+        if dialect=="sqlite":
+            from sqlalchemy.dialects.sqlite import insert as upsert
+        else:
+            from sqlalchemy.dialects.postgresql import insert as upsert
+        db.execute(upsert(table).values(id=identity,next_at=at).on_conflict_do_update(index_elements=[table.c.id],set_=values))
+    else:
+        try:
+            with db.begin_nested():db.execute(insert(table).values(id=identity,next_at=at))
+        except IntegrityError:
+            db.execute(update(table).where(table.c.id==identity).values(**values))
 
 
 def source_ready(m):
@@ -99,21 +118,22 @@ class SalesAdapter:
         source_ready(self.m)
         # The source proof request is not a send grant. Recheck local stops,
         # gates and window after that I/O, at the provider submission boundary.
-        with self.m.SessionLocal() as db:
-            reply = db.get(sales.Reply, idempotency_key)
-            row = db.get(sales.Conversation, contact_key)
-            guard=db.get(sales.DispatchGuard,contact_key)
-            if (not reply or reply.status!="sending" or not guard or guard.active_reply!=idempotency_key
-                    or not claim_token or guard.token!=claim_token):
-                raise HTTPException(409,"Stale conversation dispatch claim")
-            try:
-                template = json.loads(os.getenv("MARKETING_SALES_WHATSAPP_APPROVED_TEMPLATE", "null"))
-            except ValueError:
-                template = None
-            reason, current = sales.dispatch_policy(row, reply, template)
-            if reason or current != content or not sales.flag("MARKETING_JOURNEY_WORKER_ENABLED"):
-                raise HTTPException(409, "Dispatch eligibility changed during readiness verification")
         with httpx.Client(transport=self.transport, timeout=15, follow_redirects=False) as client:
+            with self.m.SessionLocal() as db:
+                reply = db.get(sales.Reply, idempotency_key)
+                row = db.get(sales.Conversation, contact_key)
+                guard=db.get(sales.DispatchGuard,contact_key)
+                if (not reply or reply.status!="sending" or not guard or guard.active_reply!=idempotency_key
+                        or not claim_token or guard.token!=claim_token
+                        or guard.hour!=sales.clock().strftime("%Y-%m-%dT%H")):
+                    raise HTTPException(409,"Stale conversation dispatch claim")
+                try:
+                    template = json.loads(os.getenv("MARKETING_SALES_WHATSAPP_APPROVED_TEMPLATE", "null"))
+                except ValueError:
+                    template = None
+                reason, current = sales.dispatch_policy(row, reply, template)
+                if reason or current != content or not sales.flag("MARKETING_JOURNEY_WORKER_ENABLED"):
+                    raise HTTPException(409, "Dispatch eligibility changed during readiness verification")
             response = client.post(path, headers=headers, json=payload)
         if response.status_code in {408,409,425}:
             return {"status":"unknown"}
@@ -213,20 +233,24 @@ def tick(m, *, sales_adapter=None, notification_adapter=None, dry_run=False, sto
             for case in cases:
                 if cancelled():
                     break
-                db.merge(schedule(id="case:"+case.id,next_at=at))
+                schedule_work(db,"case:"+case.id,at)
                 grant=db.scalar(select(m.AccessGrant).where(m.AccessGrant.email==case.owner)) if case.owner else None
                 owner_available=bool(case.owner and ((grant.active and grant.role!="viewer") if grant else case.owner==os.getenv("MARKETING_HANDOFF_OWNER")))
                 if not owner_available or not os.getenv("MARKETING_HANDOFF_DESTINATION"):
-                    case.notification = "missing_owner" if not owner_available else "unconfigured"
+                    db.execute(update(Handoff).where(Handoff.id==case.id,Handoff.generation==case.generation,
+                        Handoff.owner==case.owner,Handoff.status!="resolved",Handoff.attempts<3,
+                        Handoff.notification.in_(("pending","failed","unconfigured","missing_owner")))
+                        .values(notification="missing_owner" if not owner_available else "unconfigured").execution_options(synchronize_session=False))
                     db.commit()
                     continue
                 generation = case.generation
-                claimed = db.execute(update(Handoff).where(Handoff.id == case.id, Handoff.generation == generation, Handoff.notification.in_(("pending", "failed", "unconfigured", "missing_owner")), Handoff.attempts < 3).values(notification="sending", attempts=Handoff.attempts+1))
+                claimed = db.execute(update(Handoff).where(Handoff.id == case.id, Handoff.generation == generation,
+                    Handoff.owner==case.owner,Handoff.status!="resolved",Handoff.notification.in_(("pending", "failed", "unconfigured", "missing_owner")), Handoff.attempts < 3).values(notification="sending", attempts=Handoff.attempts+1))
                 db.commit()
                 if not claimed.rowcount:
                     continue
                 db.refresh(case)
-                if case.generation!=generation:
+                if case.generation!=generation or case.status=="resolved" or case.notification!="sending":
                     continue
                 if cancelled() or not sales.flag("MARKETING_OUTBOUND_ENABLED") or not sales.flag("MARKETING_HANDOFF_NOTIFICATIONS_ENABLED"):
                     db.execute(update(Handoff).where(Handoff.id==case.id,Handoff.generation==generation,Handoff.notification=="sending").values(notification="pending",attempts=max(0,case.attempts-1)))
@@ -260,7 +284,7 @@ def tick(m, *, sales_adapter=None, notification_adapter=None, dry_run=False, sto
                 result["knowledge_unapproved"] = True
                 break
             reply=db.get(sales.Reply,identity)
-            db.merge(schedule(id="reply:"+identity,next_at=at))
+            schedule_work(db,"reply:"+identity,at)
             db.commit()
             if reply.payload.get("knowledge_sha256")!=os.getenv("MARKETING_SALES_KNOWLEDGE_SHA256"):
                 changed=db.execute(update(sales.Reply).where(sales.Reply.id==identity,sales.Reply.status.in_(("prepared","rejected")))

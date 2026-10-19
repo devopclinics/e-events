@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { Navigate, useLocation } from 'react-router-dom'
+import { useContext, useEffect, useRef, useState } from 'react'
+import { Navigate, useLocation, useNavigate, UNSAFE_LocationContext, UNSAFE_RouteContext, UNSAFE_NavigationContext } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
@@ -20,13 +20,28 @@ export default function ProtectedRoute({
 }) {
   const { user, loading } = useAuth()
   const location = useLocation()
+  const navigate=useNavigate()
+  const locationContext=useContext(UNSAFE_LocationContext)
+  const routeContext=useContext(UNSAFE_RouteContext)
+  const navigation=useContext(UNSAFE_NavigationContext)
+  const historyIndex=()=>navigation?.navigator?.index ?? globalThis.window?.history?.state?.idx
+  const committed=useRef(null)
+  const rollback=useRef(null)
   const [currentEventId,setCurrentEvent] = useCurrentEvent()
-  const returnKey=(user?.id||'')+':'+location.pathname+location.search
   const eventQuery=eventIdentityFromQuery(location.search)
   const requestedEvent=eventQuery.id
+  // View/task/tab changes are not a new event authorization request and must
+  // not unmount the already-verified workspace or discard its local state.
+  const returnKey=(user?.id||'')+':'+location.pathname+':'+requestedEvent
   const appliedReturn=useRef(null)
   const [eventReturn,setEventReturn]=useState({key:null,status:'checking'})
   useEffect(()=>{
+    if(rollback.current&&rollback.current.key===location.key){
+      appliedReturn.current=rollback.current.applied
+      setEventReturn(rollback.current.authorization)
+      rollback.current=null
+      return
+    }
     appliedReturn.current=null
     setEventReturn({key:returnKey,status:'checking'})
     if(!user||!requestedEvent||eventQuery.conflict)return
@@ -36,7 +51,16 @@ export default function ProtectedRoute({
       // Event authorization is independent of login return-URL sanitization.
       // Registered legacy/presenter routes keep their own query parameters.
       const allowed=events.some(event=>event.id===requestedEvent)
-      if(allowed)setCurrentEvent(requestedEvent)
+      if(allowed&&setCurrentEvent(requestedEvent)===false){
+        const previous=committed.current
+        if(previous?.user===user.id&&previous.event===currentEventId){
+          rollback.current={key:previous.location.key,applied:previous.applied,authorization:previous.authorization}
+          const index=historyIndex(),delta=previous.index-index
+          if(Number.isInteger(index)&&Number.isInteger(previous.index)&&delta)navigate(delta)
+          else navigate(previous.location.pathname+previous.location.search+(previous.location.hash||''),{replace:true})
+          return
+        }
+      }
       setEventReturn({key:returnKey,status:allowed?'verified':'denied'})
     }).catch(()=>{if(alive)setEventReturn({key:returnKey,status:'denied'})})
     return()=>{alive=false}
@@ -72,6 +96,30 @@ export default function ProtectedRoute({
     return()=>{alive=false}
   }, [paidOnly, user, currentEventId,paidKey])
 
+  const ready=!loading&&user&&!eventQuery.conflict&&(!requestedEvent||(
+    eventReturn.key===returnKey&&eventReturn.status==='verified'&&currentEventId===requestedEvent))&&
+    (!paidOnly||(paidState.key===paidKey&&paidState.status==='ok'))&&
+    (!platformSuperadminOnly||user.is_platform_superadmin)&&(!adminOnly||user.role==='admin')&&
+    (!setupOnly||['admin','event_manager'].includes(user.role))
+  useEffect(()=>{
+    if(ready)committed.current={user:user.id,event:currentEventId,children,location,locationContext,routeContext,
+      index:historyIndex(),authorization:eventReturn,applied:{key:returnKey,user:user.id}}
+  },[ready,user,currentEventId,children,location,eventReturn,returnKey])
+  const workspace=(snapshot,waiting=false)=>(
+    <UNSAFE_LocationContext.Provider value={snapshot.locationContext}>
+      <UNSAFE_RouteContext.Provider value={snapshot.routeContext}>
+        <div aria-busy={waiting} inert={waiting?'':undefined}>{snapshot.children}</div>
+      </UNSAFE_RouteContext.Provider>
+    </UNSAFE_LocationContext.Provider>
+  )
+  // Keep the committed editor and its registered dirty guard alive while a
+  // history/deep-link event change is authorized and offered to that guard.
+  const previous=committed.current
+  const roleAllowed=(!platformSuperadminOnly||user?.is_platform_superadmin)&&(!adminOnly||user?.role==='admin')&&
+    (!setupOnly||['admin','event_manager'].includes(user?.role))
+  if(roleAllowed&&!loading&&user&&previous?.user===user.id&&previous.event===currentEventId&&requestedEvent&&
+    (eventReturn.key!==returnKey||eventReturn.status==='checking')&&!eventQuery.conflict)
+    return workspace(previous,true)
   if (loading) return <Spinner />
 
   if (!user) return <Navigate to="/login" state={{organizerReturn:location.pathname+location.search}} replace />
@@ -94,5 +142,5 @@ export default function ProtectedRoute({
     if (paidState.status==='denied') return <Navigate to="/admin" replace />
   }
 
-  return children
+  return workspace({children,locationContext,routeContext})
 }

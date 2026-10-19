@@ -34,10 +34,14 @@ Existing default-OFF gates, 1–10 immutable pilot, single test recipient, suppr
 ## Exact corrective scope
 
 - docs/pr9-corrective-review.md
+- event-checkin/backend/app/routers/access.py
 - event-checkin/backend/app/models.py
 - event-checkin/backend/app/routers/events.py
 - event-checkin/backend/app/services/marketing_client.py
 - event-checkin/backend/tests/test_pr9_provenance_readiness.py
+- event-checkin/frontend/package.json
+- event-checkin/frontend/package-lock.json
+- event-checkin/frontend/src/hooks/useCurrentEvent.js
 - event-checkin/frontend/src/components/ProtectedRoute.jsx
 - event-checkin/frontend/src/pages/organizerGuidance.mjs
 - event-checkin/frontend/tests/organizer-return-gate.test.mjs
@@ -68,3 +72,21 @@ The explicitly requested Copilot review completed after CI passed and raised fou
 These regressions execute the production ProtectedRoute component in a controlled VM and real database workers with barriers, not sleeps. The new review required another final-head CI run and a fresh requested review; the earlier green CI/review is not treated as final approval. Deployment stays on hold, PR remains draft, and this task must not merge it.
 
 A further deterministic edge case within comment4312886780 revisits the same deep link after an intermediate route without an event and an accepted selection change. The prior applied marker must not be reused as proof of a new user switch. Clearing the marker and route verification state on every route/user change fixes that case; the pre-fix8dbb24d component fails the history regression. This changes no scope or external behavior beyond correct initial-versus-subsequent selection handling.
+
+
+## Corrective review passes 2 and 3 (8dbb24d, 747f9d2)
+
+Both requested reviews completed and their full overview bodies were read, including findings without inline threads. Findings are confirmed and corrected:
+
+| Finding | Correction and acceptance evidence |
+|---|---|
+| 4313048802: stale availability writer resets notifications | Persisted generation/owner/unresolved/runnable-state CAS prevents stale missing-owner snapshots resetting accepted/uncertain. Separate-session regressions cover both outcomes. |
+| Same-event presentation parameters remount workspace | Event authorization key uses user/path/event identity. Mounted React lifecycle tests retain editor draft and guard across view/task changes. |
+| Editor unmount bypasses dirty guard on history changes | Preserve the committed workspace under its prior router contexts while authorizing an event change. Honour the actual shared guard result and restore Back/Forward position on cancellation. Real React test-renderer + MemoryRouter mount/unmount tests cover both directions, cancellation and subsequent acceptance. Cold unauthorized event tasks remain unmounted. The official renderer is development-only; no browser permission bypass. |
+| Reservation crosses dispatch hour | Reject/refund known-unsent old-hour claim after readiness at the provider boundary. Clock-controlled test crosses 12:59:59 to 13:00:01, asserts zero submission, then at most four submissions in the new hour. |
+| Concurrent first schedule inserts abort worker | Shared SQLite/PostgreSQL atomic conflict-safe upsert at both sites; monotonic timestamps. Two actual sessions synchronize first writes for replies and handoffs; both ticks finish with one submission. |
+| Guardian authorization mutation does not publish readiness invalidation | Actual guardian settings route now captures configured outcome in its mutation transaction; route-level test toggles the setting and requires distinct revisions. |
+| Adjacent resolved-case notification race | Claim and final persisted check require unresolved case. Separate sessions resolve before claim and after claim; neither submits. |
+| Adjacent open_handoff availability writer | Serialize existing case changes and refresh cached state; configuration loss/repeated inbound preserves accepted/uncertain within the same generation. Only a genuinely reopened generation reauthorizes notification. Regression covers loss/restoration and explicit reopen. |
+
+The expanded corrective scope is 24 files (the original 20 plus the guardian route, shared event-selection hook and the two development dependency manifests). No messaging gate or production configuration changes. Final exact-head test results are recorded in the task verification artifacts and PR checkpoint; CI and the next requested review must finish before parent verification. This task must not merge.

@@ -307,3 +307,148 @@ def test_stale_suppressed_worker_cannot_cancel_owned_or_unknown_reply(service,mo
         assert db.get(sales.DispatchGuard,key).active_reply is None
         assert db.get(sales.Conversation,key).status=="opted_out"
     assert adapter.send.call_count==1
+
+
+@pytest.mark.parametrize("notification",["accepted","uncertain"])
+def test_stale_missing_owner_snapshot_cannot_reset_completed_notification(service,monkeypatch,notification):
+    m,client,headers=service;enable(monkeypatch)
+    monkeypatch.setenv("MARKETING_HANDOFF_DESTINATION","https://synthetic.invalid/staff")
+    monkeypatch.setenv("MARKETING_HANDOFF_NOTIFICATIONS_ENABLED","true")
+    with m.SessionLocal() as db:
+        lead=m.Lead(email="synthetic@example.com",automation_paused=True);db.add(lead);db.flush();lead_id=lead.id
+        db.add(m.AccessGrant(email="operator@example.com",name="Operator",role="marketer",active=True,granted_by="synthetic"))
+        db.add(journey.Handoff(id="stale-owner-case",lead_id=lead.id,status="open",notification="missing_owner",history=[]));db.commit()
+    entered=threading.Event();release=threading.Event();local=threading.local()
+    original=getattr(workers,"schedule_work",None);merge=m.SessionLocal.class_.merge
+    def pause():
+        if getattr(local,"stale",False) and not getattr(local,"waited",False):
+            local.waited=True;entered.set();assert release.wait(10)
+    if original:
+        def schedule(db,*args):pause();return original(db,*args)
+        monkeypatch.setattr(workers,"schedule_work",schedule)
+    else:
+        def stale_merge(db,instance,*args,**kwargs):pause();return merge(db,instance,*args,**kwargs)
+        monkeypatch.setattr(m.SessionLocal.class_,"merge",stale_merge)
+    adapter=Mock()
+    if notification=="accepted":adapter.notify.return_value=True
+    else:adapter.notify.side_effect=TimeoutError("synthetic unknown outcome")
+    def stale_worker():local.stale=True;return workers.tick(m,notification_adapter=adapter)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        stale=pool.submit(stale_worker);assert entered.wait(10)
+        assert client.post('/api/marketing/handoffs/stale-owner-case/assign-owner',headers=headers,json={"owner":"operator@example.com"}).status_code==200
+        workers.tick(m,notification_adapter=adapter)
+        release.set();stale.result(timeout=10)
+    with m.SessionLocal() as db:
+        case=db.get(journey.Handoff,"stale-owner-case")
+        assert case.notification==notification and case.generation==2
+        assert db.get(m.Lead,lead_id).automation_paused
+    workers.tick(m,notification_adapter=adapter)
+    assert adapter.notify.call_count==1
+
+
+@pytest.mark.parametrize("kind",["reply","case"])
+def test_concurrent_first_schedule_writes_do_not_abort_either_tick(service,monkeypatch,kind):
+    m,_,_=service;body=real_sales_fixture(monkeypatch,"chat")
+    if kind=="reply":
+        with m.SessionLocal() as db:sales.ingest(db,body)
+    else:
+        monkeypatch.setenv("MARKETING_HANDOFF_OWNER","operator@example.com")
+        monkeypatch.setenv("MARKETING_HANDOFF_DESTINATION","https://synthetic.invalid/staff")
+        monkeypatch.setenv("MARKETING_HANDOFF_NOTIFICATIONS_ENABLED","true")
+        with m.SessionLocal() as db:
+            db.add(journey.Handoff(id="concurrent-schedule",lead_id="lead",owner="operator@example.com",status="open",notification="pending",history=[]));db.commit()
+    barrier=threading.Barrier(2);local=threading.local();execute=m.SessionLocal.class_.execute;merge=m.SessionLocal.class_.merge
+    def synchronize():
+        if not getattr(local,"waited",False):local.waited=True;barrier.wait(timeout=10)
+    def atomic_write(db,statement,*args,**kwargs):
+        if getattr(statement,"is_insert",False) and statement.table.name==sales.QueueSchedule.__tablename__:synchronize()
+        return execute(db,statement,*args,**kwargs)
+    def old_merge(db,instance,*args,**kwargs):
+        result=merge(db,instance,*args,**kwargs)
+        if isinstance(instance,sales.QueueSchedule):synchronize()
+        return result
+    monkeypatch.setattr(m.SessionLocal.class_,"execute",atomic_write)
+    monkeypatch.setattr(m.SessionLocal.class_,"merge",old_merge)
+    sender=Mock();sender.send.return_value={"status":"accepted","provider_id":"synthetic"}
+    notifier=Mock();notifier.notify.return_value=True
+    def tick():return workers.tick(m,sales_adapter=sender,notification_adapter=notifier)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures=[pool.submit(tick) for _ in range(2)]
+        for future in futures:future.result(timeout=15)
+    assert (sender.send.call_count if kind=="reply" else notifier.notify.call_count)==1
+    with m.SessionLocal() as db:assert len(db.scalars(select(sales.QueueSchedule)).all())==1
+
+
+def test_reservation_crossing_an_hour_is_cancelled_unsent_before_transport(service,monkeypatch):
+    m,_,_=service;body=real_sales_fixture(monkeypatch,"chat")
+    at=sales.clock().replace(minute=59,second=59,microsecond=0);monkeypatch.setattr(sales,"clock",lambda:at)
+    with m.SessionLocal() as db:reply=sales.ingest(db,body);identity=reply.id;key=reply.conversation_id
+    def crossed(_):
+        nonlocal at
+        at=at+timedelta(seconds=2);return True
+    monkeypatch.setattr(workers,"source_ready",crossed)
+    requests=[]
+    adapter=workers.SalesAdapter(m,transport=httpx.MockTransport(lambda request:(requests.append(request) or httpx.Response(200,json={"id":"synthetic"}))))
+    with m.SessionLocal() as db:
+        assert sales.dispatch(db,identity,adapter)=="unconfigured"
+        assert db.get(sales.Reply,identity).status=="prepared"
+        assert db.get(sales.DispatchGuard,key).active_reply is None
+        assert db.get(sales.DispatchGuard,key).attempts==0
+    assert requests==[]
+    monkeypatch.setattr(workers,"source_ready",lambda _:True)
+    with m.SessionLocal() as db:assert sales.dispatch(db,identity,adapter)=="accepted"
+    for i in range(4):
+        with m.SessionLocal() as db:
+            next_reply=sales.ingest(db,{**body,"event_id":f"new-hour-{i}"})
+            sales.dispatch(db,next_reply.id,adapter)
+    assert len(requests)==4
+
+@pytest.mark.parametrize("stage",["before_claim","after_claim"])
+def test_resolved_case_is_not_notified_by_already_selected_worker(service,monkeypatch,stage):
+    m,_,_=service;enable(monkeypatch)
+    monkeypatch.setenv("MARKETING_HANDOFF_OWNER","operator@example.com")
+    monkeypatch.setenv("MARKETING_HANDOFF_DESTINATION","https://synthetic.invalid/staff")
+    monkeypatch.setenv("MARKETING_HANDOFF_NOTIFICATIONS_ENABLED","true")
+    with m.SessionLocal() as db:
+        db.add(journey.Handoff(id="resolved-race",lead_id="lead",owner="operator@example.com",status="open",notification="pending",history=[]));db.commit()
+    entered=threading.Event();release=threading.Event();schedule=workers.schedule_work;refresh=m.SessionLocal.class_.refresh
+    def wait():entered.set();assert release.wait(10)
+    def scheduled(db,*args):
+        if stage=="before_claim":wait()
+        return schedule(db,*args)
+    def refreshed(db,instance,*args,**kwargs):
+        if stage=="after_claim" and isinstance(instance,journey.Handoff) and not entered.is_set():wait()
+        return refresh(db,instance,*args,**kwargs)
+    monkeypatch.setattr(workers,"schedule_work",scheduled);monkeypatch.setattr(m.SessionLocal.class_,"refresh",refreshed)
+    adapter=Mock();adapter.notify.return_value=True
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        task=pool.submit(workers.tick,m,notification_adapter=adapter);assert entered.wait(10)
+        with m.SessionLocal() as writer:
+            case=writer.get(journey.Handoff,"resolved-race");case.status="resolved";writer.commit()
+        release.set();task.result(timeout=10)
+    adapter.notify.assert_not_called()
+    with m.SessionLocal() as db:assert db.get(journey.Handoff,"resolved-race").status=="resolved"
+
+
+@pytest.mark.parametrize("notification",["accepted","uncertain"])
+def test_repeated_handoff_inbound_and_configuration_loss_preserve_terminal_notification(service,monkeypatch,notification):
+    m,_,_=service;enable(monkeypatch)
+    monkeypatch.setenv("MARKETING_HANDOFF_OWNER","operator@example.com")
+    monkeypatch.setenv("MARKETING_HANDOFF_DESTINATION","https://synthetic.invalid/staff")
+    monkeypatch.setenv("MARKETING_HANDOFF_NOTIFICATIONS_ENABLED","true")
+    with m.SessionLocal() as db:
+        lead=m.Lead(email="synthetic@example.com",automation_paused=True);db.add(lead);db.flush();lead_id=lead.id
+        case=journey.open_handoff(m,db,lead,"email","initial");case.notification=notification;db.commit();case_id=case.id
+    monkeypatch.delenv("MARKETING_HANDOFF_DESTINATION")
+    with m.SessionLocal() as db:
+        case=journey.open_handoff(m,db,db.get(m.Lead,lead_id),"email","repeat")
+        db.commit();assert case.notification==notification;assert case.generation==1
+    monkeypatch.setenv("MARKETING_HANDOFF_DESTINATION","https://synthetic.invalid/staff")
+    adapter=Mock();workers.tick(m,notification_adapter=adapter);adapter.notify.assert_not_called()
+    # A genuinely reopened case is a new generation and can notify once.
+    with m.SessionLocal() as db:
+        db.get(journey.Handoff,case_id).status="resolved";db.commit()
+        case=journey.open_handoff(m,db,db.get(m.Lead,lead_id),"email","new-question");db.commit()
+        assert case.generation==2 and case.notification=="pending"
+    adapter.notify.return_value=True
+    assert workers.tick(m,notification_adapter=adapter)["notifications"]==1

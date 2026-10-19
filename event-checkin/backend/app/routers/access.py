@@ -487,6 +487,8 @@ async def update_guardian_authorizations(event_id: str, body: GuardianAuthorizat
     event.junior_guardian_handoff_enabled = body.enabled
     event.guardian_authorizations = dict(normalized)
     event.guardian_designation_scope = body.designation_scope
+    from ..services.marketing_client import capture_event_outcome
+    await capture_event_outcome(db,event,"configured",event.id)
     await db.commit()
     return await get_guardian_authorizations(event_id, db, user)
 

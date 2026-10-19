@@ -35,10 +35,10 @@ function harness({initialSelection='A',path='/setup-redesign',search='?event=B&v
   const selections=[]
   const setCurrent=id=>{if(id!==selected&&!guard(id))return;if(id!==selected)selections.push(id);selected=id}
   const react={useState(initial){const i=cursor++;if(!(i in states))states[i]=initial;return [states[i],value=>{states[i]=value}]},
-    useRef(initial){const i=cursor++;if(!(i in states))states[i]={current:initial};return states[i]},
+    useContext(){return null},useRef(initial){const i=cursor++;if(!(i in states))states[i]={current:initial};return states[i]},
     useEffect(fn,next){const i=cursor++;if(!deps[i]||next.some((x,j)=>x!==deps[i][j])){deps[i]=next;pending.push(()=>{cleanups[i]?.();cleanups[i]=fn()})}}}
-  const jsx=(type,props)=>({type,props})
-  const modules={react,'react/jsx-runtime':{jsx,jsxs:jsx},'react-router-dom':{Navigate:'Navigate',useLocation:()=>location},
+  const jsx=(type,props)=>type==='Provider'||type==='div'&&!props.role&&'aria-busy' in props?props.children:({type,props})
+  const modules={react,'react/jsx-runtime':{jsx,jsxs:jsx},'react-router-dom':{Navigate:'Navigate',useLocation:()=>location,useNavigate:()=>()=>{},UNSAFE_LocationContext:{Provider:'Provider'},UNSAFE_RouteContext:{Provider:'Provider'},UNSAFE_NavigationContext:{}},
     '../context/AuthContext':{useAuth:()=>({user,loading:false})},'../api':{api:{listEvents:()=>new Promise(resolve=>{requests.push(resolve)})}},
     '../hooks/useCurrentEvent':{useCurrentEvent:()=>[selected,setCurrent]},
     '../pages/organizerGuidance.mjs':{eventIdentityFromQuery,authenticatedOrganizerReturn}}
@@ -120,4 +120,65 @@ test('returning to a previous deep link performs a fresh selection instead of re
   const checking=h.render();assert.notEqual(checking,'event-tasks');assert.notEqual(checking.type,'Navigate')
   h.resolve([{id:'B'},{id:'C'}],1);await Promise.resolve();await Promise.resolve()
   const blocked=h.render();assert.equal(blocked.props.role,'alert');assert.equal(h.selected,'C')
+})
+
+test('same-event view/task changes keep the verified workspace mounted without another authorization read',async()=>{
+  const h=harness({path:'/event-results-redesign',search:'?event=B&view=summary'})
+  h.render();h.resolve([{id:'B'}]);await Promise.resolve();await Promise.resolve();assert.equal(h.render(),'event-tasks')
+  for(const search of ['?event=B&view=details','?event=B&view=details&task=closeout','?view=summary&event_id=B']){
+    h.navigate('/event-results-redesign'+search)
+    assert.equal(h.render(),'event-tasks');assert.equal(h.requestCount,1)
+  }
+})
+
+// Real React lifecycles + MemoryRouter history, with only network/auth mocked.
+// An editor cleanup actually unregisters the shared change guard here.
+for(const direction of ['back','forward'])test(`mounted dirty editor survives cancelled ${direction} and preserves history`,async()=>{
+  const React=await import('react'),Router=await import('react-router-dom')
+  const {create,act}=await import('react-test-renderer')
+  const {createRequire}=await import('node:module'),require=createRequire(import.meta.url)
+  const evaluate=(path,modules)=>{
+    const module={exports:{}}
+    const code=transformSync(readFileSync(new URL(path,import.meta.url),'utf8'),{loader:'jsx',format:'cjs',jsx:'automatic'}).code
+    runInNewContext(code,{module,exports:module.exports,require:name=>modules[name]??require(name),URLSearchParams,
+      localStorage:{getItem:()=> 'A',setItem(){},removeItem(){}}})
+    return module.exports
+  }
+  const current=evaluate('../src/hooks/useCurrentEvent.js',{})
+  const user={id:'owner',role:'admin'},requests=[]
+  const Protected=evaluate('../src/components/ProtectedRoute.jsx',{
+    '../context/AuthContext':{useAuth:()=>({user,loading:false})},'../api':{api:{listEvents:()=>new Promise(resolve=>requests.push(resolve))}},
+    '../hooks/useCurrentEvent':current,'../pages/organizerGuidance.mjs':{eventIdentityFromQuery}}).default
+  let navigation,routerLocation,index,selected,edit,allow=false,mounts=0,unmounts=0,guardCalls=0
+  function Probe(){navigation=Router.useNavigate();routerLocation=Router.useLocation();index=React.useContext(Router.UNSAFE_NavigationContext).navigator.index;[selected]=current.useCurrentEvent();return null}
+  function Editor(){
+    const [draft,setDraft]=React.useState('');edit=setDraft
+    const loc=Router.useLocation()
+    React.useEffect(()=>{mounts++;const unregister=current.registerEventChangeGuard(()=>{guardCalls++;return allow});return()=>{unmounts++;unregister()}},[])
+    return React.createElement('input',{value:draft,'data-location':loc.search})
+  }
+  const a='/design-studio-redesign/website?event=A&view=edit',b='/design-studio-redesign/website?event=B&view=edit'
+  let root
+  await act(async()=>{root=create(React.createElement(Router.MemoryRouter,{initialEntries:direction==='back'?[b,a]:[a,b],initialIndex:direction==='back'?1:0},
+    React.createElement(Probe),React.createElement(Protected,null,React.createElement(Editor))))})
+  await act(async()=>requests.shift()([{id:'A'},{id:'B'}]))
+  await act(async()=>edit('unsaved synthetic draft'))
+  const originalIndex=index
+  await act(async()=>navigation(direction==='back'?-1:1))
+  assert.equal(selected,'A');assert.equal(unmounts,0);assert.equal(mounts,1)
+  assert.equal(root.root.findByType('input').props.value,'unsaved synthetic draft')
+  assert.match(root.root.findByType('input').props['data-location'],/event=A/)
+  await act(async()=>requests.shift()([{id:'A'},{id:'B'}]))
+  assert.equal(guardCalls,1);assert.equal(selected,'A');assert.equal(index,originalIndex)
+  assert.equal(routerLocation.search,'?event=A&view=edit');assert.equal(unmounts,0)
+  assert.equal(root.root.findByType('input').props.value,'unsaved synthetic draft')
+  await act(async()=>navigation('?event=A&view=details&task=closeout',{replace:true}))
+  assert.equal(unmounts,0);assert.equal(requests.length,0)
+  assert.equal(root.root.findByType('input').props.value,'unsaved synthetic draft')
+  // The existing opposite entry is still available after the cancellation.
+  allow=true
+  await act(async()=>navigation(direction==='back'?-1:1))
+  await act(async()=>requests.shift()([{id:'A'},{id:'B'}]))
+  assert.equal(selected,'B');assert.equal(guardCalls,2);assert.match(routerLocation.search,/event=B/)
+  await act(async()=>root.unmount())
 })

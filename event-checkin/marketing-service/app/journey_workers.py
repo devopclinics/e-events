@@ -119,12 +119,22 @@ class SalesAdapter:
         # The source proof request is not a send grant. Recheck local stops,
         # gates and window after that I/O, at the provider submission boundary.
         with httpx.Client(transport=self.transport, timeout=15, follow_redirects=False) as client:
+            # Persist the irreversible may-submit boundary before contact.
+            # After arming, a not-found observation cannot authorize reclaim.
             with self.m.SessionLocal() as db:
+                armed=db.execute(update(sales.DispatchGuard).where(sales.DispatchGuard.conversation_id==contact_key,
+                    sales.DispatchGuard.active_reply==idempotency_key,sales.DispatchGuard.token==claim_token,
+                    sales.DispatchGuard.submission_state=="preparing").values(submission_state="armed"))
+                db.commit()
+                if armed.rowcount!=1:
+                    raise HTTPException(409,"Submission claim was revoked before arming")
+            with self.m.SessionLocal() as db:
+                sales.lock_dispatch(db,contact_key)
                 reply = db.get(sales.Reply, idempotency_key)
                 row = db.get(sales.Conversation, contact_key)
                 guard=db.get(sales.DispatchGuard,contact_key)
                 if (not reply or reply.status!="sending" or not guard or guard.active_reply!=idempotency_key
-                        or not claim_token or guard.token!=claim_token):
+                        or not claim_token or guard.token!=claim_token or guard.submission_state!="armed"):
                     raise HTTPException(409,"Stale conversation dispatch claim")
                 try:
                     template = json.loads(os.getenv("MARKETING_SALES_WHATSAPP_APPROVED_TEMPLATE", "null"))
@@ -134,7 +144,7 @@ class SalesAdapter:
                 if (reason or current != content or not sales.flag("MARKETING_JOURNEY_WORKER_ENABLED")
                         or guard.hour!=sales.clock().strftime("%Y-%m-%dT%H")):
                     raise HTTPException(409, "Dispatch eligibility changed during readiness verification")
-            response = client.post(path, headers=headers, json=payload)
+                response = client.post(path, headers=headers, json=payload)
         if response.status_code in {408,409,425}:
             return {"status":"unknown"}
         if 400 <= response.status_code < 500:

@@ -189,6 +189,9 @@ def install(m):
     migrate_checkpoint(m.engine)
     # Checkpoint upgrades are additive; no historical enrollment or repair.
     from sqlalchemy import inspect, text
+    if "submission_state" not in {c["name"] for c in inspect(m.engine).get_columns(sales_responses.DispatchGuard.__tablename__)}:
+        with m.engine.begin() as connection:
+            connection.execute(text("ALTER TABLE marketing_sales_dispatch_guards ADD COLUMN submission_state VARCHAR(20)"))
     if "context_ciphertext" not in {c["name"] for c in inspect(m.engine).get_columns(Handoff.__tablename__)}:
         with m.engine.begin() as connection:
             connection.execute(text("ALTER TABLE marketing_handoff_cases ADD COLUMN context_ciphertext TEXT"))

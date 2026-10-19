@@ -36,19 +36,22 @@ export default function ProtectedRoute({
   const appliedReturn=useRef(null)
   const [eventReturn,setEventReturn]=useState({key:null,status:'checking'})
   useEffect(()=>{
-    if(rollback.current&&rollback.current.key===location.key){
+    if(rollback.current&&rollback.current.user===user?.id&&rollback.current.authorization.key===returnKey&&
+      rollback.current.url===location.pathname+location.search+(location.hash||'')){
       appliedReturn.current=rollback.current.applied
       setEventReturn(rollback.current.authorization)
       rollback.current=null
       return
     }
+    rollback.current=null
     appliedReturn.current=null
     setEventReturn({key:returnKey,status:'checking'})
     let alive=true
     const restoreCommitted=()=>{
       const previous=committed.current
       if(previous?.user!==user.id||previous.event!==currentEventId)return false
-      rollback.current={key:previous.location.key,applied:previous.applied,authorization:previous.authorization}
+      rollback.current={user:previous.user,url:previous.location.pathname+previous.location.search+(previous.location.hash||''),
+        applied:previous.applied,authorization:previous.authorization}
       const index=historyIndex(),delta=previous.index-index
       if(Number.isInteger(index)&&Number.isInteger(previous.index)&&delta)navigate(delta)
       else navigate(previous.location.pathname+previous.location.search+(previous.location.hash||''),{replace:true})

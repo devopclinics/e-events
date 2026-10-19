@@ -470,3 +470,140 @@ def test_open_handoff_refreshes_cached_case_before_availability_write(service,mo
         stale.commit()
         assert case is cached and case.notification==notification and case.generation==1
     with m.SessionLocal() as reader:assert reader.get(journey.Handoff,case_id).notification==notification
+
+@pytest.mark.parametrize("channel",["chat","whatsapp"])
+@pytest.mark.parametrize("receipt",[False,True])
+def test_post_check_submission_cannot_be_revoked_or_reassigned(service,monkeypatch,channel,receipt):
+    from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError
+    m,_,_=service;body=real_sales_fixture(monkeypatch,channel);one,two,key=prepare_pair(m,body)
+    entered=threading.Event();release=threading.Event();requests=[];post=httpx.Client.post
+    def paused_post(client,*args,**kwargs):
+        entered.set();assert release.wait(10)
+        return post(client,*args,**kwargs)
+    monkeypatch.setattr(httpx.Client,"post",paused_post)
+    adapter=workers.SalesAdapter(m,transport=httpx.MockTransport(lambda request:(requests.append(request) or httpx.Response(200,json={"id":"synthetic-accepted"}))))
+    def submit():
+        with m.SessionLocal() as db:return sales.dispatch(db,one,adapter)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        task=pool.submit(submit);assert entered.wait(10)
+        try:
+            assert requests==[] # Paused after final validation, before transport.
+            with m.SessionLocal() as other:
+                other.execute(text("PRAGMA busy_timeout=0"))
+                with pytest.raises(OperationalError):sales.reconcile(other,one,**({"provider_id":"authenticated-receipt"} if receipt else {"definitely_not_sent":True}))
+                other.rollback()
+            with m.SessionLocal() as other:
+                assert other.get(sales.DispatchGuard,key).active_reply==one
+                assert sales.dispatch(other,two,adapter)=="reconciliation_required"
+            assert requests==[]
+        finally:release.set()
+        assert task.result(timeout=10)=="accepted"
+    assert len(requests)==1
+
+
+@pytest.mark.parametrize("channel",["chat","whatsapp"])
+def test_durable_armed_attempt_survives_lost_transaction_and_unknown_receipt(service,monkeypatch,channel):
+    from fastapi import HTTPException
+    m,_,_=service;body=real_sales_fixture(monkeypatch,channel);one,two,key=prepare_pair(m,body)
+    local=threading.local();lock=getattr(sales,"lock_dispatch",None);post=httpx.Client.post;requests=[]
+    if lock:
+        def capture(db,key):local.db=db;return lock(db,key)
+        monkeypatch.setattr(sales,"lock_dispatch",capture)
+    def lost_transaction(client,*args,**kwargs):
+        # Simulate losing coordination after the final check. The durable arm
+        # must still prevent a not-found observation from granting reassignment.
+        if lock:local.db.rollback()
+        with m.SessionLocal() as other:
+            with pytest.raises(HTTPException) as error:sales.reconcile(other,one,definitely_not_sent=True)
+            assert error.value.status_code==409
+        return post(client,*args,**kwargs)
+    monkeypatch.setattr(httpx.Client,"post",lost_transaction)
+    adapter=workers.SalesAdapter(m,transport=httpx.MockTransport(lambda request:(requests.append(request) or httpx.Response(503))))
+    with m.SessionLocal() as db:assert sales.dispatch(db,one,adapter)=="unknown"
+    assert len(requests)==1
+    with m.SessionLocal() as db:
+        assert db.get(sales.DispatchGuard,key).submission_state=="armed"
+        with pytest.raises(HTTPException):sales.reconcile(db,one,definitely_not_sent=True)
+        assert sales.dispatch(db,two,adapter)=="reconciliation_required"
+        assert sales.reconcile(db,one,provider_id="authenticated-provider-receipt")=="accepted"
+        assert db.get(sales.DispatchGuard,key).active_reply is None
+        assert db.get(sales.Conversation,key).status=="paused" # Never auto-resume.
+
+
+@pytest.mark.parametrize("change",["gate","hour","window","consent"])
+def test_submission_rechecks_policy_after_coordination_wait(service,monkeypatch,change):
+    m,_,_=service;body={**real_sales_fixture(monkeypatch,"whatsapp"),"consent":True}
+    at=sales.clock().replace(minute=59,second=59,microsecond=0);monkeypatch.setattr(sales,"clock",lambda:at)
+    template=None
+    if change=="consent":
+        content={"text":"Reviewed synthetic template","cta_url":sales.CTA}
+        template={"id":"synthetic-approved","approved":True,"content":content}
+        monkeypatch.setenv("MARKETING_SALES_WHATSAPP_TEMPLATE",template["id"])
+        monkeypatch.setenv("MARKETING_SALES_WHATSAPP_TEMPLATE_SHA256",journey.fingerprint(content))
+        monkeypatch.setenv("MARKETING_SALES_WHATSAPP_APPROVED_TEMPLATE",json.dumps(template))
+    with m.SessionLocal() as db:
+        reply=sales.ingest(db,body);identity=reply.id;key=reply.conversation_id
+        if change=="consent":db.get(sales.Conversation,key).inbound_at=(at-timedelta(hours=25)).isoformat();db.commit()
+    entered=threading.Event();release=threading.Event();local=threading.local();lock=sales.lock_dispatch;requests=[]
+    def delayed(db,key):
+        if not getattr(local,"waited",False):local.waited=True;entered.set();assert release.wait(10)
+        return lock(db,key)
+    monkeypatch.setattr(sales,"lock_dispatch",delayed)
+    adapter=workers.SalesAdapter(m,transport=httpx.MockTransport(lambda request:(requests.append(request) or httpx.Response(200,json={"id":"synthetic"}))))
+    def submit():
+        with m.SessionLocal() as db:return sales.dispatch(db,identity,adapter,template=template)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        task=pool.submit(submit);assert entered.wait(10)
+        if change=="gate":monkeypatch.setenv("MARKETING_OUTBOUND_ENABLED","false")
+        elif change=="hour":at=at+timedelta(seconds=2)
+        elif change=="window":at=at+timedelta(hours=25)
+        else:
+            with m.SessionLocal() as db:db.get(sales.Conversation,key).consent=0;db.commit()
+        release.set();assert task.result(timeout=10)=="unconfigured"
+    assert requests==[]
+    with m.SessionLocal() as db:
+        guard=db.get(sales.DispatchGuard,key)
+        assert guard.active_reply is None and guard.submission_state is None and guard.attempts==0
+
+
+
+def test_submission_and_reconciliation_finish_use_consistent_guard_first_order(service,monkeypatch):
+    m,_,_=service;body=real_sales_fixture(monkeypatch,"chat");one,two,key=prepare_pair(m,body)
+    entered=threading.Event();release=threading.Event();local=threading.local();lock=sales.lock_dispatch
+    def finish_wait(db,key):
+        if getattr(local,"sender",False) and not getattr(local,"waited",False):
+            local.waited=True;entered.set();assert release.wait(10)
+        return lock(db,key)
+    monkeypatch.setattr(sales,"lock_dispatch",finish_wait)
+    adapter=Mock();adapter.send.return_value={"status":"unknown"}
+    def send():
+        local.sender=True
+        with m.SessionLocal() as db:return sales.dispatch(db,one,adapter)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future=pool.submit(send);assert entered.wait(10)
+        with m.SessionLocal() as other:assert sales.reconcile(other,one,provider_id="authenticated-receipt")=="accepted"
+        release.set();assert future.result(timeout=10)=="reconciliation_required"
+    with m.SessionLocal() as db:
+        assert db.get(sales.Reply,one).status=="accepted"
+        assert db.get(sales.DispatchGuard,key).active_reply is None
+    assert adapter.send.call_count==1
+
+
+def test_submission_phase_upgrade_preserves_legacy_unknown_hold(service):
+    from sqlalchemy import text,inspect
+    from fastapi import HTTPException
+    m,_,_=service
+    with m.engine.begin() as connection:
+        connection.execute(text("DROP TABLE marketing_sales_dispatch_guards"))
+        connection.execute(text("CREATE TABLE marketing_sales_dispatch_guards (conversation_id VARCHAR(64) PRIMARY KEY, active_reply VARCHAR(128),token VARCHAR(36),hour VARCHAR(20) NOT NULL,attempts INTEGER NOT NULL)"))
+        connection.execute(text("INSERT INTO marketing_sales_dispatch_guards VALUES ('legacy','legacy-reply','preserved-token','2026-01-01T00',1)"))
+    journey.install(m);journey.install(m)
+    assert "submission_state" in {c["name"] for c in inspect(m.engine).get_columns(sales.DispatchGuard.__tablename__)}
+    with m.SessionLocal() as db:
+        guard=db.get(sales.DispatchGuard,"legacy")
+        assert guard.active_reply=="legacy-reply" and guard.token=="preserved-token" and guard.submission_state is None
+        db.add(sales.Reply(id="legacy-reply",fingerprint="synthetic",conversation_id="legacy",status="unknown",payload={},attempts=1));db.commit()
+        with pytest.raises(HTTPException) as error:sales.reconcile(db,"legacy-reply",definitely_not_sent=True)
+        assert error.value.status_code==409
+        assert db.get(sales.DispatchGuard,"legacy").active_reply=="legacy-reply"

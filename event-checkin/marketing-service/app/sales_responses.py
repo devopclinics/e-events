@@ -59,6 +59,7 @@ class DispatchGuard(Base):
     conversation_id = Column(String(64), primary_key=True)
     active_reply = Column(String(128), nullable=True)
     token = Column(String(36), nullable=True)
+    submission_state = Column(String(20), nullable=True)
     hour = Column(String(20), nullable=False)
     attempts = Column(Integer, nullable=False, default=0)
 
@@ -69,8 +70,20 @@ class QueueSchedule(Base):
     next_at = Column(String(40), nullable=False)
 
 
+def lock_dispatch(db, conversation_id):
+    """Transaction mutex shared by submission, reconciliation and finalization.
+
+    A no-op UPDATE takes the conversation row lock on PostgreSQL and the
+    write lock on SQLite. Caller must retain this transaction through contact.
+    All writers acquire guard before reply to keep lock ordering consistent.
+    """
+    with db.no_autoflush:
+        db.execute(update(DispatchGuard).where(DispatchGuard.conversation_id==conversation_id)
+            .values(token=DispatchGuard.token).execution_options(synchronize_session=False))
+
+
 def release_claim(db, reply, *, unsent=False, token=None):
-    values={"active_reply":None}
+    values={"active_reply":None,"submission_state":None}
     if unsent:
         values["attempts"]=case((DispatchGuard.attempts>0,DispatchGuard.attempts-1),else_=0)
     query=update(DispatchGuard).where(DispatchGuard.conversation_id==reply.conversation_id,DispatchGuard.active_reply==reply.id)
@@ -287,7 +300,7 @@ def dispatch(db, reply_id, adapter, *, template=None, stop_requested=None):
     unresolved=select(Reply.id).where(Reply.conversation_id==row.id,Reply.status.in_(("sending","unknown"))).exists()
     serialized=db.execute(update(DispatchGuard).where(DispatchGuard.conversation_id==row.id,
         DispatchGuard.active_reply.is_(None),~unresolved,
-        or_(DispatchGuard.hour!=hour,DispatchGuard.attempts<4)).values(active_reply=reply.id,token=token,hour=hour,
+        or_(DispatchGuard.hour!=hour,DispatchGuard.attempts<4)).values(active_reply=reply.id,token=token,hour=hour,submission_state="preparing",
         attempts=case((DispatchGuard.hour==hour,DispatchGuard.attempts+1),else_=1)).execution_options(synchronize_session=False))
     if serialized.rowcount!=1:
         db.rollback()
@@ -300,6 +313,7 @@ def dispatch(db, reply_id, adapter, *, template=None, stop_requested=None):
     owned=select(DispatchGuard.conversation_id).where(DispatchGuard.conversation_id==row.id,
         DispatchGuard.active_reply==reply.id,DispatchGuard.token==token).exists()
     def finish(values, *, unsent=False):
+        lock_dispatch(db,row.id)
         changed=db.execute(update(Reply).where(Reply.id==reply.id,Reply.status=="sending",owned)
             .values(**values).execution_options(synchronize_session=False))
         if changed.rowcount:
@@ -340,6 +354,9 @@ def dispatch(db, reply_id, adapter, *, template=None, stop_requested=None):
 
 def reconcile(db, reply_id, *, provider_id=None, definitely_not_sent=False):
     reply = db.get(Reply, reply_id)
+    if reply:
+        lock_dispatch(db,reply.conversation_id)
+        db.refresh(reply)
     if not reply or reply.status not in {"unknown", "sending"}:
         raise HTTPException(409, "No uncertain attempt")
     # Caller must independently inspect authenticated provider records.
@@ -347,6 +364,11 @@ def reconcile(db, reply_id, *, provider_id=None, definitely_not_sent=False):
         reply.status, reply.provider_id = "accepted", provider_id
         db.execute(delete(Target).where(Target.id==reply.id))
     elif definitely_not_sent is True:
+        guard=db.get(DispatchGuard,reply.conversation_id,populate_existing=True)
+        if not guard or guard.active_reply!=reply.id or guard.submission_state!="preparing":
+            # Armed (and legacy unknown-phase) attempts may still submit even
+            # after a connection/process failure. Not-found is not a fence.
+            raise HTTPException(409,"Submission may have started; authenticated provider receipt required")
         reply.status = "rejected"
     else:
         raise HTTPException(409, "Definitive provider evidence required")

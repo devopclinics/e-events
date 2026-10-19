@@ -29,14 +29,23 @@ def message_context(m, lead, sequence, index):
         milestones = {r.milestone for r in rows if r.event_id == event_id and r.org_id == current.get("org_id")}
         if sequence.payload.get("category") != "organizer_retention" and (current.get("status") == "ended" or "event_completed" in milestones):
             raise email_pilot.EmailBlocked("Event onboarding is complete; retention is separately gated")
-        steps = [
-            ("guest_imported", "Review the guest list task and import your intended guest list when it is ready.", "audience", "rsvp"),
-            ("invitation_delivered", "Review invitation content, recipient consent and delivery exceptions before deciding whether to send.", "experience", "invitation"),
-            ("rsvp_received", "Review the RSVP flow and check for actual guest responses. A controlled test is a rehearsal.", "audience", "rsvp"),
-            ("checkin_succeeded", "Review check-in and staff access. Rehearse with marked test guests before admitting real attendees.", "operations", "checkin"),
-        ]
-        choice = next((step for step in steps if step[0] not in milestones),
-            ("event_completed", "Review event results and outstanding exceptions before completing closeout.", "closeout", "results"))
+        mode=current.get("attendance_mode")
+        personal=current.get("invite_mode")=="personal"
+        registration_seen=bool(milestones & {"rsvp_received","ticket_order_paid","checkin_succeeded"})
+        steps=[]
+        if mode in {"rsvp","hybrid","private"} and personal and not registration_seen:
+            if not current.get("real_guest_count"):
+                steps.append(("guest_imported","Review the intended attendee list and add or import it when ready.","audience" if mode!="private" else "operations","rsvp" if mode!="private" else "checkin"))
+            if mode!="private" or current.get("rsvp_enabled") is True:
+                steps.append(("invitation_delivered","Review invitation content, recipient consent and delivery exceptions before deciding whether to send.","audience","invitation"))
+        if mode in {"rsvp","hybrid"} or (mode=="private" and current.get("rsvp_enabled") is True):
+            steps.append(("rsvp_received","Review the RSVP flow and actual guest responses. A controlled test is a rehearsal.","audience","rsvp"))
+        if mode in {"ticketed","hybrid"}:
+            steps.append(("ticket_order_paid","Review ticket products, checkout and paid/free order exceptions. Rehearsals and free orders are separate from real paid ticket sales.","audience","tickets"))
+        # First value does not finish onboarding. Continue selected operations,
+        # without requiring an import/invitation for open RSVP or ticketed modes.
+        choice=next((step for step in steps if step[0] not in milestones),
+            ("operations","Review outstanding selected operations and delivery or payment exceptions in your event guide.","operations","finance"))
         if sequence.payload.get("category") == "organizer_retention":
             choice = ("reuse", "Review closeout exceptions and create a new draft when you are ready. A copied draft needs new dates and its own checks.", "closeout", "reuse")
         date_note = ""
@@ -51,7 +60,7 @@ def message_context(m, lead, sequence, index):
                 if sequence.payload.get("category")!="organizer_retention":
                     if local_day>end_day:
                         choice=("closeout","Review results, delivery and payment exceptions before recording event completion.","closeout","closeout")
-                    elif event_day<=local_day<=end_day and "checkin_succeeded" not in milestones:
+                    elif event_day<=local_day<=end_day and current.get("manual_checkin_enabled") is True and "checkin_succeeded" not in milestones:
                         choice=("checkin_succeeded","Review check-in access and staff readiness before admitting real attendees.","operations","checkin")
                 date_note = " Your event date has passed; review closeout rather than inferring completion from the date." if local_day > end_day else " Check outstanding operations for your event day." if event_day<=local_day<=end_day else " Check the event date and timezone before scheduling the next task."
             except (ValueError, KeyError):

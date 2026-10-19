@@ -169,7 +169,7 @@ def tick(m, *, sales_adapter=None, notification_adapter=None, dry_run=False, sto
             at = sales.authenticated_time(stale.claimed_at) if stale.claimed_at else None
             if at is None or at < sales.clock()-timedelta(minutes=2):
                 stale.status = "unknown"
-                db.get(sales.Conversation, stale.conversation_id).status = "paused"
+                sales.hold_conversation(db,stale.conversation_id)
                 from types import SimpleNamespace
                 from .organizer_journey import open_handoff
                 open_handoff(m, db, SimpleNamespace(id="sales:"+stale.conversation_id, owner_email=None), stale.payload["channel"], stale.id)
@@ -238,7 +238,7 @@ def tick(m, *, sales_adapter=None, notification_adapter=None, dry_run=False, sto
             reply=db.get(sales.Reply,identity)
             if reply.payload.get("knowledge_sha256")!=os.getenv("MARKETING_SALES_KNOWLEDGE_SHA256"):
                 reply.status="review_required"
-                db.get(sales.Conversation,reply.conversation_id).status="handoff"
+                sales.hold_conversation(db,reply.conversation_id,"handoff")
                 db.commit()
                 continue
             outcome = sales.dispatch(db, identity, adapter, template=template, stop_requested=cancelled)
@@ -247,7 +247,7 @@ def tick(m, *, sales_adapter=None, notification_adapter=None, dry_run=False, sto
                 from types import SimpleNamespace
                 from .organizer_journey import open_handoff
                 reply = db.get(sales.Reply, identity)
-                db.get(sales.Conversation,reply.conversation_id).status="paused"
+                sales.hold_conversation(db,reply.conversation_id)
                 open_handoff(m, db, SimpleNamespace(id="sales:"+reply.conversation_id, owner_email=None), reply.payload["channel"], identity)
                 db.commit()
     from .retention import run_retention

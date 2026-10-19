@@ -4774,6 +4774,11 @@
             ],
             "title": "Hotel Name"
           },
+          "is_test": {
+            "default": false,
+            "title": "Is Test",
+            "type": "boolean"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -5070,6 +5075,11 @@
               }
             ],
             "title": "Blocked Messaging Channels"
+          },
+          "cancelled": {
+            "default": false,
+            "title": "Cancelled",
+            "type": "boolean"
           },
           "channel_policy": {
             "anyOf": [
@@ -5380,6 +5390,17 @@
             "default": false,
             "title": "Is Paid",
             "type": "boolean"
+          },
+          "is_test": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Test"
           },
           "junior_guardian_handoff_enabled": {
             "default": false,
@@ -8683,6 +8704,11 @@
             "title": "First Name",
             "type": "string"
           },
+          "is_test": {
+            "default": false,
+            "title": "Is Test",
+            "type": "boolean"
+          },
           "is_vip": {
             "default": false,
             "title": "Is Vip",
@@ -9393,6 +9419,17 @@
             "default": false,
             "title": "Is Junior",
             "type": "boolean"
+          },
+          "is_test": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Test"
           },
           "is_vip": {
             "default": false,
@@ -14534,6 +14571,12 @@
       },
       "PaidOrderFulfillment": {
         "properties": {
+          "amount": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Amount",
+            "type": "integer"
+          },
           "attendees": {
             "items": {
               "$ref": "#/components/schemas/PaidAttendee"
@@ -14547,6 +14590,12 @@
             "title": "Buyer Email",
             "type": "string"
           },
+          "currency": {
+            "default": "",
+            "maxLength": 3,
+            "title": "Currency",
+            "type": "string"
+          },
           "delivery_settings": {
             "additionalProperties": true,
             "title": "Delivery Settings",
@@ -14556,11 +14605,34 @@
             "title": "Event Id",
             "type": "string"
           },
+          "is_test": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Test"
+          },
           "order_id": {
             "maxLength": 80,
             "minLength": 1,
             "title": "Order Id",
             "type": "string"
+          },
+          "ticket_amount": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticket Amount"
           }
         },
         "required": [
@@ -17480,6 +17552,11 @@
             },
             "title": "Invitees",
             "type": "array"
+          },
+          "is_test": {
+            "default": false,
+            "title": "Is Test",
+            "type": "boolean"
           },
           "last_name": {
             "title": "Last Name",
@@ -40052,6 +40129,64 @@
         ]
       }
     },
+    "/api/events/{event_id}/organizer-observation": {
+      "post": {
+        "description": "Scoped organizer observations cannot create a real guest outcome.",
+        "operationId": "organizer_observation_api_events__event_id__organizer_observation_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Organizer Observation",
+        "tags": [
+          "events"
+        ]
+      }
+    },
     "/api/events/{event_id}/partner-categories": {
       "get": {
         "operationId": "list_partner_categories_api_events__event_id__partner_categories_get",
@@ -47769,6 +47904,118 @@
           }
         },
         "summary": "Email Readiness"
+      }
+    },
+    "/api/internal/marketing/organizer-context": {
+      "get": {
+        "operationId": "organizer_context_api_internal_marketing_organizer_context_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "title": "Account Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "challenge",
+            "required": true,
+            "schema": {
+              "title": "Challenge",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Organizer Context"
+      }
+    },
+    "/api/internal/marketing/sales-readiness": {
+      "get": {
+        "operationId": "sales_readiness_api_internal_marketing_sales_readiness_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "challenge",
+            "required": true,
+            "schema": {
+              "title": "Challenge",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sales Readiness"
       }
     },
     "/api/internal/ticketing/anonymize/{event_id}/{order_id}": {

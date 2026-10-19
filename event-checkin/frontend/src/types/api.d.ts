@@ -810,6 +810,7 @@ export interface EventCreate {
   external_website_url?: (string) | null
   hotel_address?: (string) | null
   hotel_name?: (string) | null
+  is_test?: boolean
   name: string
   notify_sms?: (boolean) | null
   notify_whatsapp?: (boolean) | null
@@ -856,6 +857,7 @@ export interface EventOut {
   attendance_mode?: string
   blocked_comm_features?: ((string)[]) | null
   blocked_messaging_channels?: ((string)[]) | null
+  cancelled?: boolean
   channel_policy?: (Record<string, unknown>) | null
   checkin_base_url: string
   checkout_enabled?: boolean
@@ -896,6 +898,7 @@ export interface EventOut {
   invite_share_enabled?: boolean
   invite_theme?: string
   is_paid?: boolean
+  is_test?: (boolean) | null
   junior_guardian_handoff_enabled?: boolean
   live_program_enabled?: boolean
   logistics_enabled?: boolean
@@ -1397,6 +1400,7 @@ export interface GuestCreate {
   confirm_duplicate?: boolean
   email?: (string) | null
   first_name: string
+  is_test?: boolean
   is_vip?: boolean
   is_walk_in?: boolean
   last_name: string
@@ -1514,6 +1518,7 @@ export interface GuestOut {
   invite_status?: (string) | null
   invite_token?: (string) | null
   is_junior?: boolean
+  is_test?: (boolean) | null
   is_vip?: boolean
   is_walk_in?: boolean
   last_name: string
@@ -2301,11 +2306,15 @@ export interface PaidOrderDelivery {
 }
 
 export interface PaidOrderFulfillment {
+  amount?: number
   attendees: (PaidAttendee)[]
   buyer_email: string
+  currency?: string
   delivery_settings?: Record<string, unknown>
   event_id: string
+  is_test?: (boolean) | null
   order_id: string
+  ticket_amount?: (number) | null
 }
 
 export interface PaidTicketTransfer {
@@ -2982,6 +2991,7 @@ export interface RSVPSubmit {
   email?: (string) | null
   first_name: string
   invitees?: (RSVPInviteeSubmit)[]
+  is_test?: boolean
   last_name: string
   phone?: (string) | null
   shipping_address?: (ShippingAddressUpdate) | null

@@ -254,7 +254,14 @@ def install(m):
         uncertain = db.scalar(select(sales_responses.Reply.id).where(sales_responses.Reply.conversation_id == conversation_id, sales_responses.Reply.status.in_(("sending", "unknown"))).limit(1))
         if case.status != "resolved" or row.status == "opted_out" or uncertain:
             raise HTTPException(409, "Resolve handoff and uncertainty; opt-out cannot be overridden")
-        row.status = "open"
+        owned_case=select(Handoff.id).where(Handoff.id==case.id,Handoff.generation==case.generation,
+            Handoff.status=="resolved",Handoff.owner==case.owner).exists()
+        changed=db.execute(update(sales_responses.Conversation).where(sales_responses.Conversation.id==row.id,
+            sales_responses.Conversation.version==row.version,sales_responses.Conversation.status!="opted_out",owned_case
+            ).values(status="open",version=sales_responses.Conversation.version+1).execution_options(synchronize_session=False))
+        if changed.rowcount!=1:
+            db.rollback()
+            raise HTTPException(409,"Conversation or handoff changed; review the current stop state")
         db.execute(update(sales_responses.Reply).where(sales_responses.Reply.conversation_id == conversation_id, sales_responses.Reply.status.in_(("prepared", "rejected"))).values(status="cancelled"))
         db.execute(delete(sales_responses.Target).where(sales_responses.Target.conversation_id==conversation_id))
         case.history = [*case.history, {"at": stamp(), "action": "explicit_resume", "actor": identity.email}]
@@ -462,8 +469,16 @@ def install(m):
         attempt=db.scalar(select(m.SendAttempt.id).where(m.SendAttempt.lead_id==lead.id,m.SendAttempt.status.in_(("sending","uncertain"))).limit(1))
         if uncertain or attempt or lead.unsubscribed or not lead.consent_email or lead.deletion_requested_at or lead.suppression_reason not in {None,"inbound_reply","human_handoff","demo_requested"}:
             raise HTTPException(409,"Consent, suppression or provider reconciliation still blocks resumption")
-        lead.automation_paused=False;lead.suppression_reason=None
-        lead.next_follow_up_at=m.now()
+        from sqlalchemy import update
+        owned_case=select(Handoff.id).where(Handoff.id==case.id,Handoff.generation==case.generation,
+            Handoff.status=="resolved",Handoff.owner==case.owner).exists()
+        changed=db.execute(update(m.Lead).where(m.Lead.id==lead.id,m.Lead.unsubscribed.is_(False),
+            m.Lead.consent_email.is_(True),m.Lead.deletion_requested_at.is_(None),
+            m.Lead.suppression_reason==lead.suppression_reason,owned_case).values(
+                automation_paused=False,suppression_reason=None,next_follow_up_at=m.now()).execution_options(synchronize_session=False))
+        if changed.rowcount!=1:
+            db.rollback()
+            raise HTTPException(409,"Organizer stop state or handoff changed; review before resuming")
         case.history=[*case.history,{"at":stamp(),"action":"explicit_resume","actor":identity.email}]
         db.commit()
         return {"resumed":True}

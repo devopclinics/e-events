@@ -42,16 +42,20 @@ async def organizer_context(account_id: str, event_id: str, challenge: str,
     proof_claims = require_marketing_readiness(authorization)
     if challenge != proof_claims["jti"] or len(account_id) > 128 or len(event_id) > 128:
         raise HTTPException(403, "Context challenge mismatch")
-    from app.models import Event, User, Membership, Organization
+    from app.models import Event, User, Membership, Organization, Guest
     event = await db.get(Event, event_id)
     owner = await db.scalar(select(User.id).join(Membership, Membership.user_id == User.id).join(Organization,Organization.id==Membership.org_id).where(
         Organization.is_active.is_(True),User.is_active.is_(True),
         Membership.org_id == event.org_id, Membership.role == "owner",
         ((User.firebase_uid == account_id) | (User.firebase_uid.is_(None) & (User.id == account_id))))) if event else None
     at = datetime.now(timezone.utc)
+    real_guests = await db.scalar(select(func.count(Guest.id)).where(Guest.event_id==event_id,Guest.is_test.is_(False))) if owner else None
     result = dict(account_id=account_id, event_id=event_id, current_owner=owner is not None,
         org_id=event.org_id if owner else None, status=event.status if owner else None,
         cancelled=event.cancelled if owner else None, is_test=event.is_test if owner else None,
+        attendance_mode=event.attendance_mode if owner else None, invite_mode=event.invite_mode if owner else None,
+        rsvp_enabled=event.rsvp_enabled if owner else None, manual_checkin_enabled=event.manual_checkin_enabled if owner else None,
+        real_guest_count=real_guests,
         event_end_date=(event.event_end_date.replace(tzinfo=timezone.utc) if event.event_end_date.tzinfo is None else event.event_end_date).isoformat() if owner and event.event_end_date else None,
         event_date=(event.event_date.replace(tzinfo=timezone.utc) if event.event_date.tzinfo is None else event.event_date).isoformat() if owner else None, timezone=event.timezone if owner else None,
         checked_at=at.isoformat(), sub="organizer-context-response", iss="festio-backend", aud="organizer-context-response",

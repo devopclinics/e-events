@@ -23,6 +23,7 @@ event-checkin/backend/tests/test_engagement_config.py
 event-checkin/backend/tests/test_organizer_journey_acceptance.py
 event-checkin/backend/tests/test_organizer_outcome_capture.py
 event-checkin/backend/tests/test_prospect_webhooks.py
+event-checkin/docs/api-contract/openapi.json
 event-checkin/frontend/src/api.js
 event-checkin/frontend/src/components/ProtectedRoute.jsx
 event-checkin/frontend/src/components/guesthub/EventApp.jsx
@@ -35,6 +36,7 @@ event-checkin/frontend/src/pages/MarketingPage.jsx
 event-checkin/frontend/src/pages/OrganizerHandoffs.jsx
 event-checkin/frontend/src/pages/SetupRedesignPage.jsx
 event-checkin/frontend/src/pages/organizerGuidance.mjs
+event-checkin/frontend/src/types/api.d.ts
 event-checkin/frontend/tests/engagement-foundations.test.mjs
 event-checkin/frontend/tests/helpers/signup-acquisition-harness.mjs
 event-checkin/frontend/tests/organizer-guidance.test.mjs

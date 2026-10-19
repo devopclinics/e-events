@@ -115,6 +115,7 @@ async def test_current_context_revocation_and_cancellation_fail_closed(ctx,monke
     response=await ctx.client.get("/api/internal/marketing/organizer-context",params=params,headers=headers)
     proof=jwt.decode(response.json()["proof"],"synthetic-context-key",algorithms=["HS256"],audience="organizer-context-response")
     assert proof["current_owner"] is False and proof["org_id"] is None and proof["event_date"] is None
+    assert all(proof[key] is None for key in ("attendance_mode","invite_mode","rsvp_enabled","manual_checkin_enabled","real_guest_count"))
 
 
 async def test_commerce_sources_preserve_amount_proof_and_distinguish_renewals(ctx,monkeypatch):

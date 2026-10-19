@@ -293,3 +293,55 @@ handoff/journey slice passed **43 tests**. Full Backend, Support and Ticketing
 results and the three unchanged Windows TestClient limits above still apply;
 there were no later Backend product changes after the 12-test schedule correction.
 The final changed-file scope remains 58. All deployment gates remain OFF.
+
+### Linux closure and final assurance (2026-10-19)
+
+This follow-up uses only `/tmp/festio-journey-94a1897-linux.tghWN1`, fresh
+validation containers, synthetic databases and HTTP mocks. No production
+container/repository/database/configuration was used or changed. Source at
+94a1897858ba9b0714f9026c80ab483e8051c654 was verified against a 1,209-file SHA256
+manifest before extraction. No credentials or environment files were transferred.
+
+Exact-commit Linux Backend: **1,272 passed, one existing xfail**, 312.15 seconds.
+The complete authentication acquisition file separately passed **five tests**,
+including all three cases limited by the Windows socket guard. Existing scoped
+release unit guards: **49 passed** on Linux. No main/ref guard was bypassed and
+no release packaging/publication command was run. An earlier full run ended
+without a summary; the complete verbose rerun supersedes that incomplete result.
+Final Backend ownership-context acceptance: **six passed** after adding mode
+fields and the revoked-owner privacy assertion. Source compilation uses only
+container scratch bytecode; source mounts stay read-only.
+
+| Assurance | Definition and evidence |
+|---|---|
+| First value | Per event/use case: actual guest import, authenticated final invitation delivery, real RSVP, successful admission or verified paid ticket order. Historical `activated`, configuration, rehearsal and provider acceptance are excluded. This is evidence by use case, not an invented single primary conversion for every attendance mode. |
+| RSVP modes | Open RSVP starts with the RSVP flow; personal invitations can first guide list/import and invitation review. A real response/admission suppresses obsolete import/invitation recommendations. |
+| Ticketed/hybrid/private | Ticketed guides checkout/order exceptions without requiring RSVP/import. Hybrid guides incomplete RSVP and ticket tasks. Private attendance respects RSVP/manual-admission flags. First value continues outstanding operations until explicit event completion; dates/timezone guide event-day/closeout without fabricating completion. |
+| Channel authority | Authenticated provider/account/inbox/conversation metadata plus immutable queued transport binding determine reply destinations. User-supplied email/phone/URL/tools are ignored; wrong destinations rejected. No private-account lookup or email/phone identity join exists. Both-channel hostile-input regressions added. |
+| Consent | All three false preferences withdraw all marketing channels and invalidate email proof; WhatsApp-only withdrawal leaves independently consented email/SMS intact. Public anonymous channel STOP remains channel/contact-scoped and cannot be joined to a private organizer by matching contact details. |
+| Test isolation/caps | Only the explicit single test UID can test; other cohort members cannot. Test and pilot share the recipient/account daily cap, alongside campaign caps. No automatic enrollment or historical backfill. |
+| Accepted/crashed | Real mocked Chatwoot/Bird sales adapters and webhook/private-note notification adapters accept before a simulated process death interrupts success commit. Email and retention simulate the same point before ledger finalization. Restart holds sending/unknown claims, never retries blindly; manual reconciliation is required. |
+| STOP/recovery race | Recovery and unknown outcomes conditionally preserve opted-out tombstones. Explicit resume compares current conversation version and owned resolved case generation. Concurrent STOP wins the resume regression. WhatsApp service-window policy remains checked at dispatch/retry and after readiness. |
+
+Final added product corrections are conditional opt-out-safe holds/resumption and
+mode-aware email guidance with signed owner-scoped context. Reviewed copy,
+immutable pilot membership, consent barriers and default-OFF gates are preserved.
+The API snapshot and generated frontend declarations are refreshed. Linux's
+existing upload schema spelling is retained; Windows dependency versions produce
+a different equivalent upload representation, so Linux is the canonical export.
+
+Raw local evidence: `<task>/verification/assurance-*` and
+`<task>/verification/linux-*.log`. External activation prerequisites remain the
+approved immutable pilot and reviewed template fingerprints, authenticated inbound
+routing, owned/acknowledged handoff destination, business sender and eligible
+WhatsApp templates/consent, sender keys and an explicit deployment/activation
+review. All gates remain OFF. No real provider or browser coverage is claimed.
+
+Final Marketing suite after the explicit-resume race regression: **326 passed**,
+137.12 seconds. The final worker slice before that additional race case passed
+**47 tests**; the race case separately passed. Final scope is **60 files** versus
+public-main base: the 58 implementation files plus the API snapshot and generated
+frontend types. No generated-knowledge content changes are needed once transport
+line endings match canonical Git. Windows and Linux FastAPI versions also differ
+in optional ValidationError fields; the committed snapshot is the actual offline
+Linux export, with no unrelated deletion from the existing contract.

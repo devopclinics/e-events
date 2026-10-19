@@ -78,6 +78,14 @@ def flag(name):
     return os.getenv(name, "false").lower() == "true"
 
 
+def hold_conversation(db, conversation_id, status="paused"):
+    # A worker outcome is not permission to erase an authenticated STOP. Bump
+    # the version so an older inbound snapshot cannot undo this hold either.
+    db.execute(update(Conversation).where(Conversation.id==conversation_id,
+        Conversation.status!="opted_out").values(status=status,version=Conversation.version+1).execution_options(synchronize_session=False))
+    db.expire_all()
+
+
 def transport_binding(channel, destination):
     mapping = {"channel":channel,"destination":destination}
     if channel=="chat":
@@ -267,7 +275,7 @@ def dispatch(db, reply_id, adapter, *, template=None, stop_requested=None):
     except Exception:
         reply.status = "unknown"
     if reply.status == "unknown":
-        row.status = "paused"
+        hold_conversation(db,row.id)
     if reply.status=="accepted":
         db.execute(delete(Target).where(Target.id==reply.id))
     db.commit()

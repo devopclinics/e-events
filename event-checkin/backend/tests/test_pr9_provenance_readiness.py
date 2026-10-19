@@ -78,7 +78,7 @@ async def test_guardian_settings_route_publishes_configuration_revision(ctx,monk
     monkeypatch.setattr(settings,"organization_entitlements_v2",False)
     ctx.login(ctx.ids["user_a"]);event_id=ctx.ids["event_a"]
     async with _Session() as db:
-        event=await db.get(Event,event_id);event.is_test=False;event.is_paid=True;await db.commit()
+        event=await db.get(Event,event_id);event.is_test=False;event.is_paid=True;event.venue_access_enabled=True;await db.commit()
     for enabled in [False,True]:
         response=await ctx.client.put(f"/api/events/{event_id}/access/guardian-authorizations",json={"enabled":enabled,"authorizations":[],"designation_scope":"party"})
         assert response.status_code==200,response.text

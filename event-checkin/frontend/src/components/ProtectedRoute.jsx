@@ -44,25 +44,29 @@ export default function ProtectedRoute({
     }
     appliedReturn.current=null
     setEventReturn({key:returnKey,status:'checking'})
-    if(!user||!requestedEvent||eventQuery.conflict)return
     let alive=true
+    const restoreCommitted=()=>{
+      const previous=committed.current
+      if(previous?.user!==user.id||previous.event!==currentEventId)return false
+      rollback.current={key:previous.location.key,applied:previous.applied,authorization:previous.authorization}
+      const index=historyIndex(),delta=previous.index-index
+      if(Number.isInteger(index)&&Number.isInteger(previous.index)&&delta)navigate(delta)
+      else navigate(previous.location.pathname+previous.location.search+(previous.location.hash||''),{replace:true})
+      return true
+    }
+    if(!user)return
+    if(eventQuery.conflict){restoreCommitted();return}
+    if(!requestedEvent)return
     api.listEvents().then(events=>{
       if(!alive)return
       // Event authorization is independent of login return-URL sanitization.
-      // Registered legacy/presenter routes keep their own query parameters.
+      // Keep the committed editor alive even if the target was revoked/deleted
+      // or its authorization lookup fails. Cold links still fail closed.
       const allowed=events.some(event=>event.id===requestedEvent)
-      if(allowed&&setCurrentEvent(requestedEvent)===false){
-        const previous=committed.current
-        if(previous?.user===user.id&&previous.event===currentEventId){
-          rollback.current={key:previous.location.key,applied:previous.applied,authorization:previous.authorization}
-          const index=historyIndex(),delta=previous.index-index
-          if(Number.isInteger(index)&&Number.isInteger(previous.index)&&delta)navigate(delta)
-          else navigate(previous.location.pathname+previous.location.search+(previous.location.hash||''),{replace:true})
-          return
-        }
-      }
+      if(!allowed&&restoreCommitted())return
+      if(allowed&&setCurrentEvent(requestedEvent)===false&&restoreCommitted())return
       setEventReturn({key:returnKey,status:allowed?'verified':'denied'})
-    }).catch(()=>{if(alive)setEventReturn({key:returnKey,status:'denied'})})
+    }).catch(()=>{if(alive&&!restoreCommitted())setEventReturn({key:returnKey,status:'denied'})})
     return()=>{alive=false}
   },[user,returnKey,requestedEvent,eventQuery.conflict])
   useEffect(()=>{
@@ -117,8 +121,8 @@ export default function ProtectedRoute({
   const previous=committed.current
   const roleAllowed=(!platformSuperadminOnly||user?.is_platform_superadmin)&&(!adminOnly||user?.role==='admin')&&
     (!setupOnly||['admin','event_manager'].includes(user?.role))
-  if(roleAllowed&&!loading&&user&&previous?.user===user.id&&previous.event===currentEventId&&requestedEvent&&
-    (eventReturn.key!==returnKey||eventReturn.status==='checking')&&!eventQuery.conflict)
+  if(roleAllowed&&!loading&&user&&previous?.user===user.id&&previous.event===currentEventId&&(requestedEvent||eventQuery.conflict)&&
+    (eventReturn.key!==returnKey||eventReturn.status==='checking'||eventQuery.conflict))
     return workspace(previous,true)
   if (loading) return <Spinner />
 

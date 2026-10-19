@@ -42,7 +42,7 @@ async def test_copy_of_unknown_event_does_not_emit_real_evidence(ctx,monkeypatch
         assert not any(row.payload.get("organizer_event_id")==copied for row in rows)
 
 
-@pytest.mark.parametrize("field,value",[("checkout_enabled",True),("menu_selection_timing","during_rsvp"),("invite_mode","closed"),("rsvp_token","changed"),("rsvp_deadline",datetime(2027,1,1)),("junior_guardian_handoff_enabled",True),("guardian_authorizations",{"synthetic":True})])
+@pytest.mark.parametrize("field,value",[("checkout_enabled",True),("menu_selection_timing","during_rsvp"),("invite_mode","closed"),("rsvp_token","changed"),("rsvp_deadline",datetime(2027,1,1)),("junior_guardian_handoff_enabled",True),("guardian_authorizations",{"synthetic":True}),("guardian_designation_scope","any_guest")])
 async def test_configuration_revision_changes_for_recorded_check_settings(ctx,monkeypatch,field,value):
     monkeypatch.setattr(engagement_settings,"marketing_outbox_enabled",True)
     monkeypatch.setattr(settings,"planner_internal_token","synthetic")
@@ -71,7 +71,8 @@ async def test_invite_settings_and_token_rotation_publish_new_configuration(ctx,
         assert len(revisions)==2
 
 
-async def test_guardian_settings_route_publishes_configuration_revision(ctx,monkeypatch):
+@pytest.mark.parametrize("change",["enabled","designation_scope"])
+async def test_guardian_settings_route_publishes_configuration_revision(ctx,monkeypatch,change):
     monkeypatch.setattr(engagement_settings,"marketing_outbox_enabled",True)
     monkeypatch.setattr(settings,"planner_internal_token","synthetic")
     monkeypatch.setattr(settings,"marketing_service_url","https://synthetic.invalid")
@@ -79,8 +80,9 @@ async def test_guardian_settings_route_publishes_configuration_revision(ctx,monk
     ctx.login(ctx.ids["user_a"]);event_id=ctx.ids["event_a"]
     async with _Session() as db:
         event=await db.get(Event,event_id);event.is_test=False;event.is_paid=True;event.venue_access_enabled=True;await db.commit()
-    for enabled in [False,True]:
-        response=await ctx.client.put(f"/api/events/{event_id}/access/guardian-authorizations",json={"enabled":enabled,"authorizations":[],"designation_scope":"party"})
+    for value in ([False,True] if change=="enabled" else ["party","any_guest"]):
+        body={"enabled":value if change=="enabled" else True,"authorizations":[],"designation_scope":value if change=="designation_scope" else "party"}
+        response=await ctx.client.put(f"/api/events/{event_id}/access/guardian-authorizations",json=body)
         assert response.status_code==200,response.text
     async with _Session() as db:
         revisions={row.payload["config_revision"] for row in (await db.execute(select(MarketingOutbox).where(MarketingOutbox.endpoint=="organizer-milestones"))).scalars()}

@@ -95,3 +95,15 @@ The expanded corrective scope is 24 files (the original 20 plus the guardian rou
 Publication boundary: automatic approval review denied updating the existing remote draft branch because the original delegation forbids publication/push/merge of expanded scope. The rejected command did not execute; it was not retried or routed around. All subsequent validation is local/task-owned and synthetic. The published PR remains at 747f9d2. Final-head hosted CI and requested external review are blocked until fresh trusted user authorization permits that update. No deployment or activation is authorized by such a publication approval.
 
 Latest red/green evidence: unchanged published ProtectedRoute fails all three new same-event/mounted Back/Forward regressions. The prior worker fails atomic schedule insertion, dispatch-hour rollover and tightened stale availability-write reproductions. The fixture deliberately starts at pending so the old missing-owner assignment is an actual changed write. Adjacent cached open_handoff tests use distinct database sessions and cover accepted/uncertain; repeated inbound/configuration loss cannot reset either outcome. Frontend tests plus e2e unit files: 200 passed; build/postbuild passed. Linux synthetic Marketing at 56e8136: 361 passed, one optional PostgreSQL skip; Support37 and Ticketing35 passed. Final worker/test hardening adds two cached-case tests; its exact-head final result is in the task evidence. No live browser/provider coverage is claimed.
+
+
+## Exact-head review on e245156
+
+CI39246472808 and API39246472742 completed successfully. Requested Copilot39246504885 completed; full review5571062339 recommended two corrections, including one body-only finding. Workflow success was not treated as approval. The stale notification issue4313048802 is now resolved by the reviewer.
+
+-4313435185: confirmed guardian_designation_scope was absent from the revision hash. Add it and exercise scope-only party to any_guest changes through the actual guardian route, holding enabled/authorizations fixed. Both helper and route tests fail before correction.
+-Body-only denied editor navigation: confirmed inaccessible/deleted event or failed authorization lookup unmounted the committed dirty editor. Restore the committed history entry on denial/failure as on a cancelled switch; cold unauthorized links remain denied. Four real mounted-child Back/Forward regressions fail on e245 and pass corrected, retaining draft/guard/current event/history.
+
+Scope remains24 files. No gate, deployment or provider change. Fresh exact-head hosted CI/review and parent verification remain required before merge.
+
+Adjacent malformed-query coverage also restores the committed editor for conflicting event parameters, while cold malformed links remain rejected. Both Back and Forward mounted cases pass. Full provenance/readiness file:13 passed; focused organizer return/lifecycle file:21 passed.

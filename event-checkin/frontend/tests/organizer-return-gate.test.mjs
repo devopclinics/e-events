@@ -133,7 +133,7 @@ test('same-event view/task changes keep the verified workspace mounted without a
 
 // Real React lifecycles + MemoryRouter history, with only network/auth mocked.
 // An editor cleanup actually unregisters the shared change guard here.
-for(const direction of ['back','forward'])test(`mounted dirty editor survives cancelled ${direction} and preserves history`,async()=>{
+for(const direction of ['back','forward'])for(const outcome of ['cancelled','denied','lookup-error','conflict'])test(`mounted dirty editor survives ${outcome} ${direction} and preserves history`,async()=>{
   const React=await import('react'),Router=await import('react-router-dom')
   const {create,act}=await import('react-test-renderer')
   const {createRequire}=await import('node:module'),require=createRequire(import.meta.url)
@@ -147,7 +147,7 @@ for(const direction of ['back','forward'])test(`mounted dirty editor survives ca
   const current=evaluate('../src/hooks/useCurrentEvent.js',{})
   const user={id:'owner',role:'admin'},requests=[]
   const Protected=evaluate('../src/components/ProtectedRoute.jsx',{
-    '../context/AuthContext':{useAuth:()=>({user,loading:false})},'../api':{api:{listEvents:()=>new Promise(resolve=>requests.push(resolve))}},
+    '../context/AuthContext':{useAuth:()=>({user,loading:false})},'../api':{api:{listEvents:()=>new Promise((resolve,reject)=>requests.push(Object.assign(resolve,{reject})))}},
     '../hooks/useCurrentEvent':current,'../pages/organizerGuidance.mjs':{eventIdentityFromQuery}}).default
   let navigation,routerLocation,index,selected,edit,allow=false,mounts=0,unmounts=0,guardCalls=0
   function Probe(){navigation=Router.useNavigate();routerLocation=Router.useLocation();index=React.useContext(Router.UNSAFE_NavigationContext).navigator.index;[selected]=current.useCurrentEvent();return null}
@@ -157,7 +157,7 @@ for(const direction of ['back','forward'])test(`mounted dirty editor survives ca
     React.useEffect(()=>{mounts++;const unregister=current.registerEventChangeGuard(()=>{guardCalls++;return allow});return()=>{unmounts++;unregister()}},[])
     return React.createElement('input',{value:draft,'data-location':loc.search})
   }
-  const a='/design-studio-redesign/website?event=A&view=edit',b='/design-studio-redesign/website?event=B&view=edit'
+  const a='/design-studio-redesign/website?event=A&view=edit',b='/design-studio-redesign/website?event=B&view=edit'+(outcome==='conflict'?'&event_id=C':'')
   let root
   await act(async()=>{root=create(React.createElement(Router.MemoryRouter,{initialEntries:direction==='back'?[b,a]:[a,b],initialIndex:direction==='back'?1:0},
     React.createElement(Probe),React.createElement(Protected,null,React.createElement(Editor))))})
@@ -168,8 +168,8 @@ for(const direction of ['back','forward'])test(`mounted dirty editor survives ca
   assert.equal(selected,'A');assert.equal(unmounts,0);assert.equal(mounts,1)
   assert.equal(root.root.findByType('input').props.value,'unsaved synthetic draft')
   assert.match(root.root.findByType('input').props['data-location'],/event=A/)
-  await act(async()=>requests.shift()([{id:'A'},{id:'B'}]))
-  assert.equal(guardCalls,1);assert.equal(selected,'A');assert.equal(index,originalIndex)
+  if(outcome!=='conflict')await act(async()=>{const request=requests.shift();if(outcome==='lookup-error')request.reject(new Error('synthetic unavailable'));else request(outcome==='denied'?[{id:'A'}]:[{id:'A'},{id:'B'}])})
+  assert.equal(guardCalls,outcome==='cancelled'?1:0);assert.equal(selected,'A');assert.equal(index,originalIndex)
   assert.equal(routerLocation.search,'?event=A&view=edit');assert.equal(unmounts,0)
   assert.equal(root.root.findByType('input').props.value,'unsaved synthetic draft')
   await act(async()=>navigation('?event=A&view=details&task=closeout',{replace:true}))
@@ -177,8 +177,9 @@ for(const direction of ['back','forward'])test(`mounted dirty editor survives ca
   assert.equal(root.root.findByType('input').props.value,'unsaved synthetic draft')
   // The existing opposite entry is still available after the cancellation.
   allow=true
+  if(outcome==='conflict'){await act(async()=>root.unmount());return}
   await act(async()=>navigation(direction==='back'?-1:1))
   await act(async()=>requests.shift()([{id:'A'},{id:'B'}]))
-  assert.equal(selected,'B');assert.equal(guardCalls,2);assert.match(routerLocation.search,/event=B/)
+  assert.equal(selected,'B');assert.equal(guardCalls,outcome==='cancelled'?2:1);assert.match(routerLocation.search,/event=B/)
   await act(async()=>root.unmount())
 })

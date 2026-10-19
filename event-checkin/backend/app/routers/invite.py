@@ -606,6 +606,7 @@ async def _submit_multi_invitee_rsvp(
     created: list[Guest] = []
 
     submitter_guest = Guest(
+        is_test=data.is_test or event.is_test is True,
         event_id=event.id,
         first_name=data.first_name.strip(),
         last_name=data.last_name.strip(),
@@ -644,6 +645,7 @@ async def _submit_multi_invitee_rsvp(
         if invitee_bucket_group_id:
             group_id = invitee_bucket_group_id
         guest = Guest(
+            is_test=data.is_test or event.is_test is True,
             event_id=event.id,
             first_name=first,
             last_name=last,
@@ -713,6 +715,8 @@ async def _submit_multi_invitee_rsvp(
 
     for created_guest in created:
         queue_guest_sync(db, created_guest, event=event)
+        from ..services.marketing_client import capture_event_outcome
+        await capture_event_outcome(db, event, "rsvp_received", created_guest.id, use_case="rsvp", guest=created_guest)
     await db.commit()
     overrides = await load_overrides(event.id, db)
     guest_count_text = (
@@ -888,6 +892,7 @@ async def submit_rsvp(
         rsvp_status = "confirmed"
 
     guest = Guest(
+        is_test=data.is_test or event.is_test is True,
         event_id=event_id,
         first_name=data.first_name.strip(),
         last_name=data.last_name.strip(),
@@ -914,6 +919,8 @@ async def submit_rsvp(
     await _save_shipping(guest, event, data.shipping_address, data.sizes, db)
 
     queue_guest_sync(db, guest, event=event)
+    from ..services.marketing_client import capture_event_outcome
+    await capture_event_outcome(db, event, "rsvp_received", guest.id, use_case="rsvp", guest=guest)
     await db.commit()
     await db.refresh(guest)
 
@@ -1300,6 +1307,8 @@ async def submit_invite_token_rsvp(
 
     guest.rsvp_status = data.status
     guest.rsvp_responded_at = datetime.utcnow()
+    from ..services.marketing_client import capture_event_outcome
+    await capture_event_outcome(db, event, "rsvp_received", guest.id, use_case="rsvp", guest=guest)
     queue_guest_sync(db, guest, event=event)
     await _save_answers(guest.id, event.id, data.answers, db, replace=True)
     if data.status == "confirmed":

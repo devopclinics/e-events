@@ -1638,6 +1638,7 @@ export default function GuestsRedesignPage() {
         email: addForm.email.trim() || null,
         phone: addForm.phone.trim() || null,
         is_vip: addForm.vip,
+        is_test: !!addForm.isTest,
         confirm_duplicate: confirmDuplicate,
       })
       if (addForm.ticket_type_id) await api.assignTicketType(eventId, created.id, addForm.ticket_type_id)
@@ -1743,6 +1744,7 @@ export default function GuestsRedesignPage() {
 
             {event?.venue_access_enabled && <div><label className="rd-field-label">Check-in access</label><select className="rd-field" value={addForm.ticket_type_id} onChange={(e) => setAddForm({ ...addForm, ticket_type_id: e.target.value })}><option value="">No access type yet</option>{ticketTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}</select><span className="rd-hint">Import templates and registration categories can assign this automatically; use this for manual guests.</span></div>}
             <label className="gr-required-check"><input type="checkbox" checked={addForm.vip} onChange={(e) => setAddForm({ ...addForm, vip: e.target.checked })} /> Mark as VIP</label>
+            <label className="gr-required-check"><input type="checkbox" checked={!!addForm.isTest} onChange={e=>setAddForm({...addForm,isTest:e.target.checked})}/> Test guest for rehearsal — exclude from organizer outcomes</label>
             <label className="gr-required-check"><input type="checkbox" checked={addForm.sendInvite} onChange={(e) => setAddForm({ ...addForm, sendInvite: e.target.checked })} /> Send invite immediately</label>
             <div className="rd-row2" style={{ marginTop: 4 }}>
               <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setAddOpen(false)}>Cancel</button>

@@ -49,7 +49,9 @@ def _as_utc(dt: datetime, tz_name: str | None = None) -> datetime:
 
 def _display_time(body: DemoRequestCreate) -> str:
     local = _as_utc(body.preferred_time, body.timezone).astimezone(_timezone(body.timezone))
-    return local.strftime("%A, %B %-d, %Y at %-I:%M %p %Z")
+    # Unpadded %-d/%-I directives are unsupported on Windows.
+    return (local.strftime("%A, %B ") + str(local.day) + local.strftime(", %Y at ")
+            + str(local.hour % 12 or 12) + local.strftime(":%M %p %Z"))
 
 
 def _response(request: DemoRequest) -> DemoRequestOut:

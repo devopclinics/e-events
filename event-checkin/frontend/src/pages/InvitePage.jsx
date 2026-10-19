@@ -1,7 +1,7 @@
 import EventWebsiteLink from '../components/guesthub/EventWebsiteLink'
 import GuestSpeakers from '../components/guesthub/GuestSpeakers'
 import { readDraftPreview } from '../components/design-studio/model.mjs'
-import ProgrammeAudience from '../components/guesthub/ProgrammeAudience';
+import ProgrammeAudience from '../components/guesthub/ProgrammeAudience.jsx';
 import { filterProgramme } from '../components/guesthub/programmeAudience.mjs';
 import { useState, useEffect, useCallback, useRef } from 'react'
 import confetti from 'canvas-confetti'

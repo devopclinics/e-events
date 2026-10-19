@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { signInWithEmailAndPassword } from 'firebase/auth'
 import { auth } from '../firebase'
 import { googleSignIn } from '../auth/googleSignIn'
@@ -8,6 +8,9 @@ import { oidcProvider, oidcProviderLabel } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { getPreferredView, setPreferredView } from '../App'
 import { acquisitionAttributionHeaders } from '../lib/acquisitionAttribution.mjs'
+import { authenticatedOrganizerReturn } from './organizerGuidance.mjs'
+import { api } from '../api'
+import { useCurrentEvent } from '../hooks/useCurrentEvent'
 
 function ViewPicker({ role, onPick }) {
   const views = [
@@ -45,14 +48,32 @@ export default function LoginPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [params] = useSearchParams()
+  const location = useLocation()
+  const [,setCurrentEvent] = useCurrentEvent()
+  const requestedReturn = location.state?.organizerReturn || params.get('next') || ''
   const [form, setForm] = useState({ email: '', password: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [pickerRole, setPickerRole] = useState(null)
 
   useEffect(() => {
-    if (user && !pickerRole) navigate(getPreferredView(user.role), { replace: true })
-  }, [user, pickerRole, navigate])
+    let cancelled=false
+    if (user && !pickerRole) {
+      ;(async()=>{
+        let target=null
+        try {
+          const events=requestedReturn?await api.listEvents():[]
+          target=authenticatedOrganizerReturn(requestedReturn,events)
+          if(target && !cancelled){
+            const event=new URL(target,window.location.origin).searchParams.get('event')
+            if(event)setCurrentEvent(event)
+          }
+        } catch { /* A failed authorization read cannot authorize a return. */ }
+        if(!cancelled)navigate(target||getPreferredView(user.role),{replace:true})
+      })()
+    }
+    return()=>{cancelled=true}
+  }, [user, pickerRole, navigate, requestedReturn])
 
   // Partner referral: someone may share a /login?ref= link even though
   // /register is the primary entry point — capture it here too.
@@ -66,6 +87,7 @@ export default function LoginPage() {
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
   function afterSignIn(role) {
+    if (requestedReturn) return // Authenticated effect validates tenant access first.
     if (!localStorage.getItem('preferredView')) {
       setPickerRole(role)
     } else {

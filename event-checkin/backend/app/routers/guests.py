@@ -452,6 +452,7 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession, *, dry_run: b
             select(func.count(Guest.id)).where(Guest.event_id == event_id)
         ) or 0
 
+    real_added = 0
     added = skipped = invalid_phones = backfilled_phones = 0
     tickets_assigned = addresses_added = sample_rows = over_cap = 0
     unknown_tickets: set[str] = set()
@@ -528,6 +529,7 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession, *, dry_run: b
             over_cap += 1
             continue
         g = Guest(
+            is_test=(event.is_test is True or row.get("is_test", "").strip().lower() in {"1", "yes", "true"}),
             event_id=event_id,
             first_name=first,
             last_name=last,
@@ -541,6 +543,8 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession, *, dry_run: b
         )
         db.add(g)
         added += 1
+        if g.is_test is False:
+            real_added += 1
         current_count += 1
         if ticket_type_id:
             tickets_assigned += 1
@@ -576,6 +580,9 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession, *, dry_run: b
     if dry_run:
         await db.rollback()
     else:
+        if real_added:
+            from ..services.marketing_client import capture_event_outcome
+            await capture_event_outcome(db, event, "guest_imported", event.id, use_case="guest_list")
         await db.commit()
     result = {"added": added, "skipped": skipped}
     if backfilled_phones:
@@ -1554,7 +1561,7 @@ async def add_guest(event_id: str, data: GuestCreate, db: AsyncSession = Depends
 
     guest = Guest(event_id=event_id, first_name=first, last_name=last, email=email,
                   phone=phone, is_vip=bool(data.is_vip), assigned_table_group_id=group_id,
-                  is_walk_in=bool(data.is_walk_in))
+                  is_walk_in=bool(data.is_walk_in), is_test=data.is_test or event.is_test is True)
     db.add(guest)
     await db.commit()
     await db.refresh(guest)

@@ -63,8 +63,8 @@ creates an unverified pending prospect and an assigned review task containing
 the requested time/details; it cannot update a lead or confirm a calendar booking. Lead output exposes `automation_paused`,
 `suppression_reason`, `last_inbound_at`, and `handoff_requested_at` for a future
 operator inbox. A staff review must resolve the reason before explicitly
-resuming a lead. No automatic reply, chatbot, or WhatsApp sending is implemented
-by these ingress contracts.
+resuming a lead. These original ingress contracts remain consent-neutral. The separately gated
+bounded sales worker described below provides replies without linking visitors to CRM accounts.
 
 ### Lifecycle ingress
 
@@ -453,3 +453,107 @@ Blank internal keys cannot authenticate readiness or permit a send. Committed
 reply receipts acknowledge exact replays after deletion/mailbox changes without
 reapplying effects. Campaign result transactions close before the next durable
 recipient claim, and malformed CTA parsing remains a known-unsent failure.
+
+## Organizer journey worker (implemented locally; default OFF)
+
+See `../../docs/organizer-journey-implementation.md` for the acceptance matrix,
+source producers, migrations, verification and activation boundaries. No existing
+launch or template is activated by this patch.
+
+- `MARKETING_JOURNEY_WORKER_ENABLED` defaults false. Its clock waits 60 seconds
+  before the first bounded tick; `POST /api/marketing/journey/run` is superadmin
+  only and defaults to dry run. All outbound work also requires the existing
+  `MARKETING_OUTBOUND_ENABLED`; channel and notification gates are independent.
+- Backend `SALES_RESPONSES_ENABLED`, Marketing `MARKETING_SALES_INGRESS_ENABLED`,
+  `MARKETING_SALES_CHAT_ENABLED`, `MARKETING_SALES_WHATSAPP_ENABLED`,
+  `MARKETING_HANDOFF_NOTIFICATIONS_ENABLED` and
+  `MARKETING_ORGANIZER_RETENTION_ENABLED` all default false.
+- Chat uses the existing Chatwoot account/inbox. Configure the exact
+  `MARKETING_SALES_CHAT_DESTINATION` (inbox ID), `MARKETING_SALES_CHAT_URL`,
+  `MARKETING_SALES_CHAT_ACCOUNT` and `MARKETING_SALES_CHAT_TOKEN` only after
+  review. Authenticated source thread/contact metadata is encrypted per reply;
+  anonymous email/phone is never used to retrieve a private account.
+- WhatsApp uses existing Bird channels infrastructure. Configure the exact
+  inbound `MARKETING_SALES_WHATSAPP_DESTINATION`, existing `BIRD_WORKSPACE_ID`
+  and `BIRD_ACCESS_KEY`, plus `MARKETING_SALES_WHATSAPP_SENDER`. Review/pin
+  `MARKETING_SALES_WHATSAPP_SENDER_BINDING` as the canonical fingerprint of
+  `{destination, workspace, sender}`. Never infer a sender mapping.
+- Approve `MARKETING_SALES_KNOWLEDGE_SHA256` over `{knowledge: KNOWLEDGE,
+  cta: CTA}`. Changing factual responses requires a new review. Limits are
+  four replies/hour and six total per scoped conversation, with three known
+  unaccepted transport attempts. Human takeover/limits persist across restarts.
+- Outside the authenticated 24-hour WhatsApp window (30-second safety margin),
+  dispatch/retry needs applicable recorded consent and
+  `MARKETING_SALES_WHATSAPP_APPROVED_TEMPLATE` JSON with `id`, `approved:true`,
+  and Bird API `content`; pin ID in `MARKETING_SALES_WHATSAPP_TEMPLATE` and the
+  canonical content fingerprint in `MARKETING_SALES_WHATSAPP_TEMPLATE_SHA256`.
+  Missing provider timestamps cannot open a window. STOP still suppresses.
+- Configure `MARKETING_SALES_READINESS_URL` at the existing backend origin,
+  path `/api/internal/marketing/sales-readiness`. Every transport call requires
+  a fresh challenge-bound signed proof that source conversation/response
+  outboxes are clear. This prevents a captured pending stop from being ignored.
+- Configure a reviewed active staff owner or `MARKETING_HANDOFF_OWNER`, and
+  `MARKETING_HANDOFF_DESTINATION` HTTPS endpoint plus
+  `MARKETING_HANDOFF_WEBHOOK_TOKEN`. The notification adapter posts only case ID,
+  owner and staff URL with an Idempotency-Key per assignment generation. The
+  configured sink must durably acknowledge `{recorded:true}`. Uncertain receipts
+  require manual reconciliation; no automatic resume or blind resend.
+- Marketing's Organizer handoffs tab provides assignment, acknowledgement,
+  resolution, backlog/history and authenticated outcome reconciliation. Resolving
+  a case does not resume automation. Separate explicit resume cancels old queued
+  replies and applies only to future inbound; it cannot override opt-out or
+  unresolved uncertainty. Missing owner and failed notification stay visible.
+- Review candidates with `GET /api/marketing/template-review`. Existing stored
+  templates are preserved; opt-in POST migration requires the current stored
+  fingerprint and superadmin authority. Pins include rendered-copy source hashes.
+  New seeds alone never update production stored templates.
+- Organizer retention is separate from guest thank-yous. Create/review a stored
+  sequence with category `organizer_retention`, pin its ID/fingerprint in
+  `MARKETING_ORGANIZER_RETENTION_TEMPLATE`, and configure
+  `MARKETING_ORGANIZER_CONTEXT_URL` at the existing backend origin, path
+  `/api/internal/marketing/organizer-context`. This same signed current-owner
+  context is required for event-specific pilot email. Retention shares the
+  immutable 1-10-account cohort, consent, suppression, daily caps and unknown
+  claim protection; cancelled, rehearsal, historical-unknown and revoked events
+  fail closed. No retention-only enrollment or consent backfill exists.
+
+All URLs reject credentials, query fragments and redirects. Internal signed
+proofs reuse existing service authority; there is no new key or paid service.
+No real provider call was made during implementation or synthetic verification.
+
+### Native staff notification and review hardening
+
+To use existing Chatwoot instead of a custom receipt sink, explicitly configure
+`MARKETING_HANDOFF_TRANSPORT=chatwoot`, a reviewed staff-only
+`MARKETING_HANDOFF_DESTINATION=https://<chatwoot>/api/v1/accounts/<numeric-account>/conversations/<numeric-staff-thread>/messages`,
+and `MARKETING_HANDOFF_CHATWOOT_TOKEN` with staff access. The adapter always
+posts `private:true`; it does not contact the organizer. Assign/subscribe the
+accountable operator to that staff conversation during activation review.
+A valid native message ID is provider acceptance, not owner acknowledgement.
+The webhook adapter remains available with `MARKETING_HANDOFF_TRANSPORT=webhook`
+and its explicit durable `{recorded:true}` contract. Both modes share the same
+OFF gates, bounded generation claims and uncertainty/reconciliation behavior.
+
+Reviewed templates with `journey_context:true` cannot send in legacy mode even
+if old global scheduler/outbound flags are enabled. Use the explicit pilot/test
+cohort and reviewed pins. Preserved stored templates are not silently migrated.
+HTTP 408/409/425 now hold both email ledgers and notification receipts as
+uncertain. Retention jobs store immutable sequence identity, recover accepted
+claims after a worker crash without resending, and reconcile known provider
+outcomes without clearing a human takeover. Old checkpoint jobs lacking that
+identity become review-required rather than being guessed or silently replayed.
+
+Unresolved sales handoffs preserve encrypted authenticated source routing after
+an acknowledgement target is purged. Assigned operators/superadmins can use the
+staff UI's Review source routing action to open the original approved Chatwoot
+thread or inspect WhatsApp routing and current suppression/consent state. This
+never identifies a Festio account from email/phone. Context access is audited,
+excluded from ordinary backlog output, and purged on resolution. New inbound
+while paused reopens the owned case without resuming automation. Old cases with
+no context surface unavailable rather than inventing a pointer.
+
+Configure transport authority before enabling ingress. Queued replies bind to
+chat host/account/inbox or WhatsApp workspace/sender/destination; changing those
+values cannot retarget an old queued reply. Unbound checkpoint targets are held
+for review. Source links are shown only while that recorded authority still
+matches the configured source. Tokens/credentials are never exposed in context.

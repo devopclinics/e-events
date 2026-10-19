@@ -62,7 +62,7 @@ const FEATURES = [
 function WizardPhase({ onComplete, notify }) {
   const [form, setForm] = useState({
     name: '', type: 'Conference / seminar', host: '', date: '', timezone: DETECTED_TZ || 'UTC',
-    attendanceMode: 'rsvp',
+    attendanceMode: 'rsvp', isTest: false,
     multiDay: false, endDate: '', baseUrl: '', venue: '', venueAddress: '',
     guestCount: '', currency: '',
     channels: new Set(['email']), features: new Set(['rsvp', 'planner']),
@@ -118,6 +118,7 @@ function WizardPhase({ onComplete, notify }) {
       <div className="su-wizard-form">
         <h2>Create your event</h2>
         <p className="su-section-label">Event details</p>
+        <label><input type="checkbox" checked={form.isTest} onChange={e=>setForm({...form,isTest:e.target.checked})}/> Rehearsal event — exclude test activity from organizer outcome metrics</label>
         <div className="su-field-row">
           <div>
             <label className="rd-field-label">Event name *</label>
@@ -244,6 +245,7 @@ function WizardPhase({ onComplete, notify }) {
             let event = null
             try {
               event = await api.createEvent({
+                is_test: form.isTest,
                 setup_preferences: { features: [...form.features], channels: [...form.channels], currency: form.currency.slice(0, 3) },
                 name: form.name.trim(),
                 couples_name: form.host.trim(),

@@ -42,6 +42,7 @@ engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} i
 SessionLocal = sessionmaker(engine, expire_on_commit=False)
 logger = logging.getLogger("festio.marketing")
 from . import email_pilot
+from .journey_templates import candidates as journey_template_candidates
 from .email_pilot import EmailBlocked
 
 
@@ -298,17 +299,7 @@ if "owner_scoped" not in access_columns:
 
 def seed_defaults() -> None:
     defaults = [
-        ("sequences", "New registration welcome", "active", {"stage": "registered", "cadence_days": 2, "cta_url": "https://festio.events/setup-redesign", "steps": [
-            {"delay_hours": 0,   "subject": "Welcome to Festio", "body": "You've just joined thousands of event organizers who use Festio to manage invitations, check-ins, and the moments that make events memorable.\n\nYour account is ready. Let's create your first event.", "cta": "Create your first event", "cta_url": "https://festio.events/setup-redesign"},
-            {"delay_hours": 24,  "subject": "Let us help with your event setup", "body": "Setting up an event on Festio takes about 10 minutes. Add your event details, upload a cover image, and you'll have a shareable event page ready to go.\n\nWe're here if you get stuck.", "cta": "Continue setup", "cta_url": "https://festio.events/setup-redesign"},
-            {"delay_hours": 72,  "subject": "What kind of event are you planning?", "body": "Whether it's a wedding, a corporate conference, or a birthday celebration, Festio adapts to how you work.\n\nThousands of organizers trust us for everything from a 20-person dinner to a 5,000-person festival. We'd love to hear about yours.", "cta": "Tell us about your event", "cta_url": "mailto:hello@festio.events?subject=My%20event%20type"},
-            {"delay_hours": 168, "subject": "Would a 15-minute setup call help?", "body": "Sometimes a quick conversation makes all the difference. One of our team will walk through your event with you, answer any questions, and make sure Festio is set up exactly the way you need it.\n\nNo commitment, just a helpful call.", "cta": "Book a free call", "cta_url": "https://festio.events/#contact"},
-        ]}),
-        ("sequences", "Event created onboarding", "active", {"stage": "event_created", "cadence_days": 3, "cta_url": "https://festio.events/admin-redesign", "steps": [
-            {"delay_hours": 0,   "subject": "Your Festio event is ready for setup", "body": "Your event is now live on Festio.\n\nThe next step is adding your guest list and customizing your invitation. It only takes a few minutes and your guests will receive a beautiful, branded invite.", "cta": "Add guests", "cta_url": "https://festio.events/admin-redesign"},
-            {"delay_hours": 48,  "subject": "Invite, sell tickets, or start planning", "body": "Your event dashboard is ready: import your guest list, set up ticket types, configure check-in, and manage meals or seating.\n\nMost organizers get fully set up in under an hour.", "cta": "Open your event", "cta_url": "https://festio.events/admin-redesign"},
-            {"delay_hours": 120, "subject": "See what your event still needs", "body": "A quick checklist can save a lot of day-of stress.\n\nHead to your event setup to make sure invitations are sent, RSVPs are tracking, and your check-in team is ready. Need help? We're one message away.", "cta": "Review your setup", "cta_url": "https://festio.events/admin-redesign"},
-        ]}),
+        *[("sequences", name, "active", payload) for name, payload in journey_template_candidates().items()],
         ("segments", "Registered without an event", "active", {"rules": [{"field": "stage", "operator": "equals", "value": "registered"}]}),
         ("segments", "Paid event promotion audience", "active", {"rules": [{"field": "stage", "operator": "in", "value": ["paid", "customer"]}]}),
         ("campaigns", "Six-month paid add-on promotion", "draft", {"channels": ["email", "social"], "audience": "Paid event promotion audience", "goal": "addon_activation"}),
@@ -334,61 +325,7 @@ def seed_defaults() -> None:
 seed_defaults()
 
 
-# Live migration: backfill body copy on existing seeded sequences that have steps
-# with no body text (deployed before 2026-08-10 copy update).
-_STEP_BODY_BACKFILL = {
-    "New registration welcome": [
-        "You've just joined thousands of event organizers who use Festio to manage invitations, check-ins, and the moments that make events memorable.\n\nYour account is ready. Let's create your first event.",
-        "Setting up an event on Festio takes about 10 minutes. Add your event details, upload a cover image, and you'll have a shareable event page ready to go.\n\nWe're here if you get stuck.",
-        "Whether it's a wedding, a corporate conference, or a birthday celebration, Festio adapts to how you work.\n\nThousands of organizers trust us for everything from a 20-person dinner to a 5,000-person festival. We'd love to hear about yours.",
-        "Sometimes a quick conversation makes all the difference. One of our team will walk through your event with you, answer any questions, and make sure Festio is set up exactly the way you need it.\n\nNo commitment, just a helpful call.",
-    ],
-    "Event created onboarding": [
-        "Your event is now live on Festio.\n\nThe next step is adding your guest list and customizing your invitation. It only takes a few minutes and your guests will receive a beautiful, branded invite.",
-        "Your event dashboard is ready: import your guest list, set up ticket types, configure check-in, and manage meals or seating.\n\nMost organizers get fully set up in under an hour.",
-        "A quick checklist can save a lot of day-of stress.\n\nHead to your event setup to make sure invitations are sent, RSVPs are tracking, and your check-in team is ready. Need help? We're one message away.",
-    ],
-}
-# Patch already-deployed sequences: remove em-dashes and fix Book-a-call cta_url.
-_STEP_CORRECTIONS = [
-    ("New registration welcome", 0, "body", "ready \u2014 let's create your first event.", "ready. Let's create your first event."),
-    ("New registration welcome", 0, "cta_url", None, "https://festio.events/setup-redesign"),
-    ("New registration welcome", 1, "cta_url", None, "https://festio.events/setup-redesign"),
-    ("New registration welcome", 2, "body", "celebration \u2014 Festio adapts", "celebration, Festio adapts"),
-    ("New registration welcome", 2, "cta_url", None, "mailto:hello@festio.events?subject=My%20event%20type"),
-    ("New registration welcome", 3, "body", "No commitment \u2014 just a helpful call.", "No commitment, just a helpful call."),
-    ("New registration welcome", 3, "cta_url", None, "https://festio.events/#contact"),
-    ("Event created onboarding", 0, "body", "Great news \u2014 your event is live on Festio.", "Your event is now live on Festio."),
-    ("Event created onboarding", 1, "body", "ready for everything \u2014 import", "ready for everything: import"),
-]
-with SessionLocal() as _db:
-    for seq_name, bodies in _STEP_BODY_BACKFILL.items():
-        _seq = _db.scalar(select(ModuleRecord).where(ModuleRecord.name == seq_name, ModuleRecord.module == "sequences"))
-        if _seq:
-            steps = list(_seq.payload.get("steps") or [])
-            changed = False
-            for i, body_text in enumerate(bodies):
-                if i < len(steps) and not steps[i].get("body"):
-                    steps[i] = {**steps[i], "body": body_text}
-                    changed = True
-            if changed:
-                _seq.payload = {**_seq.payload, "steps": steps}
-    for seq_name, step_i, field, old_val, new_val in _STEP_CORRECTIONS:
-        _seq = _db.scalar(select(ModuleRecord).where(ModuleRecord.name == seq_name, ModuleRecord.module == "sequences"))
-        if _seq:
-            steps = list(_seq.payload.get("steps") or [])
-            if step_i < len(steps):
-                current = steps[step_i].get(field)
-                if old_val is None:
-                    # Backfill: set field when it is missing
-                    if not current:
-                        steps[step_i] = {**steps[step_i], field: new_val}
-                        _seq.payload = {**_seq.payload, "steps": steps}
-                elif current and old_val in current:
-                    steps[step_i] = {**steps[step_i], field: current.replace(old_val, new_val)}
-                    _seq.payload = {**_seq.payload, "steps": steps}
-    _db.commit()
-
+# Stored copy is user-owned. Review candidates explicitly; startup never rewrites it.
 
 class Identity(BaseModel):
     subject: str
@@ -504,6 +441,13 @@ def pause_for_handoff(lead: Lead, reason: str) -> None:
     lead.handoff_requested_at = lead.handoff_requested_at or now()
     lead.suppression_reason = lead.suppression_reason or reason
     lead.next_follow_up_at = None
+    if reason in {"delivery_outcome_unknown","delivery_retry_exhausted"}:
+        from sqlalchemy.orm import object_session
+        from .organizer_journey import open_handoff
+        import sys
+        db=object_session(lead)
+        if db is not None:
+            open_handoff(sys.modules[__name__],db,lead,"email",reason+":"+lead.id)
 
 
 def normalize_phone(value: str | None) -> str | None:
@@ -618,6 +562,7 @@ def lead_automation_map(db: Session, leads: list[Lead]) -> dict[str, dict | None
     """Where each lead stands in its matching active sequence: step reached, out of how
     many, whether it's finished, and the status/time of its most recent touch."""
     sequences = db.scalars(select(ModuleRecord).where(ModuleRecord.module == "sequences", ModuleRecord.status == "active")).all()
+    sequences=[s for s in sequences if s.payload.get("category")!="organizer_retention"]
     lead_ids = [lead.id for lead in leads]
     touches = db.scalars(select(Activity).where(Activity.lead_id.in_(lead_ids), Activity.kind.in_(EMAIL_ATTEMPT_KINDS), Activity.actor != "resend")).all() if lead_ids else []
     counts: dict[tuple[str, str], int] = {}
@@ -719,6 +664,11 @@ def _deliver_follow_up(lead: Lead, sequence: ModuleRecord, step_index: int = 0) 
         raise HTTPException(409, "Lead is not eligible for marketing email")
     steps = sequence_steps(sequence)
     step = steps[min(step_index, len(steps) - 1)] if steps else {"subject": sequence.name, "cta": "Open Festio"}
+    from .journey_context import message_context
+    import sys
+    context = message_context(sys.modules[__name__], lead, sequence, step_index)
+    if context:
+        step = {**step, **context}
     message = EmailMessage()
     message["From"] = os.getenv("EMAIL_FROM", "Festio <events@festio.events>")
     message["To"] = lead.email
@@ -971,7 +921,10 @@ def advance_lifecycle_stage(row: Lead, lifecycle: str, stage: str | None) -> Non
     row.last_active_at = now()
     rank = {"registered": 0, "demo_requested": 1, "event_created": 2, "activated": 3,
             "qualified": 4, "demo_booked": 5, "paid": 6, "customer": 7}
-    incoming_stage = stage or lifecycle
+    # Legacy activated records are preserved for audit, never first-value proof.
+    # A configuration update cannot graduate an organizer out of onboarding.
+    incoming_stage = ("event_created" if lifecycle in {"configured", "activated", "attendee_order_fulfilled"}
+                      else "paid" if lifecycle == "organizer_purchase" else (stage or lifecycle))
     if row.stage in rank and incoming_stage in rank and rank[incoming_stage] > rank[row.stage]:
         row.stage = incoming_stage
         row.stage_changed_at = now()
@@ -979,11 +932,11 @@ def advance_lifecycle_stage(row: Lead, lifecycle: str, stage: str | None) -> Non
         row.score = max(row.score, 30)
 
 
-def schedule_lifecycle_followup(row: Lead, previous_stage: str, *, created: bool = False) -> None:
+def schedule_lifecycle_followup(row: Lead, previous_stage: str, *, created: bool = False, db=None) -> None:
     # Milestones may reset timing, but never grant consent or remove a newer stop.
     if email_pilot.stopped(row):
         row.next_follow_up_at = None
-    elif row.stage not in {"registered", "event_created"}:
+    elif (email_pilot.stage_for(db,row) if db is not None else row.stage) not in {"registered", "event_created"}:
         if row.stage != previous_stage:
             row.next_follow_up_at = None
     elif created or row.stage != previous_stage or row.next_follow_up_at is None:
@@ -1029,7 +982,7 @@ def ingest(body: dict, identity: Identity = Depends(decode_identity), db: Sessio
         # A previously linked UID can still receive a narrow business milestone
         # from a background job. Never look up its email, modify its identity or
         # profile, adopt prospects, or apply even an opt-out from this path.
-        milestones = {"event_created", "event_updated", "activated", "paid", "customer"}
+        milestones = {"event_created", "event_updated", "configured", "activated", "paid", "customer", "attendee_order_fulfilled", "organizer_purchase"}
         row = None
         if subject and lifecycle in milestones and not any(
             field in body for field in ("consent_email", "consent_sms", "consent_whatsapp")
@@ -1039,7 +992,7 @@ def ingest(body: dict, identity: Identity = Depends(decode_identity), db: Sessio
             return record_unverified_lifecycle(body, identity, db, receipt)
         previous_stage = row.stage
         advance_lifecycle_stage(row, lifecycle, "event_created" if lifecycle == "event_updated" else lifecycle)
-        schedule_lifecycle_followup(row, previous_stage)
+        schedule_lifecycle_followup(row, previous_stage, db=db)
         import sys
         email_pilot.capture_evidence(sys.modules[__name__], db, row, body)
         db.add(Activity(lead_id=row.id, kind=lifecycle[:50], summary=f"Lifecycle: {lifecycle[:80]}",
@@ -1060,7 +1013,12 @@ def ingest(body: dict, identity: Identity = Depends(decode_identity), db: Sessio
         if isinstance(registered_at, str):
             try: registered_at = datetime.fromisoformat(registered_at.replace("Z", "+00:00"))
             except ValueError: registered_at = None
-        row = Lead(email=email, festio_user_id=subject or None, name=body.get("name") or "", source=body.get("source") or "website", stage=body.get("stage") or ("registered" if lifecycle == "signup_consent" else lifecycle), owner_email=default_owner_email(db), registered_at=registered_at or now(), last_active_at=now())
+        initial_stage = body.get("stage") or ("registered" if lifecycle == "signup_consent" else lifecycle)
+        if lifecycle in {"configured", "activated", "attendee_order_fulfilled"}:
+            initial_stage = "event_created"
+        elif lifecycle == "organizer_purchase":
+            initial_stage = "paid"
+        row = Lead(email=email, festio_user_id=subject or None, name=body.get("name") or "", source=body.get("source") or "website", stage=initial_stage, owner_email=default_owner_email(db), registered_at=registered_at or now(), last_active_at=now())
         db.add(row)
         db.flush()
     elif subject:
@@ -1122,7 +1080,7 @@ def ingest(body: dict, identity: Identity = Depends(decode_identity), db: Sessio
         evidence = {"event_id": body.get("event_id"), "requested": consent_fields, "effective": {field: getattr(row, field) for field in consent_fields}, "occurred_at": str(body.get("occurred_at") or now().isoformat())[:50], "lifecycle_event": lifecycle[:80], "source": str(body.get("source") or "festio")[:100]}
         db.add(Activity(lead_id=row.id, kind="consent_recorded", summary="Explicit channel consent recorded", actor="festio", data=evidence))
         audit(db, identity, "consent.recorded", "lead", row.id, **evidence)
-    schedule_lifecycle_followup(row, previous_stage, created=created)
+    schedule_lifecycle_followup(row, previous_stage, created=created, db=db)
     if lifecycle == "demo_requested":
         pause_for_handoff(row, "demo_requested")
         details = {field: str(body[field])[:limit] for field, limit in {"demo_request_id": 128, "preferred_time": 50, "timezone": 100, "event_name": 240, "message": 2000}.items() if body.get(field)}
@@ -1215,6 +1173,9 @@ def ingest_conversation(body: ConversationIn, identity: Identity = Depends(decod
         db.commit()
         return {"recorded": True, "duplicate": False, "lead_id": None, "unmatched": True, "prospect_id": prospect.id}
     apply_inbound_intent(row, body.channel, body.event == "opt_out")
+    from .organizer_journey import open_handoff
+    import sys
+    open_handoff(sys.modules[__name__], db, row, body.channel, body.event_id)
     receipt.lead_id = row.id
     # No transcript or message text is retained by this endpoint.
     db.add(Activity(lead_id=row.id, kind=f"{body.channel}_{body.event}", summary=f"{body.channel.title()} {body.event.replace('_', ' ')}", actor="conversation_ingest", data={"event_id": body.event_id, "channel": body.channel}))
@@ -1333,6 +1294,11 @@ def create_lead(body: LeadIn, identity: Identity = Depends(decode_identity), db:
 @app.patch("/api/marketing/leads/{lead_id}")
 def update_lead(lead_id: str, body: dict, identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
     row = visible_lead(db, lead_id, identity)
+    if body.get("automation_paused") is False:
+        from .organizer_journey import Handoff
+        case = db.scalar(select(Handoff).where(Handoff.lead_id == row.id, Handoff.status != "resolved"))
+        if case:
+            raise HTTPException(409, "Resolve the owned handoff before explicitly resuming automation")
     for field in ("consent_email", "consent_sms", "consent_whatsapp", "automation_paused", "unsubscribed"):
         if field in body and not isinstance(body[field], bool):
             raise HTTPException(400, f"{field} must be a boolean")
@@ -1938,12 +1904,12 @@ def next_step_delay_hours(sequence: ModuleRecord, steps: list[dict], sent_index:
     return max(0, float(sequence.payload.get("cadence_days", 3)) * 24)
 
 
-def still_due(lead: Lead, sequence: ModuleRecord, identity: Identity) -> bool:
+def still_due(lead: Lead, sequence: ModuleRecord, identity: Identity, *, db=None, email_mode="legacy") -> bool:
     return bool(
         lead.consent_email and not lead.unsubscribed and not lead.automation_paused
         and not lead.suppression_reason and not lead.deletion_requested_at
         and lead.next_follow_up_at and lead.next_follow_up_at.replace(tzinfo=timezone.utc) <= now()
-        and (not sequence.payload.get("stage") or sequence.payload["stage"] == lead.stage)
+        and (not sequence.payload.get("stage") or sequence.payload["stage"] == (email_pilot.stage_for(db,lead) if email_mode != "legacy" and db is not None else lead.stage))
         and sequence.status == "active"
         and (not identity.owner_scoped or lead.owner_email == identity.email)
     )
@@ -1962,6 +1928,7 @@ def release_unsent_claim(db: Session, attempt: SendAttempt) -> None:
 def run_automation_service(db: Session, identity: Identity, *, dry_run: bool = False, lead_id: str | None = None, email_mode: str = "legacy", stop_requested=None) -> dict:
     """Plain service callable shared by HTTP and scheduler; no FastAPI defaults."""
     sequences = db.scalars(select(ModuleRecord).where(ModuleRecord.module == "sequences", ModuleRecord.status == "active").order_by(ModuleRecord.created_at, ModuleRecord.id)).all()
+    sequences=[s for s in sequences if s.payload.get("category")!="organizer_retention"]
     lead_stmt = select(Lead).where(Lead.unsubscribed.is_(False), Lead.consent_email.is_(True), Lead.automation_paused.is_(False), Lead.suppression_reason.is_(None), Lead.deletion_requested_at.is_(None), Lead.next_follow_up_at <= now())
     if lead_id:
         lead_stmt = lead_stmt.where(Lead.id == lead_id)
@@ -1983,11 +1950,12 @@ def run_automation_service(db: Session, identity: Identity, *, dry_run: bool = F
         if stop_requested and stop_requested():
             result["stopping"] = True
             break
-        matching = next((seq for seq in sequences if not seq.payload.get("stage") or seq.payload.get("stage") == lead.stage), None)
+        lifecycle_stage=email_pilot.stage_for(db,lead) if email_mode != "legacy" else lead.stage
+        matching = next((seq for seq in sequences if not seq.payload.get("stage") or seq.payload.get("stage") == lifecycle_stage), None)
         if not matching:
             continue
         if email_mode != "legacy":
-            email_pilot.approved_template(db, matching, lead.stage)
+            email_pilot.approved_template(db, matching, lifecycle_stage)
         sent_count = db.scalar(select(func.count(Activity.id)).where(Activity.lead_id == lead.id, Activity.kind == "email_sent", Activity.actor != "resend", Activity.data["sequence_id"].as_string() == matching.id)) or 0
         steps = sequence_steps(matching)
         max_touches = max(1, int(matching.payload.get("max_touches") or len(steps)))
@@ -2013,14 +1981,14 @@ def run_automation_service(db: Session, identity: Identity, *, dry_run: bool = F
             continue
         db.refresh(lead)
         db.refresh(matching)
-        if not still_due(lead, matching, identity):
+        if not still_due(lead, matching, identity, db=db, email_mode=email_mode):
             continue
         attempt = claim_sequence_step(db, lead, matching, sent_count)
         if not attempt:
             continue
         db.refresh(lead)
         db.refresh(matching)
-        if not still_due(lead, matching, identity):
+        if not still_due(lead, matching, identity, db=db, email_mode=email_mode):
             release_unsent_claim(db, attempt)
             continue
         uncertain = False
@@ -2042,7 +2010,7 @@ def run_automation_service(db: Session, identity: Identity, *, dry_run: bool = F
         except httpx.HTTPStatusError as exc:
             # Explicit client rejection is retryable; a server error may have
             # occurred after acceptance, so it needs reconciliation instead.
-            uncertain = not 400 <= exc.response.status_code < 500
+            uncertain = email_pilot.uncertain_http(exc.response.status_code)
             delivery = {"status": "failed", "provider": "resend", "provider_id": None, "error": f"Provider HTTP {exc.response.status_code}"}
         except Exception:
             uncertain = True
@@ -2248,3 +2216,8 @@ def signalhouse_sms_webhook(body: dict, x_webhook_token: str | None = Header(def
         return {"recorded": True, "unsubscribed": True}
     db.add(Activity(lead_id=row.id, kind="sms_received", summary="SMS reply received", actor="signalhouse", data={})); db.commit()
     return {"recorded": True, "unsubscribed": False}
+
+# Register additive journey tables and routes after the service contracts exist.
+from . import organizer_journey
+import sys as _sys
+organizer_journey.install(_sys.modules[__name__])

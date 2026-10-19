@@ -925,6 +925,7 @@ async def create_order(event_id: str, body: OrderIn, db: AsyncSession = Depends(
     # $0 payment-mode Checkout Session, so there's no provider to hand this
     # to; complete the order directly instead of erroring out at checkout.
     if order.total == 0:
+        order.is_test = cfg.provider == "fake"
         order.status, order.paid_at = "paid", datetime.utcnow()
         for line in body.lines:
             products[line.product_id].sold += line.quantity
@@ -1079,6 +1080,8 @@ async def fulfill(db: AsyncSession, order: Order) -> bool:
     products = {p.id: p for p in (await db.execute(select(TicketProduct).where(
         TicketProduct.id.in_([item.product_id for item in items])))).scalars().all()}
     attendees = []
+    allocations=allocate_ticket_values(max(0,order.subtotal-order.discount),[item.unit_price*item.quantity for item in items])
+    ticket_amount=sum(value for item,value in zip(items,allocations) if products[item.product_id].product_type!="donation")
     for item in items:
         p = products[item.product_id]
         for attendee in item.attendee_data:
@@ -1089,6 +1092,8 @@ async def fulfill(db: AsyncSession, order: Order) -> bool:
             response = await client.post(f"{settings.core_backend_url}/api/internal/ticketing/fulfill",
                 headers={"X-Internal-Token": settings.internal_service_token},
                 json={"order_id": order.id, "event_id": order.event_id,
+                      "is_test": order.is_test, "amount": order.total, "currency": order.currency,
+                      "ticket_amount":ticket_amount,
                       "buyer_email": order.buyer_email, "attendees": attendees,
                       "delivery_settings": (await db.get(EventConfig, order.event_id)).delivery_settings or {}})
         response.raise_for_status()
@@ -1124,6 +1129,9 @@ async def apply_payment_success(db: AsyncSession, payment_event: PaymentEvent, r
         payment_event.last_error = "Payment amount or currency did not match the order"
         await db.commit(); return None
     order.status, order.paid_at, order.payment_reference = "paid", datetime.utcnow(), payment_reference
+    proof = payment_event.payload or {}
+    live = proof.get("livemode") if payment_event.provider == "stripe" else (proof.get("data") or {}).get("domain")
+    order.is_test = (not live) if type(live) is bool else (live != "live") if isinstance(live, str) and live in {"live", "test"} else True
     db.add(LedgerEntry(id=uid(), order_id=order.id, kind="payment", amount=order.total,
                        currency=order.currency, provider_reference=reference))
     add_journal(db, order, kind="payment", amount=order.total, reference=reference)

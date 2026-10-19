@@ -7,6 +7,7 @@ from app.engagement_config import EngagementSettings, engagement_settings
 DEFAULTS = {
     "marketing_outbox_enabled": False,
     "prospect_ingress_enabled": False,
+    "sales_responses_enabled": False,
     "meta_whatsapp_app_secret": "",
     "meta_whatsapp_sales_phone_number_id": "",
     "meta_whatsapp_webhook_verify_token": "",

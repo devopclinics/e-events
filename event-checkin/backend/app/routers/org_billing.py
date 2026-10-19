@@ -203,6 +203,11 @@ async def handle_stripe_subscription_checkout(db: AsyncSession, session_obj: dic
     """checkout.session.completed where mode == 'subscription'."""
     meta = session_obj.get("metadata") or {}
     org_id, plan_key = meta.get("org_id"), meta.get("plan_key")
+    from ..services.marketing_client import capture_commerce
+    if org_id and isinstance(session_obj.get("subscription"),str) and session_obj["subscription"] and type(session_obj.get("amount_total")) is int and session_obj.get("payment_status") == "paid":
+        await capture_commerce(db, org_id, "subscription_started", session_obj["subscription"],
+            session_obj["amount_total"], str(session_obj.get("currency") or "").upper(), provider="stripe",
+            synthetic=not session_obj["livemode"] if type(session_obj.get("livemode")) is bool else None)
     await _fulfill_checkout(db, "stripe", session_obj.get("id"), org_id, plan_key)
     if org_id and plan_key:
         await _activate(
@@ -280,10 +285,31 @@ async def handle_paystack_subscription_renewal(db: AsyncSession, data: dict) -> 
     """charge.success carrying a `plan` — a subscription renewal charge."""
     meta = data.get("metadata") or {}
     org_id, plan_key = meta.get("org_id"), meta.get("plan_key")
+    payment = await db.scalar(select(Payment).where(Payment.reference == data.get("reference")))
+    from ..services.marketing_client import capture_commerce
+    if org_id and type(data.get("amount")) is int:
+        await capture_commerce(db, org_id, "subscription_started" if payment and payment.amount>0 else "subscription_renewed", data.get("reference"),
+            data["amount"], str(data.get("currency") or "").upper(), provider="paystack",
+            synthetic=(data["domain"] != "live") if data.get("domain") in {"live", "test"} else None)
     await _fulfill_checkout(db, "paystack", data.get("reference"), org_id, plan_key)
     if not org_id:
         return
     org = await db.get(Organization, org_id)
     if org and org.subscription_status == "active":
         org.current_period_end = datetime.utcnow() + timedelta(days=30)
+        await db.commit()
+
+
+async def capture_stripe_invoice(db, invoice, *, synthetic):
+    """Distinct invoice identity; renewal never becomes acquisition."""
+    subscription = invoice.get("subscription")
+    if invoice.get("billing_reason") not in {"subscription_create","subscription_cycle"} or not isinstance(subscription,str):
+        return
+    org = await db.scalar(select(Organization).where(Organization.stripe_subscription_id == subscription)) if subscription else None
+    if org and type(invoice.get("amount_paid")) is int:
+        from ..services.marketing_client import capture_commerce
+        first = invoice.get("billing_reason") == "subscription_create"
+        await capture_commerce(db, org.id, "subscription_started" if first else "subscription_renewed",
+            subscription if first else invoice.get("id"), invoice["amount_paid"], str(invoice.get("currency") or "").upper(),
+            synthetic=synthetic, provider="stripe")
         await db.commit()

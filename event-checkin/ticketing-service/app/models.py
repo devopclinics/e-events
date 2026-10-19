@@ -106,6 +106,7 @@ class PromoCode(Base):
 
 
 class Order(Base):
+    is_test: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     __tablename__ = "orders"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     event_id: Mapped[str] = mapped_column(String(36), index=True)

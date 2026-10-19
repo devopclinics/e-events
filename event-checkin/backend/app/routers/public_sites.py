@@ -86,10 +86,10 @@ async def _website_content_sources(event: Event, db: AsyncSession) -> dict:
             description = str(program.get("public_description") or step.description or "")
             if description.strip() == "Track guest attendance for a program segment or breakout.":
                 description = ""
-            time_label = starts_at.strftime("%-I:%M %p")
+            time_label = starts_at.strftime("%I:%M %p").lstrip("0")
             if ends_at:
-                time_label += " – " + ends_at.strftime("%-I:%M %p")
-                if ends_at.date() != starts_at.date(): time_label += " (" + ends_at.strftime("%b %-d") + ")"
+                time_label += " \u2013 " + ends_at.strftime("%I:%M %p").lstrip("0")
+                if ends_at.date() != starts_at.date(): time_label += " (" + ends_at.strftime("%b ") + str(ends_at.day) + ")"
             sessions.append({
                 "source_id": step.id,
                 "day": starts_at.strftime("%A"),

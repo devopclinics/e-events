@@ -151,6 +151,26 @@ def _normalize_public_base_url(value: str | None) -> str:
 
 
 VALID_STATUSES = {"draft", "active", "ended", "archived"}
+
+
+@router.post("/{event_id}/organizer-observation")
+async def organizer_observation(event_id: str, body: dict, db: AsyncSession = Depends(get_db),
+                                _: User = Depends(require_event_admin)):
+    """Scoped organizer observations cannot create a real guest outcome."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    source_id, use_case = body.get("source_id"), body.get("use_case")
+    if not isinstance(source_id, str) or not 1 <= len(source_id) <= 128 or not isinstance(use_case, str) or not re.fullmatch(r"[a-z0-9_]{1,40}", use_case) or body.get("result") not in {"passed", "partial", "failed"}:
+        raise HTTPException(422, "Bounded scoped observation required")
+    from ..services.marketing_client import capture_event_outcome
+    await capture_event_outcome(db, event, "rehearsal", source_id, use_case=use_case)
+    if body["result"] == "passed":
+        await capture_event_outcome(db, event, "ready", source_id, use_case=use_case)
+    await db.commit()
+    return {"recorded": True, "real_outcome": False}
+
+
 STATUS_TRANSITIONS = {
     "draft":  {"active", "archived"},
     # Draft is the planning / RSVP state.  It deliberately keeps public RSVP
@@ -366,6 +386,9 @@ async def create_event(
         db, current_user, stage="event_created", event_type=event.event_type, guest_count=event.guest_cap,
         event_id=lifecycle_event_id("event_created", event.id),
     )
+    from ..services.marketing_client import capture_event_outcome
+    await capture_event_outcome(db, event, "event_created", event.id)
+    await capture_event_outcome(db,event,"configured",event.id)
     await db.commit()
     if trial_granted_to_org:
         from .. import entitlements
@@ -484,6 +507,7 @@ async def duplicate_event(
                 )
 
     new_event = Event(
+        is_test=source.is_test,
         org_id=org_id,
         name=(body.name or f"{source.name} (Copy)").strip()[:255],
         couples_name=source.couples_name,
@@ -579,6 +603,9 @@ async def duplicate_event(
             email_body=t.email_body, sms_body=t.sms_body, whatsapp_body=t.whatsapp_body, mms_body=t.mms_body,
         ))
 
+    from ..services.marketing_client import capture_event_outcome
+    await capture_event_outcome(db, new_event, "event_created", new_event.id)
+    await capture_event_outcome(db,new_event,"configured",new_event.id)
     await db.commit()
     await db.refresh(new_event)
 
@@ -740,6 +767,8 @@ async def update_event(
         db, current_user, stage="event_created", lifecycle_event="event_updated",
         event_type=event.event_type, guest_count=event.guest_cap,
     )
+    from ..services.marketing_client import capture_event_outcome
+    await capture_event_outcome(db,event,"configured",event.id)
     await db.commit()
     await db.refresh(event)
     return await _event_balance_out(event, db)
@@ -771,7 +800,8 @@ async def change_status(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_event_admin),
 ):
-    new_status = body.get("status", "")
+    cancelling = body.get("status") == "cancelled"
+    new_status = "ended" if cancelling else body.get("status", "")
     if new_status not in VALID_STATUSES:
         raise HTTPException(400, f"status must be one of: {', '.join(VALID_STATUSES)}")
 
@@ -795,10 +825,15 @@ async def change_status(
             raise HTTPException(409, "This event was changed by another operator. Refresh and try again.")
 
     allowed = STATUS_TRANSITIONS.get(event.status, set())
-    if new_status not in allowed:
+    if new_status not in allowed and not (cancelling and event.status in {"draft", "active", "ended"}):
         raise HTTPException(400, f"Cannot move from '{event.status}' to '{new_status}'")
 
     event.status = new_status
+    if cancelling:
+        event.cancelled = True
+    from ..services.marketing_client import capture_event_outcome
+    if new_status == "ended":
+        await capture_event_outcome(db, event, "event_cancelled" if event.cancelled else "event_completed", event.id)
     await db.commit()
     await db.refresh(event)
     return await _event_balance_out(event, db)
@@ -1277,9 +1312,11 @@ async def toggle_features(
     if any(bool(body.get(feature)) for feature in ("seating_enabled", "menu_enabled", "logistics_enabled", "registry_enabled", "venue_access_enabled", "experience_enabled", "festiome_addon_enabled", "planner_enabled", "engagement_enabled", "speaker_enabled", "partner_enabled", "reminders_enabled")):
         from ..services.marketing_client import ingest_marketing_lead, lifecycle_event_id
         await ingest_marketing_lead(
-            db, current_user, stage="activated", event_type=event.event_type,
-            event_id=lifecycle_event_id("activated", event.id),
+            db, current_user, stage="event_created", lifecycle_event="configured", event_type=event.event_type,
+            event_id=lifecycle_event_id("configured-v1", event.id),
         )
+    from ..services.marketing_client import capture_event_outcome
+    await capture_event_outcome(db, event, "configured", event.id)
     await db.commit()
     await db.refresh(event)
     return await _event_balance_out(event, db)

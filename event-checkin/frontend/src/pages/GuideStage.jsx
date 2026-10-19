@@ -6,6 +6,7 @@ import {GUIDE_STAGES,selectedRecipes,requiredServices,taskRevision,effectiveProg
 import {selectedOutcomeIds} from './guidedSetupPhaseOneModel.mjs'
 import {saveGuideResume} from './guideNavigation.mjs'
 import {CHECKLISTS} from './guideChecklists.mjs'
+import {contextualGuidance} from './organizerGuidance.mjs'
 import {MealTimingControl} from './SetupFeatureControls'
 import './GuidedSetupPhaseTwo.css'
 import './GuideStage.css'
@@ -48,11 +49,13 @@ export default function GuideStage({phase,eventId,onBack,notify}) {
  if(error)return <div role="alert"><p>{error}</p><button className="rr-btn secondary" onClick={load}>Retry guide checks</button></div>
  if(!data)return null
  const readiness=config.model({...data,progress:data.progressForChecks})
+ const guidance=contextualGuidance({event:data.event,accessibleEvents:data.events,recipes:readiness.recipes})
  const next=readiness.next
  return <section className="gst-guide">
   <header className="gsp-guide-head"><div><span className="gsp-eyebrow">Stage {phase+2} of 8 · {config.label}</span><h2>{data.event.name}</h2><p>{readiness.complete} of {readiness.total} applicable tasks checked · {readiness.blocked} blocked · {readiness.unknown} cannot verify</p><small>{phase===6?'Post-event checks do not count toward launch readiness.':'These checks describe this stage, not whole-event launch approval.'}</small></div><div className="gst-head-actions"><button className="rr-btn secondary" onClick={onBack}>Previous stage</button><button className="rr-btn secondary" onClick={load}>Refresh status</button></div></header>
   <p className="guide-launch-state"><strong>Event lifecycle: {data.event.status || 'Unknown'}.</strong> {data.event.status==='active'?'Activation is separate from service readiness; check each task before using it.':'Complete draft configuration and scoped tests here. Activate the event in Event Setup before guest launch.'} <a href="/admin-redesign">Review event status →</a></p>
   {phase===4 && <MealTimingControl event={data.event} onRefresh={load}/>}
+  <aside aria-label="Organizer next steps"><p>{guidance.note}</p><p>Use a rehearsal event or mark controlled attendees as test guests before running checks.</p>{guidance.next.map(task=><p key={task.id}><a href={task.route} onClick={()=>workspace(task)}>{task.title}</a>{task.checklist[0] && <small> — {task.checklist[0]}</small>}</p>)}</aside>
   {!!readiness.dataFailures.length&&<div className="gst-warning" role="alert"><div><strong>Some checks could not be verified</strong><ul>{readiness.dataFailures.map(f=><li key={f.key}>{f.label}: {f.message||'Service unavailable'}. Retry to verify affected tasks.</li>)}</ul><button className="rr-btn secondary" onClick={load}>Retry service checks</button></div></div>}
   {next?<section className={`gsp-next${next.blocked?' blocked':''}`}><div><span className="gsp-eyebrow">Next recommended action</span><h3>{next.title}</h3><p>{next.description}</p></div>{next.unknown?<button className="rr-btn primary" onClick={load}>Retry service checks</button>:<a className="rr-btn primary" href={next.route} onClick={()=>workspace(next)}>{next.action} →</a>}</section>:<p role="status">{readiness.total?'All applicable checks in this stage are complete. Review production actions in their workspaces.':'No tasks apply to the outcomes selected for this stage.'}</p>}
   <div className="gst-recipe-list">{readiness.recipes.map(recipe=>{

@@ -1,9 +1,9 @@
 import { useEventWebsite } from './EventWebsiteLink';
 import GuestSpeakers from './GuestSpeakers';
 import { FONTS, imagePresentation } from '../design-studio/model.mjs';
-import OfflinePass from './OfflinePass';
+import OfflinePass from './OfflinePass.jsx';
 import { startsIn, timezoneLabel } from './programmeView.mjs';
-import ProgrammeView, { SessionActivities } from './ProgrammeView';
+import ProgrammeView, { SessionActivities } from './ProgrammeView.jsx';
 import { readSavedSessions } from './programmeView.mjs';
 import AppearanceChoices from './AppearanceChoices';
 import { appearanceTokens, appearanceKey, storedAppearance, validAppTheme } from './appearance.mjs';

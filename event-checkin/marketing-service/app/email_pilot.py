@@ -9,6 +9,9 @@ import json
 import os
 import re
 import secrets
+import ast
+from functools import lru_cache
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import httpx
@@ -160,9 +163,20 @@ def capture_evidence(m, db, lead, body):
         row.consented_at = None
 
 
-def eligible(m, db, lead, mode):
+def stage_for(db, lead):
+    from .organizer_journey import Evidence
+    rows = db.scalars(select(Evidence).where(Evidence.account_id == lead.festio_user_id)).all() if lead.festio_user_id else []
+    closed = {(r.org_id,r.event_id) for r in rows if r.milestone in {"event_completed","event_cancelled"}}
+    if any((r.org_id,r.event_id) not in closed for r in rows):
+        return "event_created"
+    if rows:
+        return None
+    return lead.stage if lead.stage in {"registered","event_created"} else None
+
+
+def eligible(m, db, lead, mode, *, retention=False):
     accounts, launch = config(mode)
-    if not enabled(mode) or stopped(lead) or lead.stage not in {"registered", "event_created"} or lead.festio_user_id not in accounts:
+    if not enabled(mode) or stopped(lead) or (not retention and stage_for(db,lead) not in {"registered", "event_created"}) or lead.festio_user_id not in accounts:
         return False
     proof = db.get(IdentityEvidence, lead.festio_user_id)
     if (not proof or proof.lead_id != lead.id
@@ -178,10 +192,19 @@ def eligible(m, db, lead, mode):
     return bool(receipt and receipt.kind == "lifecycle" and receipt.lead_id == lead.id)
 
 
+@lru_cache(maxsize=1)
+def renderer_fingerprint():
+    """Pin fixed rendered copy as well as stored text; never hash credentials."""
+    source=Path(__file__).with_name("main.py").read_text(encoding="utf-8")
+    render=next(node for node in ast.parse(source).body if isinstance(node,ast.FunctionDef) and node.name=="_deliver_follow_up")
+    context=Path(__file__).with_name("journey_context.py").read_text(encoding="utf-8")
+    return hashlib.sha256((ast.dump(render,include_attributes=False)+ast.dump(ast.parse(context),include_attributes=False)).encode()).hexdigest()
+
+
 def template_fingerprint(sequence):
     try:
         payload = {"id": sequence.id, "module": sequence.module,
-                   "name": sequence.name, "payload": sequence.payload}
+                   "name": sequence.name, "payload": sequence.payload, "renderer_sha256":renderer_fingerprint()}
         return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":"),
                              ensure_ascii=False, allow_nan=False).encode()).hexdigest()
     except (ValueError, TypeError):
@@ -206,6 +229,15 @@ def template_pins():
 
 
 def approved_template(db, sequence, stage):
+    if sequence.payload.get("category") == "organizer_retention":
+        try:
+            pin = json.loads(os.getenv("MARKETING_ORGANIZER_RETENTION_TEMPLATE", "{}"))
+        except ValueError:
+            raise EmailBlocked("Approved retention template required")
+        current = db.get(type(sequence), sequence.id, populate_existing=True)
+        if not current or current.status != "active" or pin.get("id") != current.id or pin.get("sha256") != template_fingerprint(current) or template_fingerprint(sequence) != pin.get("sha256"):
+            raise EmailBlocked("Retention template differs from its approved pin")
+        return True
     pin = template_pins().get(stage)
     current = db.get(type(sequence), sequence.id, populate_existing=True)
     if (not pin or not current or current.id != pin["id"] or current.module != "sequences"
@@ -270,7 +302,7 @@ def reserve(m, lead, sequence, index, mode):
         current = db.get(m.Lead, lead.id)
         if not current or stopped(current) or current.email.strip().lower() != lead.email.strip().lower():
             raise EmailBlocked("Lead is not eligible")
-        if mode != "legacy" and not eligible(m, db, current, mode):
+        if mode != "legacy" and not eligible(m, db, current, mode, retention=sequence.payload.get("category") == "organizer_retention"):
             raise EmailBlocked("Account is outside the approved new-organizer cohort")
         keys = [key("email:", current.email.strip().lower())]
         if current.festio_user_id:
@@ -286,7 +318,7 @@ def reserve(m, lead, sequence, index, mode):
         if mode != "legacy":
             accounts, launch = config("pilot")
             cohort_key = key("cohort:", launch.isoformat())
-            approved_template(db, sequence, current.stage)
+            approved_template(db, sequence, stage_for(db,current))
             fingerprint = key("", json.dumps({"accounts": sorted(accounts), "templates": template_pins()}, sort_keys=True))
             db.execute(insert(EmailCap).values(key=cohort_key, claim_id=fingerprint,
                        blocked_until=launch, uncertain=False).on_conflict_do_nothing(index_elements=["key"]))
@@ -361,6 +393,10 @@ def finish(m, claim, status, provider_id=None):
                        m.Lead.suppression_reason.is_(None)).values(
                        automation_paused=True, suppression_reason="delivery_outcome_unknown",
                        next_follow_up_at=None))
+            lead=db.get(m.Lead,row.lead_id,populate_existing=True)
+            if lead:
+                from .organizer_journey import open_handoff
+                open_handoff(m,db,lead,"email","dispatch:"+claim)
         db.commit()
 
 
@@ -376,10 +412,22 @@ def recover_stale_claims(m):
                            m.Lead.suppression_reason.is_(None)).values(
                            automation_paused=True, suppression_reason="delivery_outcome_unknown",
                            next_follow_up_at=None))
+                lead=db.get(m.Lead,row.lead_id,populate_existing=True)
+                if lead:
+                    from .organizer_journey import open_handoff
+                    open_handoff(m,db,lead,"email","dispatch:"+row.id)
         db.commit()
 
 
+def uncertain_http(status):
+    return status in {408, 409, 425} or not 400 <= status < 500
+
+
 def send(m, lead, sequence, index=0, mode="legacy", stop_requested=None):
+    if sequence.payload.get("journey_context") is True and mode == "legacy":
+        raise EmailBlocked("Reviewed organizer journey requires its explicit pilot or test cohort")
+    if sequence.payload.get("category") == "organizer_retention" and mode != "pilot":
+        raise EmailBlocked("Organizer retention requires the explicit pilot cohort")
     if stop_requested and stop_requested():
         raise EmailBlocked("Email pilot is stopping")
     if mode == "legacy":
@@ -394,7 +442,7 @@ def send(m, lead, sequence, index=0, mode="legacy", stop_requested=None):
     m.safe_cta_url(step.get("cta_url") or sequence.payload.get("cta_url"))
     if mode != "legacy":
         with m.SessionLocal() as db:
-            approved_template(db, sequence, lead.stage)
+            approved_template(db, sequence, stage_for(db,lead))
     readiness(m)
     if stop_requested and stop_requested():
         raise EmailBlocked("Email pilot is stopping")
@@ -406,18 +454,24 @@ def send(m, lead, sequence, index=0, mode="legacy", stop_requested=None):
             if (not current or stopped(current) or current.stage != lead.stage
                     or current.email.strip().lower() != lead.email.strip().lower()
                     or current.festio_user_id != lead.festio_user_id
-                    or (mode != "legacy" and not eligible(m, db, current, mode))):
+                    or (mode != "legacy" and not eligible(m, db, current, mode, retention=sequence.payload.get("category") == "organizer_retention"))):
                 raise EmailBlocked("Eligibility changed before dispatch")
             if mode != "legacy":
-                approved_template(db, sequence, current.stage)
+                approved_template(db, sequence, stage_for(db,current))
         if stop_requested and stop_requested():
             raise EmailBlocked("Email pilot is stopping")
+        if sequence.payload.get("category") == "organizer_retention":
+            from .retention import validate_dispatch
+            validate_dispatch(m, lead, index, sequence_id=sequence.id)
+        elif mode != "legacy":
+            from .journey_context import validate_current_event
+            validate_current_event(m,lead)
         result = m._deliver_follow_up(lead, sequence, index)
     except HTTPException:
         finish(m, claim, "cancelled")
         raise
     except httpx.HTTPStatusError as exc:
-        finish(m, claim, "failed" if 400 <= exc.response.status_code < 500 else "uncertain")
+        finish(m, claim, "uncertain" if uncertain_http(exc.response.status_code) else "failed")
         raise
     except Exception:
         finish(m, claim, "uncertain")

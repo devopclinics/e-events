@@ -257,7 +257,7 @@ async def checkout(body: CheckoutRequest, user: User = Depends(get_current_user)
     return CheckoutOut(url=url, provider=provider)
 
 
-async def _fulfill(db: AsyncSession, provider: str, reference: str, event_id: str | None, tier_key: str | None) -> None:
+async def _fulfill(db: AsyncSession, provider: str, reference: str, event_id: str | None, tier_key: str | None, *, synthetic: bool | None = None, paid_amount: int | None = None, paid_currency: str | None = None) -> None:
     """Idempotently mark a payment paid and apply the entitlement to its event."""
     if not reference or not tier_key:
         return
@@ -293,10 +293,17 @@ async def _fulfill(db: AsyncSession, provider: str, reference: str, event_id: st
             tier_key=tier_key, amount=0, currency="", status="paid",
         ))
     from ..services.marketing_client import ingest_org_lifecycle, lifecycle_event_id
-    await ingest_org_lifecycle(
-        db, event.org_id, stage="paid", event_type=event.event_type,
-        event_id=lifecycle_event_id("paid", provider, reference),
-    )
+    # A recovered zero-value record is not proof of a paid acquisition.
+    if (payment and payment.amount > 0 and plan.kind == "tier" and synthetic is False and event.is_test is False
+            and type(paid_amount) is int and paid_amount == payment.amount
+            and isinstance(paid_currency, str) and paid_currency.upper() == payment.currency.upper()):
+        from ..services.marketing_client import capture_commerce
+        await capture_commerce(db, event.org_id, "event_pass", reference, payment.amount, payment.currency,
+            synthetic=synthetic, event_id=event.id, provider=provider)
+        await ingest_org_lifecycle(
+            db, event.org_id, stage="paid", lifecycle_event="organizer_purchase", event_type=event.event_type,
+            event_id=lifecycle_event_id("organizer_purchase-v1", provider, reference),
+        )
     await db.commit()
     if settings.organization_entitlements_v2:
         from .. import entitlements
@@ -317,10 +324,13 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
         if meta.get("wa_submission_id"):
             await wa_template_submissions.fulfill_payment(db, meta["wa_submission_id"])
         elif obj.get("mode") == "subscription":
-            await org_billing.handle_stripe_subscription_checkout(db, obj)
+            await org_billing.handle_stripe_subscription_checkout(db, {**obj, "livemode":evt.get("livemode")})
         else:
-            await _fulfill(db, "stripe", obj.get("id"), meta.get("event_id"), meta.get("tier_key"))
-    elif etype in ("customer.subscription.updated", "customer.subscription.deleted", "invoice.payment_failed"):
+            await _fulfill(db, "stripe", obj.get("id"), meta.get("event_id"), meta.get("tier_key"), synthetic=not evt["livemode"] if type(evt.get("livemode")) is bool and obj.get("payment_status") == "paid" else None, paid_amount=obj.get("amount_total"), paid_currency=obj.get("currency"))
+    elif etype in ("customer.subscription.updated", "customer.subscription.deleted", "invoice.payment_failed", "invoice.paid"):
+        if etype == "invoice.paid":
+            await org_billing.capture_stripe_invoice(db, evt["data"]["object"], synthetic=not evt["livemode"] if type(evt.get("livemode")) is bool else None)
+            return {"received": True}
         await org_billing.handle_stripe_subscription_event(db, etype, evt["data"]["object"])
     return {"received": True}
 
@@ -340,7 +350,7 @@ async def paystack_webhook(request: Request, db: AsyncSession = Depends(get_db))
         elif data.get("plan"):
             await org_billing.handle_paystack_subscription_renewal(db, data)
         else:
-            await _fulfill(db, "paystack", data.get("reference"), meta.get("event_id"), meta.get("tier_key"))
+            await _fulfill(db, "paystack", data.get("reference"), meta.get("event_id"), meta.get("tier_key"), synthetic=(data["domain"] != "live") if data.get("domain") in {"live", "test"} else None, paid_amount=data.get("amount"), paid_currency=data.get("currency"))
     elif etype in ("subscription.create", "subscription.disable"):
         await org_billing.handle_paystack_subscription_event(db, etype, data)
     return {"received": True}

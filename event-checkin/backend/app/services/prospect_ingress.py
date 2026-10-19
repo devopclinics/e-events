@@ -6,6 +6,7 @@ follow-ups; it is not permission to contact the sender on another channel.
 import hashlib
 import json
 import re
+from datetime import datetime,timezone,timedelta
 from email.utils import parseaddr
 
 from fastapi import HTTPException, Request
@@ -13,6 +14,17 @@ from fastapi import HTTPException, Request
 MAX_WEBHOOK_BYTES = 262144
 _STOP_WORDS = {"stop", "unsubscribe", "cancel", "end", "quit", "stop all"}
 _HANDOFF_PHRASES = ("talk to a human", "speak to a human", "live agent", "real person")
+
+
+def authenticated_message_time(raw):
+    try:
+        value=datetime.fromtimestamp(raw,timezone.utc) if type(raw) in {int,float} else datetime.fromisoformat(str(raw).replace("Z","+00:00"))
+        now=datetime.now(timezone.utc)
+        if value.tzinfo is None or value>now or value<now-timedelta(days=7):
+            return None
+        return value.astimezone(timezone.utc).isoformat()
+    except (TypeError,ValueError,OverflowError,OSError):
+        return None
 
 
 async def bounded_body(request: Request) -> bytes:
@@ -46,6 +58,25 @@ def incoming_event(text: str | None) -> str:
     if any(phrase in normalized for phrase in _HANDOFF_PHRASES):
         return "handoff_requested"
     return "message_received"
+
+
+def sales_intent(text: str | None) -> str:
+    """Bounded intent classification; no model/tools or account retrieval."""
+    normalized = " ".join(str(text or "")[:2000].casefold().split())
+    if normalized == "i agree to receive festio whatsapp guidance":
+        return "setup"
+    event = incoming_event(normalized)
+    if event == "opt_out":
+        return "opt_out"
+    if event == "handoff_requested":
+        return "handoff"
+    if any(word in normalized for word in ("price", "pricing", "cost")):
+        return "pricing"
+    if any(word in normalized for word in ("setup", "set up", "create event", "guest list", "rsvp", "check-in")):
+        return "setup"
+    if normalized.strip(".!?") in {"hi", "hello", "help", "start"}:
+        return "discovery"
+    return "handoff"
 
 
 def email_address(value) -> str | None:

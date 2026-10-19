@@ -24,6 +24,11 @@ def identity(module):
 
 def due_lead(module, *, consent=True, stage="registered", **extra):
     with module.SessionLocal() as db:
+        # These legacy-path tests model preserved stored templates. Reviewed
+        # journey candidates have separate explicit-cohort tests and cannot use
+        # legacy flags. Do not implicitly opt the legacy fixture into that path.
+        for sequence in db.scalars(select(module.ModuleRecord).where(module.ModuleRecord.module == "sequences")):
+            sequence.payload = {**sequence.payload, "journey_context": False}
         lead = module.Lead(email=f"lead-{module.uid()}@example.com", consent_email=consent, stage=stage, next_follow_up_at=module.now() - timedelta(minutes=1), stage_changed_at=module.now() - timedelta(days=10), **extra)
         db.add(lead)
         db.commit()

@@ -12,6 +12,7 @@ class EngagementSettings(BaseSettings):
 
     marketing_outbox_enabled: bool = False
     prospect_ingress_enabled: bool = False
+    sales_responses_enabled: bool = False
     meta_whatsapp_app_secret: str = ""
     meta_whatsapp_sales_phone_number_id: str = ""
     meta_whatsapp_webhook_verify_token: str = ""

@@ -345,3 +345,17 @@ frontend types. No generated-knowledge content changes are needed once transport
 line endings match canonical Git. Windows and Linux FastAPI versions also differ
 in optional ValidationError fields; the committed snapshot is the actual offline
 Linux export, with no unrelated deletion from the existing contract.
+
+Final clean Linux frontend validation passed: `npm ci --ignore-scripts
+--legacy-peer-deps --userconfig=/dev/null` using only the public lockfile registry,
+**185 tests passed**, unchanged help-content drift guard passed, production
+build/postbuild passed, and regenerated declarations matched byte-for-byte.
+Recognized dependencies were installed only in the disposable task container;
+no host/production installation or security setting changed. No browser ran.
+The final offline Linux backend export also matches the committed API snapshot
+byte-for-byte; Backend and Marketing Python source compilation passed with
+bytecode directed to container scratch storage. Product code is committed as
+`9cf64b135a9dd8e8b2b2c1e42b45aa72bd85583d`; this final report update records the
+subsequent completed build evidence. Working tree, whitespace and combined patch
+reverse-application checks are clean. Deployment and all live activation remain
+explicitly outside this task.

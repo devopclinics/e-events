@@ -542,6 +542,13 @@ async function downloadFile(path, filename, { withAuth = true } = {}) {
 }
 
 export const api = {
+  guestServices: eventId => req('GET', `/events/${eventId}/guest-services`),
+  configureGuestServices: (eventId, memberId, body) => req('PUT', `/events/${eventId}/guest-services/members/${memberId}`, body),
+  markGuestSeated: (eventId, guestId, seated) => req('POST', `/events/${eventId}/guest-services/guests/${guestId}/seated`, { seated }),
+  assistGuestMenu: (eventId, guestId, body) => req('POST', `/events/${eventId}/guest-services/guests/${guestId}/menu`, body),
+  serveGuestMeal: (eventId, guestId, serviceId) => req('POST', `/events/${eventId}/guest-services/guests/${guestId}/services/${serviceId}/served`),
+  guestServiceScan: (eventId, body) => req('POST', `/events/${eventId}/guest-services/scan`, body),
+  guestServiceRequest: (eventId, body) => req('POST', `/events/${eventId}/guest-services/requests`, body),
   submitDemoRequest: (body, idempotencyKey) => req('POST', '/demo-requests', body, undefined,
     idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
 

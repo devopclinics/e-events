@@ -45,6 +45,7 @@ const HelpPage = lazy(() => import('./pages/HelpPage'))
 const MediaPage = lazy(() => import('./pages/MediaPage'))
 const SelfCheckinPage = lazy(() => import('./pages/SelfCheckinPage'))
 const FestioMePage = lazy(() => import('./pages/FestioMePage'))
+const GuestServicesPage = lazy(() => import('./pages/GuestServicesPage'))
 const MyTasksPage = lazy(() => import('./pages/MyTasksPage'))
 const OrgSettingsPage = lazy(() => import('./pages/OrgSettingsPage'))
 const ApiDocsPage = lazy(() => import('./pages/ApiDocsPage'))
@@ -536,6 +537,7 @@ function AppRoutes() {
       <Route path="/addons-redesign" element={<ProtectedRoute><AddonsRedesignPage /></ProtectedRoute>} />
       <Route path="/team-redesign" element={<ProtectedRoute><TeamRedesignPage /></ProtectedRoute>} />
       <Route path="/experience-redesign" element={<ProtectedRoute><ExperienceRedesignPage /></ProtectedRoute>} />
+      <Route path="/guest-services" element={<ProtectedRoute><GuestServicesPage /></ProtectedRoute>} />
       <Route path="/checkin-redesign" element={<ProtectedRoute><CheckinRedesignPage /></ProtectedRoute>} />
       <Route path="/superadmin-redesign" element={<ProtectedRoute platformSuperadminOnly><SuperadminRedesignPage /></ProtectedRoute>} />
       <Route path="/media-redesign" element={<ProtectedRoute platformSuperadminOnly><MediaRedesignPage /></ProtectedRoute>} />

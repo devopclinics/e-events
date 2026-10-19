@@ -1,6 +1,6 @@
 // Shared source for in-app Help, public guide and support knowledge.
 // Updated from the 48 reviewed service recipes; preserve topic IDs for links.
-export const GUIDE_REVISED_AT = '2026-10-08'
+export const GUIDE_REVISED_AT = '2026-10-19'
 
 export const CONTENT = {
   "organizer": {
@@ -933,6 +933,23 @@ export const CONTENT = {
         "troubleshoot": "Compare the event timezone and start/end dates across Results, Ticketing and published programme surfaces before sharing the production schedule."
       },
       {
+        "id": "org-guest-services", "icon": "🪑", "title": "Assign table managers and conference room stewards",
+        "intro": "Give staff responsibility for multiple tables or existing conference rooms without creating another task or order system.",
+        "path": "Event operations → Guest Services → Assign staff",
+        "before": "Add staff to the event in Team. Create tables in Seating or rooms/zones in Venue Access. Guest operations require an Event Pass; zone scans also require Venue Access to be enabled.",
+        "steps": [
+          "Select the correct event, open Guest Services and choose Assign staff.",
+          "Choose a staff member. Keep Restrict guest operations enabled for table managers and room stewards. Organisation administrators and event managers retain wider access.",
+          "If a broad guest, menu, seat or dashboard grant conflicts, remove it in Team before saving scoped access.",
+          "Add one assignment per table or room. Repeat to assign multiple locations to one person; assign the same location to supporting staff as needed. Mark the lead where useful.",
+          "Optionally set shift start and end using your local time. Empty dates mean an ongoing assignment. Enable event check-in, assisted meals or room scanning separately as appropriate.",
+          "Save assignments. A table manager sees current guests at those tables; a room steward sees accepted zone movements. Removing all assignments while retaining restricted access leaves that staff member with no operational access.",
+          "Use the floor overview to review staff coverage, guest seating and service status. Reassign tables or shifts here; use existing Tasks for assistance, progress and handover notes."
+        ],
+        "check": "Sign in as the staff member: assigned tables or rooms are visible, another table is unavailable, and an expired shift cannot perform actions.",
+        "troubleshoot": "Refresh after another organiser changes access. Admission, physical seating, meal service and session attendance are separate records; a room scan does not complete a session."
+      },
+      {
         "id": "org-team",
         "icon": "🧑‍🤝‍🧑",
         "title": "Add your team",
@@ -1242,6 +1259,23 @@ export const CONTENT = {
           "🔵 Blue — \"Checked in on this device\" — the internet dropped, so the scan was accepted from the guest list already cached on your phone and queued to sync. Keep scanning normally; it uploads automatically once you're back online.",
           "For any denied result, do not override — direct the guest to the organiser's desk for resolution."
         ]
+      },
+      {
+        "id": "staff-guest-services", "icon": "🪑", "title": "Look after assigned tables and conference rooms",
+        "path": "Event operations → Guest Services",
+        "intro": "Your workspace follows the organiser’s table, room and shift assignments.",
+        "steps": [
+          "Select the event and open Guest Services. Check My assignments and the current shift before acting.",
+          "Filter tables or choose Needs attention only. Expected, Checked in and Seated describe different stages; use Mark seated only after helping the guest reach the table.",
+          "If check-in permission is enabled, scan the guest pass or paste its link. Only guests already assigned to your tables can be admitted here. Ask a supervisor to handle unassigned guests or table moves.",
+          "Choose Help choose menu, review options with the guest, confirm their agreement and save. Existing menu eligibility and selection locks still apply.",
+          "When the meal is delivered, mark the specific meal service served. Each occurrence has its own completion; repeated taps do not create a second fulfilment. Closed, full or out-of-window services cannot be served here.",
+          "For a conference room, choose the room and entry/exit direction before scanning. Existing ticket, capacity and guardian checks apply. This records venue movement, not session attendance.",
+          "Use Request help or hand over work for water, accessibility assistance, housekeeping or delays. Choose a teammate or leave it in the team queue, then create the task.",
+          "Open team Tasks to see acknowledgement, progress, comments and completion. Keep sensitive guest details out of these shared notes. Contact the supervisor for urgent issues."
+        ],
+        "check": "The right guest, table or room and meal service are updated. Assistance appears once in the existing Tasks board.",
+        "troubleshoot": "If a shift expires or a guest moves tables, refresh and ask the organiser to review your assignment. Guest Services requires an online connection; do not assume a failed action was saved."
       },
       {
         "id": "staff-zones",

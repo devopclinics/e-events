@@ -384,7 +384,7 @@ async def require_dashboard_access(
         return user
     eu = await db.scalar(select(EventUser).where(
         EventUser.event_id == event_id, EventUser.user_id == user.id))
-    if eu and (eu.can_view_dashboard or eu.event_role == "manager"):
+    if eu and not eu.guest_service_scoped and (eu.can_view_dashboard or eu.event_role == "manager"):
         return user
     raise HTTPException(403, "You don't have dashboard access for this event.")
 
@@ -412,7 +412,7 @@ async def require_guest_view_access(
     eu = await db.scalar(select(EventUser).where(
         EventUser.event_id == event_id, EventUser.user_id == user.id
     ))
-    if eu and (eu.event_role == "manager" or eu.can_view_guests or eu.can_manage_guests):
+    if eu and not eu.guest_service_scoped and (eu.event_role == "manager" or eu.can_view_guests or eu.can_manage_guests):
         return user
     raise HTTPException(403, "You don't have permission to view guests for this event.")
 
@@ -436,7 +436,7 @@ async def require_guest_manage_access(
     eu = await db.scalar(select(EventUser).where(
         EventUser.event_id == event_id, EventUser.user_id == user.id
     ))
-    if eu and (eu.event_role == "manager" or eu.can_manage_guests):
+    if eu and not eu.guest_service_scoped and (eu.event_role == "manager" or eu.can_manage_guests):
         return user
     raise HTTPException(403, "You don't have permission to manage guests for this event.")
 
@@ -531,6 +531,9 @@ async def require_paid_event_member(
         return user
     if await _org_role(user, event.org_id, db) is None:
         raise HTTPException(404, "Event not found")
+    eu = await db.scalar(select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == user.id))
+    if eu and eu.guest_service_scoped and await _org_role(user, event.org_id, db) not in ("owner", "admin"):
+        raise HTTPException(403, "Use Guest Services for your assigned tables and rooms")
     if not event.is_paid:
         raise HTTPException(402, _PAID_REQUIRED)
     return user

@@ -2169,7 +2169,7 @@ async def manual_checkin(
     guest = await db.get(Guest, guest_id)
     if not guest or guest.event_id != event_id:
         return ScanResult(status="invalid", message="Guest not found for this event.")
-    blocked = await checkin_guard(event, current_user, db)
+    blocked = await checkin_guard(event, current_user, db, guest=guest)
     if blocked:
         return blocked
     if event.section_mode_enabled and not guest.assigned_table_group_id:

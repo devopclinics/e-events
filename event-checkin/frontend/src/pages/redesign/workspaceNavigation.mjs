@@ -2,7 +2,7 @@ export const WORKSPACES = [
   { id: 'events', label: 'Events', items: ['events'] },
   { id: 'workspace', label: 'Event workspace', items: ['setup', 'guide', 'design', 'planner', 'mytasks'] },
   { id: 'guest', label: 'Guest experience', items: ['guesthub', 'website', 'festiome'] },
-  { id: 'operations', label: 'Event operations', items: ['ticketing', 'checkin', 'live', 'orders'] },
+  { id: 'operations', label: 'Event operations', items: ['ticketing', 'checkin', 'guestservices', 'live', 'orders'] },
   { id: 'results', label: 'Results', items: ['results'] },
 ]
 export function workspaceNavigation(links, { pathname, search = '' }, topActive) {

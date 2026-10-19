@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, BigInteger, Boolean, DateTime, ForeignKey, Integer, Float, Text, UniqueConstraint, Index, text, JSON
+from sqlalchemy import String, BigInteger, Boolean, DateTime, ForeignKey, Integer, Float, Text, UniqueConstraint, CheckConstraint, Index, text, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 
@@ -321,6 +321,7 @@ class EventUser(Base):
     event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
     assigned_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    guest_service_scoped: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     can_reassign_seats: Mapped[bool] = mapped_column(Boolean, default=False)
     can_manage_menu: Mapped[bool] = mapped_column(Boolean, default=False)
     # Lets a non-admin staffer open the live event dashboard (admins always can).
@@ -3016,3 +3017,54 @@ class DemoRequest(Base):
     message: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(30), default="requested")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class GuestServiceAssignment(Base):
+    """Operational responsibility, not a task or a second seating/access ledger."""
+    __tablename__ = "guest_service_assignments"
+    __table_args__ = (
+        CheckConstraint("(table_id IS NOT NULL AND zone_id IS NULL) OR (table_id IS NULL AND zone_id IS NOT NULL)", name="ck_service_assignment_scope"),
+        CheckConstraint("starts_at IS NULL OR ends_at IS NULL OR ends_at > starts_at", name="ck_service_assignment_shift"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("event_users.id", ondelete="CASCADE"), index=True)
+    table_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("seating_tables.id", ondelete="CASCADE"), nullable=True)
+    zone_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("zones.id", ondelete="CASCADE"), nullable=True)
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    is_lead: Mapped[bool] = mapped_column(Boolean, default=False)
+    can_checkin: Mapped[bool] = mapped_column(Boolean, default=False)
+    can_manage_meals: Mapped[bool] = mapped_column(Boolean, default=False)
+    can_scan_zone: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class GuestSeatingPresence(Base):
+    """Physical seating confirmation; Guest.table_id remains the seat assignment."""
+    __tablename__ = "guest_seating_presence"
+    guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id", ondelete="CASCADE"), primary_key=True)
+    table_id: Mapped[str] = mapped_column(String(36), ForeignKey("seating_tables.id", ondelete="CASCADE"))
+    seated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    seated_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
+
+
+class GuestServiceActivity(Base):
+    __tablename__ = "guest_service_activity"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    actor_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
+    guest_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    action: Mapped[str] = mapped_column(String(60))
+    detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class GuestServiceRequest(Base):
+    """Idempotency link to canonical Tasks, never a parallel request queue."""
+    __tablename__ = "guest_service_requests"
+    __table_args__ = (UniqueConstraint("event_id", "actor_id", "request_key", name="uq_guest_service_request"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    actor_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
+    request_key: Mapped[str] = mapped_column(String(80))
+    assignment_id: Mapped[str] = mapped_column(String(36))
+    task_id: Mapped[str] = mapped_column(String(36), ForeignKey("tasks.id", ondelete="CASCADE"))

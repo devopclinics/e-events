@@ -105,14 +105,38 @@ export interface ApprovedWhatsAppTemplateOut {
   variables: (string)[]
 }
 
+export interface AssignmentIn {
+  can_checkin?: boolean
+  can_manage_meals?: boolean
+  can_scan_zone?: boolean
+  ends_at?: (string) | null
+  is_lead?: boolean
+  starts_at?: (string) | null
+  table_id?: (string) | null
+  zone_id?: (string) | null
+}
+
 export interface AssignmentRequest {
   due_at?: (string) | null
   org_id?: (string) | null
   user_ids: (string)[]
 }
 
+export interface AssignmentUpdate {
+  assignments?: (AssignmentIn)[]
+  if_unmodified_since?: (string) | null
+  scoped?: boolean
+}
+
 export interface AssignUserRequest {
   user_id: string
+}
+
+export interface AssistedMenuIn {
+  combo?: Record<string, string>
+  guest_agreed?: boolean
+  multi?: Record<string, (string)[]>
+  single?: Record<string, string>
 }
 
 export interface Authority {
@@ -2933,6 +2957,15 @@ export interface ReminderTestSendRequest {
   whatsapp_template_vars?: (Record<string, string>) | null
 }
 
+export interface RequestIn {
+  assignee_user_id?: (string) | null
+  assignment_id: string
+  notes?: string
+  priority?: 'low' | 'normal' | 'high'
+  request_key: string
+  title: string
+}
+
 export interface RevokeRequest {
   reason: string
 }
@@ -3030,6 +3063,12 @@ export interface SaveForm {
 export interface ScanCheckoutRequest {
   guardian_guest_id?: (string) | null
   guardian_token?: (string) | null
+}
+
+export interface ScanIn {
+  direction?: 'in' | 'out'
+  token: string
+  zone_id?: (string) | null
 }
 
 export interface ScanResult {
@@ -3154,6 +3193,10 @@ export interface ScheduledCommunicationUpdate {
 export interface SeatAssignRequest {
   seat_number?: (string) | null
   table_id?: (string) | null
+}
+
+export interface SeatedIn {
+  seated?: boolean
 }
 
 export interface SeatingTableCreate {

@@ -192,6 +192,20 @@ async def create_task(
     event_id: str, data: TaskCreate, background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db), actor: User = Depends(require_event_member),
 ):
+    event, task, assignee = await add_task_record(event_id, data, actor, db)
+    await db.commit()
+    await db.refresh(task)
+    if assignee:
+        _notify_assignee(background_tasks, event, task, assignee)
+    names = await _assignee_names(event_id, db)
+    return _task_out(task, names)
+
+
+async def add_task_record(event_id: str, data: TaskCreate, actor: User, db: AsyncSession):
+    """Canonical task creation, composed atomically with other event workflows.
+
+    Caller commits and queues assignment notifications only after that commit.
+    """
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -208,14 +222,10 @@ async def create_task(
         planner_vendor_id=data.planner_vendor_id, priority=data.priority,
     )
     db.add(task)
-    await db.commit()
-    await db.refresh(task)
+    await db.flush()
     body = f"Created this task{f', assigned to {assignee.name}' if assignee else ''}."
-    await _log_activity(db, task.id, actor, "system", body)
-    if assignee:
-        _notify_assignee(background_tasks, event, task, assignee)
-    names = await _assignee_names(event_id, db)
-    return _task_out(task, names)
+    db.add(TaskActivity(task_id=task.id, user_id=actor.id, kind="system", body=body))
+    return event, task, assignee
 
 
 @router.put("/{event_id}/tasks/{task_id}", response_model=TaskOut)

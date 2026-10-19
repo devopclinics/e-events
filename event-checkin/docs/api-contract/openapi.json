@@ -475,6 +475,78 @@
         "title": "AssignUserRequest",
         "type": "object"
       },
+      "AssignmentIn": {
+        "properties": {
+          "can_checkin": {
+            "default": false,
+            "title": "Can Checkin",
+            "type": "boolean"
+          },
+          "can_manage_meals": {
+            "default": false,
+            "title": "Can Manage Meals",
+            "type": "boolean"
+          },
+          "can_scan_zone": {
+            "default": false,
+            "title": "Can Scan Zone",
+            "type": "boolean"
+          },
+          "ends_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "is_lead": {
+            "default": false,
+            "title": "Is Lead",
+            "type": "boolean"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          },
+          "table_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Id"
+          },
+          "zone_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zone Id"
+          }
+        },
+        "title": "AssignmentIn",
+        "type": "object"
+      },
       "AssignmentRequest": {
         "properties": {
           "due_at": {
@@ -513,6 +585,75 @@
           "user_ids"
         ],
         "title": "AssignmentRequest",
+        "type": "object"
+      },
+      "AssignmentUpdate": {
+        "properties": {
+          "assignments": {
+            "items": {
+              "$ref": "#/components/schemas/AssignmentIn"
+            },
+            "maxItems": 100,
+            "title": "Assignments",
+            "type": "array"
+          },
+          "if_unmodified_since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "If Unmodified Since"
+          },
+          "scoped": {
+            "default": true,
+            "title": "Scoped",
+            "type": "boolean"
+          }
+        },
+        "title": "AssignmentUpdate",
+        "type": "object"
+      },
+      "AssistedMenuIn": {
+        "properties": {
+          "combo": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {},
+            "title": "Combo",
+            "type": "object"
+          },
+          "guest_agreed": {
+            "default": false,
+            "title": "Guest Agreed",
+            "type": "boolean"
+          },
+          "multi": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "default": {},
+            "title": "Multi",
+            "type": "object"
+          },
+          "single": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {},
+            "title": "Single",
+            "type": "object"
+          }
+        },
+        "title": "AssistedMenuIn",
         "type": "object"
       },
       "Authority": {
@@ -18954,6 +19095,60 @@
         "title": "ReminderTestSendRequest",
         "type": "object"
       },
+      "RequestIn": {
+        "properties": {
+          "assignee_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee User Id"
+          },
+          "assignment_id": {
+            "title": "Assignment Id",
+            "type": "string"
+          },
+          "notes": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Notes",
+            "type": "string"
+          },
+          "priority": {
+            "default": "normal",
+            "enum": [
+              "low",
+              "normal",
+              "high"
+            ],
+            "title": "Priority",
+            "type": "string"
+          },
+          "request_key": {
+            "maxLength": 80,
+            "minLength": 8,
+            "title": "Request Key",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 180,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "assignment_id",
+          "request_key",
+          "title"
+        ],
+        "title": "RequestIn",
+        "type": "object"
+      },
       "RevokeRequest": {
         "properties": {
           "reason": {
@@ -19106,6 +19301,41 @@
           }
         },
         "title": "ScanCheckoutRequest",
+        "type": "object"
+      },
+      "ScanIn": {
+        "properties": {
+          "direction": {
+            "default": "in",
+            "enum": [
+              "in",
+              "out"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "token": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          },
+          "zone_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zone Id"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "ScanIn",
         "type": "object"
       },
       "ScanResult": {
@@ -20199,6 +20429,17 @@
           }
         },
         "title": "SeatAssignRequest",
+        "type": "object"
+      },
+      "SeatedIn": {
+        "properties": {
+          "seated": {
+            "default": true,
+            "title": "Seated",
+            "type": "boolean"
+          }
+        },
+        "title": "SeatedIn",
         "type": "object"
       },
       "SeatingTableCreate": {
@@ -35887,6 +36128,416 @@
         "summary": "Guest Content",
         "tags": [
           "certificates-presenter-materials"
+        ]
+      }
+    },
+    "/api/events/{event_id}/guest-services": {
+      "get": {
+        "operationId": "workspace_api_events__event_id__guest_services_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Workspace",
+        "tags": [
+          "guest-services"
+        ]
+      }
+    },
+    "/api/events/{event_id}/guest-services/guests/{guest_id}/menu": {
+      "post": {
+        "operationId": "assisted_menu_api_events__event_id__guest_services_guests__guest_id__menu_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "guest_id",
+            "required": true,
+            "schema": {
+              "title": "Guest Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistedMenuIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Assisted Menu",
+        "tags": [
+          "guest-services"
+        ]
+      }
+    },
+    "/api/events/{event_id}/guest-services/guests/{guest_id}/seated": {
+      "post": {
+        "operationId": "mark_seated_api_events__event_id__guest_services_guests__guest_id__seated_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "guest_id",
+            "required": true,
+            "schema": {
+              "title": "Guest Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeatedIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Mark Seated",
+        "tags": [
+          "guest-services"
+        ]
+      }
+    },
+    "/api/events/{event_id}/guest-services/guests/{guest_id}/services/{service_id}/served": {
+      "post": {
+        "operationId": "serve_api_events__event_id__guest_services_guests__guest_id__services__service_id__served_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "guest_id",
+            "required": true,
+            "schema": {
+              "title": "Guest Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "service_id",
+            "required": true,
+            "schema": {
+              "title": "Service Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Serve",
+        "tags": [
+          "guest-services"
+        ]
+      }
+    },
+    "/api/events/{event_id}/guest-services/members/{member_id}": {
+      "put": {
+        "operationId": "configure_api_events__event_id__guest_services_members__member_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "member_id",
+            "required": true,
+            "schema": {
+              "title": "Member Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignmentUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Configure",
+        "tags": [
+          "guest-services"
+        ]
+      }
+    },
+    "/api/events/{event_id}/guest-services/requests": {
+      "post": {
+        "operationId": "assistance_api_events__event_id__guest_services_requests_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Assistance",
+        "tags": [
+          "guest-services"
+        ]
+      }
+    },
+    "/api/events/{event_id}/guest-services/scan": {
+      "post": {
+        "operationId": "scan_api_events__event_id__guest_services_scan_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScanIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Scan",
+        "tags": [
+          "guest-services"
         ]
       }
     },

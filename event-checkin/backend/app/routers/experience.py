@@ -151,8 +151,10 @@ async def _ensure_runtime_operator(event_id: str, user: User, db: AsyncSession) 
     if await is_org_manager(user, event.org_id, db):
         return event
     assigned = await db.scalar(
-        select(EventUser.id).where(EventUser.event_id == event_id, EventUser.user_id == user.id).limit(1)
+        select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == user.id).limit(1)
     )
+    if assigned and assigned.guest_service_scoped:
+        raise HTTPException(403, "Use Guest Services for your assigned tables and rooms")
     if assigned:
         return event
     raise HTTPException(403, "You are not assigned to this event")

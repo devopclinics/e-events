@@ -334,6 +334,7 @@ const TOP_LINKS = [
     gate: ({ user, ticketingMaster }) => ticketingMaster && user?.role === 'admin' && typeof window !== 'undefined' &&
       ['festio.events', 'staging.festio.events', 'localhost'].includes(window.location.hostname),
   },
+  { id: 'guestservices', label: 'Guest Services', to: '/guest-services', icon: 'users' },
   { id: 'mytasks', label: 'My Tasks', to: '/team-redesign?tab=mytasks', icon: 'file' },
   {
     id: 'org', label: 'Org Settings', to: '/billing-redesign?tab=org', icon: 'settings',
@@ -386,6 +387,7 @@ const SIDEBAR_NAV = [
   ['clock', 'Reminders', '/addons-redesign?tab=reminders', 'reminders', null, 'reminders'],
   ['chat', 'FestioMe', '/festiome-redesign', 'festiome', null, 'festiome'],
   ['grp', 'Team & Settings'],
+  ['users', 'Guest Services', '/guest-services', 'guestservices'],
   ['team', 'Team', '/team-redesign?tab=team', 'team'],
   ['file', 'Tasks', '/team-redesign?tab=tasks', 'tasks'],
   ['barchart', 'Experience', '/experience-redesign', 'experience', null, 'experience', true],

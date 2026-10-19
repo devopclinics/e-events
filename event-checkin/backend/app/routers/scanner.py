@@ -961,7 +961,7 @@ async def scan_qr(
     event = await db.get(Event, guest.event_id)
     if not event:
         return ScanResult(status="invalid", message="Event not found for this ticket.")
-    blocked = await checkin_guard(event, current_user, db)
+    blocked = await checkin_guard(event, current_user, db, guest=guest, operation="checkin")
     if blocked:
         return blocked
     result = await perform_admission(guest, event, background_tasks, db)
@@ -994,7 +994,7 @@ async def record_daily_attendance(
     event = await db.get(Event, guest.event_id)
     if not event:
         return DailyAttendanceResult(status="invalid", message="Event not found for this ticket.")
-    blocked = await checkin_guard(event, current_user, db)
+    blocked = await checkin_guard(event, current_user, db, guest=guest, operation="daily")
     if blocked:
         return DailyAttendanceResult(status=blocked.status, message=blocked.message, guest=GuestOut.model_validate(guest))
     if not event.daily_checkin_enabled:
@@ -1092,7 +1092,7 @@ async def perform_checkout(
             status="checkout_disabled",
             message="Check-out is not enabled for this event.",
         )
-    blocked = await checkin_guard(event, current_user, db)
+    blocked = await checkin_guard(event, current_user, db, guest=guest, operation="checkout")
     if blocked:
         return blocked
     if not guest.admitted:
@@ -1159,10 +1159,12 @@ async def perform_checkout(
     )
 
 
-async def checkin_guard(event, current_user, db) -> ScanResult | None:
+async def checkin_guard(event, current_user, db, guest=None, operation="checkin") -> ScanResult | None:
     """Shared validity + tenant/assignment check for QR and manual check-in.
     Returns a ScanResult to short-circuit on failure, or None when allowed.
     Org owners/admins can check in any of their events; staff must be assigned."""
+    from ..services.guest_services import enforce_scoped_scan
+    await enforce_scoped_scan(event, current_user, db, guest=guest, operation=operation)
     if event and event.status != "active":
         label = "has not started yet" if event.status == "draft" else "has ended"
         return ScanResult(status="not_active", message=f"'{event.name}' {label}. Check-in is disabled.")
@@ -1472,6 +1474,9 @@ async def scan_qr_zone(
             if not assigned:
                 raise HTTPException(403, "You are not assigned to this event.")
 
+    from ..services.guest_services import enforce_scoped_scan
+    await enforce_scoped_scan(event, current_user, db, guest=guest, operation="zone", zone_id=body.zone_id)
+
     zone = await db.get(Zone, body.zone_id)
     if not zone or zone.event_id != event.id or not zone.is_active:
         raise HTTPException(404, "Zone not found.")
@@ -1673,6 +1678,12 @@ async def submit_menu(qr_token: str, body: GuestMenuSubmit, db: AsyncSession = D
     guest = (await db.execute(select(Guest).where(Guest.qr_token == qr_token))).scalar_one_or_none()
     if not guest:
         raise HTTPException(status_code=404, detail="Invalid ticket")
+    return await save_guest_menu(guest, body, db)
+
+
+async def save_guest_menu(guest, body, db, *, actor_user_id=None):
+    """Shared guest and assisted selection rules; callers authorize the actor."""
+    guest = await db.scalar(select(Guest).where(Guest.id == guest.id).with_for_update().execution_options(populate_existing=True))
     event = await db.get(Event, guest.event_id)
     if not event or not event.menu_enabled:
         raise HTTPException(status_code=400, detail="Menu selection is not enabled for this event")
@@ -1750,6 +1761,6 @@ async def submit_menu(qr_token: str, body: GuestMenuSubmit, db: AsyncSession = D
     for row in new_rows:
         db.add(row)
 
-    await sync_guest_progress(event.id, guest.id, db, source="guest")
+    await sync_guest_progress(event.id, guest.id, db, source="staff" if actor_user_id else "guest", actor_user_id=actor_user_id)
     await db.commit()
     return {"ok": True, "saved": len(new_rows)}

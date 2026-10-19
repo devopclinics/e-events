@@ -684,6 +684,8 @@ async def update_member_permissions(
         expected = datetime.fromisoformat(str(if_unmodified_since).replace("Z", "+00:00")).replace(tzinfo=None)
         if eu.updated_at and eu.updated_at != expected:
             raise HTTPException(409, "This member's permissions were changed by another operator. Refresh and try again.")
+    if eu.guest_service_scoped and any(body.get(k) for k in ("can_reassign_seats", "can_manage_menu", "can_view_dashboard", "can_view_guests", "can_manage_guests")):
+        raise HTTPException(409, "Remove scoped Guest Services access before granting event-wide guest operations")
     if "can_reassign_seats" in body:
         eu.can_reassign_seats = bool(body["can_reassign_seats"])
     if "can_manage_menu" in body:
@@ -714,6 +716,8 @@ async def update_member_permissions(
         role = str(body["event_role"] or "staff")
         if role not in ("staff", "manager"):
             raise HTTPException(400, "event_role must be staff or manager")
+        if eu.guest_service_scoped and role == "manager":
+            raise HTTPException(409, "Remove scoped Guest Services access before granting event manager access")
         eu.event_role = role
         if role == "manager":
             eu.can_manage_menu = True

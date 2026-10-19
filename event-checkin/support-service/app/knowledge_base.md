@@ -1,5 +1,5 @@
 # Festio product documentation
-Revised 2026-10-08
+Revised 2026-10-19
 
 Generated from frontend/src/guideContent.mjs — do not edit by hand, run
 support-service/scripts/build_knowledge_base.mjs to regenerate.
@@ -949,6 +949,26 @@ Check the result: Items appear in chronological order with a clear owner, locati
 
 If something is wrong: Compare the event timezone and start/end dates across Results, Ticketing and published programme surfaces before sharing the production schedule.
 
+### Assign table managers and conference room stewards
+
+Give staff responsibility for multiple tables or existing conference rooms without creating another task or order system.
+
+Go to: Event operations → Guest Services → Assign staff
+
+Before you start: Add staff to the event in Team. Create tables in Seating or rooms/zones in Venue Access. Guest operations require an Event Pass; zone scans also require Venue Access to be enabled.
+
+1. Select the correct event, open Guest Services and choose Assign staff.
+2. Choose a staff member. Keep Restrict guest operations enabled for table managers and room stewards. Organisation administrators and event managers retain wider access.
+3. If a broad guest, menu, seat or dashboard grant conflicts, remove it in Team before saving scoped access.
+4. Add one assignment per table or room. Repeat to assign multiple locations to one person; assign the same location to supporting staff as needed. Mark the lead where useful.
+5. Optionally set shift start and end using your local time. Empty dates mean an ongoing assignment. Enable event check-in, assisted meals or room scanning separately as appropriate.
+6. Save assignments. A table manager sees current guests at those tables; a room steward sees accepted zone movements. Removing all assignments while retaining restricted access leaves that staff member with no operational access.
+7. Use the floor overview to review staff coverage, guest seating and service status. Reassign tables or shifts here; use existing Tasks for assistance, progress and handover notes.
+
+Check the result: Sign in as the staff member: assigned tables or rooms are visible, another table is unavailable, and an expired shift cannot perform actions.
+
+If something is wrong: Refresh after another organiser changes access. Admission, physical seating, meal service and session attendance are separate records; a room scan does not complete a session.
+
 ### Add your team
 
 Delegate preparation and event operations with appropriate access.
@@ -1219,6 +1239,25 @@ Tip: If a QR is not working, ask the organiser to look up the guest in Guests an
 6. ❓ "Guest not found" — the QR is from a different event or is corrupted. Direct the guest to the organiser desk.
 7. 🔵 Blue — "Checked in on this device" — the internet dropped, so the scan was accepted from the guest list already cached on your phone and queued to sync. Keep scanning normally; it uploads automatically once you're back online.
 8. For any denied result, do not override — direct the guest to the organiser's desk for resolution.
+
+### Look after assigned tables and conference rooms
+
+Your workspace follows the organiser’s table, room and shift assignments.
+
+Go to: Event operations → Guest Services
+
+1. Select the event and open Guest Services. Check My assignments and the current shift before acting.
+2. Filter tables or choose Needs attention only. Expected, Checked in and Seated describe different stages; use Mark seated only after helping the guest reach the table.
+3. If check-in permission is enabled, scan the guest pass or paste its link. Only guests already assigned to your tables can be admitted here. Ask a supervisor to handle unassigned guests or table moves.
+4. Choose Help choose menu, review options with the guest, confirm their agreement and save. Existing menu eligibility and selection locks still apply.
+5. When the meal is delivered, mark the specific meal service served. Each occurrence has its own completion; repeated taps do not create a second fulfilment. Closed, full or out-of-window services cannot be served here.
+6. For a conference room, choose the room and entry/exit direction before scanning. Existing ticket, capacity and guardian checks apply. This records venue movement, not session attendance.
+7. Use Request help or hand over work for water, accessibility assistance, housekeeping or delays. Choose a teammate or leave it in the team queue, then create the task.
+8. Open team Tasks to see acknowledgement, progress, comments and completion. Keep sensitive guest details out of these shared notes. Contact the supervisor for urgent issues.
+
+Check the result: The right guest, table or room and meal service are updated. Assistance appears once in the existing Tasks board.
+
+If something is wrong: If a shift expires or a guest moves tables, refresh and ask the organiser to review your assignment. Guest Services requires an online connection; do not assume a failed action was saved.
 
 ### Zone scanning & gates
 

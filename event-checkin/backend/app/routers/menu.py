@@ -289,12 +289,20 @@ async def mark_category_served(
     db: AsyncSession = Depends(get_db), current_user: User = Depends(require_paid_event_member),
 ):
     await _require_menu_access(event_id, db, current_user)
+    return await fulfill_category(event_id, category_id, guest_id, station_id, db, current_user)
+
+
+async def fulfill_category(event_id, category_id, guest_id, station_id, db, current_user, *, service=None, enforce_service_limits=False):
+    """Canonical fulfillment shared with table-scoped staff; caller authorizes."""
     cat = await _category_or_404(event_id, category_id, db)
-    guest = await db.get(Guest, guest_id)
+    guest = await db.scalar(select(Guest).where(Guest.id == guest_id).with_for_update().execution_options(populate_existing=True))
     if not guest or guest.event_id != event_id:
         raise HTTPException(404, "Guest not found")
 
-    service = await _default_service_for_category(event_id, cat, db)
+    service = service or await _default_service_for_category(event_id, cat, db)
+    if service.event_id != event_id or service.category_id != category_id:
+        raise HTTPException(404, "Meal service not found")
+    service = await db.scalar(select(MealService).where(MealService.id == service.id).with_for_update().execution_options(populate_existing=True))
     if service.status != "open":
         raise HTTPException(409, f"{service.name} is {service.status}; meal collection is closed")
     existing = await db.scalar(select(GuestMealService).where(
@@ -303,6 +311,14 @@ async def mark_category_served(
         raise HTTPException(403, "Guest is not eligible for this meal service")
     if existing and existing.fulfillment_status == "served":
         return {"ok": True, "already_served": True, "served_at": existing.served_at}
+    if enforce_service_limits:
+        now = datetime.utcnow()
+        if (service.starts_at and now < service.starts_at) or (service.ends_at and now >= service.ends_at):
+            raise HTTPException(409, "This meal service is outside its serving window")
+        served_count = await db.scalar(select(func.count()).select_from(GuestMealService).where(
+            GuestMealService.service_id == service.id, GuestMealService.fulfillment_status == "served"))
+        if service.capacity is not None and served_count >= service.capacity:
+            raise HTTPException(409, "This meal service has reached its serving capacity")
     if existing:
         existing.fulfillment_status = "served"
         existing.served_at = datetime.utcnow()

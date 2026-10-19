@@ -46,6 +46,7 @@ def test_postgres_submission_row_lock_fences_reconciliation_after_final_check(mo
     from test_journey_workers import real_sales_fixture
     url=make_url(os.environ["TASK_POSTGRES_TEST_URL"])
     assert url.host=="127.0.0.1" and url.database=="journey_review" and url.username=="synthetic"
+    monkeypatch.setenv("MARKETING_INTERNAL_TOKEN","synthetic-postgres-only")
     body=real_sales_fixture(monkeypatch,channel);local=threading.local()
     async def execute(callback):
         engine=create_async_engine(url)

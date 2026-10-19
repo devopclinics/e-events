@@ -344,7 +344,13 @@ def dispatch(db, reply_id, adapter, *, template=None, stop_requested=None):
         else:
             values={"status":"unknown"}
     except HTTPException:
-        # Configuration/target validation failed before transport contact.
+        # Adapter contract: typed validation failures occur before client.post.
+        # The current owner may prove its own attempt unsent even if recovery
+        # concurrently marked Reply unknown; do not overwrite that status.
+        lock_dispatch(db,row.id)
+        db.execute(update(DispatchGuard).where(DispatchGuard.conversation_id==row.id,
+            DispatchGuard.active_reply==reply.id,DispatchGuard.token==token)
+            .values(submission_state="preparing").execution_options(synchronize_session=False))
         changed=finish({"status":"prepared","attempts":max(0,reply.attempts-1)},unsent=True)
         return "unconfigured" if changed else "reconciliation_required"
     except Exception:

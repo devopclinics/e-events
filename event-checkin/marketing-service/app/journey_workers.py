@@ -119,7 +119,7 @@ class SalesAdapter:
         # The source proof request is not a send grant. Recheck local stops,
         # gates and window after that I/O, at the provider submission boundary.
         with httpx.Client(transport=self.transport, timeout=15, follow_redirects=False) as client:
-            # Persist the irreversible may-submit boundary before contact.
+            # Persist the conservative may-submit boundary before contact.
             # After arming, a not-found observation cannot authorize reclaim.
             with self.m.SessionLocal() as db:
                 armed=db.execute(update(sales.DispatchGuard).where(sales.DispatchGuard.conversation_id==contact_key,
@@ -130,6 +130,10 @@ class SalesAdapter:
                     raise HTTPException(409,"Submission claim was revoked before arming")
             with self.m.SessionLocal() as db:
                 sales.lock_dispatch(db,contact_key)
+                # Serialize persisted consent/STOP writes with the same
+                # submission boundary, including PostgreSQL's row locking.
+                db.execute(update(sales.Conversation).where(sales.Conversation.id==contact_key)
+                    .values(version=sales.Conversation.version).execution_options(synchronize_session=False))
                 reply = db.get(sales.Reply, idempotency_key)
                 row = db.get(sales.Conversation, contact_key)
                 guard=db.get(sales.DispatchGuard,contact_key)

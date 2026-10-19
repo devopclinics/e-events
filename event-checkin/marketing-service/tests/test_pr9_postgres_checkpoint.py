@@ -85,11 +85,16 @@ def test_postgres_submission_row_lock_fences_reconciliation_after_final_check(mo
                 def competing(db):
                     # PostgreSQL permits stale-recovery writes to Reply while
                     # the provider boundary holds the separate Guard row.
-                    db.get(sales.Reply,one).status="unknown";sales.hold_conversation(db,key);db.commit()
+                    db.get(sales.Reply,one).status="unknown";db.commit()
                     db.execute(text("SET LOCAL lock_timeout = '100ms'"))
                     with pytest.raises(DBAPIError) as blocked:
                         sales.reconcile(db,one,**({"provider_id":"authenticated-receipt"} if provider_receipt else {"definitely_not_sent":True}))
                     assert getattr(blocked.value.orig,"sqlstate",None)=="55P03"
+                    db.rollback()
+                    db.execute(text("SET LOCAL lock_timeout = '100ms'"))
+                    with pytest.raises(DBAPIError) as consent_blocked:
+                        db.execute(text("UPDATE marketing_sales_conversations SET consent=0 WHERE id=:id"),{"id":key})
+                    assert getattr(consent_blocked.value.orig,"sqlstate",None)=="55P03"
                     db.rollback()
                     assert db.get(sales.DispatchGuard,key).active_reply==one
                     assert sales.dispatch(db,two,adapter)=="reconciliation_required"
@@ -98,6 +103,7 @@ def test_postgres_submission_row_lock_fences_reconciliation_after_final_check(mo
             assert old.result(timeout=10)=="reconciliation_required"
         assert len(requests)==1
         def verified(db):
+            sales.hold_conversation(db,key);db.commit()
             assert sales.reconcile(db,one,provider_id="synthetic-pg-accepted")=="accepted"
             assert db.get(sales.DispatchGuard,key).active_reply is None
             assert db.get(sales.Conversation,key).status=="paused"

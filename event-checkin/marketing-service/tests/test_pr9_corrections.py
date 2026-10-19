@@ -607,3 +607,27 @@ def test_submission_phase_upgrade_preserves_legacy_unknown_hold(service):
         with pytest.raises(HTTPException) as error:sales.reconcile(db,"legacy-reply",definitely_not_sent=True)
         assert error.value.status_code==409
         assert db.get(sales.DispatchGuard,"legacy").active_reply=="legacy-reply"
+
+
+
+def test_owner_precontact_rejection_after_stale_recovery_can_be_reconciled_unsent(service,monkeypatch):
+    m,_,_=service;body=real_sales_fixture(monkeypatch,"chat");one,two,key=prepare_pair(m,body)
+    entered=threading.Event();release=threading.Event();local=threading.local();lock=sales.lock_dispatch;requests=[]
+    def wait_before_lock(db,key):
+        if not getattr(local,"waited",False):local.waited=True;entered.set();assert release.wait(10)
+        return lock(db,key)
+    monkeypatch.setattr(sales,"lock_dispatch",wait_before_lock)
+    adapter=workers.SalesAdapter(m,transport=httpx.MockTransport(lambda request:(requests.append(request) or httpx.Response(200,json={"id":"synthetic"}))))
+    def send():
+        with m.SessionLocal() as db:return sales.dispatch(db,one,adapter)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        old=pool.submit(send);assert entered.wait(10)
+        with m.SessionLocal() as writer:
+            writer.get(sales.Reply,one).status="unknown";sales.hold_conversation(writer,key);writer.commit()
+        release.set();assert old.result(timeout=10)=="reconciliation_required"
+    assert requests==[]
+    with m.SessionLocal() as db:
+        assert db.get(sales.Reply,one).status=="unknown"
+        assert db.get(sales.DispatchGuard,key).submission_state=="preparing"
+        assert sales.reconcile(db,one,definitely_not_sent=True)=="rejected"
+        assert db.get(sales.Conversation,key).status=="paused"

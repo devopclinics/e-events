@@ -659,7 +659,7 @@ def send_follow_up(lead: Lead, sequence: ModuleRecord, step_index: int = 0, *, e
                             stop_requested=stop_requested)
 
 
-def _deliver_follow_up(lead: Lead, sequence: ModuleRecord, step_index: int = 0) -> dict:
+def _deliver_follow_up(lead: Lead, sequence: ModuleRecord, step_index: int = 0, *, pre_submit=None) -> dict:
     if not lead.consent_email or lead.unsubscribed or lead.automation_paused or lead.suppression_reason or lead.deletion_requested_at:
         raise HTTPException(409, "Lead is not eligible for marketing email")
     steps = sequence_steps(sequence)
@@ -696,6 +696,8 @@ def _deliver_follow_up(lead: Lead, sequence: ModuleRecord, step_index: int = 0) 
     message.add_alternative(f"""<!doctype html><html><body style="margin:0;background:#f5f1e9;font-family:Arial,sans-serif;color:#172033"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:36px 16px"><table role="presentation" width="600" style="max-width:600px;background:#fff;border-radius:18px;overflow:hidden"><tr><td style="padding:20px 32px;background:#075b5d"><a href="https://festio.events" style="color:#fff;text-decoration:none;font-size:20px;font-weight:700">Festio</a></td></tr><tr><td style="padding:36px 32px"><p style="font-size:17px">Hi {escape(first_name)},</p><h1 style="font-size:28px;line-height:1.2">{escape(subject)}</h1><p style="font-size:16px;line-height:1.7;color:#526070">{escape(body)}</p><p style="margin:28px 0"><a href="{escape(cta_url)}" style="display:inline-block;background:#a85d32;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:700">{escape(cta)}</a></p><p style="font-size:13px;color:#78828f">You received this because you asked Festio for event updates. <a href="{unsubscribe_url}">Unsubscribe</a>.</p></td></tr></table></td></tr></table></body></html>""", subtype="html")
     resend_key = os.getenv("RESEND_API_KEY", "")
     if resend_key:
+        if pre_submit:
+            pre_submit()
         response = httpx.post(
             "https://api.resend.com/emails",
             headers={"Authorization": f"Bearer {resend_key}", "Idempotency-Key": f"marketing/{lead.id}/{sequence.id}/{step_index}"},
@@ -713,7 +715,10 @@ def _deliver_follow_up(lead: Lead, sequence: ModuleRecord, step_index: int = 0) 
     port = int(os.getenv("SMTP_PORT", "587"))
     with smtplib.SMTP(host, port, timeout=15) as smtp:
         if os.getenv("SMTP_TLS", "true").lower() in {"1", "true", "yes"}: smtp.starttls()
-        smtp.login(user, password); smtp.send_message(message)
+        smtp.login(user, password)
+        if pre_submit:
+            pre_submit()
+        smtp.send_message(message)
     return {"status": "sent", "provider": "smtp", "provider_id": None}
 
 

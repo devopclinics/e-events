@@ -509,7 +509,7 @@ def test_mode_specific_guidance_continues_after_first_value(service,monkeypatch,
     from app import journey_context
     with m.SessionLocal() as db:
         db.add(journey.Evidence(id="mode-created",fingerprint="synthetic",account_id="account",org_id="org",event_id="event",use_case="event",milestone="event_created",source_id="created",occurred_at=m.now().isoformat()));db.commit()
-    context={"current_owner":True,"is_test":False,"cancelled":False,"status":"active","org_id":"org","attendance_mode":mode,"invite_mode":"personal" if personal else "open","rsvp_enabled":rsvp,"real_guest_count":0}
+    context={"current_owner":True,"is_test":False,"cancelled":False,"status":"active","org_id":"org","attendance_mode":mode,"invite_mode":"closed" if personal else "open","rsvp_enabled":rsvp,"real_guest_count":0}
     monkeypatch.setattr(retention,"source_context",lambda *args:context)
     lead=SimpleNamespace(festio_user_id="account");sequence=SimpleNamespace(payload={"journey_context":True})
     assert expected in journey_context.message_context(m,lead,sequence,0)["body"]

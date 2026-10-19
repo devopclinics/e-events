@@ -14,7 +14,8 @@ from urllib.parse import urlsplit
 import httpx
 import jwt
 from fastapi import HTTPException
-from sqlalchemy import select, update
+from sqlalchemy import select, update, or_, literal,case,insert
+from sqlalchemy.exc import IntegrityError
 
 from . import sales_responses as sales
 from .organizer_journey import Handoff
@@ -25,6 +26,24 @@ def endpoint(value):
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise HTTPException(503, "A configured HTTPS destination is required")
     return value.rstrip("/")
+
+
+def schedule_work(db,identity,at):
+    """Atomic insert/update on both supported databases; never move backwards."""
+    table=sales.QueueSchedule.__table__
+    dialect=db.get_bind().dialect.name
+    values={"next_at":case((table.c.next_at<at,at),else_=table.c.next_at)}
+    if dialect in {"sqlite","postgresql"}:
+        if dialect=="sqlite":
+            from sqlalchemy.dialects.sqlite import insert as upsert
+        else:
+            from sqlalchemy.dialects.postgresql import insert as upsert
+        db.execute(upsert(table).values(id=identity,next_at=at).on_conflict_do_update(index_elements=[table.c.id],set_=values))
+    else:
+        try:
+            with db.begin_nested():db.execute(insert(table).values(id=identity,next_at=at))
+        except IntegrityError:
+            db.execute(update(table).where(table.c.id==identity).values(**values))
 
 
 def source_ready(m):
@@ -54,7 +73,7 @@ class SalesAdapter:
     def __init__(self, m, *, transport=None):
         self.m, self.transport = m, transport
 
-    def send(self, *, channel, contact_key, content, idempotency_key):
+    def send(self, *, channel, contact_key, content, idempotency_key, claim_token=None):
         with self.m.SessionLocal() as db:
             target = db.get(sales.Target, idempotency_key)
             if not target or target.conversation_id != contact_key:
@@ -99,18 +118,38 @@ class SalesAdapter:
         source_ready(self.m)
         # The source proof request is not a send grant. Recheck local stops,
         # gates and window after that I/O, at the provider submission boundary.
-        with self.m.SessionLocal() as db:
-            reply = db.get(sales.Reply, idempotency_key)
-            row = db.get(sales.Conversation, contact_key)
-            try:
-                template = json.loads(os.getenv("MARKETING_SALES_WHATSAPP_APPROVED_TEMPLATE", "null"))
-            except ValueError:
-                template = None
-            reason, current = sales.dispatch_policy(row, reply, template)
-            if reason or current != content or not sales.flag("MARKETING_JOURNEY_WORKER_ENABLED"):
-                raise HTTPException(409, "Dispatch eligibility changed during readiness verification")
         with httpx.Client(transport=self.transport, timeout=15, follow_redirects=False) as client:
-            response = client.post(path, headers=headers, json=payload)
+            # Persist the conservative may-submit boundary before contact.
+            # After arming, a not-found observation cannot authorize reclaim.
+            with self.m.SessionLocal() as db:
+                sales.dispatch_lock_timeout(db)
+                armed=db.execute(update(sales.DispatchGuard).where(sales.DispatchGuard.conversation_id==contact_key,
+                    sales.DispatchGuard.active_reply==idempotency_key,sales.DispatchGuard.token==claim_token,
+                    sales.DispatchGuard.submission_state=="preparing").values(submission_state="armed"))
+                db.commit()
+                if armed.rowcount!=1:
+                    raise HTTPException(409,"Submission claim was revoked before arming")
+            with self.m.SessionLocal() as db:
+                sales.lock_dispatch(db,contact_key)
+                # Serialize persisted consent/STOP writes with the same
+                # submission boundary, including PostgreSQL's row locking.
+                db.execute(update(sales.Conversation).where(sales.Conversation.id==contact_key)
+                    .values(version=sales.Conversation.version).execution_options(synchronize_session=False))
+                reply = db.get(sales.Reply, idempotency_key)
+                row = db.get(sales.Conversation, contact_key)
+                guard=db.get(sales.DispatchGuard,contact_key)
+                if (not reply or reply.status!="sending" or not guard or guard.active_reply!=idempotency_key
+                        or not claim_token or guard.token!=claim_token or guard.submission_state!="armed"):
+                    raise HTTPException(409,"Stale conversation dispatch claim")
+                try:
+                    template = json.loads(os.getenv("MARKETING_SALES_WHATSAPP_APPROVED_TEMPLATE", "null"))
+                except ValueError:
+                    template = None
+                reason, current = sales.dispatch_policy(row, reply, template)
+                if (reason or current != content or not sales.flag("MARKETING_JOURNEY_WORKER_ENABLED")
+                        or guard.hour!=sales.clock().strftime("%Y-%m-%dT%H")):
+                    raise HTTPException(409, "Dispatch eligibility changed during readiness verification")
+                response = client.post(path, headers=headers, json=payload)
         if response.status_code in {408,409,425}:
             return {"status":"unknown"}
         if 400 <= response.status_code < 500:
@@ -168,7 +207,10 @@ def tick(m, *, sales_adapter=None, notification_adapter=None, dry_run=False, sto
         for stale in ([] if dry_run else db.scalars(select(sales.Reply).where(sales.Reply.status == "sending"))):
             at = sales.authenticated_time(stale.claimed_at) if stale.claimed_at else None
             if at is None or at < sales.clock()-timedelta(minutes=2):
-                stale.status = "unknown"
+                changed=db.execute(update(sales.Reply).where(sales.Reply.id==stale.id,sales.Reply.status=="sending",
+                    sales.Reply.claimed_at==stale.claimed_at).values(status="unknown").execution_options(synchronize_session=False))
+                if not changed.rowcount:
+                    continue
                 sales.hold_conversation(db,stale.conversation_id)
                 from types import SimpleNamespace
                 from .organizer_journey import open_handoff
@@ -176,14 +218,29 @@ def tick(m, *, sales_adapter=None, notification_adapter=None, dry_run=False, sto
         if not dry_run:
             from types import SimpleNamespace
             from .organizer_journey import open_handoff
-            for row in db.scalars(select(sales.Conversation).where(sales.Conversation.status.in_(("paused","handoff"))).limit(20)):
+            for exhausted in db.scalars(select(sales.Reply).where(sales.Reply.status.in_(("prepared","rejected")),sales.Reply.attempts>=3).limit(20)):
+                changed=db.execute(update(sales.Reply).where(sales.Reply.id==exhausted.id,sales.Reply.status.in_(("prepared","rejected")),sales.Reply.attempts>=3)
+                    .values(status="exhausted").execution_options(synchronize_session=False))
+                if not changed.rowcount:
+                    continue
+                sales.hold_conversation(db,exhausted.conversation_id)
+                open_handoff(m,db,SimpleNamespace(id="sales:"+exhausted.conversation_id,owner_email=None),exhausted.payload["channel"],exhausted.id)
+            missing_case=~select(Handoff.id).where(Handoff.lead_id==literal("sales:")+sales.Conversation.id).exists()
+            for row in db.scalars(select(sales.Conversation).where(sales.Conversation.status.in_(("paused","handoff")),missing_case).limit(20)):
                 if not db.scalar(select(Handoff.id).where(Handoff.lead_id=="sales:"+row.id)):
                     reply=db.scalar(select(sales.Reply).where(sales.Reply.conversation_id==row.id).limit(1))
                     if reply:
                         open_handoff(m,db,SimpleNamespace(id="sales:"+row.id,owner_email=None),row.channel,reply.id)
         db.commit()
-        ids = list(db.scalars(select(sales.Reply.id).where(sales.Reply.status.in_(("prepared", "rejected"))).order_by(sales.Reply.claimed_at, sales.Reply.id).limit(20)))
-        cases = list(db.scalars(select(Handoff).where(Handoff.status != "resolved", Handoff.notification.in_(("pending", "failed", "unconfigured", "missing_owner"))).limit(20)))
+        schedule=sales.QueueSchedule
+        at=sales.clock().isoformat()
+        ids = list(db.scalars(select(sales.Reply.id).outerjoin(schedule,schedule.id==literal("reply:")+sales.Reply.id).where(
+            sales.Reply.status.in_(("prepared", "rejected")),sales.Reply.attempts<3,or_(schedule.next_at.is_(None),schedule.next_at<=at))
+            .order_by(schedule.next_at.asc().nullsfirst(),sales.Reply.id).limit(20)))
+        cases = list(db.scalars(select(Handoff).outerjoin(schedule,schedule.id==literal("case:")+Handoff.id).where(
+            Handoff.status != "resolved",Handoff.attempts<3,
+            Handoff.notification.in_(("pending", "failed", "unconfigured", "missing_owner")),or_(schedule.next_at.is_(None),schedule.next_at<=at))
+            .order_by(schedule.next_at.asc().nullsfirst(),Handoff.id).limit(20)))
         if dry_run:
             return {**result, "prepared_replies": len(ids), "handoff_backlog": len(cases)}
         if sales.flag("MARKETING_OUTBOUND_ENABLED") and sales.flag("MARKETING_HANDOFF_NOTIFICATIONS_ENABLED"):
@@ -191,18 +248,24 @@ def tick(m, *, sales_adapter=None, notification_adapter=None, dry_run=False, sto
             for case in cases:
                 if cancelled():
                     break
+                schedule_work(db,"case:"+case.id,at)
                 grant=db.scalar(select(m.AccessGrant).where(m.AccessGrant.email==case.owner)) if case.owner else None
                 owner_available=bool(case.owner and ((grant.active and grant.role!="viewer") if grant else case.owner==os.getenv("MARKETING_HANDOFF_OWNER")))
                 if not owner_available or not os.getenv("MARKETING_HANDOFF_DESTINATION"):
-                    case.notification = "missing_owner" if not owner_available else "unconfigured"
+                    db.execute(update(Handoff).where(Handoff.id==case.id,Handoff.generation==case.generation,
+                        Handoff.owner==case.owner,Handoff.status!="resolved",Handoff.attempts<3,
+                        Handoff.notification.in_(("pending","failed","unconfigured","missing_owner")))
+                        .values(notification="missing_owner" if not owner_available else "unconfigured").execution_options(synchronize_session=False))
+                    db.commit()
                     continue
                 generation = case.generation
-                claimed = db.execute(update(Handoff).where(Handoff.id == case.id, Handoff.generation == generation, Handoff.notification.in_(("pending", "failed", "unconfigured")), Handoff.attempts < 3).values(notification="sending", attempts=Handoff.attempts+1))
+                claimed = db.execute(update(Handoff).where(Handoff.id == case.id, Handoff.generation == generation,
+                    Handoff.owner==case.owner,Handoff.status!="resolved",Handoff.notification.in_(("pending", "failed", "unconfigured", "missing_owner")), Handoff.attempts < 3).values(notification="sending", attempts=Handoff.attempts+1))
                 db.commit()
                 if not claimed.rowcount:
                     continue
                 db.refresh(case)
-                if case.generation!=generation:
+                if case.generation!=generation or case.status=="resolved" or case.notification!="sending":
                     continue
                 if cancelled() or not sales.flag("MARKETING_OUTBOUND_ENABLED") or not sales.flag("MARKETING_HANDOFF_NOTIFICATIONS_ENABLED"):
                     db.execute(update(Handoff).where(Handoff.id==case.id,Handoff.generation==generation,Handoff.notification=="sending").values(notification="pending",attempts=max(0,case.attempts-1)))
@@ -236,13 +299,29 @@ def tick(m, *, sales_adapter=None, notification_adapter=None, dry_run=False, sto
                 result["knowledge_unapproved"] = True
                 break
             reply=db.get(sales.Reply,identity)
+            schedule_work(db,"reply:"+identity,at)
+            db.commit()
             if reply.payload.get("knowledge_sha256")!=os.getenv("MARKETING_SALES_KNOWLEDGE_SHA256"):
-                reply.status="review_required"
+                changed=db.execute(update(sales.Reply).where(sales.Reply.id==identity,sales.Reply.status.in_(("prepared","rejected")))
+                    .values(status="review_required").execution_options(synchronize_session=False))
+                if not changed.rowcount:
+                    db.rollback()
+                    continue
                 sales.hold_conversation(db,reply.conversation_id,"handoff")
                 db.commit()
                 continue
             outcome = sales.dispatch(db, identity, adapter, template=template, stop_requested=cancelled)
             result["sent"] += outcome == "accepted"
+            reply=db.get(sales.Reply,identity)
+            if outcome=="rejected" and reply.attempts>=3:
+                outcome="retry_limit"
+            if outcome in {"suppressed","retry_limit"}:
+                changed=db.execute(update(sales.Reply).where(sales.Reply.id==identity,sales.Reply.status.in_(("prepared","rejected")))
+                    .values(status="cancelled" if outcome=="suppressed" else "exhausted").execution_options(synchronize_session=False))
+                db.commit()
+                db.expire_all()
+                if not changed.rowcount:
+                    continue
             if outcome in {"unknown", "retry_limit"}:
                 from types import SimpleNamespace
                 from .organizer_journey import open_handoff

@@ -1497,6 +1497,8 @@ async def update_invite_settings(
         category.options = _json.dumps(list(synced_limit_rules.keys()))
         category.is_required = True
         category.sort_order = min(category.sort_order or 15, 15)
+    from ..services.marketing_client import capture_event_outcome
+    await capture_event_outcome(db,event,"configured",event.id)
     await db.commit()
     await db.refresh(event)
     return await _event_balance_out(event, db)
@@ -1515,6 +1517,8 @@ async def generate_rsvp_link(
         raise HTTPException(404, "Event not found")
     if not event.rsvp_token or bool((body or {}).get("regenerate")):
         event.rsvp_token = str(_uuid.uuid4())
+    from ..services.marketing_client import capture_event_outcome
+    await capture_event_outcome(db,event,"configured",event.id)
     await db.commit()
     await db.refresh(event)
     return await _event_balance_out(event, db)

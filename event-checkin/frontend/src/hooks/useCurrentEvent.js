@@ -14,13 +14,14 @@ export function registerEventChangeGuard(guard) {
 }
 
 function setCurrent(id) {
-  if ((id || '') !== current && [...changeGuards].some(guard => !guard(id))) return
+  if ((id || '') !== current && [...changeGuards].some(guard => !guard(id))) return false
   current = id || ''
   try {
     if (id) localStorage.setItem(KEY, id)
     else localStorage.removeItem(KEY)
   } catch { /* Keep the authenticated session usable without persistence. */ }
   subs.forEach((fn) => fn(current))
+  return true
 }
 
 export function useCurrentEvent() {

@@ -30,7 +30,7 @@ def message_context(m, lead, sequence, index):
         if sequence.payload.get("category") != "organizer_retention" and (current.get("status") == "ended" or "event_completed" in milestones):
             raise email_pilot.EmailBlocked("Event onboarding is complete; retention is separately gated")
         mode=current.get("attendance_mode")
-        personal=current.get("invite_mode")=="personal"
+        personal=current.get("invite_mode")=="closed"
         registration_seen=bool(milestones & {"rsvp_received","ticket_order_paid","checkin_succeeded"})
         steps=[]
         if mode in {"rsvp","hybrid","private"} and personal and not registration_seen:

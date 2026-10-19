@@ -3,16 +3,25 @@ import {CHECKLISTS} from './guideChecklists.mjs'
 const WORKSPACES = new Set(['/marketing','/setup-redesign','/admin-redesign','/guests-redesign','/tickets-redesign',
   '/ticketing-redesign','/messaging-redesign','/design-redesign','/addons-redesign','/kitchen-redesign',
   '/planner-redesign','/team-redesign','/live-redesign','/results-redesign','/experience-redesign',
-  '/festiome-redesign','/guesthub-redesign','/checkin-redesign','/integrations-redesign'])
+  '/festiome-redesign','/guesthub-redesign','/checkin-redesign','/integrations-redesign',
+  '/design-studio-redesign','/design-studio-redesign/website','/communications-redesign','/conference-center',
+  '/event-results-redesign','/help-redesign','/api-explorer-redesign','/finance'])
 
 // This validates navigation only. Destination APIs must still authorize the
 // selected event; a URL or local-storage resume entry never grants access.
+export function eventIdentityFromQuery(search) {
+  const params=new URLSearchParams(search)
+  const values=['event','event_id','eventId'].flatMap(key=>params.getAll(key))
+  return {present:values.length>0,id:values[0]||'',conflict:values.length>0&&(!values[0]||values.some(value=>value!==values[0]))}
+}
+
 export function safeOrganizerDestination(route, eventId, accessibleEvents, orgId) {
   const event = accessibleEvents?.find(e=>e.id===eventId)
   if (!event || (orgId && event.org_id!==orgId) || typeof route!=='string' ||
       !route.startsWith('/') || route.startsWith('//') || /[\\\u0000-\u0020]/.test(route)) return null
   const url = new URL(route, 'https://festio.events')
   if (url.origin!=='https://festio.events' || !WORKSPACES.has(url.pathname)) return null
+  if(eventIdentityFromQuery(url.search).conflict)return null
   for (const key of ['event','event_id','eventId']) {
     if (url.searchParams.has(key) && url.searchParams.get(key)!==eventId) return null
   }
@@ -26,6 +35,7 @@ export function authenticatedOrganizerReturn(route, accessibleEvents) {
   if (typeof route!=='string' || !route.startsWith('/') || route.startsWith('//') || /[\\\u0000-\u0020]/.test(route)) return null
   const url=new URL(route,'https://festio.events')
   if (url.origin!=='https://festio.events' || !WORKSPACES.has(url.pathname)) return null
+  if(eventIdentityFromQuery(url.search).conflict)return null
   const event=url.searchParams.get('event')||url.searchParams.get('event_id')||url.searchParams.get('eventId')
   if(event)return safeOrganizerDestination(route,event,accessibleEvents)
   if (![...url.searchParams.keys()].every(k=>['tab','view','task'].includes(k)))return null

@@ -148,7 +148,7 @@ async def capture_event_outcome(db, event, milestone, source_id, *, use_case="ev
     if guest is not None and (guest.event_id != event.id or getattr(guest, "is_test", None) is not False):
         return None
     import hashlib
-    keys=("event_date","event_end_date","timezone","attendance_mode","seating_enabled","menu_enabled","logistics_enabled","registry_enabled","venue_access_enabled","experience_enabled","planner_enabled","engagement_enabled","speaker_enabled","partner_enabled","reminders_enabled","rsvp_enabled","rsvp_capacity","manual_checkin_enabled","channel_policy","notify_email","notify_sms","notify_whatsapp")
+    keys=("event_date","event_end_date","timezone","attendance_mode","seating_enabled","menu_enabled","menu_selection_timing","logistics_enabled","registry_enabled","venue_access_enabled","experience_enabled","planner_enabled","engagement_enabled","speaker_enabled","partner_enabled","reminders_enabled","rsvp_enabled","rsvp_capacity","rsvp_deadline","rsvp_token","invite_mode","manual_checkin_enabled","checkout_enabled","junior_guardian_handoff_enabled","guardian_authorizations","guardian_designation_scope","channel_policy","notify_email","notify_sms","notify_whatsapp")
     revision=hashlib.sha256(json.dumps({k:getattr(event,k,None) for k in keys},sort_keys=True,default=str).encode()).hexdigest()
     if milestone=="configured":
         await db.flush()

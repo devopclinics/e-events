@@ -375,7 +375,7 @@ class EventUserSection(Base):
 class Event(Base):
     cancelled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     # NULL on pre-upgrade rows: unknown provenance is never a real outcome.
-    is_test: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
+    is_test: Mapped[bool | None] = mapped_column(Boolean().evaluates_none(), nullable=True, default=False)
     menu_selection_timing: Mapped[str] = mapped_column(String(30), default="after_admission", server_default="after_admission")
     setup_preferences: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     __tablename__ = "events"
@@ -1554,7 +1554,7 @@ class MenuCombinationItem(Base):
 
 
 class Guest(Base):
-    is_test: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
+    is_test: Mapped[bool | None] = mapped_column(Boolean().evaluates_none(), nullable=True, default=False)
     __tablename__ = "guests"
     __table_args__ = (
         # A given seat at a table holds at most one guest. Partial unique index

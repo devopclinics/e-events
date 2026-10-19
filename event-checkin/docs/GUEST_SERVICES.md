@@ -55,3 +55,11 @@ Room occupants come from the latest accepted directional zone movement. A room a
 Backend regression coverage lives in `tests/test_guest_services.py`. Mounted UI tests live in `frontend/tests/guest-services.test.mjs`. The opt-in PostgreSQL test verifies additive migration, same-guest duplicate serving and competing guests against one remaining serving capacity. It accepts only an explicitly configured disposable localhost `guest_service_fixture*` database.
 
 Shared Help is updated in `frontend/src/guideContent.mjs`; the support knowledge and internal media documentation are regenerated from that source. API contracts and frontend schema types include the new routes and request bodies.
+
+## Operations board and focused editors
+
+Tables switches between a card board and a coverage canvas; the canvas is a responsibility diagram, not a second floor-plan editor. Staff, Rooms, Guests and Requests have separate views. Search and attention filtering use the existing scoped response. Help stays available in the Quick guide drawer. Empty assigned tables remain visible.
+
+Edit assignments opens the existing per-location editor directly, preserving distinct grants, lead flags, shift bounds and member version. Table details use the existing Seating endpoint and carry category, order and optimistic version through unchanged; capacity reductions stay in Seating for allocation review. Guest care contains physical seating, agreed choices and per-service collection. Event admission and room movement still require the existing pass scanner. Requests create canonical Tasks and link to the existing board. No new local roster or task status store is introduced.
+
+Edit name is limited to unclaimed `.invalid` placeholder identities with no Firebase UID or superadmin grant, staff membership in this organisation and exactly one organisation and event assignment. The protected endpoint requires a writable event supervisor, locks both member and user, checks the optimistic member version and audits the change. Shared, verified or real-email accounts are not renamed here; Team remains the place to replace placeholders with real sign-ins.

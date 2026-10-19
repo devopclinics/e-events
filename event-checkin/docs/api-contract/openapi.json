@@ -15288,6 +15288,33 @@
         "title": "PendingGuardianConfirmation",
         "type": "object"
       },
+      "PlaceholderNameIn": {
+        "properties": {
+          "if_unmodified_since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "If Unmodified Since"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "PlaceholderNameIn",
+        "type": "object"
+      },
       "PlanUpsert": {
         "properties": {
           "active": {
@@ -36434,6 +36461,70 @@
           }
         ],
         "summary": "Configure",
+        "tags": [
+          "guest-services"
+        ]
+      }
+    },
+    "/api/events/{event_id}/guest-services/members/{member_id}/placeholder-name": {
+      "patch": {
+        "operationId": "rename_placeholder_api_events__event_id__guest_services_members__member_id__placeholder_name_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "member_id",
+            "required": true,
+            "schema": {
+              "title": "Member Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaceholderNameIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rename Placeholder",
         "tags": [
           "guest-services"
         ]

@@ -2437,6 +2437,11 @@ export interface PendingGuardianConfirmation {
   relationship: string
 }
 
+export interface PlaceholderNameIn {
+  if_unmodified_since?: (string) | null
+  name: string
+}
+
 export interface PlanUpsert {
   active?: boolean
   credits?: number

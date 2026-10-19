@@ -938,13 +938,13 @@ export const CONTENT = {
         "path": "Event operations → Guest Services → Assign staff",
         "before": "Add staff to the event in Team. Create tables in Seating or rooms/zones in Venue Access. Guest operations require an Event Pass; zone scans also require Venue Access to be enabled.",
         "steps": [
-          "Select the correct event, open Guest Services and choose Assign staff.",
+          "Select the correct event and open Guest Services. Use Assign staff or open Staff and choose Edit assignments on the teammate’s card. Quick guide opens these instructions without leaving the workspace.",
           "Choose a staff member. Keep Restrict guest operations enabled for table managers and room stewards. Organisation administrators and event managers retain wider access.",
           "If a broad guest, menu, seat or dashboard grant conflicts, remove it in Team before saving scoped access.",
           "Add one assignment per table or room. Repeat to assign multiple locations to one person; assign the same location to supporting staff as needed. Mark the lead where useful.",
           "Optionally set shift start and end using your local time. Empty dates mean an ongoing assignment. Enable event check-in, assisted meals or room scanning separately as appropriate.",
           "Save assignments. A table manager sees current guests at those tables; a room steward sees accepted zone movements. Removing all assignments while retaining restricted access leaves that staff member with no operational access.",
-          "Use the floor overview to review staff coverage, guest seating and service status. Reassign tables or shifts here; use existing Tasks for assistance, progress and handover notes."
+          "Use Tables in Board or Floor canvas view to review coverage. Use the edit control on a table to update its name or increase capacity; use Seating to reduce capacity after checking seats. In Staff, Edit name is available only for unclaimed event-only placeholders. Real staff identities and sign-ins stay managed through Team. Use existing Tasks for assistance and handover progress."
         ],
         "check": "Sign in as the staff member: assigned tables or rooms are visible, another table is unavailable, and an expired shift cannot perform actions.",
         "troubleshoot": "Refresh after another organiser changes access. Admission, physical seating, meal service and session attendance are separate records; a room scan does not complete a session."
@@ -1265,13 +1265,13 @@ export const CONTENT = {
         "path": "Event operations → Guest Services",
         "intro": "Your workspace follows the organiser’s table, room and shift assignments.",
         "steps": [
-          "Select the event and open Guest Services. Check My assignments and the current shift before acting.",
-          "Filter tables or choose Needs attention only. Expected, Checked in and Seated describe different stages; use Mark seated only after helping the guest reach the table.",
-          "If check-in permission is enabled, scan the guest pass or paste its link. Only guests already assigned to your tables can be admitted here. Ask a supervisor to handle unassigned guests or table moves.",
+          "Select the event and open Guest Services. Check My assignments and the current shift before acting. My tables and Rooms show your active coverage; Quick guide opens instructions in a side panel.",
+          "Use the search and Needs attention filter in My tables or Guests. Choose View guests on a table, then Open guest. Expected, Checked in and Seated describe different stages; use Mark seated in Guest care only after helping the guest reach the table.",
+          "If check-in permission is enabled, use Scan a pass or Scan guest pass in Guest care, then scan the pass or paste its link. Only guests already assigned to your tables can be admitted here. Ask a supervisor to handle unassigned guests or table moves.",
           "Choose Help choose menu, review options with the guest, confirm their agreement and save. Served meal categories stay locked; you can still choose a later, unserved meal. Clear an optional single or combo choice with its empty option, or uncheck all choices in an optional multiple-choice category, then save. Legacy served records without a specific category remain locked for supervisor review.",
           "When the meal is delivered, mark the specific meal service served. Each occurrence has its own completion; repeated taps do not create a second fulfilment. Closed, full or out-of-window services cannot be served here.",
-          "For a conference room, choose the room and entry/exit direction before scanning. Existing ticket, capacity and guardian checks apply. This records venue movement, not session attendance.",
-          "Use Request help or hand over work for water, accessibility assistance, housekeeping or delays. Choose a teammate or leave it in the team queue, then create the task.",
+          "For a conference room, open Rooms, choose Open room, then Scan entry or Scan exit. Confirm the room and direction before scanning. Existing ticket, capacity and guardian checks apply. This records venue movement, not session attendance.",
+          "Open Requests and choose Request assistance for water, accessibility assistance, housekeeping, delays or a shift handover. Choose a teammate or leave it in the team queue, then create the task.",
           "Open team Tasks to see acknowledgement, progress, comments and completion. Keep sensitive guest details out of these shared notes. Contact the supervisor for urgent issues."
         ],
         "check": "The right guest, table or room and meal service are updated. Assistance appears once in the existing Tasks board.",

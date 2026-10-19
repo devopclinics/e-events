@@ -7,12 +7,12 @@ from datetime import datetime, timezone
 from typing import Literal
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import get_db
 from ..auth import require_event_member, require_event_admin
-from ..models import (Event, EventUser, User, SeatingTable, Zone, Guest, GuestServiceAssignment,
+from ..models import (Event, EventUser, User, Membership, SeatingTable, Zone, Guest, GuestServiceAssignment,
     GuestSeatingPresence, GuestServiceActivity, GuestServiceRequest,
     GuestMenuChoice, MenuItem, MenuCombination, MealService, GuestMealService, ScanEvent)
 from ..schemas import GuestMenuSubmit, ScanZoneRequest
@@ -52,6 +52,20 @@ class AssignmentUpdate(BaseModel):
     scoped: bool = True
     if_unmodified_since: datetime | None = None
     assignments: list[AssignmentIn] = Field(default_factory=list, max_length=100)
+
+
+class PlaceholderNameIn(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    if_unmodified_since: datetime | None = None
+
+
+async def renameable_placeholder(user, event_user, db, org_id):
+    # Real identities and shared accounts must be edited through their identity owner.
+    if user.firebase_uid or not user.email.lower().endswith('.invalid') or user.is_platform_superadmin or event_user.event_role != 'staff':
+        return False
+    memberships = (await db.scalars(select(Membership).where(Membership.user_id == user.id))).all()
+    events = await db.scalar(select(func.count()).select_from(EventUser).where(EventUser.user_id == user.id))
+    return len(memberships) == 1 and memberships[0].org_id == org_id and memberships[0].role == 'staff' and events == 1
 
 
 class SeatedIn(BaseModel):
@@ -145,12 +159,35 @@ async def workspace(event_id: str, db: AsyncSession = Depends(get_db), actor: Us
     result = {'request_assignees':[{'id':uid,'name':name} for uid,name in request_members], 'event_id':event_id,'event_name':event.name,'is_supervisor':is_supervisor,'can_configure':can_write,
         'assignments':[assignment_out(r,table_names,zone_names) for r in mine], 'guests':out,
         'zones':[{'id':z.id,'name':z.name,'can_scan':can_write if is_supervisor else any(r.zone_id==z.id and r.can_scan_zone for r in active), 'inside':[v for (zone_id,_),v in latest.items() if zone_id==z.id and v['direction']=='in']} for z in zones if z.id in zone_ids],
-        'menu_categories':[await _cat_out(c,db) for c in cats]}
+        'menu_categories':[await _cat_out(c,db) for c in cats],
+        'tables':[{'id':t.id,'name':t.name,'capacity':t.capacity} for t in tables if t.id in table_ids]}
     if is_supervisor:
         members=(await db.execute(select(EventUser,User).join(User,User.id==EventUser.user_id).where(EventUser.event_id==event_id))).all()
-        result['team']=[{'id':m.id,'user_id':u.id,'name':u.name,'event_role':m.event_role,'scoped':m.guest_service_scoped,'updated_at':m.updated_at,'assignments':[assignment_out(r,table_names,zone_names) for r in all_rows if r.event_user_id==m.id]} for m,u in members]
-        result['locations']={'tables':[{'id':t.id,'name':t.name} for t in tables], 'zones':[{'id':z.id,'name':z.name} for z in zones]}
+        result['team']=[{'id':m.id,'user_id':u.id,'name':u.name,'event_role':m.event_role,'scoped':m.guest_service_scoped,'updated_at':m.updated_at,'can_rename_placeholder':can_write and await renameable_placeholder(u,m,db,event.org_id),'assignments':[assignment_out(r,table_names,zone_names) for r in all_rows if r.event_user_id==m.id]} for m,u in members]
+        result['locations']={'tables':[{'id':t.id,'name':t.name,'capacity':t.capacity,'category':t.category,'sort_order':t.sort_order,'updated_at':t.updated_at} for t in tables], 'zones':[{'id':z.id,'name':z.name} for z in zones]}
     return result
+
+
+@router.patch('/{event_id}/guest-services/members/{member_id}/placeholder-name')
+async def rename_placeholder(event_id: str, member_id: str, body: PlaceholderNameIn, db: AsyncSession = Depends(get_db), actor: User = Depends(require_event_admin)):
+    event = await db.get(Event, event_id)
+    if not event or not await supervisor(event, actor, db, write=True):
+        raise HTTPException(403, 'Event administrator access required')
+    eu = await db.scalar(select(EventUser).where(EventUser.id == member_id, EventUser.event_id == event_id).with_for_update())
+    if not eu: raise HTTPException(404, 'Event staff member not found')
+    user = await db.scalar(select(User).where(User.id == eu.user_id).with_for_update())
+    if not await renameable_placeholder(user, eu, db, event.org_id):
+        raise HTTPException(409, 'Only unclaimed placeholder accounts for this event can be renamed here. Use Team for real identities.')
+    expected = body.if_unmodified_since
+    if expected and expected.tzinfo: expected = expected.astimezone(timezone.utc).replace(tzinfo=None)
+    if expected != eu.updated_at: raise HTTPException(409, 'Team access changed. Refresh before saving')
+    name = ' '.join(body.name.split())
+    if not name: raise HTTPException(400, 'A display name is required')
+    user.name = name
+    eu.updated_at = datetime.utcnow()
+    audit(db, event_id, actor, 'placeholder_name_updated', detail={'member_id':eu.id,'name':name})
+    await db.commit()
+    return {'ok':True}
 
 
 @router.put('/{event_id}/guest-services/members/{member_id}')

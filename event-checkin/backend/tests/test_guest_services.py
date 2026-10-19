@@ -276,3 +276,46 @@ async def test_each_operational_grant_is_independent(ctx):
     assert (await ctx.client.post(url(s,f'/guests/{g.id}/menu'),json={'single':{s['category'].id:s['item'].id},'guest_agreed':True})).status_code==403
     assert (await ctx.client.post(url(s,f'/guests/{g.id}/services/{s["services"][0].id}/served'))).status_code==403
     assert (await ctx.client.post(url(s,f'/guests/{g.id}/seated'),json={'seated':True})).status_code==200
+
+@pytest.mark.asyncio
+async def test_workspace_table_metadata_scoped_and_placeholder_rename(ctx):
+    s=await setup(ctx);assert (await configure(ctx,s,[table(s)])).status_code==200
+    ctx.login(s['staff']);view=(await ctx.client.get(url(s))).json()
+    assert [t['id'] for t in view['tables']]==[s['tables'][0].id]
+    assert view['tables'][0]['capacity']==8
+    ctx.login(ctx.ids['user_a']);view=(await ctx.client.get(url(s))).json()
+    member=next(m for m in view['team'] if m['id']==s['eu'].id)
+    assert member['can_rename_placeholder'] is True
+    assert {'capacity','category','sort_order','updated_at'} <= view['locations']['tables'][0].keys()
+    path=url(s,f"/members/{s['eu'].id}/placeholder-name")
+    body={'name':'  Amina   Yusuf  ','if_unmodified_since':member['updated_at']}
+    assert (await ctx.client.patch(path,json=body)).status_code==200
+    async with _Session() as db:
+        user=await db.get(User,s['staff'].id);assert user.name=='Amina Yusuf' and user.firebase_uid is None
+        row=await db.get(EventUser,s['eu'].id);assert row.guest_service_scoped
+    assert (await ctx.client.patch(path,json=body)).status_code==409
+    ctx.login(s['staff']);assert (await ctx.client.patch(path,json=body)).status_code==403
+    ctx.login(ctx.ids['user_b']);assert (await ctx.client.patch(path,json=body)).status_code in (403,404)
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('case',['verified','real_email','org_admin','event_manager','shared_event','shared_org','wrong_org'])
+async def test_placeholder_rename_cannot_modify_real_or_shared_identity(ctx,case):
+    s=await setup(ctx)
+    async with _Session() as db:
+        user=await db.get(User,s['staff'].id);eu=await db.get(EventUser,s['eu'].id)
+        if case=='verified': user.firebase_uid='verified-fixture-identity'
+        if case=='real_email': user.email='real-staff@example.com'
+        if case=='wrong_org':
+            m=await db.scalar(select(Membership).where(Membership.user_id==user.id));m.org_id=ctx.ids['org_b']
+        if case=='org_admin':
+            m=await db.scalar(select(Membership).where(Membership.user_id==user.id));m.role='admin'
+        if case=='event_manager':eu.event_role='manager'
+        if case=='shared_event':
+            other=Event(org_id=ctx.ids['org_a'],name='Another event',couples_name='Another',event_date=datetime.utcnow(),checkin_base_url='http://test');db.add(other);await db.flush();db.add(EventUser(event_id=other.id,user_id=user.id))
+        if case=='shared_org':db.add(Membership(org_id=ctx.ids['org_b'],user_id=user.id,role='staff'))
+        await db.commit();version=eu.updated_at.isoformat()
+    ctx.login(ctx.ids['user_a'])
+    view=(await ctx.client.get(url(s))).json();member=next(m for m in view['team'] if m['id']==s['eu'].id);assert member['can_rename_placeholder'] is False
+    r=await ctx.client.patch(url(s,f"/members/{s['eu'].id}/placeholder-name"),json={'name':'Changed','if_unmodified_since':version})
+    assert r.status_code==409
+    async with _Session() as db:assert (await db.get(User,s['staff'].id)).name=='Table host'

@@ -520,3 +520,25 @@ launch or template is activated by this patch.
 All URLs reject credentials, query fragments and redirects. Internal signed
 proofs reuse existing service authority; there is no new key or paid service.
 No real provider call was made during implementation or synthetic verification.
+
+### Native staff notification and review hardening
+
+To use existing Chatwoot instead of a custom receipt sink, explicitly configure
+`MARKETING_HANDOFF_TRANSPORT=chatwoot`, a reviewed staff-only
+`MARKETING_HANDOFF_DESTINATION=https://<chatwoot>/api/v1/accounts/<numeric-account>/conversations/<numeric-staff-thread>/messages`,
+and `MARKETING_HANDOFF_CHATWOOT_TOKEN` with staff access. The adapter always
+posts `private:true`; it does not contact the organizer. Assign/subscribe the
+accountable operator to that staff conversation during activation review.
+A valid native message ID is provider acceptance, not owner acknowledgement.
+The webhook adapter remains available with `MARKETING_HANDOFF_TRANSPORT=webhook`
+and its explicit durable `{recorded:true}` contract. Both modes share the same
+OFF gates, bounded generation claims and uncertainty/reconciliation behavior.
+
+Reviewed templates with `journey_context:true` cannot send in legacy mode even
+if old global scheduler/outbound flags are enabled. Use the explicit pilot/test
+cohort and reviewed pins. Preserved stored templates are not silently migrated.
+HTTP 408/409/425 now hold both email ledgers and notification receipts as
+uncertain. Retention jobs store immutable sequence identity, recover accepted
+claims after a worker crash without resending, and reconcile known provider
+outcomes without clearing a human takeover. Old checkpoint jobs lacking that
+identity become review-required rather than being guessed or silently replayed.

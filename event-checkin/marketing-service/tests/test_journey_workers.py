@@ -310,7 +310,7 @@ def test_retention_discovers_new_events_and_rotates_blocked_pending_work(pilot,m
                 db.add(retention.RetentionJob(id=identity,lead_id=lead_id,event_id=event,org_id="org",step=int(identity[:12],16),status="accepted"))
         db.commit()
     seen=[]
-    def blocked(m,lead,index):
+    def blocked(m,lead,index,**kwargs):
         seen.append(index)
         raise m.email_pilot.EmailBlocked("synthetic current-owner stop")
     monkeypatch.setattr(retention,"validate_dispatch",blocked)
@@ -359,3 +359,87 @@ def test_multiday_email_guidance_keeps_operations_until_local_end_day(service,mo
     monkeypatch.setattr(retention,"source_context",lambda *args:context)
     message=journey_context.message_context(m,SimpleNamespace(festio_user_id="account"),SimpleNamespace(payload={"journey_context":True}),0)
     assert "check-in" in message["body"] and "date has passed" not in message["body"]
+
+
+@pytest.mark.parametrize("status",[408,409,425])
+def test_uncertain_notification_http_status_is_never_blindly_retried(service,monkeypatch,status):
+    m,_,_=service;enable(monkeypatch)
+    for key,value in {"MARKETING_HANDOFF_OWNER":"operator@example.com","MARKETING_HANDOFF_DESTINATION":"https://sink.synthetic.invalid/cases","MARKETING_HANDOFF_WEBHOOK_TOKEN":"synthetic-token","MARKETING_HANDOFF_NOTIFICATIONS_ENABLED":"true"}.items():monkeypatch.setenv(key,value)
+    with m.SessionLocal() as db:
+        lead=m.Lead(email="synthetic@example.com",automation_paused=True);db.add(lead);db.flush()
+        journey.open_handoff(m,db,lead,"email","source");db.commit()
+    requests=[]
+    adapter=workers.NotificationAdapter(transport=httpx.MockTransport(lambda request:(requests.append(request) or httpx.Response(status,json={}))))
+    workers.tick(m,notification_adapter=adapter)
+    workers.tick(m,notification_adapter=adapter)
+    assert len(requests)==1
+    with m.SessionLocal() as db:
+        assert db.scalar(select(journey.Handoff)).notification=="uncertain"
+        assert db.get(m.Lead,lead.id).automation_paused
+
+
+@pytest.mark.parametrize("status",[408,409,425])
+def test_ambiguous_email_status_is_uncertain_in_both_ledgers_and_never_retried(pilot,status):
+    m,_,_,sender,_,_=pilot
+    lead_id=add(pilot)
+    sender.side_effect=lambda *a,**k:httpx.Response(status,request=httpx.Request("POST",a[0]))
+    assert run(pilot,lead_id)["failed"]==1
+    assert run(pilot,lead_id)["sent"]==0
+    with m.SessionLocal() as db:
+        assert db.scalar(select(m.email_pilot.EmailDispatch)).status=="uncertain"
+        assert db.scalar(select(m.SendAttempt)).status=="uncertain"
+        assert db.get(m.Lead,lead_id).automation_paused
+        assert db.scalar(select(journey.Handoff)) is not None
+    assert sender.call_count==1
+
+
+def test_retention_recovers_accepted_claim_after_crash_without_resending_or_ignoring_takeover(pilot,monkeypatch):
+    m,_,_,sender,_,_=pilot;lead_id=add(pilot)
+    monkeypatch.setenv("MARKETING_OUTBOUND_ENABLED","true")
+    monkeypatch.setenv("MARKETING_ORGANIZER_RETENTION_ENABLED","true")
+    from app.journey_templates import retention_candidate
+    with m.SessionLocal() as db:
+        seq=m.ModuleRecord(module="sequences",name="Reviewed reuse recovery",status="active",payload=retention_candidate(),created_by="synthetic");db.add(seq)
+        db.add(journey.Evidence(id="recovery-end",fingerprint="synthetic",account_id="account-0",org_id="org",event_id="event",use_case="event",milestone="event_completed",source_id="end",occurred_at=m.now().isoformat()));db.commit()
+        monkeypatch.setenv("MARKETING_ORGANIZER_RETENTION_TEMPLATE",json.dumps({"id":seq.id,"sha256":m.email_pilot.template_fingerprint(seq)}))
+    monkeypatch.setattr(retention,"source_context",lambda *args:{"account_id":"account-0","current_owner":True,"org_id":"org","event_id":"event","status":"ended","cancelled":False,"is_test":False,"event_date":"2026-01-01T00:00:00+00:00","timezone":"UTC"})
+    assert retention.run_retention(m)==1
+    with m.SessionLocal() as db:
+        job=db.scalar(select(retention.RetentionJob));job.status="pending"
+        activity=db.scalar(select(m.Activity).where(m.Activity.actor=="organizer_retention"));db.delete(activity)
+        lead=db.get(m.Lead,lead_id);lead.automation_paused=True;lead.suppression_reason="inbound_reply";db.commit()
+    assert retention.run_retention(m)==0 and sender.call_count==1
+    assert retention.run_retention(m)==0 and sender.call_count==1
+    with m.SessionLocal() as db:
+        assert db.scalar(select(retention.RetentionJob)).status=="accepted"
+        assert len(db.scalars(select(m.Activity).where(m.Activity.actor=="organizer_retention")).all())==1
+        assert db.get(m.Lead,lead_id).automation_paused
+
+
+def test_legacy_flags_cannot_activate_reviewed_organizer_email(pilot,monkeypatch):
+    m,_,_,sender,_,_=pilot;lead_id=add(pilot)
+    for key,value in {"MARKETING_OUTBOUND_ENABLED":"true","MARKETING_SCHEDULER_ENABLED":"true","MARKETING_EMAIL_PILOT_ENABLED":"false","MARKETING_EMAIL_TEST_ENABLED":"false"}.items():monkeypatch.setenv(key,value)
+    assert run(pilot,lead_id,mode="legacy")["sent"]==0
+    sender.assert_not_called()
+    with m.SessionLocal() as db:
+        assert db.scalar(select(m.email_pilot.EmailDispatch)) is None
+
+
+def test_native_staff_chatwoot_notification_is_a_private_note_not_an_organizer_message(service,monkeypatch):
+    m,_,_=service;enable(monkeypatch)
+    for key,value in {"MARKETING_HANDOFF_OWNER":"operator@example.com","MARKETING_HANDOFF_TRANSPORT":"chatwoot","MARKETING_HANDOFF_DESTINATION":"https://chat.synthetic.invalid/api/v1/accounts/1/conversations/99/messages","MARKETING_HANDOFF_CHATWOOT_TOKEN":"synthetic-staff-token","MARKETING_HANDOFF_NOTIFICATIONS_ENABLED":"true"}.items():monkeypatch.setenv(key,value)
+    with m.SessionLocal() as db:
+        lead=m.Lead(email="synthetic@example.com",automation_paused=True);db.add(lead);db.flush()
+        journey.open_handoff(m,db,lead,"email","source");db.commit()
+    requests=[]
+    def send(request):
+        requests.append(request);body=json.loads(request.content)
+        assert body["private"] is True and body["message_type"]=="outgoing"
+        assert request.headers["api_access_token"]=="synthetic-staff-token"
+        assert "operator@example.com" in body["content"] and "synthetic@example.com" not in body["content"]
+        return httpx.Response(200,json={"id":"synthetic-note"})
+    adapter=workers.NotificationAdapter(transport=httpx.MockTransport(send))
+    assert workers.tick(m,notification_adapter=adapter)["notifications"]==1
+    assert workers.tick(m,notification_adapter=adapter)["notifications"]==0
+    assert len(requests)==1
+    with m.SessionLocal() as db:assert db.get(m.Lead,lead.id).automation_paused

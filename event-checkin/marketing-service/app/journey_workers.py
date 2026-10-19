@@ -125,17 +125,34 @@ class NotificationAdapter:
         self.transport = transport
 
     def notify(self, *, case_id, owner, destination, idempotency_key=None):
-        token = os.getenv("MARKETING_HANDOFF_WEBHOOK_TOKEN", "")
+        native = os.getenv("MARKETING_HANDOFF_TRANSPORT", "webhook") == "chatwoot"
+        if os.getenv("MARKETING_HANDOFF_TRANSPORT", "webhook") not in {"webhook", "chatwoot"}:
+            raise HTTPException(503, "Notification transport is not configured")
+        token = os.getenv("MARKETING_HANDOFF_CHATWOOT_TOKEN" if native else "MARKETING_HANDOFF_WEBHOOK_TOKEN", "")
         if not token:
             raise HTTPException(503, "Notification adapter is not configured")
+        destination = endpoint(destination)
+        headers = {"Idempotency-Key": idempotency_key or case_id}
+        payload = {"case_id": case_id, "owner": owner, "url": "https://festio.events/marketing?tab=handoffs"}
+        if native:
+            if not re.fullmatch(r"/api/v1/accounts/[0-9]+/conversations/[0-9]+/messages", urlsplit(destination).path):
+                raise HTTPException(503, "Configured staff Chatwoot conversation required")
+            headers["api_access_token"] = token
+            payload = {"content": f"Organizer handoff {case_id}. Assigned owner: {owner}. Review https://festio.events/marketing?tab=handoffs . Provider acceptance is not owner acknowledgement.",
+                "message_type": "outgoing", "private": True}
+        else:
+            headers["Authorization"] = f"Bearer {token}"
         with httpx.Client(transport=self.transport, timeout=15, follow_redirects=False) as client:
-            response = client.post(endpoint(destination), headers={"Authorization": f"Bearer {token}", "Idempotency-Key": idempotency_key or case_id},
-                json={"case_id": case_id, "owner": owner, "url": "https://festio.events/marketing?tab=handoffs"})
+            response = client.post(destination, headers=headers, json=payload)
+        if response.status_code in {408,409,425}:
+            raise RuntimeError("Uncertain notification outcome")
         if 400 <= response.status_code < 500:
             return False
         if not 200 <= response.status_code < 300:
             raise RuntimeError("Uncertain notification outcome")
-        if response.json().get("recorded") is not True:
+        data = response.json()
+        acknowledged = type(data.get("id")) in {str,int} and bool(data["id"]) if native else data.get("recorded") is True
+        if not acknowledged:
             raise RuntimeError("Missing notification receipt")
         return True
 

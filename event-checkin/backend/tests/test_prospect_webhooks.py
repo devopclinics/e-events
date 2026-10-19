@@ -218,7 +218,7 @@ async def test_reply_token_preserves_case_and_requires_allowlisted_base_address(
     assert ingress == []
 
 
-@pytest.mark.parametrize("stamp", [None,"invalid",str(int(time.time())-8*86400),str(int(time.time())+86400)])
+@pytest.mark.parametrize("stamp", [None,"invalid",str(int(time.time())-8*86400),str(int(time.time())+86400)], ids=["missing","malformed","stale","future"])
 async def test_stop_with_invalid_provider_window_still_reaches_suppression(ctx,ingress,monkeypatch,stamp):
     monkeypatch.setattr(engagement_settings,"sales_responses_enabled",True)
     payload=meta_payload("STOP")

@@ -419,7 +419,13 @@ def recover_stale_claims(m):
         db.commit()
 
 
+def uncertain_http(status):
+    return status in {408, 409, 425} or not 400 <= status < 500
+
+
 def send(m, lead, sequence, index=0, mode="legacy", stop_requested=None):
+    if sequence.payload.get("journey_context") is True and mode == "legacy":
+        raise EmailBlocked("Reviewed organizer journey requires its explicit pilot or test cohort")
     if sequence.payload.get("category") == "organizer_retention" and mode != "pilot":
         raise EmailBlocked("Organizer retention requires the explicit pilot cohort")
     if stop_requested and stop_requested():
@@ -456,7 +462,7 @@ def send(m, lead, sequence, index=0, mode="legacy", stop_requested=None):
             raise EmailBlocked("Email pilot is stopping")
         if sequence.payload.get("category") == "organizer_retention":
             from .retention import validate_dispatch
-            validate_dispatch(m, lead, index)
+            validate_dispatch(m, lead, index, sequence_id=sequence.id)
         elif mode != "legacy":
             from .journey_context import validate_current_event
             validate_current_event(m,lead)
@@ -465,7 +471,7 @@ def send(m, lead, sequence, index=0, mode="legacy", stop_requested=None):
         finish(m, claim, "cancelled")
         raise
     except httpx.HTTPStatusError as exc:
-        finish(m, claim, "failed" if 400 <= exc.response.status_code < 500 else "uncertain")
+        finish(m, claim, "uncertain" if uncertain_http(exc.response.status_code) else "failed")
         raise
     except Exception:
         finish(m, claim, "uncertain")

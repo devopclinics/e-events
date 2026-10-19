@@ -11,6 +11,7 @@ event-checkin/backend/app/routers/marketing_email_readiness.py
 event-checkin/backend/app/routers/meta_whatsapp.py
 event-checkin/backend/app/routers/org_billing.py
 event-checkin/backend/app/routers/prospect_webhooks.py
+event-checkin/backend/app/routers/public_sites.py
 event-checkin/backend/app/routers/resend_webhooks.py
 event-checkin/backend/app/routers/scanner.py
 event-checkin/backend/app/routers/ticketing_internal.py
@@ -34,6 +35,7 @@ event-checkin/frontend/src/pages/MarketingPage.jsx
 event-checkin/frontend/src/pages/OrganizerHandoffs.jsx
 event-checkin/frontend/src/pages/SetupRedesignPage.jsx
 event-checkin/frontend/src/pages/organizerGuidance.mjs
+event-checkin/frontend/tests/engagement-foundations.test.mjs
 event-checkin/frontend/tests/helpers/signup-acquisition-harness.mjs
 event-checkin/frontend/tests/organizer-guidance.test.mjs
 event-checkin/marketing-service/README.md
@@ -46,6 +48,7 @@ event-checkin/marketing-service/app/organizer_journey.py
 event-checkin/marketing-service/app/retention.py
 event-checkin/marketing-service/app/sales_responses.py
 event-checkin/marketing-service/tests/conftest.py
+event-checkin/marketing-service/tests/test_engagement_reliability.py
 event-checkin/marketing-service/tests/test_journey_workers.py
 event-checkin/marketing-service/tests/test_organizer_journey.py
 event-checkin/marketing-service/tests/test_unverified_account_capture.py

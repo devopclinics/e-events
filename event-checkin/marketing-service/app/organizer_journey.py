@@ -174,6 +174,9 @@ def install(m):
     RetentionBase.metadata.create_all(m.engine)
     # Checkpoint upgrades are additive; no historical enrollment or repair.
     from sqlalchemy import inspect, text
+    if "sequence_id" not in {c["name"] for c in inspect(m.engine).get_columns("marketing_organizer_retention_jobs")}:
+        with m.engine.begin() as connection:
+            connection.execute(text("ALTER TABLE marketing_organizer_retention_jobs ADD COLUMN sequence_id VARCHAR(36)"))
     if "last_attempt_at" not in {c["name"] for c in inspect(m.engine).get_columns("marketing_organizer_retention_jobs")}:
         with m.engine.begin() as connection:
             connection.execute(text("ALTER TABLE marketing_organizer_retention_jobs ADD COLUMN last_attempt_at VARCHAR(40)"))

@@ -84,7 +84,7 @@ test('sales requires both explicit gates and never falls back to the support inb
 })
 
 test('scoped release build environment preserves authenticated support with public sales hard-disabled', () => {
-  const dockerfile = readFileSync(new URL('../Dockerfile.scoped-release', import.meta.url), 'utf8')
+  const dockerfile = readFileSync(new URL('../Dockerfile.scoped-release', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   const buildArgs = Object.fromEntries([...dockerfile.matchAll(/^ARG (\w+)$/gm)].map(([, name]) => [name, env[name] || 'synthetic-public-value']))
   const compiledEnv = {}
   // Resolve the actual Dockerfile's build-time ENV contract using only public

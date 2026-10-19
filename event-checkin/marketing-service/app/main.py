@@ -2010,7 +2010,7 @@ def run_automation_service(db: Session, identity: Identity, *, dry_run: bool = F
         except httpx.HTTPStatusError as exc:
             # Explicit client rejection is retryable; a server error may have
             # occurred after acceptance, so it needs reconciliation instead.
-            uncertain = not 400 <= exc.response.status_code < 500
+            uncertain = email_pilot.uncertain_http(exc.response.status_code)
             delivery = {"status": "failed", "provider": "resend", "provider_id": None, "error": f"Provider HTTP {exc.response.status_code}"}
         except Exception:
             uncertain = True

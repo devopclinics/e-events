@@ -148,3 +148,122 @@ Synthetic source acceptance covers actual business producers to the actual
 Marketing consumer. Worker integration uses HTTP MockTransport for the actual
 Chatwoot/Bird/notification adapters, and mocks existing email delivery. Real
 HTTP/SMTP/provider transport is denied by the service test fixtures.
+
+### Adversarial review follow-up
+
+Reviewed original delivery commit `53201450e6e6fe49824b49d1d9475d9abbd627af`
+against the requested failure modes. This was an adversarial self-review, not a
+separate reviewer's approval. Recoverable findings were closed locally:
+
+1. Notification HTTP 408/409/425 could have been treated as known rejection.
+   They now remain uncertain and never auto-retry. Synthetic transport tests
+   assert one request, held receipt and continued takeover suppression.
+2. The shared email dispatch and automation ledgers had the same ambiguous-HTTP
+   classification gap. Both now hold these responses as uncertain, pause the
+   lead and open a handoff. Repeated ticks cannot resend.
+3. Retention acceptance and job bookkeeping had a crash boundary. Each job now
+   stores its immutable sequence identity. Recovery derives accepted/uncertain
+   state from its own durable email claim and creates a deterministic audit
+   activity once. A paused lead stays paused. A changed sequence cannot replay
+   an old event's job. Missing checkpoint identity becomes review-required,
+   without guessing or backfilling consent/enrollment.
+4. Reviewed contextual templates could have used the existing legacy email mode.
+   They now explicitly require pilot/test mode; retention still requires pilot
+   mode plus its own gate. A regression enables legacy scheduler/outbound flags
+   while disabling pilot/test and asserts zero provider calls. Legacy tests
+   explicitly model preserved, non-migrated stored templates rather than opting
+   them into the reviewed journey.
+5. Added a native existing-Chatwoot staff-notification adapter in addition to
+   the configured HTTPS receipt sink. It posts a private staff note to a reviewed
+   account/conversation URL, with a separate staff API token and idempotency key.
+   Provider acceptance is not owner acknowledgement. No new receiver or paid
+   service is required when using this native mode.
+6. Full checks exposed two pre-existing Windows portability defects: CRLF parsing
+   in a frontend Dockerfile-contract test, and Unix-only public programme date
+   directives. Both were corrected without changing live release flags. Timestamp
+   parameter IDs are now stable across isolated pytest workers.
+
+Original delivery scope was exactly 55 files. Review adds three paths:
+`event-checkin/backend/app/routers/public_sites.py`,
+`event-checkin/frontend/tests/engagement-foundations.test.mjs`, and
+`event-checkin/marketing-service/tests/test_engagement_reliability.py`.
+The final manifest contains 58 files; the original 55 remain available at the
+reviewed commit. No publication/deployment or server-worktree change occurred.
+
+### Complete suite scope and Windows limits
+
+The earlier 543 was an affected-file selection, not the full Backend suite.
+The full current collection has **1,273 cases**, versus the cited previous
+1,258: six source acceptance cases, two outcome/ownership cases, six new ingress
+cases and one new default-config parameter account for the 15-case increase.
+No old cases were removed to produce the 543 selection.
+
+The first unmodified full Windows invocation completed with 468 passed,
+9 failed, 1 xfailed and 795 setup errors. The initial error was the unchanged
+`test_auth_acquisition_capture.py` socket guard blocking Windows asyncio's local
+self-pipe construction; subsequent pytest runner setup cascaded. Eight isolated
+config tests also omitted Windows `SystemRoot` from their deliberately minimal
+child environment and failed importing `_overlapped` (WinError 10106). The ninth
+failure was the portable programme-date formatting issue fixed above.
+
+A host-only helper at `verification/festio_windows_test_host.py` initializes
+pytest's Windows loop before each module's network guard, and supplies only
+`SystemRoot` to explicitly isolated child environments. It does not remove or
+weaken the socket guards, copy credentials, change deployment configuration or
+permit provider HTTP/SMTP; real provider transports are additionally rejected.
+It is outside the application patch. UTF-8 mode is required on this Windows host.
+
+Run all Backend cases with:
+`PYTHONPATH=<task>/verification python -X utf8 -m pytest tests -p festio_windows_test_host -n 4 --dist loadfile -q -W ignore --tb=short`.
+`pytest-xdist` is a task-local test dependency only; application dependencies and
+lockfiles were not changed. A first parallel collection attempt found dynamic
+IDs on the four timestamp cases; those IDs are now fixed, with no case removal.
+
+Three unchanged acquisition tests still encounter the strict socket guard while
+ASGI TestClient creates a new Windows portal loop. The traceback is in stdlib
+`proactor_events._make_self_pipe -> socket._fallback_socketpair`, before the
+Marketing request. The guard is preserved; these cases need a compatible test
+runtime for a clean pass:
+
+- `test_existing_user_verified_upgrade_preserves_acquisition_without_header`
+- `test_new_verified_user_retains_real_acquisition_or_create_only_default[None]`
+- `test_new_verified_user_retains_real_acquisition_or_create_only_default[attribution1]`
+
+The existing non-strict xfail is
+`test_experience.py::test_room_assignment_step_assigns_table_group_seat_and_sends_email`:
+its pre-existing reason concerns room-name email rendering and duplicate builders.
+It was not relabelled or hidden. No browser permission was bypassed.
+
+Full Support tests require only process-local `DATABASE_URL=sqlite+aiosqlite://`,
+`REDIS_URL=redis://127.0.0.1:1/0`, `SUPPORT_RUN_WORKER=false`, UTF-8 mode, and real
+HTTP/SMTP rejection. No live settings or files were changed for these tests.
+Full frontend command is `node --test tests/*.test.mjs`; build remains
+`npm run build`. Full Marketing/Ticketing commands are `python -m pytest tests`.
+
+Final review results supersede the earlier selected counts: Marketing **304
+passed**; Support **37 passed**; Ticketing **30 passed**; frontend **148 passed**;
+frontend build/postbuild passed. Full Backend result is recorded with final
+handoff evidence after its complete run. Overlapping slices are not summed.
+
+Complete Backend execution finished all 1,273 cases: **1,268 passed, 4 failed,
+1 xfailed** in 584.24 seconds with four isolated workers. Three failures are the
+unchanged Windows TestClient cases listed above. The fourth was an en-dash
+separator regression introduced while making the programme date format portable;
+it was corrected to preserve the original output. The final complete
+`test_public_site_connections.py` + `test_website_editor_contract.py` rerun passed
+**12 tests**. No remaining product failure was found; a clean pass for the three
+strict-socket TestClient cases still needs a compatible runtime. The full-suite
+result is reported as actually run, not rewritten as an all-green full run.
+
+Final full Marketing result is **304 passed**, including the native staff note,
+legacy-mode block, both-ledger HTTP uncertainty and retention recovery cases.
+Full Support **37 passed**, full Ticketing **30 passed**, full frontend **148
+passed**, and build/postbuild passed. Raw logs and the host-only helper are in
+`<task>/verification/review-*` and `festio_windows_test_host.py`. No command is
+stalled or awaiting permission. No live provider/browser coverage is claimed.
+
+Invitation first-value evidence is deliberately limited to authenticated final
+Resend delivery with exact event/guest/invitation tags. Provider acceptance and
+legacy unsigned guest-provider status callbacks never create first value. The
+operational Bird public-sales response adapter is separate; sending an anonymous
+sales reply is not a guest invitation outcome or an account-linking signal.

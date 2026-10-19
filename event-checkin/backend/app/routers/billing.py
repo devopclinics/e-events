@@ -293,10 +293,12 @@ async def _fulfill(db: AsyncSession, provider: str, reference: str, event_id: st
             tier_key=tier_key, amount=0, currency="", status="paid",
         ))
     from ..services.marketing_client import ingest_org_lifecycle, lifecycle_event_id
-    await ingest_org_lifecycle(
-        db, event.org_id, stage="paid", event_type=event.event_type,
-        event_id=lifecycle_event_id("paid", provider, reference),
-    )
+    # A recovered zero-value record is not proof of a paid acquisition.
+    if payment and payment.amount > 0 and plan.kind == "tier":
+        await ingest_org_lifecycle(
+            db, event.org_id, stage="paid", lifecycle_event="organizer_purchase", event_type=event.event_type,
+            event_id=lifecycle_event_id("organizer_purchase-v1", provider, reference),
+        )
     await db.commit()
     if settings.organization_entitlements_v2:
         from .. import entitlements

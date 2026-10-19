@@ -18,7 +18,7 @@ from ..config import settings
 from ..models import MarketingOutbox
 
 
-ENDPOINTS = frozenset({"ingest", "delivery", "conversations", "demo-requests"})
+ENDPOINTS = frozenset({"ingest", "delivery", "conversations", "demo-requests", "sales-responses", "organizer-milestones"})
 
 
 def lifecycle_event_id(*parts: str) -> str:
@@ -102,7 +102,7 @@ async def ingest_marketing_delivery(
 async def ingest_org_lifecycle(db: AsyncSession, org_id: str, *, stage: str, **fields) -> None:
     """Attribute organization revenue and ticket milestones to its owner."""
     from ..models import Membership, User
-    membership = await db.scalar(select(Membership).where(Membership.org_id == org_id).order_by(
+    membership = await db.scalar(select(Membership).where(Membership.org_id == org_id, Membership.role == "owner").order_by(
         (Membership.role == "owner").desc(), Membership.created_at.asc()
     ).limit(1))
     if not membership:
@@ -113,6 +113,32 @@ async def ingest_org_lifecycle(db: AsyncSession, org_id: str, *, stage: str, **f
         # authentication claim. Do not forward verification from loose fields.
         fields.pop("email_verified", None)
         await ingest_marketing_lead(db, user, stage=stage, **fields)
+
+
+async def capture_organizer_outcome(
+    db: AsyncSession, event, *, milestone: str, source_id: str,
+    use_case: str, synthetic: bool | None,
+) -> str | None:
+    """Capture only explicit real-source evidence in the business transaction.
+
+    Missing provenance fails closed. A test, preview, provider acceptance or
+    configuration toggle must never call this as a real delivered outcome.
+    No email matching, ownership fallback, consent change or provider I/O.
+    """
+    if synthetic is not False:
+        return None
+    from ..models import Membership, User
+    owners = (await db.execute(select(User).join(Membership, Membership.user_id == User.id).where(
+        Membership.org_id == event.org_id, Membership.role == "owner"))).scalars().all()
+    for owner in owners:
+        subject = owner.firebase_uid or owner.id
+        identity = lifecycle_event_id("organizer-outcome-v1", subject, event.org_id, event.id, use_case, milestone, source_id)
+        await enqueue_marketing_payload(db, {
+            "id": identity, "account_id": subject, "org_id": event.org_id, "organizer_event_id": event.id,
+            "use_case": use_case, "milestone": milestone, "source_id": source_id,
+            "current_owner": True, "synthetic": False,
+        }, endpoint="organizer-milestones", event_id=identity)
+    return identity if owners else None
 
 
 async def marketing_preferences(email: str, body: dict | None = None) -> dict:

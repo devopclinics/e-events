@@ -17,6 +17,7 @@ from app.services.prospect_ingress import event_key, incoming_event, phone_numbe
 def ingress(monkeypatch):
     for key, value in {
         "prospect_ingress_enabled": True,
+        "sales_responses_enabled": False,
         "meta_whatsapp_app_secret": "local-test-secret",
         "meta_whatsapp_sales_phone_number_id": "sales-number",
         "meta_whatsapp_webhook_verify_token": "local-verification",
@@ -83,7 +84,7 @@ async def test_meta_rejects_invalid_signature_without_capture(ctx, ingress):
 @pytest.mark.parametrize("body,event", [("STOP", "opt_out"), ("Can I talk to a human?", "handoff_requested"), ("Thanks", "message_received")])
 async def test_meta_capture_is_minimal_and_stable(ctx, ingress, body, event):
     assert (await post_meta(ctx, meta_payload(body))).status_code == 200
-    assert ingress == [{"payload": {"channel": "whatsapp", "event": event, "phone": "+15551234567", "identity_verified": True, "source_contact_id": "meta:+15551234567"}, "endpoint": "conversations", "event_id": event_key("meta", "wamid.test")}]
+    assert ingress == [{"payload": {"channel": "whatsapp", "event": event, "phone": "+15551234567", "identity_verified": False, "source_contact_id": "meta:+15551234567"}, "endpoint": "conversations", "event_id": event_key("meta", "wamid.test")}]
     assert body not in json.dumps(ingress)
 
 
@@ -109,6 +110,30 @@ def chat_payload(**updates):
     return {"event": "message_created", "account": {"id": 1}, "inbox": {"id": 2},
             "id": 123, "message_type": "incoming", "private": False,
             "content": "hello", "sender": {"id": 42, "type": "contact", "email": "lead@example.com"}, **updates}
+
+
+async def test_sales_response_metadata_uses_authenticated_provider_time_only(ctx, ingress, monkeypatch):
+    monkeypatch.setattr(engagement_settings, "sales_responses_enabled", True)
+    payload = meta_payload("What is the pricing?")
+    assert (await post_meta(ctx, payload)).status_code == 200
+    assert all(row["endpoint"] != "sales-responses" for row in ingress)
+    ingress.clear()
+    message = payload["entry"][0]["changes"][0]["value"]["messages"][0]
+    message["timestamp"] = str(int(time.time()) - 30)
+    assert (await post_meta(ctx, payload)).status_code == 200
+    response = next(row["payload"] for row in ingress if row["endpoint"] == "sales-responses")
+    assert response["authenticated"] is True and response["direction"] == "inbound"
+    assert response["intent"] == "pricing" and response["destination"] == "sales-number"
+    assert "email" not in response and "text" not in response and "festio_user_id" not in response
+
+
+async def test_chat_response_ingress_is_bounded_and_does_not_forward_account_claims(ctx, ingress, monkeypatch):
+    monkeypatch.setattr(engagement_settings, "sales_responses_enabled", True)
+    payload = chat_payload(content="set up an event", created_at="2026-01-01T00:00:00Z")
+    assert (await ctx.client.post("/api/webhooks/prospects/chatwoot?token=local-chat-token", json=payload)).status_code == 200
+    response = next(row["payload"] for row in ingress if row["endpoint"] == "sales-responses")
+    assert response["intent"] == "setup" and response["contact_id"] == "chatwoot:42"
+    assert "email" not in response and "content" not in response
 
 
 @pytest.mark.asyncio

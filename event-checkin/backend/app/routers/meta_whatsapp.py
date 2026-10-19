@@ -1,6 +1,7 @@
 """Authenticated Meta webhook ingress; never sends an automatic reply."""
 import hashlib
 import hmac
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.engagement_config import engagement_settings
 from app.database import get_db
 from app.services.marketing_client import enqueue_marketing_payload
-from app.services.prospect_ingress import bounded_body, event_key, incoming_event, object_payload, phone_number
+from app.services.prospect_ingress import bounded_body, event_key, incoming_event, object_payload, phone_number, sales_intent
 
 router = APIRouter()
 
@@ -70,7 +71,18 @@ async def receive_meta_whatsapp_webhook(
                 # messages. Any received attachment also pauses follow-ups.
                 await enqueue_marketing_payload(db, {
                     "channel": "whatsapp", "event": incoming_event(text), "phone": phone,
-                    "identity_verified": True, "source_contact_id": f"meta:{phone}",
+                    # Provider phone ownership does not bind a Festio account.
+                    "identity_verified": False, "source_contact_id": f"meta:{phone}",
                 }, endpoint="conversations", event_id=event_key("meta", provider_id))
+                if engagement_settings.sales_responses_enabled:
+                    try:
+                        received = datetime.fromtimestamp(int(message.get("timestamp")), timezone.utc).isoformat()
+                    except (TypeError, ValueError, OverflowError, OSError):
+                        continue  # Never invent a new service window for missing provider time.
+                    await enqueue_marketing_payload(db, {
+                        "channel": "whatsapp", "contact_id": f"meta:{phone}",
+                        "destination": str(metadata["phone_number_id"]), "received_at": received,
+                        "intent": sales_intent(text), "authenticated": True, "direction": "inbound",
+                    }, endpoint="sales-responses", event_id=event_key("meta-sales", provider_id))
     await db.commit()  # 200 only after durable capture; provider retries failures.
     return {"ok": True}

@@ -42,6 +42,7 @@ engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} i
 SessionLocal = sessionmaker(engine, expire_on_commit=False)
 logger = logging.getLogger("festio.marketing")
 from . import email_pilot
+from .journey_templates import candidates as journey_template_candidates
 from .email_pilot import EmailBlocked
 
 
@@ -298,17 +299,7 @@ if "owner_scoped" not in access_columns:
 
 def seed_defaults() -> None:
     defaults = [
-        ("sequences", "New registration welcome", "active", {"stage": "registered", "cadence_days": 2, "cta_url": "https://festio.events/setup-redesign", "steps": [
-            {"delay_hours": 0,   "subject": "Welcome to Festio", "body": "You've just joined thousands of event organizers who use Festio to manage invitations, check-ins, and the moments that make events memorable.\n\nYour account is ready. Let's create your first event.", "cta": "Create your first event", "cta_url": "https://festio.events/setup-redesign"},
-            {"delay_hours": 24,  "subject": "Let us help with your event setup", "body": "Setting up an event on Festio takes about 10 minutes. Add your event details, upload a cover image, and you'll have a shareable event page ready to go.\n\nWe're here if you get stuck.", "cta": "Continue setup", "cta_url": "https://festio.events/setup-redesign"},
-            {"delay_hours": 72,  "subject": "What kind of event are you planning?", "body": "Whether it's a wedding, a corporate conference, or a birthday celebration, Festio adapts to how you work.\n\nThousands of organizers trust us for everything from a 20-person dinner to a 5,000-person festival. We'd love to hear about yours.", "cta": "Tell us about your event", "cta_url": "mailto:hello@festio.events?subject=My%20event%20type"},
-            {"delay_hours": 168, "subject": "Would a 15-minute setup call help?", "body": "Sometimes a quick conversation makes all the difference. One of our team will walk through your event with you, answer any questions, and make sure Festio is set up exactly the way you need it.\n\nNo commitment, just a helpful call.", "cta": "Book a free call", "cta_url": "https://festio.events/#contact"},
-        ]}),
-        ("sequences", "Event created onboarding", "active", {"stage": "event_created", "cadence_days": 3, "cta_url": "https://festio.events/admin-redesign", "steps": [
-            {"delay_hours": 0,   "subject": "Your Festio event is ready for setup", "body": "Your event is now live on Festio.\n\nThe next step is adding your guest list and customizing your invitation. It only takes a few minutes and your guests will receive a beautiful, branded invite.", "cta": "Add guests", "cta_url": "https://festio.events/admin-redesign"},
-            {"delay_hours": 48,  "subject": "Invite, sell tickets, or start planning", "body": "Your event dashboard is ready: import your guest list, set up ticket types, configure check-in, and manage meals or seating.\n\nMost organizers get fully set up in under an hour.", "cta": "Open your event", "cta_url": "https://festio.events/admin-redesign"},
-            {"delay_hours": 120, "subject": "See what your event still needs", "body": "A quick checklist can save a lot of day-of stress.\n\nHead to your event setup to make sure invitations are sent, RSVPs are tracking, and your check-in team is ready. Need help? We're one message away.", "cta": "Review your setup", "cta_url": "https://festio.events/admin-redesign"},
-        ]}),
+        *[("sequences", name, "active", payload) for name, payload in journey_template_candidates().items()],
         ("segments", "Registered without an event", "active", {"rules": [{"field": "stage", "operator": "equals", "value": "registered"}]}),
         ("segments", "Paid event promotion audience", "active", {"rules": [{"field": "stage", "operator": "in", "value": ["paid", "customer"]}]}),
         ("campaigns", "Six-month paid add-on promotion", "draft", {"channels": ["email", "social"], "audience": "Paid event promotion audience", "goal": "addon_activation"}),
@@ -334,61 +325,7 @@ def seed_defaults() -> None:
 seed_defaults()
 
 
-# Live migration: backfill body copy on existing seeded sequences that have steps
-# with no body text (deployed before 2026-08-10 copy update).
-_STEP_BODY_BACKFILL = {
-    "New registration welcome": [
-        "You've just joined thousands of event organizers who use Festio to manage invitations, check-ins, and the moments that make events memorable.\n\nYour account is ready. Let's create your first event.",
-        "Setting up an event on Festio takes about 10 minutes. Add your event details, upload a cover image, and you'll have a shareable event page ready to go.\n\nWe're here if you get stuck.",
-        "Whether it's a wedding, a corporate conference, or a birthday celebration, Festio adapts to how you work.\n\nThousands of organizers trust us for everything from a 20-person dinner to a 5,000-person festival. We'd love to hear about yours.",
-        "Sometimes a quick conversation makes all the difference. One of our team will walk through your event with you, answer any questions, and make sure Festio is set up exactly the way you need it.\n\nNo commitment, just a helpful call.",
-    ],
-    "Event created onboarding": [
-        "Your event is now live on Festio.\n\nThe next step is adding your guest list and customizing your invitation. It only takes a few minutes and your guests will receive a beautiful, branded invite.",
-        "Your event dashboard is ready: import your guest list, set up ticket types, configure check-in, and manage meals or seating.\n\nMost organizers get fully set up in under an hour.",
-        "A quick checklist can save a lot of day-of stress.\n\nHead to your event setup to make sure invitations are sent, RSVPs are tracking, and your check-in team is ready. Need help? We're one message away.",
-    ],
-}
-# Patch already-deployed sequences: remove em-dashes and fix Book-a-call cta_url.
-_STEP_CORRECTIONS = [
-    ("New registration welcome", 0, "body", "ready \u2014 let's create your first event.", "ready. Let's create your first event."),
-    ("New registration welcome", 0, "cta_url", None, "https://festio.events/setup-redesign"),
-    ("New registration welcome", 1, "cta_url", None, "https://festio.events/setup-redesign"),
-    ("New registration welcome", 2, "body", "celebration \u2014 Festio adapts", "celebration, Festio adapts"),
-    ("New registration welcome", 2, "cta_url", None, "mailto:hello@festio.events?subject=My%20event%20type"),
-    ("New registration welcome", 3, "body", "No commitment \u2014 just a helpful call.", "No commitment, just a helpful call."),
-    ("New registration welcome", 3, "cta_url", None, "https://festio.events/#contact"),
-    ("Event created onboarding", 0, "body", "Great news \u2014 your event is live on Festio.", "Your event is now live on Festio."),
-    ("Event created onboarding", 1, "body", "ready for everything \u2014 import", "ready for everything: import"),
-]
-with SessionLocal() as _db:
-    for seq_name, bodies in _STEP_BODY_BACKFILL.items():
-        _seq = _db.scalar(select(ModuleRecord).where(ModuleRecord.name == seq_name, ModuleRecord.module == "sequences"))
-        if _seq:
-            steps = list(_seq.payload.get("steps") or [])
-            changed = False
-            for i, body_text in enumerate(bodies):
-                if i < len(steps) and not steps[i].get("body"):
-                    steps[i] = {**steps[i], "body": body_text}
-                    changed = True
-            if changed:
-                _seq.payload = {**_seq.payload, "steps": steps}
-    for seq_name, step_i, field, old_val, new_val in _STEP_CORRECTIONS:
-        _seq = _db.scalar(select(ModuleRecord).where(ModuleRecord.name == seq_name, ModuleRecord.module == "sequences"))
-        if _seq:
-            steps = list(_seq.payload.get("steps") or [])
-            if step_i < len(steps):
-                current = steps[step_i].get(field)
-                if old_val is None:
-                    # Backfill: set field when it is missing
-                    if not current:
-                        steps[step_i] = {**steps[step_i], field: new_val}
-                        _seq.payload = {**_seq.payload, "steps": steps}
-                elif current and old_val in current:
-                    steps[step_i] = {**steps[step_i], field: current.replace(old_val, new_val)}
-                    _seq.payload = {**_seq.payload, "steps": steps}
-    _db.commit()
-
+# Stored copy is user-owned. Review candidates explicitly; startup never rewrites it.
 
 class Identity(BaseModel):
     subject: str
@@ -971,7 +908,10 @@ def advance_lifecycle_stage(row: Lead, lifecycle: str, stage: str | None) -> Non
     row.last_active_at = now()
     rank = {"registered": 0, "demo_requested": 1, "event_created": 2, "activated": 3,
             "qualified": 4, "demo_booked": 5, "paid": 6, "customer": 7}
-    incoming_stage = stage or lifecycle
+    # Legacy activated records are preserved for audit, never first-value proof.
+    # A configuration update cannot graduate an organizer out of onboarding.
+    incoming_stage = ("event_created" if lifecycle in {"configured", "activated", "attendee_order_fulfilled"}
+                      else "paid" if lifecycle == "organizer_purchase" else (stage or lifecycle))
     if row.stage in rank and incoming_stage in rank and rank[incoming_stage] > rank[row.stage]:
         row.stage = incoming_stage
         row.stage_changed_at = now()
@@ -1029,7 +969,7 @@ def ingest(body: dict, identity: Identity = Depends(decode_identity), db: Sessio
         # A previously linked UID can still receive a narrow business milestone
         # from a background job. Never look up its email, modify its identity or
         # profile, adopt prospects, or apply even an opt-out from this path.
-        milestones = {"event_created", "event_updated", "activated", "paid", "customer"}
+        milestones = {"event_created", "event_updated", "configured", "activated", "paid", "customer", "attendee_order_fulfilled", "organizer_purchase"}
         row = None
         if subject and lifecycle in milestones and not any(
             field in body for field in ("consent_email", "consent_sms", "consent_whatsapp")
@@ -1060,7 +1000,12 @@ def ingest(body: dict, identity: Identity = Depends(decode_identity), db: Sessio
         if isinstance(registered_at, str):
             try: registered_at = datetime.fromisoformat(registered_at.replace("Z", "+00:00"))
             except ValueError: registered_at = None
-        row = Lead(email=email, festio_user_id=subject or None, name=body.get("name") or "", source=body.get("source") or "website", stage=body.get("stage") or ("registered" if lifecycle == "signup_consent" else lifecycle), owner_email=default_owner_email(db), registered_at=registered_at or now(), last_active_at=now())
+        initial_stage = body.get("stage") or ("registered" if lifecycle == "signup_consent" else lifecycle)
+        if lifecycle in {"configured", "activated", "attendee_order_fulfilled"}:
+            initial_stage = "event_created"
+        elif lifecycle == "organizer_purchase":
+            initial_stage = "paid"
+        row = Lead(email=email, festio_user_id=subject or None, name=body.get("name") or "", source=body.get("source") or "website", stage=initial_stage, owner_email=default_owner_email(db), registered_at=registered_at or now(), last_active_at=now())
         db.add(row)
         db.flush()
     elif subject:
@@ -1215,6 +1160,9 @@ def ingest_conversation(body: ConversationIn, identity: Identity = Depends(decod
         db.commit()
         return {"recorded": True, "duplicate": False, "lead_id": None, "unmatched": True, "prospect_id": prospect.id}
     apply_inbound_intent(row, body.channel, body.event == "opt_out")
+    from .organizer_journey import open_handoff
+    import sys
+    open_handoff(sys.modules[__name__], db, row, body.channel, body.event_id)
     receipt.lead_id = row.id
     # No transcript or message text is retained by this endpoint.
     db.add(Activity(lead_id=row.id, kind=f"{body.channel}_{body.event}", summary=f"{body.channel.title()} {body.event.replace('_', ' ')}", actor="conversation_ingest", data={"event_id": body.event_id, "channel": body.channel}))
@@ -1333,6 +1281,11 @@ def create_lead(body: LeadIn, identity: Identity = Depends(decode_identity), db:
 @app.patch("/api/marketing/leads/{lead_id}")
 def update_lead(lead_id: str, body: dict, identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
     row = visible_lead(db, lead_id, identity)
+    if body.get("automation_paused") is False:
+        from .organizer_journey import Handoff
+        case = db.scalar(select(Handoff).where(Handoff.lead_id == row.id, Handoff.status != "resolved"))
+        if case:
+            raise HTTPException(409, "Resolve the owned handoff before explicitly resuming automation")
     for field in ("consent_email", "consent_sms", "consent_whatsapp", "automation_paused", "unsubscribed"):
         if field in body and not isinstance(body[field], bool):
             raise HTTPException(400, f"{field} must be a boolean")
@@ -2248,3 +2201,8 @@ def signalhouse_sms_webhook(body: dict, x_webhook_token: str | None = Header(def
         return {"recorded": True, "unsubscribed": True}
     db.add(Activity(lead_id=row.id, kind="sms_received", summary="SMS reply received", actor="signalhouse", data={})); db.commit()
     return {"recorded": True, "unsubscribed": False}
+
+# Register additive journey tables and routes after the service contracts exist.
+from . import organizer_journey
+import sys as _sys
+organizer_journey.install(_sys.modules[__name__])

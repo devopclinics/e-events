@@ -85,7 +85,7 @@ async def _deliver(row: MarketingOutbox, client: httpx.AsyncClient) -> None:
             subject = row.payload.get("festio_user_id")
             subject_milestone = (
                 isinstance(subject, str) and bool(subject.strip())
-                and lifecycle in {"event_created", "event_updated", "activated", "paid", "customer"}
+                and lifecycle in {"event_created", "event_updated", "configured", "activated", "paid", "customer", "attendee_order_fulfilled", "organizer_purchase"}
                 and not any(field in row.payload for field in ("consent_email", "consent_sms", "consent_whatsapp"))
             )
             recorded = (
@@ -120,6 +120,20 @@ async def process_due(*, limit: int = 20, transport: httpx.AsyncBaseTransport | 
             ).order_by(MarketingOutbox.created_at, MarketingOutbox.id).limit(limit)
               .with_for_update(skip_locked=True))).scalars().all()
             for row in rows:
+                if row.endpoint == "organizer-milestones":
+                    from ..models import Event, Membership, User
+                    # Re-check exact current ownership before every delivery,
+                    # including retries. A captured role is not a lasting grant.
+                    subject = row.payload.get("account_id")
+                    owner = await db.scalar(select(User.id).join(Membership, Membership.user_id == User.id).join(
+                        Event, Event.org_id == Membership.org_id).where(
+                        Event.id == row.payload.get("organizer_event_id"),
+                        Event.org_id == row.payload.get("org_id"), Membership.role == "owner",
+                        ((User.firebase_uid == subject) | (User.id == subject)),
+                    ).limit(1))
+                    if not owner:
+                        row.status, row.last_error = "cancelled", "Ownership revoked"
+                        continue
                 row.attempts += 1
                 try:
                     await _deliver(row, client)

@@ -131,7 +131,7 @@ def test_unverified_capture_requires_durable_valid_event_id(service, event_id):
 
 @pytest.mark.parametrize("lifecycle, expected_stage", [
     ("event_created", "event_created"), ("event_updated", "event_created"),
-    ("activated", "activated"), ("paid", "paid"), ("customer", "customer"),
+    ("activated", "event_created"), ("paid", "paid"), ("customer", "customer"),
 ])
 def test_known_uid_background_milestones_ignore_email_profile_and_attribution_claims(service, lifecycle, expected_stage):
     module, client, headers = service

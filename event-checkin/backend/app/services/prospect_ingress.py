@@ -48,6 +48,23 @@ def incoming_event(text: str | None) -> str:
     return "message_received"
 
 
+def sales_intent(text: str | None) -> str:
+    """Bounded intent classification; no model/tools or account retrieval."""
+    normalized = " ".join(str(text or "")[:2000].casefold().split())
+    event = incoming_event(normalized)
+    if event == "opt_out":
+        return "opt_out"
+    if event == "handoff_requested":
+        return "handoff"
+    if any(word in normalized for word in ("price", "pricing", "cost")):
+        return "pricing"
+    if any(word in normalized for word in ("setup", "set up", "create event", "guest list", "rsvp", "check-in")):
+        return "setup"
+    if normalized.strip(".!?") in {"hi", "hello", "help", "start"}:
+        return "discovery"
+    return "handoff"
+
+
 def email_address(value) -> str | None:
     if not isinstance(value, str):
         return None

@@ -1277,8 +1277,8 @@ async def toggle_features(
     if any(bool(body.get(feature)) for feature in ("seating_enabled", "menu_enabled", "logistics_enabled", "registry_enabled", "venue_access_enabled", "experience_enabled", "festiome_addon_enabled", "planner_enabled", "engagement_enabled", "speaker_enabled", "partner_enabled", "reminders_enabled")):
         from ..services.marketing_client import ingest_marketing_lead, lifecycle_event_id
         await ingest_marketing_lead(
-            db, current_user, stage="activated", event_type=event.event_type,
-            event_id=lifecycle_event_id("activated", event.id),
+            db, current_user, stage="event_created", lifecycle_event="configured", event_type=event.event_type,
+            event_id=lifecycle_event_id("configured-v1", event.id),
         )
     await db.commit()
     await db.refresh(event)

@@ -289,7 +289,8 @@ async def fulfill_paid_order(body: PaidOrderFulfillment, background_tasks: Backg
         db.add(guest); created.append(guest)
     from ..services.marketing_client import ingest_org_lifecycle, lifecycle_event_id
     await ingest_org_lifecycle(
-        db, event.org_id, stage="customer", event_type=event.event_type,
+        # Attendee fulfillment (including free orders) is not organizer acquisition.
+        db, event.org_id, stage="event_created", lifecycle_event="attendee_order_fulfilled", event_type=event.event_type,
         event_id=lifecycle_event_id("ticket_order", body.order_id),
     )
     await db.commit()

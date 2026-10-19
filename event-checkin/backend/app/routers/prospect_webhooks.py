@@ -10,7 +10,7 @@ from app.engagement_config import engagement_settings
 from app.database import get_db
 from app.routers.resend_webhooks import _verify_svix_signature
 from app.services.marketing_client import enqueue_marketing_payload
-from app.services.prospect_ingress import bounded_body, email_address, event_key, incoming_event, object_payload, phone_number
+from app.services.prospect_ingress import bounded_body, email_address, event_key, incoming_event, object_payload, phone_number, sales_intent
 
 router = APIRouter()
 
@@ -54,6 +54,13 @@ async def prospect_chatwoot_webhook(
         "identity_verified": False,
         "source_contact_id": f"chatwoot:{engagement_settings.prospect_chatwoot_account_id}:{engagement_settings.prospect_chatwoot_inbox_id}:{contact_id}",
     }, endpoint="conversations", event_id=event_key("chatwoot", f"{engagement_settings.prospect_chatwoot_account_id}:{provider_id}"))
+    if engagement_settings.sales_responses_enabled and isinstance(payload.get("created_at"), str):
+        await enqueue_marketing_payload(db, {
+            "channel": "chat", "contact_id": f"chatwoot:{contact_id}",
+            "destination": engagement_settings.prospect_chatwoot_inbox_id,
+            "received_at": payload["created_at"], "intent": sales_intent(payload.get("content")),
+            "authenticated": True, "direction": "inbound",
+        }, endpoint="sales-responses", event_id=event_key("chat-sales", f"{engagement_settings.prospect_chatwoot_account_id}:{provider_id}"))
     await db.commit()
     return {"ok": True}
 

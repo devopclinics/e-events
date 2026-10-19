@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
@@ -18,6 +18,7 @@ export default function ProtectedRoute({
   platformSuperadminOnly = false,
 }) {
   const { user, loading } = useAuth()
+  const location = useLocation()
   const [currentEventId] = useCurrentEvent()
   // paidOnly: the route is a paid perk (Design Studio, Help) — allowed when the
   // selected event is paid (mirrors the nav's canUseDesignStudio flag), or the
@@ -35,7 +36,7 @@ export default function ProtectedRoute({
 
   if (loading) return <Spinner />
 
-  if (!user) return <Navigate to="/login" replace />
+  if (!user) return <Navigate to="/login" state={{organizerReturn:location.pathname+location.search}} replace />
   if (platformSuperadminOnly && !user.is_platform_superadmin) return <Navigate to="/admin" replace />
   if (adminOnly && user.role !== 'admin') return <Navigate to="/scanner" replace />
   if (setupOnly && !['admin', 'event_manager'].includes(user.role)) return <Navigate to="/scanner" replace />

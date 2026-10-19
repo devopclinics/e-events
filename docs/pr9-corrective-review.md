@@ -53,3 +53,16 @@ Existing default-OFF gates, 1–10 immutable pilot, single test recipient, suppr
 - event-checkin/marketing-service/tests/test_pr9_postgres_checkpoint.py
 - event-checkin/ticketing-service/app/main.py
 - event-checkin/ticketing-service/tests/test_pr9_free_provenance.py
+
+## Corrective PR10 review pass 1 (825b3d7)
+
+The explicitly requested Copilot review completed after CI passed and raised four further findings. All four were read in full, reproduced, and corrected within the same 20-file scope:
+
+| PR10 comment | Disposition / regression |
+|---|---|
+| 4312886640: event access tied to return allowlist | Confirmed. ProtectedRoute now checks accessible event IDs independently of the deliberately narrower login-return URL policy. Registered legacy /setup/guided, /admin and presenter /live routes retain their parameters. Conflicting duplicate/alias event IDs fail closed. |
+| 4312886705: stale terminal worker overwrite | Confirmed. Worker terminal/review-required/stale/exhausted transitions use persisted-state CAS and skip losing transitions. Two independent SQLite connections pause between the stale read and current claim; both sending and unknown states survive, the owning worker/reconciler can release the guard, and STOP remains opted out. Both cases fail on 825b3d7 (cancelled overwrote sending/unknown) and pass corrected. |
+| 4312886746: stale paid-event authorization | Confirmed. Paid state is keyed by user/event, superseded responses are ignored, and the route stays loading until that selected event's result arrives. Tests cover unpaid A / paid B, no stored selection and an old A response arriving after B. |
+| 4312886780: accepted switch leaves stale event URL | Confirmed. Only a previously applied deep link may synchronize a subsequent accepted shared selection. URL updates preserve existing aliases/presenter parameters; rejected unsaved-change-guard switches do not change selection or URL. Initial denied changes retain an explicit recovery link. |
+
+These regressions execute the production ProtectedRoute component in a controlled VM and real database workers with barriers, not sleeps. The new review required another final-head CI run and a fresh requested review; the earlier green CI/review is not treated as final approval. Deployment stays on hold, PR remains draft, and this task must not merge it.

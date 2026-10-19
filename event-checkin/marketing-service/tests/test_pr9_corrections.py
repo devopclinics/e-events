@@ -261,3 +261,49 @@ def test_retention_schema_is_postgres_bigint_and_sqlite_preserves_identity(servi
     with m.SessionLocal() as db:
         db.add(retention.RetentionJob(id="wide-step",lead_id="lead",org_id="org",event_id="event",step=value));db.commit()
     with m.SessionLocal() as db:assert db.get(retention.RetentionJob,"wide-step").step==value
+
+
+@pytest.mark.parametrize("provider_state",["sending","unknown"])
+def test_stale_suppressed_worker_cannot_cancel_owned_or_unknown_reply(service,monkeypatch,provider_state):
+    m,_,_=service;body=real_sales_fixture(monkeypatch,"chat")
+    with m.SessionLocal() as db:
+        reply=sales.ingest(db,body);identity=reply.id;key=reply.conversation_id
+    read=threading.Event();resume_reader=threading.Event();provider_entered=threading.Event();provider_release=threading.Event();local=threading.local()
+    get=m.SessionLocal.class_.get;dispatch=sales.dispatch
+    def paused_get(db,entity,*args,**kwargs):
+        row=get(db,entity,*args,**kwargs)
+        if entity is sales.Reply and getattr(local,"inside",False) and not getattr(local,"waited",False):
+            local.waited=True;read.set();assert resume_reader.wait(10)
+        return row
+    monkeypatch.setattr(m.SessionLocal.class_,"get",paused_get)
+    def provider(**kwargs):
+        provider_entered.set()
+        if provider_state=="sending":assert provider_release.wait(10)
+        return {"status":"accepted","provider_id":"synthetic-accepted"} if provider_state=="sending" else {"status":"unknown"}
+    adapter=Mock();adapter.send.side_effect=provider
+    def wrapped(db,*args,**kwargs):
+        if getattr(local,"reader",False):local.inside=True
+        try:return dispatch(db,*args,**kwargs)
+        finally:local.inside=False
+    monkeypatch.setattr(sales,"dispatch",wrapped)
+    def reader():local.reader=True;return workers.tick(m,sales_adapter=adapter)
+    def sender():
+        with m.SessionLocal() as db:return dispatch(db,identity,adapter)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        stale=pool.submit(reader);assert read.wait(10)
+        owner=pool.submit(sender);assert provider_entered.wait(10)
+        if provider_state=="unknown":assert owner.result(timeout=10)=="unknown"
+        with m.SessionLocal() as writer:sales.ingest(writer,{**body,"event_id":"stop-between-worker-reads","intent":"opt_out"})
+        resume_reader.set()
+        try:
+            assert stale.result(timeout=10)["sent"]==0
+            with m.SessionLocal() as db:
+                assert db.get(sales.Reply,identity).status==provider_state
+                assert db.get(sales.DispatchGuard,key).active_reply==identity
+        finally:provider_release.set()
+        if provider_state=="sending":assert owner.result(timeout=10)=="accepted"
+    with m.SessionLocal() as db:
+        if provider_state=="unknown":sales.reconcile(db,identity,provider_id="authoritatively-confirmed")
+        assert db.get(sales.DispatchGuard,key).active_reply is None
+        assert db.get(sales.Conversation,key).status=="opted_out"
+    assert adapter.send.call_count==1

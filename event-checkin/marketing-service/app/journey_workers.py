@@ -172,7 +172,10 @@ def tick(m, *, sales_adapter=None, notification_adapter=None, dry_run=False, sto
         for stale in ([] if dry_run else db.scalars(select(sales.Reply).where(sales.Reply.status == "sending"))):
             at = sales.authenticated_time(stale.claimed_at) if stale.claimed_at else None
             if at is None or at < sales.clock()-timedelta(minutes=2):
-                stale.status = "unknown"
+                changed=db.execute(update(sales.Reply).where(sales.Reply.id==stale.id,sales.Reply.status=="sending",
+                    sales.Reply.claimed_at==stale.claimed_at).values(status="unknown").execution_options(synchronize_session=False))
+                if not changed.rowcount:
+                    continue
                 sales.hold_conversation(db,stale.conversation_id)
                 from types import SimpleNamespace
                 from .organizer_journey import open_handoff
@@ -181,7 +184,10 @@ def tick(m, *, sales_adapter=None, notification_adapter=None, dry_run=False, sto
             from types import SimpleNamespace
             from .organizer_journey import open_handoff
             for exhausted in db.scalars(select(sales.Reply).where(sales.Reply.status.in_(("prepared","rejected")),sales.Reply.attempts>=3).limit(20)):
-                exhausted.status="exhausted"
+                changed=db.execute(update(sales.Reply).where(sales.Reply.id==exhausted.id,sales.Reply.status.in_(("prepared","rejected")),sales.Reply.attempts>=3)
+                    .values(status="exhausted").execution_options(synchronize_session=False))
+                if not changed.rowcount:
+                    continue
                 sales.hold_conversation(db,exhausted.conversation_id)
                 open_handoff(m,db,SimpleNamespace(id="sales:"+exhausted.conversation_id,owner_email=None),exhausted.payload["channel"],exhausted.id)
             missing_case=~select(Handoff.id).where(Handoff.lead_id==literal("sales:")+sales.Conversation.id).exists()
@@ -257,7 +263,11 @@ def tick(m, *, sales_adapter=None, notification_adapter=None, dry_run=False, sto
             db.merge(schedule(id="reply:"+identity,next_at=at))
             db.commit()
             if reply.payload.get("knowledge_sha256")!=os.getenv("MARKETING_SALES_KNOWLEDGE_SHA256"):
-                reply.status="review_required"
+                changed=db.execute(update(sales.Reply).where(sales.Reply.id==identity,sales.Reply.status.in_(("prepared","rejected")))
+                    .values(status="review_required").execution_options(synchronize_session=False))
+                if not changed.rowcount:
+                    db.rollback()
+                    continue
                 sales.hold_conversation(db,reply.conversation_id,"handoff")
                 db.commit()
                 continue
@@ -267,8 +277,12 @@ def tick(m, *, sales_adapter=None, notification_adapter=None, dry_run=False, sto
             if outcome=="rejected" and reply.attempts>=3:
                 outcome="retry_limit"
             if outcome in {"suppressed","retry_limit"}:
-                reply.status="cancelled" if outcome=="suppressed" else "exhausted"
+                changed=db.execute(update(sales.Reply).where(sales.Reply.id==identity,sales.Reply.status.in_(("prepared","rejected")))
+                    .values(status="cancelled" if outcome=="suppressed" else "exhausted").execution_options(synchronize_session=False))
                 db.commit()
+                db.expire_all()
+                if not changed.rowcount:
+                    continue
             if outcome in {"unknown", "retry_limit"}:
                 from types import SimpleNamespace
                 from .organizer_journey import open_handoff

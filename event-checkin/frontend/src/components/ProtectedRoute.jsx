@@ -27,9 +27,10 @@ export default function ProtectedRoute({
   const appliedReturn=useRef(null)
   const [eventReturn,setEventReturn]=useState({key:null,status:'checking'})
   useEffect(()=>{
+    appliedReturn.current=null
+    setEventReturn({key:returnKey,status:'checking'})
     if(!user||!requestedEvent||eventQuery.conflict)return
     let alive=true
-    setEventReturn({key:returnKey,status:'checking'})
     api.listEvents().then(events=>{
       if(!alive)return
       // Event authorization is independent of login return-URL sanitization.

@@ -110,3 +110,14 @@ test('accepted user switches synchronize the event URL and blocked switches do n
   alias.switchEvent('C');const target=new URL(alias.render().props.to,'https://festio.events')
   assert.equal(target.searchParams.get('event_id'),'C');assert.equal(target.searchParams.get('present'),'1')
 })
+
+test('returning to a previous deep link performs a fresh selection instead of reusing an applied marker',async()=>{
+  let allowB=true
+  const h=harness({guard:id=>id!=='B'||allowB})
+  h.render();h.resolve([{id:'B'},{id:'C'}]);await Promise.resolve();await Promise.resolve();h.render()
+  h.navigate('/admin');h.render();h.switchEvent('C');allowB=false
+  h.navigate('/setup-redesign?event=B&view=audience&task=rsvp')
+  const checking=h.render();assert.notEqual(checking,'event-tasks');assert.notEqual(checking.type,'Navigate')
+  h.resolve([{id:'B'},{id:'C'}],1);await Promise.resolve();await Promise.resolve()
+  const blocked=h.render();assert.equal(blocked.props.role,'alert');assert.equal(h.selected,'C')
+})

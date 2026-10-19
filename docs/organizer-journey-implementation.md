@@ -127,3 +127,24 @@ timestamp. The implementation correctly refused an automated reply. The fixture
 now uses fresh authenticated metadata; missing/malformed/stale/future timestamp
 STOP requests have separate regression coverage. No freshness check was relaxed.
 Multi-day email guidance uses the event-local end day, matching the UI.
+
+### Verified final results
+
+| Check | Result |
+| --- | --- |
+| Broad backend regression | 543 passed |
+| Full Marketing regression | 294 passed |
+| Final journey/worker slice (including latest multi-day context) | 32 passed |
+| Final source/context/copy/commerce slice | 13 passed |
+| Final authenticated ingress/timestamp/STOP slice | 29 passed |
+| Full ticketing regression | 30 passed |
+| Selected frontend regression | 91 passed |
+| Frontend production build/postbuild | Passed; existing large-chunk advisory only |
+| Combined patch whitespace review | Passed |
+
+The final changed slices were run after the last source/renderer changes; counts
+overlap with the broad suites and must not be summed as unique test cases.
+Synthetic source acceptance covers actual business producers to the actual
+Marketing consumer. Worker integration uses HTTP MockTransport for the actual
+Chatwoot/Bird/notification adapters, and mocks existing email delivery. Real
+HTTP/SMTP/provider transport is denied by the service test fixtures.

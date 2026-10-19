@@ -10,9 +10,9 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import Column, String, Integer, JSON, Text, select, update, delete, case, or_,func
+from sqlalchemy import Column, String, Integer, JSON, Text, select, update, delete, case, or_,func,text
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError,DBAPIError
 
 from .organizer_journey import fingerprint
 
@@ -70,6 +70,15 @@ class QueueSchedule(Base):
     next_at = Column(String(40), nullable=False)
 
 
+DISPATCH_LOCK_TIMEOUT_MS = 5000
+
+
+def dispatch_lock_timeout(db):
+    if db.get_bind().dialect.name=="postgresql":
+        with db.no_autoflush:
+            db.execute(text("SELECT set_config('lock_timeout', :timeout, true)"),{"timeout":str(DISPATCH_LOCK_TIMEOUT_MS)+"ms"})
+
+
 def lock_dispatch(db, conversation_id):
     """Transaction mutex shared by submission, reconciliation and finalization.
 
@@ -78,6 +87,7 @@ def lock_dispatch(db, conversation_id):
     All writers acquire guard before reply to keep lock ordering consistent.
     """
     with db.no_autoflush:
+        dispatch_lock_timeout(db)
         db.execute(update(DispatchGuard).where(DispatchGuard.conversation_id==conversation_id)
             .values(token=DispatchGuard.token).execution_options(synchronize_session=False))
 
@@ -283,6 +293,7 @@ def dispatch(db, reply_id, adapter, *, template=None, stop_requested=None):
     reason,content=dispatch_policy(row,reply,template)
     if reason:
         return reason
+    dispatch_lock_timeout(db)
     hour=clock().strftime("%Y-%m-%dT%H")
     token=str(uuid.uuid4())
     if not db.get(DispatchGuard,row.id):
@@ -361,8 +372,12 @@ def dispatch(db, reply_id, adapter, *, template=None, stop_requested=None):
 def reconcile(db, reply_id, *, provider_id=None, definitely_not_sent=False):
     reply = db.get(Reply, reply_id)
     if reply:
-        lock_dispatch(db,reply.conversation_id)
-        db.refresh(reply)
+        try:
+            lock_dispatch(db,reply.conversation_id)
+            db.refresh(reply)
+        except DBAPIError:
+            db.rollback()
+            raise HTTPException(409,"Submission is active or coordination is unavailable; no reconciliation applied") from None
     if not reply or reply.status not in {"unknown", "sending"}:
         raise HTTPException(409, "No uncertain attempt")
     # Caller must independently inspect authenticated provider records.

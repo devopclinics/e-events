@@ -475,7 +475,7 @@ def test_open_handoff_refreshes_cached_case_before_availability_write(service,mo
 @pytest.mark.parametrize("receipt",[False,True])
 def test_post_check_submission_cannot_be_revoked_or_reassigned(service,monkeypatch,channel,receipt):
     from sqlalchemy import text
-    from sqlalchemy.exc import OperationalError
+    from fastapi import HTTPException
     m,_,_=service;body=real_sales_fixture(monkeypatch,channel);one,two,key=prepare_pair(m,body)
     entered=threading.Event();release=threading.Event();requests=[];post=httpx.Client.post
     def paused_post(client,*args,**kwargs):
@@ -491,7 +491,8 @@ def test_post_check_submission_cannot_be_revoked_or_reassigned(service,monkeypat
             assert requests==[] # Paused after final validation, before transport.
             with m.SessionLocal() as other:
                 other.execute(text("PRAGMA busy_timeout=0"))
-                with pytest.raises(OperationalError):sales.reconcile(other,one,**({"provider_id":"authenticated-receipt"} if receipt else {"definitely_not_sent":True}))
+                with pytest.raises(HTTPException) as busy:sales.reconcile(other,one,**({"provider_id":"authenticated-receipt"} if receipt else {"definitely_not_sent":True}))
+                assert busy.value.status_code==409
                 other.rollback()
             with m.SessionLocal() as other:
                 assert other.get(sales.DispatchGuard,key).active_reply==one

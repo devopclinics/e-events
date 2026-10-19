@@ -42,11 +42,13 @@ def test_postgres_submission_row_lock_fences_reconciliation_after_final_check(mo
     import httpx
     from sqlalchemy.orm import Session
     from sqlalchemy.exc import DBAPIError
+    from fastapi import HTTPException
     from app import sales_responses as sales,journey_workers as workers
     from test_journey_workers import real_sales_fixture
     url=make_url(os.environ["TASK_POSTGRES_TEST_URL"])
     assert url.host=="127.0.0.1" and url.database=="journey_review" and url.username=="synthetic"
     monkeypatch.setenv("MARKETING_INTERNAL_TOKEN","synthetic-postgres-only")
+    monkeypatch.setattr(sales,"DISPATCH_LOCK_TIMEOUT_MS",100)
     body=real_sales_fixture(monkeypatch,channel);local=threading.local()
     async def execute(callback):
         engine=create_async_engine(url)
@@ -87,9 +89,9 @@ def test_postgres_submission_row_lock_fences_reconciliation_after_final_check(mo
                     # the provider boundary holds the separate Guard row.
                     db.get(sales.Reply,one).status="unknown";db.commit()
                     db.execute(text("SET LOCAL lock_timeout = '100ms'"))
-                    with pytest.raises(DBAPIError) as blocked:
+                    with pytest.raises(HTTPException) as blocked:
                         sales.reconcile(db,one,**({"provider_id":"authenticated-receipt"} if provider_receipt else {"definitely_not_sent":True}))
-                    assert getattr(blocked.value.orig,"sqlstate",None)=="55P03"
+                    assert blocked.value.status_code==409
                     db.rollback()
                     db.execute(text("SET LOCAL lock_timeout = '100ms'"))
                     with pytest.raises(DBAPIError) as consent_blocked:

@@ -122,6 +122,7 @@ class SalesAdapter:
             # Persist the conservative may-submit boundary before contact.
             # After arming, a not-found observation cannot authorize reclaim.
             with self.m.SessionLocal() as db:
+                sales.dispatch_lock_timeout(db)
                 armed=db.execute(update(sales.DispatchGuard).where(sales.DispatchGuard.conversation_id==contact_key,
                     sales.DispatchGuard.active_reply==idempotency_key,sales.DispatchGuard.token==claim_token,
                     sales.DispatchGuard.submission_state=="preparing").values(submission_state="armed"))

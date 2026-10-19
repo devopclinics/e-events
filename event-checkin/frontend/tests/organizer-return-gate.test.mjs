@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {readFileSync} from 'node:fs'
+import {readFileSync,readdirSync} from 'node:fs'
 import {runInNewContext} from 'node:vm'
 import {transformSync} from 'esbuild'
 import {authenticatedOrganizerReturn,safeOrganizerDestination} from '../src/pages/organizerGuidance.mjs'
@@ -11,6 +11,18 @@ test('all reported registered workspace destinations survive authenticated retur
     assert.equal(safeOrganizerDestination(route,'B',[event]),route+'?event=B')
     assert.equal(authenticatedOrganizerReturn(route+'?event=B',[event]),route+'?event=B')
     assert.equal(authenticatedOrganizerReturn(route+'?event=B',[]),null)
+  }
+})
+
+test('every literal guide recipe destination is registered and survives safe navigation',()=>{
+  const pages=new URL('../src/pages/',import.meta.url),app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8')
+  for(const file of readdirSync(pages).filter(x=>/^guide.*\.mjs$/.test(x))){
+    const source=readFileSync(new URL(file,pages),'utf8')
+    for(const [,route] of source.matchAll(/\broute:\s*['"]([^'"]+)['"]/g)){
+      const pathname=new URL(route,'https://festio.events').pathname
+      assert.ok(app.includes(`path="${pathname}"`),`${file}: ${route} must be a registered workspace`)
+      assert.ok(safeOrganizerDestination(route,'B',[{id:'B',org_id:'org'}]),`${file}: ${route} must remain usable`)
+    }
   }
 })
 
@@ -43,6 +55,6 @@ test('logged-in deep link authorizes and selects event B before mounting tasks',
 })
 
 test('unavailable or wrong-tenant event never mounts the previously selected event tasks',async()=>{
-  const h=harness();h.render();h.resolve([{id:'A',org_id:'other-org'}]);await Promise.resolve();await Promise.resolve()
+  const h=harness();assert.notEqual(h.render(),'event-tasks');h.resolve([{id:'A',org_id:'other-org'}]);await Promise.resolve();await Promise.resolve()
   assert.equal(h.render().props.role,'alert');assert.equal(h.selected,'A');assert.deepEqual(h.selections,[])
 })

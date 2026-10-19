@@ -1929,10 +1929,23 @@ export const api = {
   getSetupRecommendations: (eventType) => req('GET', `/setup/recommendations?event_type=${encodeURIComponent(eventType || '')}`),
   eventCreationLimits: () => req('GET', '/events/creation-limits'),
   getSetupProgress: (eventId) => req('GET', `/setup/progress?event_id=${eventId}`),
-  recordSetupEvidence: (body) => req('POST', '/setup/evidence', body),
+  recordSetupEvidence: async (body) => {
+    const evidence=await req('POST', '/setup/evidence', body)
+    await req('POST', `/events/${encodeURIComponent(body.event_id)}/organizer-observation`, {
+      source_id:evidence.id, use_case:body.step_key, result:body.result,
+    })
+    return evidence
+  },
   setSetupProgress: (eventId, stepKey, status) => req('POST', `/setup/progress`, { event_id: eventId, step_key: stepKey, status }),
   marketingMe: () => marketingReq('GET', '/me'),
   marketingDashboard: () => marketingReq('GET', '/dashboard'),
+  marketingHandoffs: (includeResolved=false) => marketingReq('GET', `/handoffs?include_resolved=${includeResolved}`),
+  marketingHandoffAction: (id, action, body) => marketingReq('POST', `/handoffs/${encodeURIComponent(id)}/${action}`, body),
+  marketingResumeConversation: id => marketingReq('POST', `/sales-conversations/${encodeURIComponent(id)}/resume`),
+  marketingSalesAttempts: id => marketingReq('GET', `/sales-conversations/${encodeURIComponent(id)}/attempts`),
+  marketingReconcileReply: (id,body) => marketingReq('POST', `/sales-replies/${encodeURIComponent(id)}/reconcile`,body),
+  marketingCommerceMetrics: () => marketingReq('GET', '/commerce-metrics'),
+  marketingJourneySafety: () => marketingReq('GET', '/journey-safety'),
   marketingAccess: () => marketingReq('GET', '/access'),
   marketingGrantAccess: (body) => marketingReq('POST', '/access', body),
   marketingRevokeAccess: (id) => marketingReq('DELETE', `/access/${id}`),

@@ -18,7 +18,7 @@ from ..config import settings
 from ..models import MarketingOutbox
 
 
-ENDPOINTS = frozenset({"ingest", "delivery", "conversations", "demo-requests", "sales-responses", "organizer-milestones"})
+ENDPOINTS = frozenset({"ingest", "delivery", "conversations", "demo-requests", "sales-responses", "organizer-milestones", "commerce-facts"})
 
 
 def lifecycle_event_id(*parts: str) -> str:
@@ -72,8 +72,9 @@ async def ingest_marketing_lead(
     background job, does not prove mailbox ownership. Never let arbitrary
     lifecycle fields replace the identity selected by the caller.
     """
-    from ..models import Membership
-    organizer = await db.scalar(select(Membership.id).where(
+    from ..models import Membership, Organization
+    organizer = await db.scalar(select(Membership.id).join(Organization,Organization.id==Membership.org_id).where(
+        Organization.is_active.is_(True),
         Membership.user_id == user.id, Membership.role == "owner").limit(1))
     payload = {
         **fields,
@@ -117,7 +118,7 @@ async def ingest_org_lifecycle(db: AsyncSession, org_id: str, *, stage: str, **f
 
 async def capture_organizer_outcome(
     db: AsyncSession, event, *, milestone: str, source_id: str,
-    use_case: str, synthetic: bool | None,
+    use_case: str, synthetic: bool | None, config_revision: str | None = None,
 ) -> str | None:
     """Capture only explicit real-source evidence in the business transaction.
 
@@ -125,11 +126,11 @@ async def capture_organizer_outcome(
     configuration toggle must never call this as a real delivered outcome.
     No email matching, ownership fallback, consent change or provider I/O.
     """
-    if synthetic is not False:
+    if synthetic is not False or getattr(event, "is_test", None) is not False:
         return None
-    from ..models import Membership, User
-    owners = (await db.execute(select(User).join(Membership, Membership.user_id == User.id).where(
-        Membership.org_id == event.org_id, Membership.role == "owner"))).scalars().all()
+    from ..models import Membership, User, Organization
+    owners = (await db.execute(select(User).join(Membership, Membership.user_id == User.id).join(Organization,Organization.id==Membership.org_id).where(
+        Organization.is_active.is_(True),User.is_active.is_(True),Membership.org_id == event.org_id, Membership.role == "owner"))).scalars().all()
     for owner in owners:
         subject = owner.firebase_uid or owner.id
         identity = lifecycle_event_id("organizer-outcome-v1", subject, event.org_id, event.id, use_case, milestone, source_id)
@@ -137,8 +138,38 @@ async def capture_organizer_outcome(
             "id": identity, "account_id": subject, "org_id": event.org_id, "organizer_event_id": event.id,
             "use_case": use_case, "milestone": milestone, "source_id": source_id,
             "current_owner": True, "synthetic": False,
+            "config_revision":config_revision,
         }, endpoint="organizer-milestones", event_id=identity)
     return identity if owners else None
+
+
+async def capture_event_outcome(db, event, milestone, source_id, *, use_case="event", guest=None):
+    """Only persisted provenance can classify an outcome; callers cannot assert it."""
+    if guest is not None and (guest.event_id != event.id or getattr(guest, "is_test", None) is not False):
+        return None
+    import hashlib
+    keys=("event_date","event_end_date","timezone","attendance_mode","seating_enabled","menu_enabled","logistics_enabled","registry_enabled","venue_access_enabled","experience_enabled","planner_enabled","engagement_enabled","speaker_enabled","partner_enabled","reminders_enabled","rsvp_enabled","rsvp_capacity","manual_checkin_enabled","channel_policy","notify_email","notify_sms","notify_whatsapp")
+    revision=hashlib.sha256(json.dumps({k:getattr(event,k,None) for k in keys},sort_keys=True,default=str).encode()).hexdigest()
+    if milestone=="configured":
+        await db.flush()
+        source_id=revision+":"+str(getattr(event,"updated_at",None))
+    return await capture_organizer_outcome(db, event, milestone=milestone, source_id=source_id,
+        use_case=use_case, synthetic=getattr(event, "is_test", None), config_revision=revision)
+
+
+async def capture_commerce(db, org_id, kind, reference, amount, currency, *, synthetic, event_id=None, provider=""):
+    if synthetic is not False or not reference or type(amount) is not int or amount < 0:
+        return
+    from ..models import Membership, User, Organization
+    owners = (await db.execute(select(User).join(Membership, Membership.user_id == User.id).join(Organization,Organization.id==Membership.org_id).where(
+        Organization.is_active.is_(True),User.is_active.is_(True),Membership.org_id == org_id, Membership.role == "owner"))).scalars().all()
+    for owner in owners:
+        subject = owner.firebase_uid or owner.id
+        identity = lifecycle_event_id("commerce-v1", subject, org_id, provider, kind, reference)
+        await enqueue_marketing_payload(db, {"account_id": subject, "org_id": org_id,
+            "organizer_event_id": event_id, "kind": kind, "reference": reference, "provider": provider,
+            "amount": amount, "currency": currency, "synthetic": False, "current_owner": True},
+            endpoint="commerce-facts", event_id=identity)
 
 
 async def marketing_preferences(email: str, body: dict | None = None) -> dict:

@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 // bar — pick once, everywhere stays in sync. Backed by localStorage with a tiny
 // pub/sub so all hook instances update live in the same tab.
 const KEY = 'eq.currentEventId'
-let current = localStorage.getItem(KEY) || ''
+let current = ''
+try { current = localStorage.getItem(KEY) || '' } catch { /* In-memory selection still works when storage is blocked. */ }
 const subs = new Set()
 const changeGuards = new Set()
 export function registerEventChangeGuard(guard) {
@@ -15,8 +16,10 @@ export function registerEventChangeGuard(guard) {
 function setCurrent(id) {
   if ((id || '') !== current && [...changeGuards].some(guard => !guard(id))) return
   current = id || ''
-  if (id) localStorage.setItem(KEY, id)
-  else localStorage.removeItem(KEY)
+  try {
+    if (id) localStorage.setItem(KEY, id)
+    else localStorage.removeItem(KEY)
+  } catch { /* Keep the authenticated session usable without persistence. */ }
   subs.forEach((fn) => fn(current))
 }
 

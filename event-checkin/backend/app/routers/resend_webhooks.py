@@ -230,6 +230,15 @@ async def receive_resend_webhook(
             bounce_type=(str(data["bounce"].get("type") or "").strip().lower() or None)
             if isinstance(data.get("bounce"), dict) else None,
         )
+        # Exact signed event/guest tags only. Recipient fallback cannot establish
+        # that an invitation to this specific guest was delivered.
+        if event_type == "email.delivered" and tags.get("guest_id") == guest_id and tags.get("event_id") == event_id and delivery.message_kind in {"invitation", "experience_invitation"}:
+            from app.models import Event
+            from app.services.marketing_client import capture_event_outcome
+            source_event = await db.get(Event, event_id)
+            source_guest = await db.get(Guest, guest_id)
+            if source_event and source_guest:
+                await capture_event_outcome(db, source_event, "invitation_delivered", str(delivery.provider_email_id), use_case="invitation", guest=source_guest)
         await db.commit()
     except IntegrityError:
         await db.rollback()

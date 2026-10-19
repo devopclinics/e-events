@@ -2,7 +2,7 @@
 import html
 import uuid
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,6 +30,10 @@ class PaidAttendee(BaseModel):
 
 
 class PaidOrderFulfillment(BaseModel):
+    is_test: StrictBool | None = None
+    amount: int = Field(default=0, ge=0)
+    ticket_amount: int | None = Field(default=None,ge=0)
+    currency: str = Field(default="", max_length=3)
     order_id: str = Field(min_length=1, max_length=80)
     event_id: str
     buyer_email: str
@@ -253,6 +257,8 @@ async def fulfill_paid_order(body: PaidOrderFulfillment, background_tasks: Backg
                              x_internal_token: str | None = Header(default=None),
                              db: AsyncSession = Depends(get_db)):
     _authorized(x_internal_token)
+    if body.ticket_amount is not None and body.ticket_amount>body.amount:
+        raise HTTPException(422,"Ticket value exceeds the paid order total")
     event = await db.get(Event, body.event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -278,6 +284,7 @@ async def fulfill_paid_order(body: PaidOrderFulfillment, background_tasks: Backg
         if attendee.access_ticket_type_id and attendee.access_ticket_type_id not in valid_types:
             raise HTTPException(409, f"Access type for {attendee.product_name} is no longer valid")
         guest = Guest(
+            is_test=True if body.is_test is True or event.is_test is True else body.is_test,
             event_id=body.event_id, first_name=attendee.first_name.strip(),
             last_name=attendee.last_name.strip(), email=attendee.email or body.buyer_email,
             phone=attendee.phone, ticket_type_id=attendee.access_ticket_type_id,
@@ -293,6 +300,16 @@ async def fulfill_paid_order(body: PaidOrderFulfillment, background_tasks: Backg
         db, event.org_id, stage="event_created", lifecycle_event="attendee_order_fulfilled", event_type=event.event_type,
         event_id=lifecycle_event_id("ticket_order", body.order_id),
     )
+    from ..services.marketing_client import capture_commerce
+    if event.is_test is False:
+        await capture_commerce(db, event.org_id, "attendee_order", body.order_id, body.amount, body.currency,
+            synthetic=body.is_test, event_id=event.id, provider="ticketing")
+        if body.ticket_amount is not None:
+            await capture_commerce(db,event.org_id,"ticket_sales",body.order_id,body.ticket_amount,body.currency,
+                synthetic=body.is_test,event_id=event.id,provider="ticketing")
+        if body.ticket_amount is not None and body.ticket_amount > 0 and body.is_test is False:
+            from ..services.marketing_client import capture_event_outcome
+            await capture_event_outcome(db, event, "ticket_order_paid", body.order_id, use_case="tickets")
     await db.commit()
     for guest in created:
         await db.refresh(guest)

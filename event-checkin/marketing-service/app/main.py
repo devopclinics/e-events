@@ -441,6 +441,13 @@ def pause_for_handoff(lead: Lead, reason: str) -> None:
     lead.handoff_requested_at = lead.handoff_requested_at or now()
     lead.suppression_reason = lead.suppression_reason or reason
     lead.next_follow_up_at = None
+    if reason in {"delivery_outcome_unknown","delivery_retry_exhausted"}:
+        from sqlalchemy.orm import object_session
+        from .organizer_journey import open_handoff
+        import sys
+        db=object_session(lead)
+        if db is not None:
+            open_handoff(sys.modules[__name__],db,lead,"email",reason+":"+lead.id)
 
 
 def normalize_phone(value: str | None) -> str | None:
@@ -555,6 +562,7 @@ def lead_automation_map(db: Session, leads: list[Lead]) -> dict[str, dict | None
     """Where each lead stands in its matching active sequence: step reached, out of how
     many, whether it's finished, and the status/time of its most recent touch."""
     sequences = db.scalars(select(ModuleRecord).where(ModuleRecord.module == "sequences", ModuleRecord.status == "active")).all()
+    sequences=[s for s in sequences if s.payload.get("category")!="organizer_retention"]
     lead_ids = [lead.id for lead in leads]
     touches = db.scalars(select(Activity).where(Activity.lead_id.in_(lead_ids), Activity.kind.in_(EMAIL_ATTEMPT_KINDS), Activity.actor != "resend")).all() if lead_ids else []
     counts: dict[tuple[str, str], int] = {}
@@ -656,6 +664,11 @@ def _deliver_follow_up(lead: Lead, sequence: ModuleRecord, step_index: int = 0) 
         raise HTTPException(409, "Lead is not eligible for marketing email")
     steps = sequence_steps(sequence)
     step = steps[min(step_index, len(steps) - 1)] if steps else {"subject": sequence.name, "cta": "Open Festio"}
+    from .journey_context import message_context
+    import sys
+    context = message_context(sys.modules[__name__], lead, sequence, step_index)
+    if context:
+        step = {**step, **context}
     message = EmailMessage()
     message["From"] = os.getenv("EMAIL_FROM", "Festio <events@festio.events>")
     message["To"] = lead.email
@@ -919,11 +932,11 @@ def advance_lifecycle_stage(row: Lead, lifecycle: str, stage: str | None) -> Non
         row.score = max(row.score, 30)
 
 
-def schedule_lifecycle_followup(row: Lead, previous_stage: str, *, created: bool = False) -> None:
+def schedule_lifecycle_followup(row: Lead, previous_stage: str, *, created: bool = False, db=None) -> None:
     # Milestones may reset timing, but never grant consent or remove a newer stop.
     if email_pilot.stopped(row):
         row.next_follow_up_at = None
-    elif row.stage not in {"registered", "event_created"}:
+    elif (email_pilot.stage_for(db,row) if db is not None else row.stage) not in {"registered", "event_created"}:
         if row.stage != previous_stage:
             row.next_follow_up_at = None
     elif created or row.stage != previous_stage or row.next_follow_up_at is None:
@@ -979,7 +992,7 @@ def ingest(body: dict, identity: Identity = Depends(decode_identity), db: Sessio
             return record_unverified_lifecycle(body, identity, db, receipt)
         previous_stage = row.stage
         advance_lifecycle_stage(row, lifecycle, "event_created" if lifecycle == "event_updated" else lifecycle)
-        schedule_lifecycle_followup(row, previous_stage)
+        schedule_lifecycle_followup(row, previous_stage, db=db)
         import sys
         email_pilot.capture_evidence(sys.modules[__name__], db, row, body)
         db.add(Activity(lead_id=row.id, kind=lifecycle[:50], summary=f"Lifecycle: {lifecycle[:80]}",
@@ -1067,7 +1080,7 @@ def ingest(body: dict, identity: Identity = Depends(decode_identity), db: Sessio
         evidence = {"event_id": body.get("event_id"), "requested": consent_fields, "effective": {field: getattr(row, field) for field in consent_fields}, "occurred_at": str(body.get("occurred_at") or now().isoformat())[:50], "lifecycle_event": lifecycle[:80], "source": str(body.get("source") or "festio")[:100]}
         db.add(Activity(lead_id=row.id, kind="consent_recorded", summary="Explicit channel consent recorded", actor="festio", data=evidence))
         audit(db, identity, "consent.recorded", "lead", row.id, **evidence)
-    schedule_lifecycle_followup(row, previous_stage, created=created)
+    schedule_lifecycle_followup(row, previous_stage, created=created, db=db)
     if lifecycle == "demo_requested":
         pause_for_handoff(row, "demo_requested")
         details = {field: str(body[field])[:limit] for field, limit in {"demo_request_id": 128, "preferred_time": 50, "timezone": 100, "event_name": 240, "message": 2000}.items() if body.get(field)}
@@ -1891,12 +1904,12 @@ def next_step_delay_hours(sequence: ModuleRecord, steps: list[dict], sent_index:
     return max(0, float(sequence.payload.get("cadence_days", 3)) * 24)
 
 
-def still_due(lead: Lead, sequence: ModuleRecord, identity: Identity) -> bool:
+def still_due(lead: Lead, sequence: ModuleRecord, identity: Identity, *, db=None, email_mode="legacy") -> bool:
     return bool(
         lead.consent_email and not lead.unsubscribed and not lead.automation_paused
         and not lead.suppression_reason and not lead.deletion_requested_at
         and lead.next_follow_up_at and lead.next_follow_up_at.replace(tzinfo=timezone.utc) <= now()
-        and (not sequence.payload.get("stage") or sequence.payload["stage"] == lead.stage)
+        and (not sequence.payload.get("stage") or sequence.payload["stage"] == (email_pilot.stage_for(db,lead) if email_mode != "legacy" and db is not None else lead.stage))
         and sequence.status == "active"
         and (not identity.owner_scoped or lead.owner_email == identity.email)
     )
@@ -1915,6 +1928,7 @@ def release_unsent_claim(db: Session, attempt: SendAttempt) -> None:
 def run_automation_service(db: Session, identity: Identity, *, dry_run: bool = False, lead_id: str | None = None, email_mode: str = "legacy", stop_requested=None) -> dict:
     """Plain service callable shared by HTTP and scheduler; no FastAPI defaults."""
     sequences = db.scalars(select(ModuleRecord).where(ModuleRecord.module == "sequences", ModuleRecord.status == "active").order_by(ModuleRecord.created_at, ModuleRecord.id)).all()
+    sequences=[s for s in sequences if s.payload.get("category")!="organizer_retention"]
     lead_stmt = select(Lead).where(Lead.unsubscribed.is_(False), Lead.consent_email.is_(True), Lead.automation_paused.is_(False), Lead.suppression_reason.is_(None), Lead.deletion_requested_at.is_(None), Lead.next_follow_up_at <= now())
     if lead_id:
         lead_stmt = lead_stmt.where(Lead.id == lead_id)
@@ -1936,11 +1950,12 @@ def run_automation_service(db: Session, identity: Identity, *, dry_run: bool = F
         if stop_requested and stop_requested():
             result["stopping"] = True
             break
-        matching = next((seq for seq in sequences if not seq.payload.get("stage") or seq.payload.get("stage") == lead.stage), None)
+        lifecycle_stage=email_pilot.stage_for(db,lead) if email_mode != "legacy" else lead.stage
+        matching = next((seq for seq in sequences if not seq.payload.get("stage") or seq.payload.get("stage") == lifecycle_stage), None)
         if not matching:
             continue
         if email_mode != "legacy":
-            email_pilot.approved_template(db, matching, lead.stage)
+            email_pilot.approved_template(db, matching, lifecycle_stage)
         sent_count = db.scalar(select(func.count(Activity.id)).where(Activity.lead_id == lead.id, Activity.kind == "email_sent", Activity.actor != "resend", Activity.data["sequence_id"].as_string() == matching.id)) or 0
         steps = sequence_steps(matching)
         max_touches = max(1, int(matching.payload.get("max_touches") or len(steps)))
@@ -1966,14 +1981,14 @@ def run_automation_service(db: Session, identity: Identity, *, dry_run: bool = F
             continue
         db.refresh(lead)
         db.refresh(matching)
-        if not still_due(lead, matching, identity):
+        if not still_due(lead, matching, identity, db=db, email_mode=email_mode):
             continue
         attempt = claim_sequence_step(db, lead, matching, sent_count)
         if not attempt:
             continue
         db.refresh(lead)
         db.refresh(matching)
-        if not still_due(lead, matching, identity):
+        if not still_due(lead, matching, identity, db=db, email_mode=email_mode):
             release_unsent_claim(db, attempt)
             continue
         uncertain = False

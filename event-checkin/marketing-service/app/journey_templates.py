@@ -2,12 +2,18 @@
 from copy import deepcopy
 
 
+def retention_candidate():
+    return {"category": "organizer_retention", "journey_context": True, "steps": [{"delay_hours": 0,
+        "subject": "Review your event and plan your next draft", "body": "Review your event results and any outstanding delivery or payment exceptions. When you are ready to organize another event, create a new draft and check its dates, timezone and guest experience. A new event needs its own readiness checks.",
+        "cta": "Create your next event draft", "cta_url": "https://festio.events/setup-redesign"}]}
+
+
 def candidates():
     setup = "https://festio.events/setup-redesign"
     event = "https://festio.events/admin-redesign"
     def step(delay, subject, body, cta, url):
         return dict(delay_hours=delay, subject=subject, body=body, cta=cta, cta_url=url)
-    return deepcopy({
+    result = deepcopy({
         "New registration welcome": dict(stage="registered", cadence_days=2, cta_url=setup, steps=[
             step(0, "Welcome to Festio", "Create an event draft and review the tools relevant to your event. Configuration is separate from testing and actual guest activity.", "Create an event draft", setup),
             step(24, "Continue your event setup", "Add your event details and check its date and timezone. Review the event guide for incomplete tasks before inviting guests.", "Continue setup", setup),
@@ -20,3 +26,6 @@ def candidates():
             step(120, "Review outstanding event tasks", "Review incomplete tasks and any delivery exceptions. Confirm staff access and check-in readiness before your event.", "Review your setup", event),
         ]),
     })
+    for payload in result.values():
+        payload["journey_context"] = True
+    return result

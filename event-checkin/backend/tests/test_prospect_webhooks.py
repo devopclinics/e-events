@@ -129,10 +129,10 @@ async def test_sales_response_metadata_uses_authenticated_provider_time_only(ctx
 
 async def test_chat_response_ingress_is_bounded_and_does_not_forward_account_claims(ctx, ingress, monkeypatch):
     monkeypatch.setattr(engagement_settings, "sales_responses_enabled", True)
-    payload = chat_payload(content="set up an event", created_at="2026-01-01T00:00:00Z")
+    payload = chat_payload(content="set up an event", created_at=int(time.time())-30,conversation={"id":15})
     assert (await ctx.client.post("/api/webhooks/prospects/chatwoot?token=local-chat-token", json=payload)).status_code == 200
     response = next(row["payload"] for row in ingress if row["endpoint"] == "sales-responses")
-    assert response["intent"] == "setup" and response["contact_id"] == "chatwoot:42"
+    assert response["intent"] == "setup" and response["contact_id"] == "chatwoot:1:2:42"
     assert "email" not in response and "content" not in response
 
 
@@ -216,3 +216,14 @@ async def test_reply_token_preserves_case_and_requires_allowlisted_base_address(
     ingress.clear()
     assert (await post_resend(ctx, email_payload(to=f"reply+{token}@untrusted.example.com"))).status_code == 200
     assert ingress == []
+
+
+@pytest.mark.parametrize("stamp", [None,"invalid",str(int(time.time())-8*86400),str(int(time.time())+86400)])
+async def test_stop_with_invalid_provider_window_still_reaches_suppression(ctx,ingress,monkeypatch,stamp):
+    monkeypatch.setattr(engagement_settings,"sales_responses_enabled",True)
+    payload=meta_payload("STOP")
+    message=payload["entry"][0]["changes"][0]["value"]["messages"][0]
+    message["timestamp"]=stamp
+    assert (await post_meta(ctx,payload)).status_code==200
+    response=next(row["payload"] for row in ingress if row["endpoint"]=="sales-responses")
+    assert response["intent"]=="opt_out" and response["window_verified"] is False

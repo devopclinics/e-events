@@ -71,6 +71,7 @@ export function createAcquisitionHarness({
       if (id === 'react/jsx-runtime') return { jsx, jsxs: jsx, Fragment: 'Fragment' }
       if (id === 'react-router-dom') return {
         Link: 'a', useNavigate: () => () => {}, useSearchParams: () => [new URLSearchParams(hostWindow.location.search)],
+        useLocation: () => ({pathname:hostWindow.location.pathname,search:hostWindow.location.search,state:null}),
       }
       if (id === 'firebase/auth') return firebaseAuth
       if (id === '../firebase' || id === './firebase') return { auth, oidcProvider: 'fixture', oidcProviderLabel: 'Fixture SSO' }

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.engagement_config import engagement_settings
 from app.database import get_db
 from app.services.marketing_client import enqueue_marketing_payload
-from app.services.prospect_ingress import bounded_body, event_key, incoming_event, object_payload, phone_number, sales_intent
+from app.services.prospect_ingress import bounded_body, event_key, incoming_event, object_payload, phone_number, sales_intent, authenticated_message_time
 
 router = APIRouter()
 
@@ -76,13 +76,17 @@ async def receive_meta_whatsapp_webhook(
                 }, endpoint="conversations", event_id=event_key("meta", provider_id))
                 if engagement_settings.sales_responses_enabled:
                     try:
-                        received = datetime.fromtimestamp(int(message.get("timestamp")), timezone.utc).isoformat()
+                        received = authenticated_message_time(int(message.get("timestamp")))
                     except (TypeError, ValueError, OverflowError, OSError):
-                        continue  # Never invent a new service window for missing provider time.
+                        received=None
+                    intent=sales_intent(text)
+                    if received is None and intent not in {"opt_out","handoff"}:
+                        continue
                     await enqueue_marketing_payload(db, {
                         "channel": "whatsapp", "contact_id": f"meta:{phone}",
-                        "destination": str(metadata["phone_number_id"]), "received_at": received,
-                        "intent": sales_intent(text), "authenticated": True, "direction": "inbound",
+                        "destination": str(metadata["phone_number_id"]), "received_at": received or datetime.now(timezone.utc).isoformat(),
+                        "intent": intent, "authenticated": True, "direction": "inbound", "window_verified":received is not None,
+                        **({"consent": True} if " ".join(str(text or "").casefold().split()) == "i agree to receive festio whatsapp guidance" else {}),
                     }, endpoint="sales-responses", event_id=event_key("meta-sales", provider_id))
     await db.commit()  # 200 only after durable capture; provider retries failures.
     return {"ok": True}

@@ -1,6 +1,6 @@
 import {CHECKLISTS} from './guideChecklists.mjs'
 
-const WORKSPACES = new Set(['/setup-redesign','/admin-redesign','/guests-redesign','/tickets-redesign',
+const WORKSPACES = new Set(['/marketing','/setup-redesign','/admin-redesign','/guests-redesign','/tickets-redesign',
   '/ticketing-redesign','/messaging-redesign','/design-redesign','/addons-redesign','/kitchen-redesign',
   '/planner-redesign','/team-redesign','/live-redesign','/results-redesign','/experience-redesign',
   '/festiome-redesign','/guesthub-redesign','/checkin-redesign','/integrations-redesign'])
@@ -38,16 +38,25 @@ export function contextualGuidance({event, accessibleEvents, recipes=[], orgId, 
   let timing='unknown', localDate=null
   try {
     if (event.timezone) {
-      const parts = new Intl.DateTimeFormat('en-CA',{timeZone:event.timezone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now)
-      const get=k=>parts.find(p=>p.type===k)?.value
-      localDate=`${get('year')}-${get('month')}-${get('day')}`
-      const start=event.event_date?.slice(0,10), end=(event.event_end_date||event.event_date)?.slice(0,10)
+      const formatter=new Intl.DateTimeFormat('en-CA',{timeZone:event.timezone,year:'numeric',month:'2-digit',day:'2-digit'})
+      const day=value=>{const parts=formatter.formatToParts(value);const get=k=>parts.find(p=>p.type===k)?.value;return `${get('year')}-${get('month')}-${get('day')}`}
+      const instant=value=>new Date(/(Z|[+-]\d\d:\d\d)$/.test(value||'')?value:`${value}Z`)
+      localDate=day(now)
+      const start=day(instant(event.event_date)), end=day(instant(event.event_end_date||event.event_date))
       if (/^\d{4}-\d{2}-\d{2}$/.test(start||'') && /^\d{4}-\d{2}-\d{2}$/.test(end||''))
         timing=localDate<start?'upcoming':localDate>end?'past':'event_day'
     }
   } catch { /* Ask for a valid timezone; never infer completion from a date. */ }
-  const cancelled=event.status==='cancelled'
-  const next=recipes.filter(r=>!r.complete&&!r.notApplicable).map(r=>({
+  const cancelled=event.cancelled===true || event.status==='cancelled'
+  let candidates=recipes.filter(r=>!r.complete&&!r.notApplicable)
+  if(cancelled||timing==='past') {
+    candidates=candidates.filter(r=>['results','closeout','help','integrations'].includes(r.id))
+    if(!candidates.length)candidates=[{id:'closeout',title:'Review results and closeout',route:'/setup-redesign?view=closeout'}]
+  } else if(timing==='event_day') {
+    const rank=['checkin','access','team','control']
+    candidates.sort((a,b)=>(rank.includes(a.id)?rank.indexOf(a.id):100)-(rank.includes(b.id)?rank.indexOf(b.id):100))
+  }
+  const next=candidates.map(r=>({
     ...r, route:safeOrganizerDestination(r.route,event.id,accessibleEvents,orgId),
     checklist:CHECKLISTS[r.id]||[],
   })).filter(r=>r.route)

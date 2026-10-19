@@ -1,5 +1,6 @@
 """Dedicated sales-inbox webhooks, isolated from event guest communications."""
 import hmac
+from datetime import datetime,timezone
 from email.utils import parseaddr
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -10,7 +11,7 @@ from app.engagement_config import engagement_settings
 from app.database import get_db
 from app.routers.resend_webhooks import _verify_svix_signature
 from app.services.marketing_client import enqueue_marketing_payload
-from app.services.prospect_ingress import bounded_body, email_address, event_key, incoming_event, object_payload, phone_number, sales_intent
+from app.services.prospect_ingress import bounded_body, email_address, event_key, incoming_event, object_payload, phone_number, sales_intent, authenticated_message_time
 
 router = APIRouter()
 
@@ -54,11 +55,18 @@ async def prospect_chatwoot_webhook(
         "identity_verified": False,
         "source_contact_id": f"chatwoot:{engagement_settings.prospect_chatwoot_account_id}:{engagement_settings.prospect_chatwoot_inbox_id}:{contact_id}",
     }, endpoint="conversations", event_id=event_key("chatwoot", f"{engagement_settings.prospect_chatwoot_account_id}:{provider_id}"))
-    if engagement_settings.sales_responses_enabled and isinstance(payload.get("created_at"), str):
+    conversation=payload.get("conversation")
+    thread_id=str(conversation.get("id") or "") if isinstance(conversation,dict) else ""
+    received=authenticated_message_time(payload.get("created_at"))
+    intent=sales_intent(payload.get("content"))
+    can_respond=received is not None and thread_id.isdigit()
+    if engagement_settings.sales_responses_enabled and (can_respond or intent in {"opt_out","handoff"}):
         await enqueue_marketing_payload(db, {
-            "channel": "chat", "contact_id": f"chatwoot:{contact_id}",
+            "channel": "chat", "contact_id": f"chatwoot:{engagement_settings.prospect_chatwoot_account_id}:{engagement_settings.prospect_chatwoot_inbox_id}:{contact_id}",
+            "thread_id": thread_id,
+            "transport_account_id": engagement_settings.prospect_chatwoot_account_id,
             "destination": engagement_settings.prospect_chatwoot_inbox_id,
-            "received_at": payload["created_at"], "intent": sales_intent(payload.get("content")),
+            "received_at": received or datetime.now(timezone.utc).isoformat(), "intent": intent, "window_verified":can_respond,
             "authenticated": True, "direction": "inbound",
         }, endpoint="sales-responses", event_id=event_key("chat-sales", f"{engagement_settings.prospect_chatwoot_account_id}:{provider_id}"))
     await db.commit()

@@ -12,6 +12,14 @@ test('CTA validates current tenant, internal destination and event identity',()=
   assert.equal(authenticatedOrganizerReturn('/setup-redesign?event=other',[event]),null)
   assert.equal(authenticatedOrganizerReturn('//evil.test',[]),null)
 })
+test('event-local day changes the next task and cancellation never prompts invitations',()=>{
+  const late={...event,event_date:'2026-10-19T01:00:00Z'}
+  const args={event:late,accessibleEvents:[late],now:new Date('2026-10-19T10:00:00Z'),recipes:[{id:'invitation',route:'/admin-redesign'}]}
+  const result=contextualGuidance(args)
+  assert.equal(result.timing,'past')
+  assert.equal(result.next[0].id,'closeout')
+  assert.equal(contextualGuidance({...args,event:{...late,cancelled:true}}).next[0].id,'closeout')
+})
 test('next steps reuse checklists and use event timezone without inferring completion',()=>{
   const result=contextualGuidance({event,accessibleEvents:[event],now:new Date('2026-10-19T01:00:00Z'),recipes:[
     {id:'rsvp',route:'/admin-redesign',complete:false},{id:'checkin',route:'/admin-redesign',complete:true}]})

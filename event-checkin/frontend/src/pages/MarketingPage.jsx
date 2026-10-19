@@ -4,6 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import "./MarketingPage.css";
 import "./MarketingReadable.css";
+import OrganizerHandoffs from './OrganizerHandoffs'
 
 const MODULE_TABS = [
   ["segments", "Segments"],
@@ -2888,6 +2889,7 @@ export default function MarketingPage() {
     () => [
       ["dashboard", "Dashboard"],
       ["leads", "Leads"],
+      ["handoffs", "Organizer handoffs"],
       ["tags", "Tags"],
       ...MODULE_TABS,
       ["analytics", "Analytics"],
@@ -2986,6 +2988,8 @@ export default function MarketingPage() {
               <Leads />
             ) : tab === "access" ? (
               <Access />
+            ) : tab === "handoffs" ? (
+              <OrganizerHandoffs me={me}/>
             ) : tab === "tags" ? (
               <Tags />
             ) : tab === "analytics" ? (

@@ -78,6 +78,7 @@ class TokenResponse(BaseModel):
 # ── Events ───────────────────────────────────────────────────────────────────
 
 class EventCreate(BaseModel):
+    is_test: StrictBool = False
     _website_url = field_validator("external_website_url", mode="before")(_validate_external_website_url)
     external_website_url: Optional[str] = Field(default=None, max_length=2000)
     setup_preferences: Optional[dict] = None
@@ -193,6 +194,8 @@ class EventSourceUpdate(BaseModel):
 
 
 class EventOut(BaseModel):
+    cancelled: bool = False
+    is_test: Optional[bool] = None
     external_website_url: Optional[str] = Field(default=None, max_length=2000)
     menu_selection_timing: str = "after_admission"
     setup_preferences: Optional[dict] = None
@@ -2384,6 +2387,7 @@ class GuestMenuSubmit(BaseModel):
 # ── Guests ───────────────────────────────────────────────────────────────────
 
 class GuestCreate(BaseModel):
+    is_test: StrictBool = False
     first_name: str
     last_name: str
     email: Optional[str] = ""   # empty allowed for VVIP walk-ins with no contact email
@@ -2416,6 +2420,7 @@ class GuestUpdate(BaseModel):
 
 
 class GuestOut(BaseModel):
+    is_test: Optional[bool] = None
     is_junior: bool = False
     model_config = ConfigDict(from_attributes=True)
 
@@ -2914,6 +2919,7 @@ class RSVPInviteeSubmit(BaseModel):
 
 
 class RSVPSubmit(BaseModel):
+    is_test: StrictBool = False
     first_name: str
     last_name: str
     email: Optional[EmailStr] = None

@@ -1,5 +1,6 @@
 """Service tests use only temporary SQLite databases and stubbed transports."""
 import smtplib
+import os
 
 import httpx
 import pytest
@@ -7,6 +8,9 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def isolated_environment(monkeypatch):
+    for name in list(os.environ):
+        if name.startswith(("MARKETING_SALES_", "MARKETING_HANDOFF_", "MARKETING_ORGANIZER_", "MARKETING_JOURNEY_")):
+            monkeypatch.delenv(name, raising=False)
     for name in (
         "RESEND_API_KEY", "SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD",
         "TURNSTILE_SECRET_KEY", "SIGNALHOUSE_API_KEY", "SIGNALHOUSE_FROM_NUMBER",

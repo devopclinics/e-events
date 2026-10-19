@@ -317,7 +317,7 @@ def test_stale_missing_owner_snapshot_cannot_reset_completed_notification(servic
     with m.SessionLocal() as db:
         lead=m.Lead(email="synthetic@example.com",automation_paused=True);db.add(lead);db.flush();lead_id=lead.id
         db.add(m.AccessGrant(email="operator@example.com",name="Operator",role="marketer",active=True,granted_by="synthetic"))
-        db.add(journey.Handoff(id="stale-owner-case",lead_id=lead.id,status="open",notification="missing_owner",history=[]));db.commit()
+        db.add(journey.Handoff(id="stale-owner-case",lead_id=lead.id,status="open",notification="pending",history=[]));db.commit()
     entered=threading.Event();release=threading.Event();local=threading.local()
     original=getattr(workers,"schedule_work",None);merge=m.SessionLocal.class_.merge
     def pause():
@@ -452,3 +452,21 @@ def test_repeated_handoff_inbound_and_configuration_loss_preserve_terminal_notif
         assert case.generation==2 and case.notification=="pending"
     adapter.notify.return_value=True
     assert workers.tick(m,notification_adapter=adapter)["notifications"]==1
+
+@pytest.mark.parametrize("notification",["accepted","uncertain"])
+def test_open_handoff_refreshes_cached_case_before_availability_write(service,monkeypatch,notification):
+    m,_,_=service;enable(monkeypatch)
+    monkeypatch.setenv("MARKETING_HANDOFF_OWNER","operator@example.com")
+    monkeypatch.setenv("MARKETING_HANDOFF_DESTINATION","https://synthetic.invalid/staff")
+    with m.SessionLocal() as db:
+        lead=m.Lead(email="synthetic@example.com",automation_paused=True);db.add(lead);db.flush();lead_id=lead.id
+        case=journey.open_handoff(m,db,lead,"email","initial");db.commit();case_id=case.id
+    with m.SessionLocal() as stale:
+        cached=stale.get(journey.Handoff,case_id)
+        with m.SessionLocal() as writer:
+            writer.get(journey.Handoff,case_id).notification=notification;writer.commit()
+        monkeypatch.delenv("MARKETING_HANDOFF_DESTINATION")
+        case=journey.open_handoff(m,stale,stale.get(m.Lead,lead_id),"email","repeated")
+        stale.commit()
+        assert case is cached and case.notification==notification and case.generation==1
+    with m.SessionLocal() as reader:assert reader.get(journey.Handoff,case_id).notification==notification

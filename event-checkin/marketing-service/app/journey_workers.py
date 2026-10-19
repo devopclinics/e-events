@@ -124,15 +124,15 @@ class SalesAdapter:
                 row = db.get(sales.Conversation, contact_key)
                 guard=db.get(sales.DispatchGuard,contact_key)
                 if (not reply or reply.status!="sending" or not guard or guard.active_reply!=idempotency_key
-                        or not claim_token or guard.token!=claim_token
-                        or guard.hour!=sales.clock().strftime("%Y-%m-%dT%H")):
+                        or not claim_token or guard.token!=claim_token):
                     raise HTTPException(409,"Stale conversation dispatch claim")
                 try:
                     template = json.loads(os.getenv("MARKETING_SALES_WHATSAPP_APPROVED_TEMPLATE", "null"))
                 except ValueError:
                     template = None
                 reason, current = sales.dispatch_policy(row, reply, template)
-                if reason or current != content or not sales.flag("MARKETING_JOURNEY_WORKER_ENABLED"):
+                if (reason or current != content or not sales.flag("MARKETING_JOURNEY_WORKER_ENABLED")
+                        or guard.hour!=sales.clock().strftime("%Y-%m-%dT%H")):
                     raise HTTPException(409, "Dispatch eligibility changed during readiness verification")
             response = client.post(path, headers=headers, json=payload)
         if response.status_code in {408,409,425}:

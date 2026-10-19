@@ -226,6 +226,34 @@ def test_repair_batch_filters_existing_cases_before_limit(service,monkeypatch):
     with m.SessionLocal() as db:assert db.scalar(select(journey.Handoff.id).where(journey.Handoff.lead_id=="sales:"+missing))
 
 
+def test_existing_inactive_owner_recovers_without_reassignment(service,monkeypatch):
+    m,_,_=service;enable(monkeypatch)
+    monkeypatch.setenv("MARKETING_HANDOFF_DESTINATION","https://synthetic.invalid/staff")
+    monkeypatch.setenv("MARKETING_HANDOFF_NOTIFICATIONS_ENABLED","true")
+    with m.SessionLocal() as db:
+        db.add(m.AccessGrant(email="existing@example.com",name="Owner",role="marketer",active=False,granted_by="synthetic"))
+        db.add(journey.Handoff(id="recover-owner",lead_id="lead",owner="existing@example.com",status="open",notification="pending",history=[]));db.commit()
+    adapter=Mock();adapter.notify.return_value=True
+    workers.tick(m,notification_adapter=adapter);adapter.notify.assert_not_called()
+    with m.SessionLocal() as db:
+        assert db.get(journey.Handoff,"recover-owner").notification=="missing_owner"
+        db.scalar(select(m.AccessGrant).where(m.AccessGrant.email=="existing@example.com")).active=True;db.commit()
+    assert workers.tick(m,notification_adapter=adapter)["notifications"]==1
+
+
+def test_exhausted_notifications_do_not_consume_runnable_batch(service,monkeypatch):
+    m,_,_=service;enable(monkeypatch)
+    monkeypatch.setenv("MARKETING_HANDOFF_OWNER","owner@example.com")
+    monkeypatch.setenv("MARKETING_HANDOFF_DESTINATION","https://synthetic.invalid/staff")
+    monkeypatch.setenv("MARKETING_HANDOFF_NOTIFICATIONS_ENABLED","true")
+    with m.SessionLocal() as db:
+        for i in range(21):db.add(journey.Handoff(id=f"{i:02}-exhausted",lead_id=f"lead-{i}",owner="owner@example.com",status="open",notification="failed",attempts=3 if i<20 else 0,history=[]))
+        db.commit()
+    adapter=Mock();adapter.notify.return_value=True
+    assert workers.tick(m,notification_adapter=adapter)["notifications"]==1
+    assert adapter.notify.call_args.kwargs["case_id"]=="20-exhausted"
+
+
 def test_retention_schema_is_postgres_bigint_and_sqlite_preserves_identity(service):
     m,_,_=service
     assert "step BIGINT" in str(CreateTable(retention.RetentionJob.__table__).compile(dialect=postgresql.dialect()))

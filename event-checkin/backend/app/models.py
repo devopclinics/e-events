@@ -1220,6 +1220,7 @@ class SeatingTable(Base):
     # Optional seating category/restriction label (e.g. Male, Female, Kids,
     # Youth, VIP). Display-only guidance for manual seat assignment.
     category: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    service_section: Mapped[str | None] = mapped_column(String(80), nullable=True)
     # Display + FCFS-fill order (lower first), then name.
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     # Floor-plan layout: canvas position (px), shape, and rotation. NULL pos means
@@ -1496,6 +1497,7 @@ class MealService(Base):
     ends_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     venue_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("zones.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="open")  # draft | open | closed | cancelled
+    tracking_mode: Mapped[str] = mapped_column(String(20), default="orders", server_default="orders")
     capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -1520,7 +1522,9 @@ class GuestMealService(Base):
     service_id: Mapped[str] = mapped_column(String(36), ForeignKey("meal_services.id"), index=True)
     guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"), index=True)
     eligibility_status: Mapped[str] = mapped_column(String(20), default="eligible")  # eligible | not_eligible
-    fulfillment_status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | served | skipped | denied
+    fulfillment_status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | preparing | ready | served | skipped | denied
+    attended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    attended_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     served_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     served_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     station_id: Mapped[str | None] = mapped_column(String(100), nullable=True)

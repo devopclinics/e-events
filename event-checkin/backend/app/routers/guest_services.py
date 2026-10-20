@@ -1,7 +1,7 @@
 """Table/room responsibility and a scoped workspace over existing operations.
 
 Tasks, menu choices, meal fulfillment and zone scan records remain canonical.
-No alternate order, session-attendance or assistance status machine is created.
+Meal progress uses the canonical fulfillment ledger; assistance stays in Tasks.
 """
 from datetime import datetime, timezone
 from typing import Literal
@@ -15,8 +15,11 @@ from ..auth import require_event_member, require_event_admin
 from ..models import (Event, EventUser, User, Membership, SeatingTable, Zone, Guest, GuestServiceAssignment,
     GuestSeatingPresence, GuestServiceActivity, GuestServiceRequest,
     GuestMenuChoice, MenuItem, MenuCombination, MealService, GuestMealService, ScanEvent)
-from ..schemas import GuestMenuSubmit, ScanZoneRequest
+from ..schemas import GuestMenuSubmit, ScanZoneRequest, MealProgressIn, MealTrackingIn, MealAttendanceIn, MealAttendanceCorrectionIn
+from ..services.meal_queue import meal_requests, progress_meal, RESERVED
 from ..services.guest_services import member, supervisor, assignments_for, guest_scope, active_assignment
+
+from ..services.meal_attendance import service_summaries, set_tracking, record_attendance, correct_attendance, has_orders, headcount_only_categories
 
 router = APIRouter()
 
@@ -148,13 +151,13 @@ async def workspace(event_id: str, db: AsyncSession = Depends(get_db), actor: Us
     for choice, item, combo in choices:
         by_guest.setdefault(choice.guest_id, []).append({'category_id': choice.category_id, 'item_id': choice.menu_item_id, 'combination_id': choice.combination_id, 'name': item or combo})
     services = (await db.scalars(select(MealService).where(MealService.event_id == event_id))).all() if event.menu_enabled else []
-    service_counts = dict((await db.execute(select(GuestMealService.service_id,func.count()).where(GuestMealService.service_id.in_([s.id for s in services]),GuestMealService.fulfillment_status=='served').group_by(GuestMealService.service_id))).all()) if services else {}
+    service_counts = dict((await db.execute(select(GuestMealService.service_id,func.count()).where(GuestMealService.service_id.in_([s.id for s in services]),GuestMealService.fulfillment_status.in_(RESERVED)).group_by(GuestMealService.service_id))).all()) if services else {}
     now = datetime.utcnow()
     fulfills = {(r.guest_id, r.service_id): r for r in (await db.scalars(select(GuestMealService).where(GuestMealService.guest_id.in_(ids)))).all()} if ids else {}
     out = []
     for g in guests:
         can_meals = can_write if is_supervisor else any(r.table_id == g.table_id and r.can_manage_meals for r in active)
-        locked_categories = sorted({s.category_id for s in services if fulfills.get((g.id,s.id)) and fulfills[(g.id,s.id)].fulfillment_status == 'served'})
+        locked_categories = sorted({s.category_id for s in services if fulfills.get((g.id,s.id)) and fulfills[(g.id,s.id)].fulfillment_status in RESERVED})
         out.append({'id':g.id, 'name':f'{g.first_name} {g.last_name}'.strip(), 'table_id':g.table_id, 'table_name':table_names.get(g.table_id), 'seat_number':g.seat_number,
             'admitted':g.admitted, 'seated_at':seated[g.id].seated_at if g.id in seated and seated[g.id].table_id == g.table_id else None,
             'can_checkin':can_write if is_supervisor else any(r.table_id == g.table_id and r.can_checkin for r in active),
@@ -165,11 +168,12 @@ async def workspace(event_id: str, db: AsyncSession = Depends(get_db), actor: Us
                 record=fulfills.get((g.id,service.id))
                 served=bool(record and record.fulfillment_status=='served')
                 eligible=g.rsvp_status!='declined' and (not record or record.eligibility_status=='eligible')
-                availability,reason=meal_service_availability(service,service_counts.get(service.id,0),now)
+                availability,reason=meal_service_availability(service,service_counts.get(service.id,0)-int(bool(record and record.fulfillment_status in ('preparing','ready'))),now)
+                if not has_orders(service):availability,reason='headcount_only','Headcount only — no food order required'
                 if served: availability,reason='served','Served — choices locked'
                 elif not eligible: availability,reason='not_eligible','Guest is not eligible'
                 elif not g.admitted: availability,reason='checkin_required','Guest must check in first'
-                out[-1]['meal_services'].append({'id':service.id,'category_id':service.category_id,'name':service.name,'status':service.status,'eligible':eligible,'served':served,'starts_at':service.starts_at,'ends_at':service.ends_at,'remaining_capacity':max(0,service.capacity-service_counts.get(service.id,0)) if service.capacity is not None else None,'availability':availability,'availability_reason':reason,'can_serve':availability=='available'})
+                out[-1]['meal_services'].append({'id':service.id,'category_id':service.category_id,'name':service.name,'status':service.status,'tracking_mode':service.tracking_mode,'attended_at':record.attended_at if record else None,'eligible':eligible,'served':served,'starts_at':service.starts_at,'ends_at':service.ends_at,'remaining_capacity':max(0,service.capacity-service_counts.get(service.id,0)) if service.capacity is not None else None,'availability':availability,'availability_reason':reason,'can_serve':availability=='available'})
 
     # Zone attendance is derived from canonical accepted movements, not registration/admission.
     ranked = select(ScanEvent.id.label('scan_id'),func.row_number().over(partition_by=(ScanEvent.zone_id,ScanEvent.guest_id),order_by=(ScanEvent.scanned_at.desc(),ScanEvent.id.desc())).label('position')).where(ScanEvent.event_id==event_id,ScanEvent.zone_id.in_(zone_ids),ScanEvent.denied.is_(False)).subquery()
@@ -184,14 +188,20 @@ async def workspace(event_id: str, db: AsyncSession = Depends(get_db), actor: Us
         'zones':[{'id':z.id,'name':z.name,'can_scan':can_write if is_supervisor else any(r.zone_id==z.id and r.can_scan_zone for r in active), 'inside':[v for (zone_id,_),v in latest.items() if zone_id==z.id and v['direction']=='in']} for z in zones if z.id in zone_ids],
         'menu_categories':await categories_out(cats,db),
         'manual_guardian_verification_enabled':bool(event.manual_checkin_enabled),
-        'tables':[{'id':t.id,'name':t.name,'capacity':t.capacity} for t in tables if t.id in table_ids]}
+        'tables':[{'id':t.id,'name':t.name,'capacity':t.capacity,'service_section':t.service_section} for t in tables if t.id in table_ids]}
+    meal_guest_ids={g['id'] for g in out if g['can_manage_meals']}
+    disabled_categories=await headcount_only_categories(db,event_id)
+    result['menu_categories']=[c for c in result['menu_categories'] if c.id not in disabled_categories]
+    attendance_guests=(await db.scalars(select(Guest).where(Guest.event_id==event_id))).all() if is_supervisor else [g for g in guests if g.id in meal_guest_ids]
+    result['meal_services']=await service_summaries(db,event,attendance_guests,table_names,writable=can_write if is_supervisor else bool(meal_guest_ids),configure=can_write,scope='Entire event' if is_supervisor else 'Assigned tables')
+    result['meal_requests']=await meal_requests(db,event,[g for g in guests if g.id in meal_guest_ids],table_names,writable=can_write if is_supervisor else True)
     if is_supervisor:
         members=(await db.execute(select(EventUser,User).join(User,User.id==EventUser.user_id).where(EventUser.event_id==event_id))).all()
         renameable_ids=await renameable_placeholder_ids(members,db,event.org_id) if can_write else set()
         guest_counts=(await db.execute(select(func.count(Guest.id),func.count(Guest.table_id)).where(Guest.event_id==event_id))).one()
         result['setup_warnings']={'unallocated_guests':guest_counts[0]-guest_counts[1],'unclaimed_placeholders':sum(not u.firebase_uid and u.email.lower().endswith('.invalid') for _,u in members),'services_without_windows':sum(x.status=='open' and (not x.starts_at or not x.ends_at) for x in services),'open_demo_services':sum(x.status=='open' and 'demo' in x.name.lower() for x in services)}
         result['team']=[{'id':m.id,'user_id':u.id,'name':u.name,'event_role':m.event_role,'scoped':m.guest_service_scoped,'updated_at':m.updated_at,'can_rename_placeholder':u.id in renameable_ids,'assignments':[assignment_out(r,table_names,zone_names) for r in all_rows if r.event_user_id==m.id]} for m,u in members]
-        result['locations']={'tables':[{'id':t.id,'name':t.name,'capacity':t.capacity,'category':t.category,'sort_order':t.sort_order,'updated_at':t.updated_at} for t in tables], 'zones':[{'id':z.id,'name':z.name} for z in zones]}
+        result['locations']={'tables':[{'id':t.id,'name':t.name,'capacity':t.capacity,'category':t.category,'service_section':t.service_section,'sort_order':t.sort_order,'updated_at':t.updated_at} for t in tables], 'zones':[{'id':z.id,'name':z.name} for z in zones]}
     return result
 
 
@@ -312,6 +322,12 @@ async def scan(event_id: str, body: ScanIn, background_tasks: BackgroundTasks, d
     return {'guardian_candidates':getattr(result,'guardian_candidates',[]) if result.status=='guardian_required' else [],'guardian_name':getattr(result,'guardian_name',None),'guardian_verification_method':getattr(result,'guardian_verification_method',None),'guest_name':getattr(result,'guest_name',None),'status':result.status,'message':getattr(result, 'message', None) or getattr(result, 'deny_reason', None) or f'{result.guest_name}: {result.zone_name} {result.direction}'}
 
 
+@router.post('/{event_id}/guest-services/guests/{guest_id}/meals/{service_id}/progress')
+async def meal_progress(event_id: str, guest_id: str, service_id: str, body: MealProgressIn, db: AsyncSession = Depends(get_db), actor: User = Depends(require_event_member)):
+    await event_and_guest(event_id,guest_id,actor,db,permission='can_manage_meals')
+    return await progress_meal(event_id,service_id,guest_id,body,db,actor,scoped=True)
+
+
 @router.post('/{event_id}/guest-services/requests')
 async def assistance(event_id: str, body: RequestIn, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), actor: User = Depends(require_event_member)):
     event=await db.get(Event,event_id); await member(event,actor,db)
@@ -341,3 +357,23 @@ async def assistance(event_id: str, body: RequestIn, background_tasks: Backgroun
         return {'task_id':existing.task_id,'already_created':True}
     if assignee: _notify_assignee(background_tasks,event,task,assignee)
     return {'task_id':task.id,'already_created':False}
+
+
+@router.patch('/{event_id}/guest-services/meals/{service_id}/tracking')
+async def configure_meal_tracking(event_id: str, service_id: str, body: MealTrackingIn, db: AsyncSession = Depends(get_db), actor: User = Depends(require_event_admin)):
+    event=await db.get(Event,event_id);await member(event,actor,db)
+    if not await supervisor(event,actor,db,write=True):raise HTTPException(403,'Supervisor permission required')
+    return await set_tracking(event_id,service_id,body,db,actor)
+
+
+@router.post('/{event_id}/guest-services/meals/{service_id}/attendance')
+async def meal_attendance_scan(event_id: str, service_id: str, body: MealAttendanceIn, db: AsyncSession = Depends(get_db), actor: User = Depends(require_event_member)):
+    event=await db.get(Event,event_id);await member(event,actor,db)
+    return await record_attendance(event_id,service_id,body.token,db,actor,scoped=True)
+
+
+@router.post('/{event_id}/guest-services/meals/{service_id}/attendance/{guest_id}/correct')
+async def meal_attendance_correction(event_id: str, service_id: str, guest_id: str, body: MealAttendanceCorrectionIn, db: AsyncSession = Depends(get_db), actor: User = Depends(require_event_admin)):
+    event=await db.get(Event,event_id);await member(event,actor,db)
+    if not await supervisor(event,actor,db,write=True):raise HTTPException(403,'Supervisor permission required')
+    return await correct_attendance(event_id,service_id,guest_id,body,db,actor)

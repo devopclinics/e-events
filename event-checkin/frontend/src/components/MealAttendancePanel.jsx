@@ -1,0 +1,25 @@
+import { useEffect, useState } from 'react'
+import QrCameraScanner from './QrCameraScanner'
+import './MealAttendancePanel.css'
+
+export function mealPassToken(raw) {
+  const value=String(raw || '').trim()
+  try { return new URL(value).pathname.split('/').filter(Boolean).pop() || '' } catch { return value }
+}
+export default function MealAttendancePanel({ services = [], busy, configure, scan, correct, receipt }) {
+  const [selected, setSelected]=useState(''), [tracking,setTracking]=useState('orders'), [token,setToken]=useState(''), [correction,setCorrection]=useState(null), [reason,setReason]=useState('')
+  const service=services.find(s=>s.id===selected) || services[0]
+  useEffect(()=>{setTracking(service?.tracking_mode || 'orders');setToken('');setCorrection(null);setReason('')},[service?.id,service?.tracking_mode])
+  useEffect(()=>{if(receipt){setToken('');if(receipt.corrected){setCorrection(null);setReason('')}}},[receipt])
+  if(!service)return <section className="ma-panel"><h3>No meal services yet</h3><p>Create a meal category in Meals & orders to set up a service, then choose how to track it.</p></section>
+  const headcount=service.tracking_mode!=='orders', orders=service.tracking_mode!=='headcount'
+  const metrics=[['Expected',service.expected],...(headcount?[['Attended',service.attended],['Not yet attended',service.not_yet_attended]]:[]),...(orders?[['Placed selections',service.ordered],['Preparing',service.preparing],['Ready',service.ready],['Delivered',service.delivered]]:[]),...(headcount&&orders?[['Attended without an order',service.attended_without_order]]:[])]
+  return <section className="ma-panel" aria-label="Meal attendance and headcount"><div className="ma-heading"><div><h3>Meal attendance & headcount</h3><p>Attendance, orders and delivery are separate records.</p></div><label>Meal service<select aria-label="Attendance meal service" value={service.id} disabled={busy} onChange={e=>setSelected(e.target.value)}>{services.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label></div>
+    <p className="ma-scope">{service.scope} · Expected counts non-declined guests eligible for this meal.</p>
+    {service.can_configure && <form className="ma-config" onSubmit={e=>{e.preventDefault();configure(service.id,{tracking_mode:tracking,expected_mode:service.tracking_mode})}}><label>Meal tracking<select aria-label="Meal tracking" value={tracking} disabled={busy} onChange={e=>setTracking(e.target.value)}><option value="headcount">Headcount only</option><option value="orders">Orders only</option><option value="both">Headcount + orders</option></select></label><button disabled={busy || tracking===service.tracking_mode}>Save meal tracking</button></form>}
+    <div className="ma-metrics">{metrics.map(([label,value])=><div key={label}><strong>{value}</strong><span>{label}</span></div>)}</div>
+    {headcount ? <><p>No menu choice is required to record attendance. The guest must already be checked into the event. Repeat scans count once for this meal.</p>{service.can_scan ? <div className="ma-scan"><QrCameraScanner disabled={busy} onScan={raw=>scan(service.id,mealPassToken(raw))}/><form onSubmit={e=>{e.preventDefault();scan(service.id,mealPassToken(token))}}><label>Meal attendance pass<input aria-label="Meal attendance pass" required value={token} disabled={busy} onChange={e=>setToken(e.target.value)} placeholder="Scan or paste the guest's pass"/></label><button disabled={busy}>Record meal attendance</button></form></div>:<p>Your current permissions allow viewing these counts only.</p>}{receipt && (!receipt.service_id || receipt.service_id===service.id) && <p role="status" className="ma-receipt">{receipt.message}</p>}
+    <details className="ma-recent"><summary>Recent attendance · up to 10 guests</summary>{(service.recent_attendees || []).map(row=><div className="ma-attendee" key={row.guest_id}><span><strong>{row.name}</strong> · {row.table_name}</span>{row.can_correct && <button disabled={busy} onClick={()=>{setCorrection(row);setReason('')}} aria-label={`Correct attendance for ${row.name}`}>Correct attendance</button>}</div>)}{!(service.recent_attendees || []).length && <p>No attendance recorded for this meal in your view.</p>}</details>
+    {correction && <form className="ma-correction" onSubmit={e=>{e.preventDefault();correct(service.id,correction.guest_id,{expected_attended_at:correction.attended_at,reason:reason.trim()})}}><h4>Correct {correction.name}'s attendance</h4><p>This removes the headcount mark only. A reason and the original scan remain in the audit history.</p><label>Correction reason<textarea required minLength={8} maxLength={1000} disabled={busy} value={reason} onChange={e=>setReason(e.target.value)}/></label><button disabled={busy || reason.trim().length<8}>Confirm attendance correction</button><button type="button" disabled={busy} onClick={()=>setCorrection(null)}>Cancel correction</button></form>}</> : <p>Attendance scanning is off for this orders-only meal. A supervisor can enable Headcount + orders without changing existing orders.</p>}
+  </section>
+}

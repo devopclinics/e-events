@@ -27,7 +27,7 @@ async def group_table_ids(group_id: str, db: AsyncSession) -> set[str]:
 async def _table_out(table: SeatingTable, db: AsyncSession) -> SeatingTableOut:
     count = await db.scalar(select(func.count(Guest.id)).where(Guest.table_id == table.id)) or 0
     return SeatingTableOut(id=table.id, event_id=table.event_id, name=table.name, capacity=table.capacity,
-                           category=table.category, sort_order=table.sort_order or 0, assigned_count=count,
+                           category=table.category, service_section=table.service_section, sort_order=table.sort_order or 0, assigned_count=count,
                            updated_at=table.updated_at)
 
 
@@ -226,7 +226,7 @@ async def create_table(event_id: str, data: SeatingTableCreate, db: AsyncSession
         raise HTTPException(404, "Event not found")
     name = await _ensure_unique_table_name(event_id, data.name, db)
     table = SeatingTable(event_id=event_id, name=name, capacity=data.capacity, category=data.category,
-                         sort_order=data.sort_order or 0)
+                         sort_order=data.sort_order or 0, service_section=data.service_section)
     db.add(table)
     await db.commit()
     await db.refresh(table)
@@ -248,6 +248,8 @@ async def update_table(
         raise HTTPException(409, "This table was changed by another operator. Refresh and try again.")
     table.name = await _ensure_unique_table_name(event_id, data.name, db, exclude_id=table_id)
     table.capacity = data.capacity
+    if "service_section" in data.model_fields_set:
+        table.service_section = (data.service_section or "").strip() or None
     table.category = data.category
     if data.sort_order is not None:
         table.sort_order = data.sort_order
@@ -632,7 +634,10 @@ async def mark_meal_served(
     guest = await db.get(Guest, guest_id)
     if not guest or guest.event_id != event_id:
         raise HTTPException(404, "Guest not found")
-    guest.meal_served = True
+    eu = await db.scalar(select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == current_user.id))
+    if eu and eu.guest_service_scoped:
+        from ..services.guest_services import guest_scope
+        await guest_scope(_ev,current_user,guest,db,permission='can_manage_meals')
     # Dual-write into the per-category fulfillment table (Track B) only when
     # there's exactly one selectable category — otherwise which one the
     # organizer meant is ambiguous, and the frontend switches to per-category
@@ -640,24 +645,13 @@ async def mark_meal_served(
     selectable = (await db.execute(
         select(MenuCategory.id).where(MenuCategory.event_id == event_id, MenuCategory.display_only.is_(False))
     )).scalars().all()
+    if len(selectable) != 1 and eu and eu.guest_service_scoped:
+        raise HTTPException(409,'Choose a specific meal service in Guest Services')
+    if len(selectable) != 1:
+        guest.meal_served = True
     if len(selectable) == 1:
-        service = await db.scalar(select(MealService).where(MealService.category_id == selectable[0]))
-        if not service:
-            cat = await db.get(MenuCategory, selectable[0])
-            service = MealService(event_id=event_id, category_id=selectable[0], name=cat.name if cat else "Meal", status="open")
-            db.add(service)
-            await db.flush()
-        existing = await db.scalar(select(GuestMealService).where(
-            GuestMealService.guest_id == guest.id, GuestMealService.service_id == service.id))
-        if existing:
-            existing.fulfillment_status = "served"
-            existing.served_at = datetime.utcnow()
-            existing.served_by_user_id = current_user.id
-        else:
-            db.add(GuestMealService(
-                service_id=service.id, guest_id=guest.id, fulfillment_status="served",
-                served_at=datetime.utcnow(), served_by_user_id=current_user.id,
-            ))
+        from .menu import fulfill_category
+        await fulfill_category(event_id,selectable[0],guest.id,None,db,current_user,enforce_service_limits=True)
     await sync_guest_progress(event_id, guest.id, db, source="staff", actor_user_id=current_user.id)
     await db.commit()
     return {"ok": True}

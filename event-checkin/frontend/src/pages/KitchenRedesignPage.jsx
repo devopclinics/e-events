@@ -6,6 +6,8 @@ import { api } from '../api'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import RedesignShell, { Icon } from './redesign/RedesignShell'
 import { EmptyState, ErrorRetryState, LoadingSkeleton } from './redesign/RedesignPrimitives'
+import MealAttendancePanel from '../components/MealAttendancePanel'
+import MealRequestQueue, { useMealUpdates, MealUpdateNotice, mealProgressBody } from '../components/MealRequestQueue'
 import './KitchenRedesignPage.css'
 
 const list = (value) => Array.isArray(value) ? value.filter(Boolean) : []
@@ -49,7 +51,16 @@ export default function KitchenRedesignPage() {
   const [error, setError] = useState('')
   const [tab, setTab] = useState('orders')
   const [status, setStatus] = useState('pending')
+  const [attendanceReceipt,setAttendanceReceipt]=useState(null)
   const [table, setTable] = useState('all')
+  const [mealUpdates, dismissMealUpdates] = useMealUpdates(data?.meal_requests,eventId)
+  async function progressMeal(row) {
+    if(working)return
+    setWorking(row.id);setError('')
+    try { await api.progressKitchenMeal(eventId,row.guest_id,row.service_id,mealProgressBody(row)); await load() }
+    catch(e) { setError(e.message || 'Could not update meal progress') }
+    finally { setWorking('') }
+  }
 
   useEffect(() => {
     let alive = true
@@ -63,9 +74,9 @@ export default function KitchenRedesignPage() {
     return () => { alive = false }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (quiet=false) => {
     if (!eventId) { setData(null); setLoading(false); return }
-    setLoading(true); setError('')
+    if(!quiet)setLoading(true); setError('')
     try { setData(await api.getMenuDashboard(eventId)) }
     catch (e) { setData(null); setError(e.message || 'Could not load orders') }
     finally { setLoading(false) }
@@ -73,9 +84,18 @@ export default function KitchenRedesignPage() {
   useEffect(() => {
     load()
     if (!eventId) return undefined
-    const timer = window.setInterval(load, 20000)
+    const timer = window.setInterval(()=>load(true), 20000)
     return () => window.clearInterval(timer)
   }, [load, eventId])
+
+  async function attendanceAction(fn) {
+    if(working)return
+    setWorking('meal-attendance');setError('');setAttendanceReceipt(null)
+    try { const result=await fn();setAttendanceReceipt({...result,message:result.guest_name ? `${result.guest_name}: ${result.message}` : result.message || 'Meal settings saved'});await load(true) }
+    catch(e) { if([401,403,404].includes(e.status))await load(true);setError(e.message || 'Meal attendance could not be saved') }
+    finally { setWorking('') }
+  }
+  useEffect(()=>setAttendanceReceipt(null),[eventId])
 
   async function markServed(guestId) {
     setWorking(guestId); setError('')
@@ -117,8 +137,11 @@ export default function KitchenRedesignPage() {
     {error && <ErrorRetryState message={error} onRetry={load}/>}
     {loading ? <LoadingSkeleton rows={6}/> : !eventId ? <EmptyState icon="card" title="Select an event" body="Choose an event with order access."/> : <>
       <div className="kn-summary"><div className="kn-summary-pill kn-tone-amber"><strong>{guests.filter((guest) => hasPendingOrder(guest)).length}</strong><small>Pending</small></div><div className="kn-summary-pill kn-tone-gray"><strong>{served}</strong><small>Served</small></div></div>
-      <div className="kn-subtabs"><button className={`kn-subtab${tab === 'orders' ? ' active' : ''}`} onClick={() => setTab('orders')}>Order queue</button><button className={`kn-subtab${tab === 'tally' ? ' active' : ''}`} onClick={() => setTab('tally')}>Prep tally</button><button className={`kn-subtab${tab === 'tables' ? ' active' : ''}`} onClick={() => setTab('tables')}>By table</button></div>
-      {tab === 'orders' && <><div className="kn-filters"><div className="kn-filter-group"><button className={`kn-filter-btn${table === 'all' ? ' active' : ''}`} onClick={() => setTable('all')}>All tables</button>{tables.map((name) => <button className={`kn-filter-btn${table === name ? ' active' : ''}`} onClick={() => setTable(name)} key={name}>{name}</button>)}</div><div className="kn-filter-group">{[['pending','Pending'],['served','Served'],['all','All']].map(([key,label]) => <button className={`kn-filter-btn${status === key ? ' active' : ''}`} onClick={() => setStatus(key)} key={key}>{label}</button>)}</div></div>
+      <div className="kn-subtabs"><button className={`kn-subtab${tab === 'attendance' ? ' active' : ''}`} onClick={()=>setTab('attendance')}>Meal attendance</button><button className={`kn-subtab${tab === 'orders' ? ' active' : ''}`} onClick={() => setTab('orders')}>Order queue</button><button className={`kn-subtab${tab === 'tally' ? ' active' : ''}`} onClick={() => setTab('tally')}>Prep tally</button><button className={`kn-subtab${tab === 'tables' ? ' active' : ''}`} onClick={() => setTab('tables')}>By table</button></div>
+      <MealUpdateNotice updates={mealUpdates} dismiss={dismissMealUpdates} open={()=>setTab('orders')} />
+      {tab === 'attendance' && <MealAttendancePanel services={data?.meal_services || []} busy={!!working} receipt={attendanceReceipt} configure={(id,body)=>attendanceAction(()=>api.configureMealTracking(eventId,id,body))} scan={(id,token)=>attendanceAction(()=>api.scanMealAttendance(eventId,id,token))} correct={(id,guestId,body)=>attendanceAction(()=>api.correctMealAttendance(eventId,id,guestId,body))} />}
+      {tab === 'orders' && data?.meal_requests && <MealRequestQueue rows={data.meal_requests} busy={!!working} progress={progressMeal} />}
+      {tab === 'orders' && !data?.meal_requests && <><div className="kn-filters"><div className="kn-filter-group"><button className={`kn-filter-btn${table === 'all' ? ' active' : ''}`} onClick={() => setTable('all')}>All tables</button>{tables.map((name) => <button className={`kn-filter-btn${table === name ? ' active' : ''}`} onClick={() => setTable(name)} key={name}>{name}</button>)}</div><div className="kn-filter-group">{[['pending','Pending'],['served','Served'],['all','All']].map(([key,label]) => <button className={`kn-filter-btn${status === key ? ' active' : ''}`} onClick={() => setStatus(key)} key={key}>{label}</button>)}</div></div>
         {!filtered.length ? <EmptyState icon="check" title="Nothing outstanding" body="No orders match the current filters."/> : <div className="kn-order-grid">{filtered.map((order) => <OrderCard key={order.guest_id} order={order} working={working === order.guest_id || (working && working.startsWith(`${order.guest_id}:`)) ? working : ''} multiCategory={!!data?.multi_category_serving} onServe={markServed} onToggleCategory={toggleCategoryServed}/>)}</div>}</>}
       {tab === 'tally' && <div className="kn-tally-wrap"><p className="kn-tally-desc">Outstanding selections only.</p><div className="kn-tally-list">{tally.map(([name,count]) => <div className="kn-tally-row" key={name}><span className="kn-tally-name">{name}</span><strong className="kn-tally-count">×{count}</strong></div>)}</div>{!tally.length && <EmptyState icon="check" title="Nothing to prepare" body="All selected orders are served."/>}</div>}
       {tab === 'tables' && <div className="kn-tables-wrap"><table className="kn-table-breakdown"><thead><tr><th>Table</th><th>Pending</th><th>Served</th><th>Total</th></tr></thead><tbody>{grouped.map((row) => <tr key={row.name}><td><strong>{row.name}</strong></td><td>{row.pending}</td><td>{row.served}</td><td>{row.total}</td></tr>)}</tbody></table></div>}

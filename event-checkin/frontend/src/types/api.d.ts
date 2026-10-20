@@ -2089,6 +2089,26 @@ export interface MaterialUpdate {
   visibility?: (string) | null
 }
 
+export interface MealAttendanceCorrectionIn {
+  expected_attended_at: string
+  reason: string
+}
+
+export interface MealAttendanceIn {
+  token: string
+}
+
+export interface MealProgressIn {
+  expected_status: 'pending' | 'preparing' | 'ready' | 'served'
+  selection_key: string
+  status: 'preparing' | 'ready' | 'served'
+}
+
+export interface MealTrackingIn {
+  expected_mode: 'headcount' | 'orders' | 'both'
+  tracking_mode: 'headcount' | 'orders' | 'both'
+}
+
 export interface MemberRole {
   role: 'owner' | 'admin' | 'staff'
 }
@@ -2176,6 +2196,9 @@ export interface MenuDashboardOut {
   combination_totals: (MenuCombinationTotal)[]
   guests: (MenuDashboardGuest)[]
   item_totals: (MenuItemTotal)[]
+  meal_attendance_can_configure?: boolean
+  meal_requests?: (Record<string, unknown>)[]
+  meal_services?: (Record<string, unknown>)[]
   multi_category_serving?: boolean
 }
 
@@ -3212,6 +3235,7 @@ export interface SeatingTableCreate {
   capacity: number
   category?: (string) | null
   name: string
+  service_section?: (string) | null
   sort_order?: (number) | null
 }
 
@@ -3225,6 +3249,7 @@ export interface SeatingTableOut {
   pos_x?: (number) | null
   pos_y?: (number) | null
   rotation?: number
+  service_section?: (string) | null
   shape?: string
   sort_order?: number
   updated_at?: (string) | null

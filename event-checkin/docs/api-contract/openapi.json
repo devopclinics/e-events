@@ -13429,6 +13429,106 @@
         "title": "MaterialUpdate",
         "type": "object"
       },
+      "MealAttendanceCorrectionIn": {
+        "properties": {
+          "expected_attended_at": {
+            "format": "date-time",
+            "title": "Expected Attended At",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 8,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expected_attended_at",
+          "reason"
+        ],
+        "title": "MealAttendanceCorrectionIn",
+        "type": "object"
+      },
+      "MealAttendanceIn": {
+        "properties": {
+          "token": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "MealAttendanceIn",
+        "type": "object"
+      },
+      "MealProgressIn": {
+        "properties": {
+          "expected_status": {
+            "enum": [
+              "pending",
+              "preparing",
+              "ready",
+              "served"
+            ],
+            "title": "Expected Status",
+            "type": "string"
+          },
+          "selection_key": {
+            "maxLength": 64,
+            "minLength": 64,
+            "title": "Selection Key",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "preparing",
+              "ready",
+              "served"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "expected_status",
+          "selection_key"
+        ],
+        "title": "MealProgressIn",
+        "type": "object"
+      },
+      "MealTrackingIn": {
+        "properties": {
+          "expected_mode": {
+            "enum": [
+              "headcount",
+              "orders",
+              "both"
+            ],
+            "title": "Expected Mode",
+            "type": "string"
+          },
+          "tracking_mode": {
+            "enum": [
+              "headcount",
+              "orders",
+              "both"
+            ],
+            "title": "Tracking Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tracking_mode",
+          "expected_mode"
+        ],
+        "title": "MealTrackingIn",
+        "type": "object"
+      },
       "MemberRole": {
         "properties": {
           "role": {
@@ -13892,6 +13992,27 @@
               "$ref": "#/components/schemas/MenuItemTotal"
             },
             "title": "Item Totals",
+            "type": "array"
+          },
+          "meal_attendance_can_configure": {
+            "default": false,
+            "title": "Meal Attendance Can Configure",
+            "type": "boolean"
+          },
+          "meal_requests": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Meal Requests",
+            "type": "array"
+          },
+          "meal_services": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Meal Services",
             "type": "array"
           },
           "multi_category_serving": {
@@ -20533,6 +20654,18 @@
             "title": "Name",
             "type": "string"
           },
+          "service_section": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Section"
+          },
           "sort_order": {
             "anyOf": [
               {
@@ -20612,6 +20745,17 @@
             "default": 0,
             "title": "Rotation",
             "type": "integer"
+          },
+          "service_section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Section"
           },
           "shape": {
             "default": "round",
@@ -36246,6 +36390,79 @@
         ]
       }
     },
+    "/api/events/{event_id}/guest-services/guests/{guest_id}/meals/{service_id}/progress": {
+      "post": {
+        "operationId": "meal_progress_api_events__event_id__guest_services_guests__guest_id__meals__service_id__progress_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "guest_id",
+            "required": true,
+            "schema": {
+              "title": "Guest Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "service_id",
+            "required": true,
+            "schema": {
+              "title": "Service Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MealProgressIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Meal Progress",
+        "tags": [
+          "guest-services"
+        ]
+      }
+    },
     "/api/events/{event_id}/guest-services/guests/{guest_id}/menu": {
       "post": {
         "operationId": "assisted_menu_api_events__event_id__guest_services_guests__guest_id__menu_post",
@@ -36432,6 +36649,207 @@
           }
         ],
         "summary": "Serve",
+        "tags": [
+          "guest-services"
+        ]
+      }
+    },
+    "/api/events/{event_id}/guest-services/meals/{service_id}/attendance": {
+      "post": {
+        "operationId": "meal_attendance_scan_api_events__event_id__guest_services_meals__service_id__attendance_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "service_id",
+            "required": true,
+            "schema": {
+              "title": "Service Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MealAttendanceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Meal Attendance Scan",
+        "tags": [
+          "guest-services"
+        ]
+      }
+    },
+    "/api/events/{event_id}/guest-services/meals/{service_id}/attendance/{guest_id}/correct": {
+      "post": {
+        "operationId": "meal_attendance_correction_api_events__event_id__guest_services_meals__service_id__attendance__guest_id__correct_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "service_id",
+            "required": true,
+            "schema": {
+              "title": "Service Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "guest_id",
+            "required": true,
+            "schema": {
+              "title": "Guest Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MealAttendanceCorrectionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Meal Attendance Correction",
+        "tags": [
+          "guest-services"
+        ]
+      }
+    },
+    "/api/events/{event_id}/guest-services/meals/{service_id}/tracking": {
+      "patch": {
+        "operationId": "configure_meal_tracking_api_events__event_id__guest_services_meals__service_id__tracking_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "service_id",
+            "required": true,
+            "schema": {
+              "title": "Service Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MealTrackingIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Configure Meal Tracking",
         "tags": [
           "guest-services"
         ]
@@ -39502,6 +39920,280 @@
         "tags": [
           "Festio Live",
           "engagement"
+        ]
+      }
+    },
+    "/api/events/{event_id}/meal-services/{service_id}/attendance": {
+      "post": {
+        "operationId": "kitchen_meal_attendance_api_events__event_id__meal_services__service_id__attendance_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "service_id",
+            "required": true,
+            "schema": {
+              "title": "Service Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MealAttendanceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Kitchen Meal Attendance",
+        "tags": [
+          "menu"
+        ]
+      }
+    },
+    "/api/events/{event_id}/meal-services/{service_id}/attendance/{guest_id}/correct": {
+      "post": {
+        "operationId": "kitchen_meal_attendance_correction_api_events__event_id__meal_services__service_id__attendance__guest_id__correct_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "service_id",
+            "required": true,
+            "schema": {
+              "title": "Service Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "guest_id",
+            "required": true,
+            "schema": {
+              "title": "Guest Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MealAttendanceCorrectionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Kitchen Meal Attendance Correction",
+        "tags": [
+          "menu"
+        ]
+      }
+    },
+    "/api/events/{event_id}/meal-services/{service_id}/guests/{guest_id}/progress": {
+      "post": {
+        "operationId": "kitchen_meal_progress_api_events__event_id__meal_services__service_id__guests__guest_id__progress_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "service_id",
+            "required": true,
+            "schema": {
+              "title": "Service Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "guest_id",
+            "required": true,
+            "schema": {
+              "title": "Guest Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MealProgressIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Kitchen Meal Progress",
+        "tags": [
+          "menu"
+        ]
+      }
+    },
+    "/api/events/{event_id}/meal-services/{service_id}/tracking": {
+      "patch": {
+        "operationId": "kitchen_meal_tracking_api_events__event_id__meal_services__service_id__tracking_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "service_id",
+            "required": true,
+            "schema": {
+              "title": "Service Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MealTrackingIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Kitchen Meal Tracking",
+        "tags": [
+          "menu"
         ]
       }
     },

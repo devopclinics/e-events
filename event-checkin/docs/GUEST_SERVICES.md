@@ -71,3 +71,23 @@ Guest Services forwards guardian QR and permitted staff-selected identity verifi
 Assignment edits retain existing IDs, including legacy clients saving unchanged locations. Request acknowledgements use the caller's event membership and own idempotency key before requiring the old assignment to remain active; new requests still require active responsibility. Mutations and roster refreshes have separate acknowledgements. Connectivity errors mark the view stale and disable mutations; polling access loss clears the roster and closes operational panels. Action-specific denials first refresh scope rather than falsely declaring the entire membership lost.
 
 Meal availability is computed by a shared server helper also used by scoped fulfilment. Workspace responses include availability/reason, serving-window bounds and remaining capacity; final eligibility, window and capacity checks remain authoritative under lock at collection time. Menu serialization and placeholder metadata are batched, and occupancy fetches only each guest/zone's latest accepted movement. Organiser-only setup checks highlight placeholder identities, unallocated guests, open collections missing windows and demo collections. No live staff identities, seating allocations or serving schedules are invented by these warnings.
+
+
+## Large events and meal requests
+
+Tables support an optional service section, search, covered/uncovered filters, a compact list, and 24-row pages. Supervisors with more than 24 tables start in Compact list; Board and Floor canvas paginate too. Guests and staff views are paginated. Section metadata is distinct from seating categories and allocation groups. Legacy table updates that omit `service_section` preserve it. The existing ORM migration runner adds its nullable column.
+
+Meal requests are derived from GuestMenuChoice and MealService and progress in the existing GuestMealService ledger: pending (New), preparing, ready, served (Delivered). Kitchen and assigned table managers share these records; Tasks remain exclusively for assistance. Starting preparation requires admission, active event, eligibility, serving window, capacity, current assignment, current stage and an unchanged selection fingerprint. Preparing/ready records reserve capacity; delivery consumes the same reservation. Guest and assisted choice edits lock as soon as preparation starts. Existing direct serving remains available and respects reserved capacity. Repeated transitions acknowledge the existing result; stale or skipped transitions fail.
+
+Guest Services and Kitchen show in-app alerts for new/changed choices and ready meals on their existing 20-second refresh. Alerts contain only current visible meal requests; initial load does not replay old changes. No background browser push, email or SMS is sent. The queue has stage/table filters and 25-request pages. Real event sections and staff identities must be supplied by the organiser.
+
+
+## Meal attendance versus orders
+
+Each MealService has `tracking_mode`: `orders` (the backward-compatible default), `headcount`, or `both`. The existing GuestMealService row gains nullable `attended_at` and `attended_by_user_id`; attendance does not change fulfillment_status, served timestamps, Guest.meal_served, seating, or event admission. No second attendance/order ledger is introduced.
+
+Guest Services → Meal attendance shows assigned-table counts for meal-enabled managers, while supervisors and Kitchen see the whole event, including guests without tables. Expected means non-declined, eligible guests in the displayed scope. Attendance, not-yet-attended, distinct guest selections, preparing, ready, delivered, and attended-without-order counts remain separate. Recent attendance shows up to ten authorised guests for supervisor correction.
+
+The attendance scan requires an Event Pass, active event, enabled meals, current meal permission, event admission, eligibility, an enabled headcount mode, serving window and attendance capacity. A service-row lock serializes capacity and the unique guest/service row makes repeated scans idempotent. Attendance capacity and order reservations are independent in Both mode; neither implies the other. Headcount-only service categories disappear from order forms when no occurrence of that category accepts orders.
+
+Supervisors configure tracking and can correct an attendance mark with a meaningful reason and the original scan timestamp. Corrections retain original actor/time/reason in GuestServiceActivity and never undo delivery. Settings cannot hide existing attendance or in-progress/delivered orders; use Both to retain their visibility. Existing modes/settings remain unchanged on upgrade.

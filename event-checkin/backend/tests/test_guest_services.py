@@ -387,3 +387,192 @@ async def test_setup_warnings_are_supervisor_only_and_menu_batch_matches_canonic
         cats=[await db.get(MenuCategory,s['category'].id)];batched=await categories_out(cats,db);ordinary=[await _cat_out(cats[0],db)];assert [r.model_dump() for r in batched]==[r.model_dump() for r in ordinary]
     ctx.login(ctx.ids['user_a']);view=(await ctx.client.get(url(s))).json();assert view['setup_warnings']['unallocated_guests']==1 and view['setup_warnings']['unclaimed_placeholders']==1 and view['setup_warnings']['services_without_windows']==2
     ctx.login(s['staff']);assert 'setup_warnings' not in (await ctx.client.get(url(s))).json()
+
+async def selected_meal_setup(ctx, capacity=None):
+    s=await setup(ctx)
+    async with _Session() as db:
+        for g in s['guests']:
+            db.add(GuestMenuChoice(guest_id=g.id,category_id=s['category'].id,menu_item_id=s['item'].id))
+        service=await db.get(MealService,s['services'][0].id);service.capacity=capacity
+        await db.commit()
+    assert (await configure(ctx,s,[table(s,can_manage_meals=True)])).status_code==200
+    ctx.login(s['staff'])
+    return s
+
+def progress_url(s,row,kitchen=False):
+    return (f"/api/events/{s['event_id']}/meal-services/{row['service_id']}/guests/{row['guest_id']}/progress" if kitchen else url(s,f"/guests/{row['guest_id']}/meals/{row['service_id']}/progress"))
+def progress_body(row,status):return {'status':status,'expected_status':row['status'],'selection_key':row['selection_key']}
+
+@pytest.mark.asyncio
+async def test_canonical_meal_queue_scopes_progress_and_shared_kitchen(ctx):
+    s=await selected_meal_setup(ctx)
+    rows=(await ctx.client.get(url(s))).json()['meal_requests'];assert len(rows)==2 and all(r['guest_id']==s['guests'][0].id for r in rows)
+    row=rows[0];body=progress_body(row,'preparing')
+    assert (await ctx.client.post(progress_url(s,row),json=body)).status_code==200
+    assert (await ctx.client.post(progress_url(s,row),json=body)).json()['already_recorded']
+    # Kitchen is the same ledger, and scoped table staff do not gain kitchen access.
+    assert (await ctx.client.post(progress_url(s,row,True),json=progress_body(row,'ready'))).status_code==403
+    ctx.login(ctx.ids['user_a']);kitchen=(await ctx.client.get(f"/api/events/{s['event_id']}/menu/dashboard")).json()
+    current=next(r for r in kitchen['meal_requests'] if r['id']==row['id']);assert current['status']=='preparing'
+    assert (await ctx.client.post(progress_url(s,row,True),json=progress_body(current,'ready'))).status_code==200
+    ctx.login(s['staff']);current=next(r for r in (await ctx.client.get(url(s))).json()['meal_requests'] if r['id']==row['id']);assert current['status']=='ready'
+    assert (await ctx.client.post(progress_url(s,row),json=progress_body(current,'served'))).status_code==200
+    async with _Session() as db:
+        records=(await db.scalars(select(GuestMealService).where(GuestMealService.guest_id==row['guest_id'],GuestMealService.service_id==row['service_id']))).all();assert len(records)==1 and records[0].fulfillment_status=='served' and records[0].served_by_user_id==s['staff'].id
+        assert await db.scalar(select(func.count()).select_from(GuestServiceActivity).where(GuestServiceActivity.action=='meal_progress'))==3
+
+@pytest.mark.asyncio
+async def test_meal_queue_rejects_cross_table_and_stale_choices_or_stages(ctx):
+    s=await selected_meal_setup(ctx);row=(await ctx.client.get(url(s))).json()['meal_requests'][0]
+    foreign={**row,'guest_id':s['guests'][1].id}
+    assert (await ctx.client.post(progress_url(s,foreign),json=progress_body(row,'preparing'))).status_code==403
+    assert (await ctx.client.post(progress_url(s,row),json=progress_body(row,'ready'))).status_code==409
+    assert (await ctx.client.post(progress_url(s,row),json={**progress_body(row,'preparing'),'selection_key':'a'*64})).status_code==409
+    assert (await ctx.client.post(progress_url(s,row),json=progress_body(row,'preparing'))).status_code==200
+    assert (await ctx.client.post(progress_url(s,row),json=progress_body(row,'served'))).status_code==409
+    future=(datetime.utcnow()+timedelta(days=1)).isoformat();assert (await configure(ctx,s,[table(s,can_manage_meals=True,starts_at=future)])).status_code==200
+    ctx.login(s['staff']);assert (await ctx.client.post(progress_url(s,row),json={'status':'ready','expected_status':'preparing','selection_key':row['selection_key']})).status_code==403
+
+@pytest.mark.asyncio
+async def test_preparation_reserves_capacity_and_keeps_own_delivery_available(ctx):
+    s=await selected_meal_setup(ctx,capacity=1);ctx.login(ctx.ids['user_a']);rows=(await ctx.client.get(url(s))).json()['meal_requests'];first=next(r for r in rows if r['service_id']==s['services'][0].id and r['guest_id']==s['guests'][0].id);other=next(r for r in rows if r['service_id']==first['service_id'] and r['guest_id']==s['guests'][1].id)
+    assert (await ctx.client.post(progress_url(s,first),json=progress_body(first,'preparing'))).status_code==200
+    assert (await ctx.client.post(progress_url(s,other),json=progress_body(other,'preparing'))).status_code==409
+    rows=(await ctx.client.get(url(s))).json()['meal_requests'];own=next(r for r in rows if r['id']==first['id']);blocked=next(r for r in rows if r['id']==other['id']);assert own['can_progress'] and not blocked['can_progress']
+    assert (await ctx.client.post(progress_url(s,own),json=progress_body(own,'ready'))).status_code==200
+    assert (await ctx.client.post(progress_url(s,own),json={'status':'served','expected_status':'ready','selection_key':own['selection_key']})).status_code==200
+    # The legacy scoped shortcut cannot consume another guest's reservation.
+    assert (await ctx.client.post(url(s,f"/guests/{other['guest_id']}/services/{other['service_id']}/served"))).status_code==409
+
+@pytest.mark.asyncio
+async def test_guest_and_assisted_choices_lock_when_preparation_starts(ctx):
+    s=await selected_meal_setup(ctx);row=(await ctx.client.get(url(s))).json()['meal_requests'][0]
+    assert (await ctx.client.post(progress_url(s,row),json=progress_body(row,'preparing'))).status_code==200
+    async with _Session() as db:
+        item=MenuItem(event_id=s['event_id'],category_id=s['category'].id,name='Soup');db.add(item);await db.commit()
+    changed={'single':{s['category'].id:item.id}}
+    assert (await ctx.client.post('/api/scan/'+s['guests'][0].qr_token+'/menu',json=changed)).status_code==400
+    assert (await ctx.client.post(url(s,f"/guests/{s['guests'][0].id}/menu"),json={**changed,'guest_agreed':True})).status_code==400
+    unchanged={'single':{s['category'].id:s['item'].id}}
+    assert (await ctx.client.post('/api/scan/'+s['guests'][0].qr_token+'/menu',json=unchanged)).status_code==200
+    assert (await ctx.client.get(url(s))).json()['meal_requests'][0]['status']=='preparing'
+
+@pytest.mark.asyncio
+async def test_table_sections_persist_without_rewriting_legacy_metadata(ctx):
+    s=await setup(ctx);ctx.login(ctx.ids['user_a']);tid=s['tables'][0].id;base=f"/api/events/{s['event_id']}/tables/{tid}"
+    # Canonical table editing uses the existing seating route.
+    response=await ctx.client.put(base,json={'name':'East 1','capacity':8,'category':'VIP','service_section':'East wing'})
+    assert response.status_code==200,response.text
+    assert response.json()['service_section']=='East wing'
+    assert (await ctx.client.put(base,json={'name':'East 1','capacity':9,'category':'VIP'})).status_code==200
+    w=(await ctx.client.get(url(s))).json();assert next(t for t in w['tables'] if t['id']==tid)['service_section']=='East wing'
+
+@pytest.mark.asyncio
+async def test_new_selectable_category_has_immediate_canonical_service(ctx):
+    s=await setup(ctx);ctx.login(ctx.ids['user_a']);path=f"/api/events/{s['event_id']}/menu-categories"
+    created=await ctx.client.post(path,json={'name':'Dessert','selection_type':'single','display_only':False});assert created.status_code==201,created.text
+    cid=created.json()['id']
+    for _ in range(2):
+        assert (await ctx.client.put(path+'/'+cid,json={'name':'Dessert','selection_type':'single','display_only':False})).status_code==200
+    async with _Session() as db:
+        assert await db.scalar(select(func.count()).select_from(MealService).where(MealService.category_id==cid))==1
+
+@pytest.mark.asyncio
+async def test_legacy_delivery_shortcut_cannot_bypass_scope_or_capacity(ctx):
+    s=await selected_meal_setup(ctx,capacity=1);row=next(r for r in (await ctx.client.get(url(s))).json()['meal_requests'] if r['service_id']==s['services'][0].id)
+    assert (await ctx.client.post(progress_url(s,row),json=progress_body(row,'preparing'))).status_code==200
+    legacy=f"/api/events/{s['event_id']}/guests/{s['guests'][1].id}/meal-served"
+    assert (await ctx.client.patch(legacy)).status_code==403
+    ctx.login(ctx.ids['user_a']);assert (await ctx.client.patch(legacy)).status_code==409
+
+async def tracking(ctx,s,index=0,mode='both',expected='orders'):
+    ctx.login(ctx.ids['user_a'])
+    return await ctx.client.patch(url(s,f"/meals/{s['services'][index].id}/tracking"),json={'tracking_mode':mode,'expected_mode':expected})
+def attendance_path(s,index=0):return url(s,f"/meals/{s['services'][index].id}/attendance")
+
+@pytest.mark.asyncio
+async def test_meal_headcount_without_order_duplicate_and_occurrence_independence(ctx):
+    s=await setup(ctx);assert (await configure(ctx,s,[table(s,can_manage_meals=True)])).status_code==200
+    for i in range(2):assert (await tracking(ctx,s,i,'headcount')).status_code==200
+    ctx.login(s['staff']);body={'token':s['guests'][0].qr_token}
+    for i in range(2):
+        first=await ctx.client.post(attendance_path(s,i),json=body);assert first.status_code==200,first.text
+        repeat=await ctx.client.post(attendance_path(s,i),json=body);assert repeat.json()['already_counted']
+    view=(await ctx.client.get(url(s))).json();assert view['meal_requests']==[] and view['menu_categories']==[]
+    assert all(m['expected']==1 and m['attended']==1 and m['not_yet_attended']==0 and m['ordered']==0 and m['delivered']==0 for m in view['meal_services'])
+    assert not view['guests'][0]['meal_services'][0]['can_serve']
+    async with _Session() as db:
+        rows=(await db.scalars(select(GuestMealService).where(GuestMealService.guest_id==s['guests'][0].id))).all();assert len(rows)==2 and all(r.attended_at and r.attended_by_user_id==s['staff'].id and r.fulfillment_status=='pending' and r.served_at is None for r in rows)
+        assert await db.scalar(select(func.count()).select_from(GuestMenuChoice))==0
+        assert not (await db.get(Guest,s['guests'][0].id)).meal_served
+        assert await db.scalar(select(func.count()).select_from(GuestServiceActivity).where(GuestServiceActivity.action=='meal_attendance'))==2
+    # No hidden required menu form or backdoor order placement in headcount-only mode.
+    menu=(await ctx.client.get(f"/api/events/{s['event_id']}/menu")).json();assert not any(c['id']==s['category'].id for c in menu)
+    assert (await ctx.client.post('/api/scan/'+s['guests'][0].qr_token+'/menu',json={'single':{s['category'].id:s['item'].id}})).status_code==400
+
+@pytest.mark.asyncio
+async def test_both_mode_preserves_preparation_and_attendance_is_independent_capacity(ctx):
+    s=await selected_meal_setup(ctx,capacity=1);assert (await tracking(ctx,s)).status_code==200
+    ctx.login(s['staff']);row=next(r for r in (await ctx.client.get(url(s))).json()['meal_requests'] if r['service_id']==s['services'][0].id)
+    assert (await ctx.client.post(progress_url(s,row),json=progress_body(row,'preparing'))).status_code==200
+    assert (await ctx.client.post(attendance_path(s),json={'token':s['guests'][0].qr_token})).status_code==200
+    view=(await ctx.client.get(url(s))).json();summary=next(m for m in view['meal_services'] if m['id']==row['service_id']);assert summary['attended']==1 and summary['ordered']==1 and summary['preparing']==1 and summary['delivered']==0
+    assert next(r for r in view['meal_requests'] if r['id']==row['id'])['status']=='preparing'
+    ctx.login(ctx.ids['user_a']);path=f"/api/events/{s['event_id']}/meal-services/{row['service_id']}/attendance"
+    assert (await ctx.client.post(path,json={'token':s['guests'][1].qr_token})).status_code==409
+    assert (await tracking(ctx,s,mode='orders',expected='both')).status_code==409
+    assert (await tracking(ctx,s,mode='headcount',expected='both')).status_code==409
+
+@pytest.mark.asyncio
+async def test_meal_attendance_scope_permissions_and_event_admission_are_separate(ctx):
+    s=await setup(ctx);assert (await configure(ctx,s,[table(s,can_manage_meals=True)])).status_code==200
+    assert (await tracking(ctx,s)).status_code==200;ctx.login(s['staff'])
+    assert (await ctx.client.post(attendance_path(s),json={'token':s['guests'][1].qr_token})).status_code==403
+    assert (await ctx.client.patch(url(s,f"/meals/{s['services'][0].id}/tracking"),json={'tracking_mode':'headcount','expected_mode':'both'})).status_code==403
+    assert (await ctx.client.post(f"/api/events/{s['event_id']}/meal-services/{s['services'][0].id}/attendance",json={'token':s['guests'][0].qr_token})).status_code==403
+    async with _Session() as db:
+        guest=await db.get(Guest,s['guests'][0].id);guest.admitted=False;await db.commit()
+    assert (await ctx.client.post(attendance_path(s),json={'token':s['guests'][0].qr_token})).status_code==409
+    async with _Session() as db:assert not (await db.get(Guest,s['guests'][0].id)).admitted
+    ctx.login(ctx.ids['user_b']);assert (await ctx.client.post(attendance_path(s),json={'token':s['guests'][0].qr_token})).status_code==404
+
+@pytest.mark.asyncio
+async def test_meal_headcount_guards_windows_eligibility_and_orders_only(ctx):
+    s=await setup(ctx);assert (await configure(ctx,s,[table(s,can_manage_meals=True)])).status_code==200
+    ctx.login(s['staff']);body={'token':s['guests'][0].qr_token}
+    assert (await ctx.client.post(attendance_path(s),json=body)).status_code==409
+    assert (await tracking(ctx,s,mode='headcount')).status_code==200
+    ctx.login(s['staff'])
+    for field,value in [('starts_at',datetime.utcnow()+timedelta(days=1)),('ends_at',datetime.utcnow()-timedelta(days=1)),('capacity',0),('status','closed')]:
+        async with _Session() as db:
+            service=await db.get(MealService,s['services'][0].id);service.starts_at=None;service.ends_at=None;service.capacity=None;service.status='open';setattr(service,field,value);await db.commit()
+        assert (await ctx.client.post(attendance_path(s),json=body)).status_code==409,field
+    async with _Session() as db:
+        service=await db.get(MealService,s['services'][0].id);service.status='open';db.add(GuestMealService(service_id=service.id,guest_id=s['guests'][0].id,eligibility_status='not_eligible'));await db.commit()
+    assert (await ctx.client.post(attendance_path(s),json=body)).status_code==403
+
+@pytest.mark.asyncio
+async def test_attendance_correction_is_audited_and_never_changes_orders(ctx):
+    s=await selected_meal_setup(ctx);assert (await tracking(ctx,s)).status_code==200;ctx.login(s['staff'])
+    recorded=(await ctx.client.post(attendance_path(s),json={'token':s['guests'][0].qr_token})).json();assert recorded.get('attended_at'),recorded
+    path=attendance_path(s)+f"/{s['guests'][0].id}/correct";body={'expected_attended_at':recorded['attended_at'],'reason':'Wrong meal selected at the desk'}
+    assert (await ctx.client.post(path,json=body)).status_code==403
+    ctx.login(ctx.ids['user_a']);assert (await ctx.client.post(path,json={**body,'reason':'        '})).status_code==422
+    assert (await ctx.client.post(path,json={**body,'expected_attended_at':'2000-01-01T00:00:00'})).status_code==409
+    assert (await ctx.client.post(path,json=body)).status_code==200
+    assert (await ctx.client.post(path,json=body)).status_code==409
+    async with _Session() as db:
+        record=await db.scalar(select(GuestMealService).where(GuestMealService.guest_id==s['guests'][0].id,GuestMealService.service_id==s['services'][0].id));assert record.attended_at is None and record.fulfillment_status=='pending'
+        assert await db.scalar(select(func.count()).select_from(GuestMenuChoice))==3
+        audit=await db.scalar(select(GuestServiceActivity).where(GuestServiceActivity.action=='meal_attendance_corrected'));assert audit.detail['reason']==body['reason'] and audit.detail['recorded_by']==s['staff'].id
+
+@pytest.mark.asyncio
+async def test_global_headcount_includes_unallocated_guests_without_expanding_staff_view(ctx):
+    s=await setup(ctx);assert (await configure(ctx,s,[table(s,can_manage_meals=True)])).status_code==200
+    assert (await tracking(ctx,s,mode='headcount')).status_code==200
+    async with _Session() as db:
+        guest=await db.get(Guest,s['guests'][1].id);guest.table_id=None;await db.commit()
+    ctx.login(ctx.ids['user_a']);view=(await ctx.client.get(url(s))).json();assert view['meal_services'][0]['expected']==4 and view['meal_services'][0]['scope']=='Entire event'
+    response=await ctx.client.post(f"/api/events/{s['event_id']}/meal-services/{s['services'][0].id}/attendance",json={'token':s['guests'][1].qr_token});assert response.status_code==200,response.text
+    ctx.login(s['staff']);view=(await ctx.client.get(url(s))).json();assert view['meal_services'][0]['expected']==1 and view['meal_services'][0]['attended']==0
+    assert all(s['guests'][1].id!=row['guest_id'] for service in view['meal_services'] for row in service['recent_attendees'])

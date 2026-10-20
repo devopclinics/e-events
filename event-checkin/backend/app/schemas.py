@@ -1283,6 +1283,7 @@ class OrgSubscriptionOut(BaseModel):
 # ── Seating ───────────────────────────────────────────────────────────────────
 
 class SeatingTableCreate(BaseModel):
+    service_section: Optional[str] = Field(default=None, max_length=80)
     name: str
     capacity: int
     category: Optional[str] = None
@@ -1290,6 +1291,7 @@ class SeatingTableCreate(BaseModel):
 
 
 class SeatingTableOut(BaseModel):
+    service_section: Optional[str] = None
     id: str
     event_id: str
     name: str
@@ -2716,7 +2718,30 @@ class MenuDashboardGuest(BaseModel):
     served_categories: dict[str, bool] = {}
 
 
+class MealTrackingIn(BaseModel):
+    tracking_mode: Literal["headcount", "orders", "both"]
+    expected_mode: Literal["headcount", "orders", "both"]
+
+
+class MealAttendanceIn(BaseModel):
+    token: str = Field(min_length=1, max_length=500)
+
+
+class MealAttendanceCorrectionIn(BaseModel):
+    expected_attended_at: datetime
+    reason: str = Field(min_length=8, max_length=1000)
+
+
+class MealProgressIn(BaseModel):
+    status: Literal["preparing", "ready", "served"]
+    expected_status: Literal["pending", "preparing", "ready", "served"]
+    selection_key: str = Field(min_length=64, max_length=64)
+
+
 class MenuDashboardOut(BaseModel):
+    meal_services: list[dict] = Field(default_factory=list)
+    meal_attendance_can_configure: bool = False
+    meal_requests: list[dict] = Field(default_factory=list)
     item_totals: list[MenuItemTotal]
     combination_totals: list[MenuCombinationTotal]
     guests: list[MenuDashboardGuest]

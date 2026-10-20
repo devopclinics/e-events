@@ -11,9 +11,14 @@ from ..models import (
 from ..schemas import (
     MenuCategoryCreate, MenuCategoryOut, MenuItemCreate, MenuItemOut,
     MenuCombinationCreate, MenuCombinationOut, MenuCombinationItemOut,
-    MenuDashboardOut, MenuDashboardGuest, MenuItemTotal, MenuCombinationTotal,
+    MenuDashboardOut, MenuDashboardGuest, MenuItemTotal, MenuCombinationTotal, MealProgressIn, MealTrackingIn, MealAttendanceIn, MealAttendanceCorrectionIn,
 )
-from ..auth import require_paid_event_member, is_org_manager
+from ..auth import require_paid_event_member, is_org_manager, require_event_admin
+
+from ..services.meal_queue import meal_requests, progress_meal, RESERVED
+
+from ..services.meal_attendance import service_summaries, set_tracking, record_attendance, correct_attendance, has_orders, headcount_only_categories
+from ..services.guest_services import supervisor
 
 router = APIRouter()
 
@@ -110,6 +115,9 @@ async def create_category(event_id: str, data: MenuCategoryCreate, db: AsyncSess
         is_required=data.is_required,
     )
     db.add(cat)
+    await db.flush()
+    if not cat.display_only:
+        await _default_service_for_category(event_id,cat,db)
     await db.commit()
     await db.refresh(cat)
     return await _cat_out(cat, db)
@@ -133,6 +141,8 @@ async def update_category(event_id: str, category_id: str, data: MenuCategoryCre
     cat.min_selections = data.min_selections
     cat.max_selections = data.max_selections
     cat.is_required = data.is_required
+    if not cat.display_only:
+        await _default_service_for_category(event_id,cat,db)
     await db.commit()
     await db.refresh(cat)
     return await _cat_out(cat, db)
@@ -311,7 +321,7 @@ def meal_service_availability(service, served_count, now=None):
     return 'available','Ready for collection'
 
 
-async def fulfill_category(event_id, category_id, guest_id, station_id, db, current_user, *, service=None, enforce_service_limits=False):
+async def fulfill_category(event_id, category_id, guest_id, station_id, db, current_user, *, service=None, enforce_service_limits=True):
     """Canonical fulfillment shared with table-scoped staff; caller authorizes."""
     cat = await _category_or_404(event_id, category_id, db)
     guest = await db.scalar(select(Guest).where(Guest.id == guest_id).with_for_update().execution_options(populate_existing=True))
@@ -322,6 +332,7 @@ async def fulfill_category(event_id, category_id, guest_id, station_id, db, curr
     if service.event_id != event_id or service.category_id != category_id:
         raise HTTPException(404, "Meal service not found")
     service = await db.scalar(select(MealService).where(MealService.id == service.id).with_for_update().execution_options(populate_existing=True))
+    if not has_orders(service):raise HTTPException(409,'Orders are disabled for this headcount-only meal')
     if service.status != "open":
         raise HTTPException(409, f"{service.name} is {service.status}; meal collection is closed")
     existing = await db.scalar(select(GuestMealService).where(
@@ -332,7 +343,7 @@ async def fulfill_category(event_id, category_id, guest_id, station_id, db, curr
         return {"ok": True, "already_served": True, "served_at": existing.served_at}
     if enforce_service_limits:
         served_count = await db.scalar(select(func.count()).select_from(GuestMealService).where(
-            GuestMealService.service_id == service.id, GuestMealService.fulfillment_status == "served"))
+            GuestMealService.service_id == service.id, GuestMealService.guest_id != guest_id, GuestMealService.fulfillment_status.in_(RESERVED)))
         availability,reason=meal_service_availability(service,served_count)
         if availability!='available':raise HTTPException(409,reason)
     if existing:
@@ -405,6 +416,8 @@ async def menu_dashboard(event_id: str, db: AsyncSession = Depends(get_db), curr
     cats = (await db.execute(
         select(MenuCategory).where(MenuCategory.event_id == event_id).order_by(MenuCategory.sort_order, MenuCategory.name)
     )).scalars().all()
+    disabled=await headcount_only_categories(db,event_id)
+    cats=[c for c in cats if c.id not in disabled]
     cat_by_id = {c.id: c for c in cats}
 
     items = (await db.execute(
@@ -527,6 +540,9 @@ async def menu_dashboard(event_id: str, db: AsyncSession = Depends(get_db), curr
         combination_totals=combination_totals,
         guests=dashboard_guests,
         multi_category_serving=selectable_count >= 2,
+        meal_services=await service_summaries(db,await db.get(Event,event_id),guests,table_name_by_id,writable=True,configure=await supervisor(await db.get(Event,event_id),current_user,db,write=True),scope='Entire event'),
+        meal_attendance_can_configure=await supervisor(await db.get(Event,event_id),current_user,db,write=True),
+        meal_requests=await meal_requests(db,await db.get(Event,event_id),guests,table_name_by_id),
     )
 
 
@@ -538,6 +554,8 @@ async def get_public_menu(event_id: str, db: AsyncSession = Depends(get_db)):
     if not event or not event.menu_enabled or not event.is_paid:
         raise HTTPException(404, "Menu not available")
     cats = (await db.execute(select(MenuCategory).where(MenuCategory.event_id == event_id).order_by(MenuCategory.sort_order, MenuCategory.name))).scalars().all()
+    disabled=await headcount_only_categories(db,event_id)
+    cats=[c for c in cats if c.id not in disabled]
     out = []
     for cat in cats:
         items = (await db.execute(select(MenuItem).where(MenuItem.category_id == cat.id))).scalars().all()
@@ -568,3 +586,29 @@ async def get_public_menu(event_id: str, db: AsyncSession = Depends(get_db)):
             "combinations": combo_payload,
         })
     return out
+
+
+@router.post("/{event_id}/meal-services/{service_id}/guests/{guest_id}/progress")
+async def kitchen_meal_progress(event_id: str, service_id: str, guest_id: str, body: MealProgressIn, db: AsyncSession = Depends(get_db), actor: User = Depends(require_paid_event_member)):
+    await _require_menu_access(event_id,db,actor)
+    return await progress_meal(event_id,service_id,guest_id,body,db,actor)
+
+
+@router.patch('/{event_id}/meal-services/{service_id}/tracking')
+async def kitchen_meal_tracking(event_id: str, service_id: str, body: MealTrackingIn, db: AsyncSession = Depends(get_db), actor: User = Depends(require_event_admin)):
+    event=await db.get(Event,event_id)
+    if not event or not await supervisor(event,actor,db,write=True):raise HTTPException(403,'Supervisor permission required')
+    return await set_tracking(event_id,service_id,body,db,actor)
+
+
+@router.post('/{event_id}/meal-services/{service_id}/attendance')
+async def kitchen_meal_attendance(event_id: str, service_id: str, body: MealAttendanceIn, db: AsyncSession = Depends(get_db), actor: User = Depends(require_paid_event_member)):
+    await _require_menu_access(event_id,db,actor)
+    return await record_attendance(event_id,service_id,body.token,db,actor)
+
+
+@router.post('/{event_id}/meal-services/{service_id}/attendance/{guest_id}/correct')
+async def kitchen_meal_attendance_correction(event_id: str, service_id: str, guest_id: str, body: MealAttendanceCorrectionIn, db: AsyncSession = Depends(get_db), actor: User = Depends(require_event_admin)):
+    event=await db.get(Event,event_id)
+    if not event or not await supervisor(event,actor,db,write=True):raise HTTPException(403,'Supervisor permission required')
+    return await correct_attendance(event_id,service_id,guest_id,body,db,actor)

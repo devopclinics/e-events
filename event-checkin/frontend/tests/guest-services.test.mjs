@@ -10,7 +10,13 @@ import { create, act } from 'react-test-renderer'
 const require = createRequire(import.meta.url)
 function harness(api, selection = 'event-a') {
   let selected = selection, refreshCallback
+  const queueModule = { exports: {} }
+  runInNewContext(transformSync(readFileSync(new URL('../src/components/MealRequestQueue.jsx',import.meta.url),'utf8'),{loader:'jsx',format:'cjs',jsx:'automatic'}).code,{module:queueModule,exports:queueModule.exports,require:name=>name.endsWith('.css')?{}:require(name),Map,Set,JSON})
+  const attendanceModule={exports:{}}
+  runInNewContext(transformSync(readFileSync(new URL('../src/components/MealAttendancePanel.jsx',import.meta.url),'utf8'),{loader:'jsx',format:'cjs',jsx:'automatic'}).code,{module:attendanceModule,exports:attendanceModule.exports,require:name=>name.endsWith('.css')?{}:name==='./QrCameraScanner'?()=>null:require(name),URL})
   const modules = {
+    '../components/MealAttendancePanel':attendanceModule.exports,
+    '../components/MealRequestQueue': queueModule.exports,
     '../api': { api },
     '../guideContent.mjs': { CONTENT },
     '../hooks/useCurrentEvent': { useCurrentEvent: () => [selected] },
@@ -47,7 +53,7 @@ test('organiser can save multiple table assignments without creating tasks', asy
   const calls = [], h = harness({ guestServices: async () => data, configureGuestServices: async (...args) => calls.push(args) })
   let root; await act(async () => { root = create(React.createElement(h.Page)) })
   await act(async () => button(root, 'Assign staff').props.onClick())
-  await change(root.root.findAllByType('select')[0], 'member-a')
+  await change(root.root.findByProps({'aria-label':'Team member'}), 'member-a')
   await act(async () => button(root, 'Add table or room').props.onClick())
   await act(async () => button(root, 'Add table or room').props.onClick())
   await change(root.root.findByProps({ 'aria-label': 'Location 1' }), 'table:table-a')
@@ -147,9 +153,9 @@ test('board and canvas include empty assigned tables and provide direct table ed
  assert.ok(root.root.findByProps({'aria-label':'Open Empty Table'}))
  await act(async()=>button(root,'Board').props.onClick())
  await act(async()=>root.root.findByProps({'aria-label':'Edit Table A'}).props.onClick())
- const form=root.root.findByType('form'),inputs=form.findAllByType('input');await change(inputs[0],'Community East');await change(inputs[1],'12')
+ const form=root.root.findByType('form'),inputs=form.findAllByType('input');await change(inputs[0],'Community East');await change(inputs.find(i=>i.props.type==='number'),'12')
  await act(async()=>form.props.onSubmit({preventDefault(){}}))
- assert.deepEqual(JSON.parse(JSON.stringify(calls)),[['event-a','table-a',{name:'Community East',capacity:12,category:'VIP',sort_order:4},'table-version']])
+ assert.deepEqual(JSON.parse(JSON.stringify(calls)),[['event-a','table-a',{name:'Community East',capacity:12,category:'VIP',service_section:null,sort_order:4},'table-version']])
  await act(async()=>root.unmount())
 })
 
@@ -227,4 +233,66 @@ test('an action eligibility denial refreshes scope without falsely revoking even
  const data=base();Object.assign(data.guests[0],{can_manage_meals:true,meal_services:[{id:'meal',name:'Lunch',status:'open',eligible:true,served:false,can_serve:true}]})
  const h=harness({guestServices:async()=>data,serveGuestMeal:async()=>{data.guests[0].meal_services[0].eligible=false;data.guests[0].meal_services[0].can_serve=false;throw Object.assign(new Error('Guest is not eligible'),{status:403})}});let root
  await act(async()=>{root=create(React.createElement(h.Page))});await act(async()=>button(root,'Guests1').props.onClick());await act(async()=>button(root,'Open guest →').props.onClick());await act(async()=>button(root,'Mark served').props.onClick());assert.ok(text(root.root).includes('Ada'));assert.ok(text(root.root.findByProps({role:'alert'})).includes('Guest is not eligible'));assert.equal(button(root,'Mark served').props.disabled,true);await act(async()=>root.unmount())
+})
+
+test('100 tables default to compact pages and section/search filters reset pagination',async()=>{
+ const tables=Array.from({length:100},(_,i)=>({id:`table-${i+1}`,name:`Table ${i+1}`,capacity:8,service_section:i<50?'East':'West'}));const data={...base(),is_supervisor:true,can_configure:true,guests:[],tables,team:[],locations:{tables,zones:[]}}
+ const h=harness({guestServices:async()=>data});let root;await act(async()=>{root=create(React.createElement(h.Page))})
+ const rows=()=>root.root.findAllByType('article').filter(n=>n.props.className==='gs-table-list-row')
+ assert.equal(rows().length,24);assert.ok(text(rows()[0]).includes('Table 1'))
+ await act(async()=>button(root,'Next tables').props.onClick());assert.ok(text(rows()[0]).includes('Table 25'))
+ await change(root.root.findByProps({'aria-label':'Table section'}),'West');assert.equal(rows().length,24);assert.ok(text(rows()[0]).includes('Table 51'))
+ await change(root.root.findByProps({'aria-label':'Search workspace'}),'Table 100');assert.equal(rows().length,1);assert.equal(button(root,'Next tables').props.disabled,true)
+ await act(async()=>root.unmount())
+})
+const mealRow=(id='one',status='pending')=>({id,guest_id:'guest-a',guest_name:'Ada',table_id:'table-a',table_name:'Table A',service_id:'lunch',service_name:'Lunch',choices:['Rice'],selection_key:'a'.repeat(64),status,status_label:({pending:'New',preparing:'Preparing',ready:'Ready',served:'Delivered'})[status],next_status:({pending:'preparing',preparing:'ready',ready:'served'})[status],can_progress:status!=='served',availability_reason:'Ready for collection'})
+test('meal queue advances the canonical guest/service and alerts only after new scoped data arrives',async()=>{
+ let data={...base(),meal_requests:[mealRow()]};const calls=[];const h=harness({guestServices:async()=>data,progressGuestMeal:async(...args)=>{calls.push(args);data={...data,meal_requests:[mealRow('one','preparing')]}}});let root;await act(async()=>{root=create(React.createElement(h.Page))})
+ assert.equal(root.root.findAllByProps({'aria-label':'Dismiss meal updates'}).length,0)
+ await act(async()=>button(root,'Meal requests1').props.onClick());await act(async()=>button(root,'Start preparing').props.onClick());assert.deepEqual(JSON.parse(JSON.stringify(calls)),[['event-a','guest-a','lunch',{status:'preparing',expected_status:'pending',selection_key:'a'.repeat(64)}]])
+ data={...data,meal_requests:[mealRow('one','ready'),mealRow('two')]};await act(async()=>h.refresh());assert.ok(button(root,'View meal requests'));assert.ok(text(root.root).includes('2 meal updates'))
+ await act(async()=>button(root,'Dismiss').props.onClick());await act(async()=>h.refresh());assert.equal(root.root.findAllByProps({'aria-label':'Dismiss meal updates'}).length,0)
+ await act(async()=>root.unmount())
+})
+test('meal queue paginates requests and disables unavailable preparation',async()=>{
+ const rows=Array.from({length:60},(_,i)=>({...mealRow(String(i)),can_progress:false,availability_reason:'Collection has not started'}));const h=harness({guestServices:async()=>({...base(),meal_requests:rows})});let root;await act(async()=>{root=create(React.createElement(h.Page))})
+ await act(async()=>button(root,'Meal requests60').props.onClick());assert.equal(root.root.findAllByType('li').length,25);assert.equal(button(root,'Start preparing').props.disabled,true)
+ await act(async()=>button(root,'Next requests').props.onClick());assert.equal(root.root.findAllByType('li').length,25)
+ await change(root.root.findByProps({'aria-label':'Meal stage'}),'ready');assert.equal(root.root.findAllByType('li').length,0)
+ await act(async()=>root.unmount())
+})
+
+const attendanceService=(mode='both',canConfigure=true)=>({id:'meal-one',name:'Saturday Lunch',tracking_mode:mode,scope:'Assigned tables',can_configure:canConfigure,can_scan:mode!=='orders',expected:3,attended:1,not_yet_attended:2,ordered:2,preparing:1,ready:0,delivered:1,attended_without_order:1,recent_attendees:[]})
+test('meal attendance has explicit per-service mode and separately displays headcount and order totals',async()=>{
+ let data={...base(),meal_services:[attendanceService('orders')]};const calls=[],h=harness({guestServices:async()=>data,configureMealTracking:async(...args)=>{calls.push(args);data={...data,meal_services:[attendanceService('both')]}}});let root;await act(async()=>{root=create(React.createElement(h.Page))})
+ await act(async()=>button(root,'Meal attendance').props.onClick());assert.equal(button(root,'Record meal attendance'),undefined)
+ await change(root.root.findByProps({'aria-label':'Meal tracking'}),'both');await act(async()=>root.root.findByType('form').props.onSubmit({preventDefault(){}}))
+ assert.deepEqual(JSON.parse(JSON.stringify(calls)),[['event-a','meal-one',{tracking_mode:'both',expected_mode:'orders'},true]])
+ const metrics=root.root.findByProps({className:'ma-metrics'});assert.ok(text(metrics).includes('1Attended'));assert.ok(text(metrics).includes('2Placed selections'));assert.ok(text(metrics).includes('1Delivered'))
+ await act(async()=>root.unmount())
+})
+test('headcount pass scans use attendance API only and clearly acknowledge duplicate scans',async()=>{
+ const data={...base(),meal_services:[attendanceService('headcount',false)]},calls=[];const h=harness({guestServices:async()=>data,scanMealAttendance:async(...args)=>{calls.push(args);return {guest_name:'Ada',already_counted:true,message:'Already counted for this meal'}}});let root;await act(async()=>{root=create(React.createElement(h.Page))})
+ await act(async()=>button(root,'Meal attendance').props.onClick());assert.equal(root.root.findAllByProps({'aria-label':'Meal tracking'}).length,0)
+ assert.ok(!text(root.root.findByProps({className:'ma-metrics'})).includes('Delivered'))
+ await change(root.root.findByProps({'aria-label':'Meal attendance pass'}),'https://festio.events/rsvp/guest-pass#/home');await act(async()=>root.root.findByType('form').props.onSubmit({preventDefault(){}}))
+ assert.deepEqual(JSON.parse(JSON.stringify(calls)),[['event-a','meal-one','guest-pass',true]])
+ assert.ok(text(root.root).includes('Ada: Already counted for this meal'));assert.equal(root.root.findByProps({'aria-label':'Meal attendance pass'}).props.value,'')
+ await act(async()=>root.unmount())
+})
+test('failed attendance correction retains reason and stale timestamp until acknowledged',async()=>{
+ const service={...attendanceService(),recent_attendees:[{guest_id:'guest-a',name:'Ada',table_name:'Table A',attended_at:'2026-10-20T12:00:00',can_correct:true}]};let fail=true;const calls=[],h=harness({guestServices:async()=>({...base(),meal_services:[service]}),correctMealAttendance:async(...args)=>{calls.push(args);if(fail)throw new Error('Refresh required');return {corrected:true,message:'Attendance corrected'}}});let root;await act(async()=>{root=create(React.createElement(h.Page))})
+ await act(async()=>button(root,'Meal attendance').props.onClick());await act(async()=>root.root.findByProps({'aria-label':'Correct attendance for Ada'}).props.onClick());await change(root.root.findByType('textarea'),'Wrong meal scanned at the door')
+ const correctionForm=()=>root.root.findAllByType('form').find(f=>f.props.className==='ma-correction')
+ await act(async()=>correctionForm().props.onSubmit({preventDefault(){}}));assert.ok(correctionForm());assert.equal(root.root.findByType('textarea').props.value,'Wrong meal scanned at the door')
+ fail=false;await act(async()=>correctionForm().props.onSubmit({preventDefault(){}}));assert.equal(correctionForm(),undefined);assert.equal(calls[0][3].expected_attended_at,'2026-10-20T12:00:00')
+ await act(async()=>root.unmount())
+})
+
+test('switching meal occurrence hides the previous scan receipt and irrelevant table search',async()=>{
+ const services=[attendanceService('headcount',false),{...attendanceService('headcount',false),id:'meal-two',name:'Sunday Lunch'}];const h=harness({guestServices:async()=>({...base(),meal_services:services}),scanMealAttendance:async()=>({service_id:'meal-one',guest_name:'Ada',message:'Meal attendance recorded'})});let root;await act(async()=>{root=create(React.createElement(h.Page))})
+ await act(async()=>button(root,'Meal attendance').props.onClick());assert.equal(root.root.findAllByProps({'aria-label':'Search workspace'}).length,0)
+ await change(root.root.findByProps({'aria-label':'Meal attendance pass'}),'guest-pass');await act(async()=>root.root.findByType('form').props.onSubmit({preventDefault(){}}));assert.ok(text(root.root).includes('Ada: Meal attendance recorded'))
+ await change(root.root.findByProps({'aria-label':'Attendance meal service'}),'meal-two');assert.ok(!text(root.root).includes('Ada: Meal attendance recorded'))
+ await act(async()=>root.unmount())
 })

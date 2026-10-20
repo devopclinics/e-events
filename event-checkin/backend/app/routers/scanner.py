@@ -424,6 +424,9 @@ async def _load_menu(event_id: str, guest_id: str, db: AsyncSession):
         select(MenuCategory).where(MenuCategory.event_id == event_id, MenuCategory.guest_visible.is_(True)).order_by(MenuCategory.sort_order, MenuCategory.name)
     )).scalars().all()
 
+    from ..services.meal_attendance import headcount_only_categories
+    disabled=await headcount_only_categories(db,event_id)
+    cats=[c for c in cats if c.id not in disabled]
     menu_out = []
     for cat in cats:
         items = (await db.execute(select(MenuItem).where(MenuItem.category_id == cat.id))).scalars().all()
@@ -1693,12 +1696,11 @@ async def save_guest_menu(guest, body, db, *, actor_user_id=None, category_locks
         raise HTTPException(status_code=400, detail="Menu unlocks at check-in")
     # Assisted service operates per category. Preserve the public guest flow's
     # existing lock and fail closed for legacy served flags without occurrence data.
-    locked_categories = set()
-    if category_locks:
-        from ..models import MealService, GuestMealService
-        locked_categories = set((await db.scalars(select(MealService.category_id).join(
-            GuestMealService, GuestMealService.service_id == MealService.id).where(
-            GuestMealService.guest_id == guest.id, GuestMealService.fulfillment_status == "served"))).all())
+    from ..models import MealService, GuestMealService
+    # Preparation and delivery use the same ledger for guest and assisted edits.
+    locked_categories = set((await db.scalars(select(MealService.category_id).join(
+        GuestMealService, GuestMealService.service_id == MealService.id).where(
+        GuestMealService.guest_id == guest.id, GuestMealService.fulfillment_status.in_(['preparing','ready','served'])))).all())
     if guest.meal_served and (not category_locks or not locked_categories):
         raise HTTPException(status_code=400, detail="Your meal has been served — selection is locked")
 
@@ -1706,6 +1708,9 @@ async def save_guest_menu(guest, body, db, *, actor_user_id=None, category_locks
     cats = (await db.execute(
         select(MenuCategory).where(MenuCategory.event_id == guest.event_id, MenuCategory.guest_visible.is_(True), MenuCategory.display_only.is_(False))
     )).scalars().all()
+    from ..services.meal_attendance import headcount_only_categories
+    disabled=await headcount_only_categories(db,guest.event_id)
+    cats=[c for c in cats if c.id not in disabled]
     cats_by_id = {c.id: c for c in cats}
 
     clear_ids = set(clear_category_ids)
@@ -1714,7 +1719,7 @@ async def save_guest_menu(guest, body, db, *, actor_user_id=None, category_locks
     if any(cats_by_id[cid].is_required for cid in clear_ids):
         raise HTTPException(400, "Required meal choices cannot be cleared")
     if clear_ids & locked_categories:
-        raise HTTPException(400, "A served meal's choices are locked")
+        raise HTTPException(400, "A meal being prepared or served has locked choices")
 
     # Required-category check: fulfilled categories are already complete.
     submitted_cat_ids = set((body.single or {}).keys()) \
@@ -1776,7 +1781,7 @@ async def save_guest_menu(guest, body, db, *, actor_user_id=None, category_locks
             old = {(x.menu_item_id, x.combination_id) for x in existing if x.category_id == cid}
             new = {(x.menu_item_id, x.combination_id) for x in new_rows if x.category_id == cid}
             if old != new:
-                raise HTTPException(400, "A served meal's choices are locked")
+                raise HTTPException(400, "A meal being prepared or served has locked choices")
         touched_cat_ids -= locked_categories
         new_rows = [x for x in new_rows if x.category_id not in locked_categories]
 

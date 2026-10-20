@@ -22,6 +22,7 @@ router = APIRouter()
 
 
 class AssignmentIn(BaseModel):
+    id: str | None = None
     table_id: str | None = None
     zone_id: str | None = None
     starts_at: datetime | None = None
@@ -68,6 +69,14 @@ async def renameable_placeholder(user, event_user, db, org_id):
     return len(memberships) == 1 and memberships[0].org_id == org_id and memberships[0].role == 'staff' and events == 1
 
 
+async def renameable_placeholder_ids(members,db,org_id):
+    candidates={u.id for m,u in members if not u.firebase_uid and u.email.lower().endswith('.invalid') and not u.is_platform_superadmin and m.event_role=='staff'}
+    if not candidates:return set()
+    memberships=(await db.scalars(select(Membership).where(Membership.user_id.in_(candidates)))).all()
+    counts=dict((await db.execute(select(EventUser.user_id,func.count()).where(EventUser.user_id.in_(candidates)).group_by(EventUser.user_id))).all())
+    return {uid for uid in candidates if counts.get(uid)==1 and len([m for m in memberships if m.user_id==uid])==1 and any(m.user_id==uid and m.org_id==org_id and m.role=='staff' for m in memberships)}
+
+
 class SeatedIn(BaseModel):
     seated: bool = True
 
@@ -90,6 +99,8 @@ class ScanIn(BaseModel):
     token: str = Field(min_length=1, max_length=500)
     zone_id: str | None = None
     direction: Literal['in', 'out'] = 'in'
+    guardian_token: str | None = Field(default=None, max_length=500)
+    guardian_guest_id: str | None = Field(default=None, max_length=36)
 
 
 def audit(db, event_id, actor, action, guest_id=None, detail=None):
@@ -115,7 +126,7 @@ async def event_and_guest(event_id, guest_id, actor, db, permission=None):
 
 @router.get('/{event_id}/guest-services')
 async def workspace(event_id: str, db: AsyncSession = Depends(get_db), actor: User = Depends(require_event_member)):
-    from .menu import _cat_out
+    from .menu import categories_out, meal_service_availability
     from ..models import MenuCategory
     event = await db.get(Event, event_id)
     eu = await member(event, actor, db)
@@ -137,6 +148,8 @@ async def workspace(event_id: str, db: AsyncSession = Depends(get_db), actor: Us
     for choice, item, combo in choices:
         by_guest.setdefault(choice.guest_id, []).append({'category_id': choice.category_id, 'item_id': choice.menu_item_id, 'combination_id': choice.combination_id, 'name': item or combo})
     services = (await db.scalars(select(MealService).where(MealService.event_id == event_id))).all() if event.menu_enabled else []
+    service_counts = dict((await db.execute(select(GuestMealService.service_id,func.count()).where(GuestMealService.service_id.in_([s.id for s in services]),GuestMealService.fulfillment_status=='served').group_by(GuestMealService.service_id))).all()) if services else {}
+    now = datetime.utcnow()
     fulfills = {(r.guest_id, r.service_id): r for r in (await db.scalars(select(GuestMealService).where(GuestMealService.guest_id.in_(ids)))).all()} if ids else {}
     out = []
     for g in guests:
@@ -146,11 +159,21 @@ async def workspace(event_id: str, db: AsyncSession = Depends(get_db), actor: Us
             'admitted':g.admitted, 'seated_at':seated[g.id].seated_at if g.id in seated and seated[g.id].table_id == g.table_id else None,
             'can_checkin':can_write if is_supervisor else any(r.table_id == g.table_id and r.can_checkin for r in active),
             'can_manage_meals':can_meals, 'locked_category_ids':locked_categories if can_meals else [], 'menu_selections_locked':bool(g.meal_served and not locked_categories), 'choices':by_guest.get(g.id,[]) if can_meals else [],
-            'meal_services':[{'id':s.id,'category_id':s.category_id,'name':s.name,'status':s.status,
-                'eligible':g.rsvp_status != 'declined' and (not fulfills.get((g.id,s.id)) or fulfills[(g.id,s.id)].eligibility_status == 'eligible'),
-                'served':bool(fulfills.get((g.id,s.id)) and fulfills[(g.id,s.id)].fulfillment_status == 'served')} for s in services] if can_meals else []})
+            'meal_services':[]})
+        if can_meals:
+            for service in services:
+                record=fulfills.get((g.id,service.id))
+                served=bool(record and record.fulfillment_status=='served')
+                eligible=g.rsvp_status!='declined' and (not record or record.eligibility_status=='eligible')
+                availability,reason=meal_service_availability(service,service_counts.get(service.id,0),now)
+                if served: availability,reason='served','Served — choices locked'
+                elif not eligible: availability,reason='not_eligible','Guest is not eligible'
+                elif not g.admitted: availability,reason='checkin_required','Guest must check in first'
+                out[-1]['meal_services'].append({'id':service.id,'category_id':service.category_id,'name':service.name,'status':service.status,'eligible':eligible,'served':served,'starts_at':service.starts_at,'ends_at':service.ends_at,'remaining_capacity':max(0,service.capacity-service_counts.get(service.id,0)) if service.capacity is not None else None,'availability':availability,'availability_reason':reason,'can_serve':availability=='available'})
+
     # Zone attendance is derived from canonical accepted movements, not registration/admission.
-    movements = (await db.execute(select(ScanEvent, Guest.first_name, Guest.last_name).join(Guest, Guest.id == ScanEvent.guest_id).where(ScanEvent.event_id == event_id, ScanEvent.zone_id.in_(zone_ids), ScanEvent.denied.is_(False)).order_by(ScanEvent.scanned_at.desc(), ScanEvent.id.desc()))).all() if zone_ids else []
+    ranked = select(ScanEvent.id.label('scan_id'),func.row_number().over(partition_by=(ScanEvent.zone_id,ScanEvent.guest_id),order_by=(ScanEvent.scanned_at.desc(),ScanEvent.id.desc())).label('position')).where(ScanEvent.event_id==event_id,ScanEvent.zone_id.in_(zone_ids),ScanEvent.denied.is_(False)).subquery()
+    movements = (await db.execute(select(ScanEvent,Guest.first_name,Guest.last_name).join(ranked,ranked.c.scan_id==ScanEvent.id).join(Guest,Guest.id==ScanEvent.guest_id).where(ranked.c.position==1))).all() if zone_ids else []
     latest = {}
     for movement, first, last in movements:
         latest.setdefault((movement.zone_id,movement.guest_id), {'guest_id':movement.guest_id,'name':f'{first} {last}'.strip(),'direction':movement.direction})
@@ -159,11 +182,15 @@ async def workspace(event_id: str, db: AsyncSession = Depends(get_db), actor: Us
     result = {'request_assignees':[{'id':uid,'name':name} for uid,name in request_members], 'event_id':event_id,'event_name':event.name,'is_supervisor':is_supervisor,'can_configure':can_write,
         'assignments':[assignment_out(r,table_names,zone_names) for r in mine], 'guests':out,
         'zones':[{'id':z.id,'name':z.name,'can_scan':can_write if is_supervisor else any(r.zone_id==z.id and r.can_scan_zone for r in active), 'inside':[v for (zone_id,_),v in latest.items() if zone_id==z.id and v['direction']=='in']} for z in zones if z.id in zone_ids],
-        'menu_categories':[await _cat_out(c,db) for c in cats],
+        'menu_categories':await categories_out(cats,db),
+        'manual_guardian_verification_enabled':bool(event.manual_checkin_enabled),
         'tables':[{'id':t.id,'name':t.name,'capacity':t.capacity} for t in tables if t.id in table_ids]}
     if is_supervisor:
         members=(await db.execute(select(EventUser,User).join(User,User.id==EventUser.user_id).where(EventUser.event_id==event_id))).all()
-        result['team']=[{'id':m.id,'user_id':u.id,'name':u.name,'event_role':m.event_role,'scoped':m.guest_service_scoped,'updated_at':m.updated_at,'can_rename_placeholder':can_write and await renameable_placeholder(u,m,db,event.org_id),'assignments':[assignment_out(r,table_names,zone_names) for r in all_rows if r.event_user_id==m.id]} for m,u in members]
+        renameable_ids=await renameable_placeholder_ids(members,db,event.org_id) if can_write else set()
+        guest_counts=(await db.execute(select(func.count(Guest.id),func.count(Guest.table_id)).where(Guest.event_id==event_id))).one()
+        result['setup_warnings']={'unallocated_guests':guest_counts[0]-guest_counts[1],'unclaimed_placeholders':sum(not u.firebase_uid and u.email.lower().endswith('.invalid') for _,u in members),'services_without_windows':sum(x.status=='open' and (not x.starts_at or not x.ends_at) for x in services),'open_demo_services':sum(x.status=='open' and 'demo' in x.name.lower() for x in services)}
+        result['team']=[{'id':m.id,'user_id':u.id,'name':u.name,'event_role':m.event_role,'scoped':m.guest_service_scoped,'updated_at':m.updated_at,'can_rename_placeholder':u.id in renameable_ids,'assignments':[assignment_out(r,table_names,zone_names) for r in all_rows if r.event_user_id==m.id]} for m,u in members]
         result['locations']={'tables':[{'id':t.id,'name':t.name,'capacity':t.capacity,'category':t.category,'sort_order':t.sort_order,'updated_at':t.updated_at} for t in tables], 'zones':[{'id':z.id,'name':z.name} for z in zones]}
     return result
 
@@ -204,7 +231,8 @@ async def configure(event_id: str, member_id: str, body: AssignmentUpdate, db: A
     if expected != eu.updated_at: raise HTTPException(409,'Team access changed. Refresh before saving')
     if body.scoped and any((eu.can_manage_menu,eu.can_reassign_seats,eu.can_view_guests,eu.can_manage_guests,eu.can_view_dashboard)):
         raise HTTPException(409,'Remove event-wide guest, seat, menu and dashboard grants in Team before enabling scoped service access')
-    seen=set()
+    existing=(await db.scalars(select(GuestServiceAssignment).where(GuestServiceAssignment.event_user_id==eu.id))).all()
+    by_id={r.id:r for r in existing};seen=set();retained=set();updates=[]
     for item in body.assignments:
         key=(item.table_id,item.zone_id,item.starts_at,item.ends_at)
         if key in seen: raise HTTPException(400,'Duplicate assignment')
@@ -212,8 +240,18 @@ async def configure(event_id: str, member_id: str, body: AssignmentUpdate, db: A
         location=await db.get(SeatingTable if item.table_id else Zone,item.table_id or item.zone_id)
         if not location or location.event_id!=event_id: raise HTTPException(404,'Location not found in this event')
         if item.zone_id and not location.is_active: raise HTTPException(400,'Choose an active zone')
-    await db.execute(delete(GuestServiceAssignment).where(GuestServiceAssignment.event_user_id==eu.id))
-    for item in body.assignments: db.add(GuestServiceAssignment(event_user_id=eu.id,**item.model_dump()))
+        row=by_id.get(item.id) if item.id else next((r for r in existing if r.id not in retained and (r.table_id,r.zone_id,r.starts_at,r.ends_at)==key),None)
+        if item.id and not row: raise HTTPException(404,'Assignment not found for this staff member')
+        if row and row.id in retained: raise HTTPException(400,'Duplicate assignment identifier')
+        if row:retained.add(row.id)
+        updates.append((row,item))
+    for row,item in updates:
+        values=item.model_dump(exclude={'id'})
+        if row:
+            for field,value in values.items():setattr(row,field,value)
+        else:db.add(GuestServiceAssignment(event_user_id=eu.id,**values))
+    for row in existing:
+        if row.id not in retained:await db.delete(row)
     eu.guest_service_scoped=body.scoped; eu.updated_at=datetime.utcnow()
     audit(db,event_id,actor,'assignments_updated',detail={'member_id':eu.id,'scoped':body.scoped,'assignments':[i.model_dump(mode='json') for i in body.assignments]})
     await db.commit()
@@ -265,18 +303,21 @@ async def scan(event_id: str, body: ScanIn, background_tasks: BackgroundTasks, d
     if body.zone_id:
         if not await supervisor(event,actor,db,write=True) and not any(r.zone_id==body.zone_id and r.can_scan_zone for r in await assignments_for(event,actor,db)):
             raise HTTPException(403,'Zone scan is outside your active assignments')
-        result=await scan_qr_zone(body.token,ScanZoneRequest(zone_id=body.zone_id,direction=body.direction),background_tasks,db,actor)
+        result=await scan_qr_zone(body.token,ScanZoneRequest(zone_id=body.zone_id,direction=body.direction,guardian_token=body.guardian_token,guardian_guest_id=body.guardian_guest_id),background_tasks,db,actor)
     else:
         await guest_scope(event,actor,g,db,permission='can_checkin')
         result=await scan_qr(body.token,background_tasks,None,db,actor)
     await db.commit()
     # Do not forward the legacy scanner's full GuestOut (contacts/pass credentials).
-    return {'status':result.status,'message':getattr(result, 'message', None) or getattr(result, 'deny_reason', None) or f'{result.guest_name}: {result.zone_name} {result.direction}'}
+    return {'guardian_candidates':getattr(result,'guardian_candidates',[]) if result.status=='guardian_required' else [],'guardian_name':getattr(result,'guardian_name',None),'guardian_verification_method':getattr(result,'guardian_verification_method',None),'guest_name':getattr(result,'guest_name',None),'status':result.status,'message':getattr(result, 'message', None) or getattr(result, 'deny_reason', None) or f'{result.guest_name}: {result.zone_name} {result.direction}'}
 
 
 @router.post('/{event_id}/guest-services/requests')
 async def assistance(event_id: str, body: RequestIn, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), actor: User = Depends(require_event_member)):
     event=await db.get(Event,event_id); await member(event,actor,db)
+    # Acknowledging the caller's own completed request does not require the old shift/location to still exist.
+    existing=await db.scalar(select(GuestServiceRequest).where(GuestServiceRequest.event_id==event_id,GuestServiceRequest.actor_id==actor.id,GuestServiceRequest.request_key==body.request_key))
+    if existing:return {'task_id':existing.task_id,'already_created':True}
     assignment=await db.get(GuestServiceAssignment,body.assignment_id)
     eu=await db.get(EventUser,assignment.event_user_id) if assignment else None
     if not eu or eu.event_id!=event_id or not active_assignment(assignment): raise HTTPException(403,'Active assignment required')

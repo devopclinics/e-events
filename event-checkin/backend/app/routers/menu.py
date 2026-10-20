@@ -49,12 +49,12 @@ async def _combo_out(combo: MenuCombination, db: AsyncSession) -> MenuCombinatio
     )
 
 
-async def _cat_out(cat: MenuCategory, db: AsyncSession) -> MenuCategoryOut:
-    items = (await db.execute(select(MenuItem).where(MenuItem.category_id == cat.id))).scalars().all()
-    combos = (await db.execute(
+async def _cat_out(cat: MenuCategory, db: AsyncSession, *, cached_items=None, cached_combos=None, cached_combo_outs=None) -> MenuCategoryOut:
+    items = cached_items if cached_items is not None else (await db.execute(select(MenuItem).where(MenuItem.category_id == cat.id))).scalars().all()
+    combos = cached_combos if cached_combos is not None else (await db.execute(
         select(MenuCombination).where(MenuCombination.category_id == cat.id).order_by(MenuCombination.sort_order, MenuCombination.name)
     )).scalars().all()
-    combo_outs = [await _combo_out(c, db) for c in combos]
+    combo_outs = [cached_combo_outs[c.id] for c in combos] if cached_combo_outs is not None else [await _combo_out(c, db) for c in combos]
     return MenuCategoryOut(
         id=cat.id,
         event_id=cat.event_id,
@@ -70,6 +70,16 @@ async def _cat_out(cat: MenuCategory, db: AsyncSession) -> MenuCategoryOut:
         items=[MenuItemOut(id=i.id, category_id=i.category_id, name=i.name, description=i.description) for i in items],
         combinations=combo_outs,
     )
+
+
+async def categories_out(cats,db):
+    if not cats:return []
+    ids=[c.id for c in cats]
+    items=(await db.scalars(select(MenuItem).where(MenuItem.category_id.in_(ids)))).all()
+    combos=(await db.scalars(select(MenuCombination).where(MenuCombination.category_id.in_(ids)).order_by(MenuCombination.sort_order,MenuCombination.name))).all()
+    rows=(await db.execute(select(MenuCombinationItem,MenuItem).join(MenuItem,MenuItem.id==MenuCombinationItem.menu_item_id).where(MenuCombinationItem.combination_id.in_([c.id for c in combos])))).all() if combos else []
+    outputs={c.id:MenuCombinationOut(id=c.id,name=c.name,description=c.description,sort_order=c.sort_order,items=[MenuCombinationItemOut(menu_item_id=i.id,name=i.name,quantity=ci.quantity) for ci,i in rows if ci.combination_id==c.id]) for c in combos}
+    return [await _cat_out(c,db,cached_items=[i for i in items if i.category_id==c.id],cached_combos=[x for x in combos if x.category_id==c.id],cached_combo_outs=outputs) for c in cats]
 
 
 # ── Categories ────────────────────────────────────────────────────────────────
@@ -292,6 +302,15 @@ async def mark_category_served(
     return await fulfill_category(event_id, category_id, guest_id, station_id, db, current_user)
 
 
+def meal_service_availability(service, served_count, now=None):
+    now=now or datetime.utcnow()
+    if service.status!='open':return service.status,f'{service.name} is {service.status}; meal collection is closed'
+    if service.starts_at and now<service.starts_at:return 'upcoming','This meal service is outside its serving window — collection has not started'
+    if service.ends_at and now>=service.ends_at:return 'ended','This meal service is outside its serving window — collection has ended'
+    if service.capacity is not None and served_count>=service.capacity:return 'full','This meal service has reached its serving capacity'
+    return 'available','Ready for collection'
+
+
 async def fulfill_category(event_id, category_id, guest_id, station_id, db, current_user, *, service=None, enforce_service_limits=False):
     """Canonical fulfillment shared with table-scoped staff; caller authorizes."""
     cat = await _category_or_404(event_id, category_id, db)
@@ -312,13 +331,10 @@ async def fulfill_category(event_id, category_id, guest_id, station_id, db, curr
     if existing and existing.fulfillment_status == "served":
         return {"ok": True, "already_served": True, "served_at": existing.served_at}
     if enforce_service_limits:
-        now = datetime.utcnow()
-        if (service.starts_at and now < service.starts_at) or (service.ends_at and now >= service.ends_at):
-            raise HTTPException(409, "This meal service is outside its serving window")
         served_count = await db.scalar(select(func.count()).select_from(GuestMealService).where(
             GuestMealService.service_id == service.id, GuestMealService.fulfillment_status == "served"))
-        if service.capacity is not None and served_count >= service.capacity:
-            raise HTTPException(409, "This meal service has reached its serving capacity")
+        availability,reason=meal_service_availability(service,served_count)
+        if availability!='available':raise HTTPException(409,reason)
     if existing:
         existing.fulfillment_status = "served"
         existing.served_at = datetime.utcnow()

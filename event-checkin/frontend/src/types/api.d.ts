@@ -110,6 +110,7 @@ export interface AssignmentIn {
   can_manage_meals?: boolean
   can_scan_zone?: boolean
   ends_at?: (string) | null
+  id?: (string) | null
   is_lead?: boolean
   starts_at?: (string) | null
   table_id?: (string) | null
@@ -3073,6 +3074,8 @@ export interface ScanCheckoutRequest {
 
 export interface ScanIn {
   direction?: 'in' | 'out'
+  guardian_guest_id?: (string) | null
+  guardian_token?: (string) | null
   token: string
   zone_id?: (string) | null
 }

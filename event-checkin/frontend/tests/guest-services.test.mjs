@@ -9,7 +9,7 @@ import { CONTENT } from '../src/guideContent.mjs'
 import { create, act } from 'react-test-renderer'
 const require = createRequire(import.meta.url)
 function harness(api, selection = 'event-a') {
-  let selected = selection
+  let selected = selection, refreshCallback
   const modules = {
     '../api': { api },
     '../guideContent.mjs': { CONTENT },
@@ -21,8 +21,8 @@ function harness(api, selection = 'event-a') {
   }
   const module = { exports: {} }
   const code = transformSync(readFileSync(new URL('../src/pages/GuestServicesPage.jsx', import.meta.url), 'utf8'), { loader: 'jsx', format: 'cjs', jsx: 'automatic' }).code
-  runInNewContext(code, { module, exports: module.exports, require: name => modules[name] ?? require(name), URL, Date, Map, Object, crypto: { randomUUID: () => 'synthetic-request-key' }, setInterval: () => 1, clearInterval() {} })
-  return { Page: module.exports.default, passToken: module.exports.passToken, select: id => { selected = id } }
+  runInNewContext(code, { module, exports: module.exports, require: name => modules[name] ?? require(name), URL, Date, Map, Object, crypto: { randomUUID: () => 'synthetic-request-key' }, setInterval: callback => { refreshCallback = callback; return 1 }, clearInterval() {} })
+  return { Page: module.exports.default, passToken: module.exports.passToken, select: id => { selected = id }, refresh: () => refreshCallback() }
 }
 const base = () => ({ event_id: 'event-a', event_name: 'Conference', is_supervisor: false, can_configure: false, assignments: [{ id: 'assignment', table_id: 'table-a', name: 'Table A', active: true }], zones: [], menu_categories: [], request_assignees: [], guests: [{ id: 'guest-a', name: 'Ada', table_id: 'table-a', table_name: 'Table A', admitted: true, seated_at: null, can_checkin: false, can_manage_meals: false, choices: [], meal_services: [] }] })
 const text = node => node.children.map(c => typeof c === 'string' ? c : text(c)).join('')
@@ -176,4 +176,55 @@ test('room scan opens the existing scanner with the selected zone and direction'
  await act(async()=>{root=create(React.createElement(h.Page))});await act(async()=>button(root,'Rooms1').props.onClick());await act(async()=>button(root,'Open room →').props.onClick());await act(async()=>button(root,'Scan exit').props.onClick())
  const form=root.root.findByType('form');await change(form.findByType('input'),'guest-pass');await act(async()=>form.props.onSubmit({preventDefault(){}}));assert.deepEqual(JSON.parse(JSON.stringify(calls)),[['event-a',{token:'guest-pass',zone_id:'room',direction:'out'}]])
  await act(async()=>root.unmount())
+})
+
+test('acknowledged task stays saved when the following roster refresh fails',async()=>{
+ const data=base(),calls=[];let failRefresh=false
+ const h=harness({guestServices:async()=>{if(failRefresh)throw new Error('Network unavailable');return data},guestServiceRequest:async(...args)=>{calls.push(args);failRefresh=true;return{task_id:'saved-task'}}});let root
+ await act(async()=>{root=create(React.createElement(h.Page))});await act(async()=>button(root,'Requests').props.onClick());await act(async()=>button(root,'Request assistance').props.onClick());const form=root.root.findByType('form');await change(form.findAllByType('select')[0],'assignment');await change(form.findByType('input'),'Water needed');await act(async()=>form.props.onSubmit({preventDefault(){}}))
+ assert.equal(calls.length,1);assert.equal(root.root.findAllByProps({role:'dialog'}).length,0);assert.ok(text(root.root.findByProps({role:'status'})).includes('Request added to team Tasks'));assert.ok(text(root.root.findByProps({role:'alert'})).includes('Saved successfully'));assert.ok(text(root.root).includes('View saved task →'))
+ failRefresh=false;await act(async()=>button(root,'Refresh').props.onClick());assert.equal(calls.length,1);await act(async()=>root.unmount())
+})
+
+test('polling authorization loss clears the roster and closes operational drawers',async()=>{
+ let revoked=false;const h=harness({guestServices:async()=>{if(revoked)throw Object.assign(new Error('Forbidden'),{status:403});return base()}});let root
+ await act(async()=>{root=create(React.createElement(h.Page))});await act(async()=>button(root,'Guests1').props.onClick());await act(async()=>button(root,'Open guest →').props.onClick());revoked=true;await act(async()=>h.refresh())
+ assert.equal(root.root.findAllByProps({role:'dialog'}).length,0);assert.ok(!text(root.root).includes('Ada'));assert.equal(button(root,'Mark seated'),undefined);await act(async()=>root.unmount())
+})
+
+test('network-stale snapshot disables mutations but its drawer remains closable and refreshable',async()=>{
+ let offline=false;const h=harness({guestServices:async()=>{if(offline)throw new Error('Offline');return base()}});let root
+ await act(async()=>{root=create(React.createElement(h.Page))});await act(async()=>button(root,'Guests1').props.onClick());await act(async()=>button(root,'Open guest →').props.onClick());offline=true;await act(async()=>h.refresh());assert.equal(button(root,'Mark seated').props.disabled,true);assert.equal(root.root.findByProps({'aria-label':'Close panel'}).props.disabled,false)
+ offline=false;await act(async()=>button(root,'Refresh workspace').props.onClick());assert.equal(button(root,'Mark seated').props.disabled,false);await act(async()=>root.unmount())
+})
+
+test('guardian pass is forwarded with the original junior, zone and direction',async()=>{
+ const data={...base(),zones:[{id:'room',name:'Hall',can_scan:true,inside:[]}],manual_guardian_verification_enabled:false},calls=[]
+ const h=harness({guestServices:async()=>data,guestServiceScan:async(...args)=>{calls.push(args);return calls.length===1?{status:'guardian_required',guest_name:'Junior',guardian_candidates:[]}:{status:'ok'}}});let root
+ await act(async()=>{root=create(React.createElement(h.Page))});await act(async()=>button(root,'Rooms1').props.onClick());await act(async()=>button(root,'Open room →').props.onClick());await act(async()=>button(root,'Scan exit').props.onClick());let form=root.root.findByType('form');await change(form.findByType('input'),'junior-pass');await act(async()=>form.props.onSubmit({preventDefault(){}}));assert.ok(root.root.findByProps({'aria-label':'Guardian verification'}))
+ form=root.root.findByType('form');await change(form.findByType('input'),'adult-pass');await act(async()=>form.props.onSubmit({preventDefault(){}}));assert.deepEqual(JSON.parse(JSON.stringify(calls[1])),['event-a',{token:'junior-pass',zone_id:'room',direction:'out',guardian_token:'adult-pass',guardian_guest_id:null}]);assert.equal(root.root.findAllByProps({'aria-label':'Guardian verification'}).length,0);await act(async()=>root.unmount())
+})
+
+test('manual guardian verification requires enabled policy and explicit identity confirmation',async()=>{
+ const data={...base(),zones:[{id:'room',name:'Hall',can_scan:true,inside:[]}],manual_guardian_verification_enabled:true},calls=[]
+ const h=harness({guestServices:async()=>data,guestServiceScan:async(...args)=>{calls.push(args);return calls.length===1?{status:'guardian_required',guest_name:'Junior',guardian_candidates:[{guardian_guest_id:'adult',name:'Mary',relationship:'Parent'}]}:{status:'ok'}}});let root
+ await act(async()=>{root=create(React.createElement(h.Page))});await act(async()=>button(root,'Rooms1').props.onClick());await act(async()=>button(root,'Open room →').props.onClick());await act(async()=>button(root,'Scan entry').props.onClick());const form=root.root.findByType('form');await change(form.findByType('input'),'junior');await act(async()=>form.props.onSubmit({preventDefault(){}}));const confirm=()=>button(root,'Confirm Mary · Parent');assert.equal(confirm().props.disabled,true)
+ const identity=root.root.findAllByType('input').find(i=>i.props.type==='checkbox');await act(async()=>identity.props.onChange({target:{checked:true}}));await act(async()=>confirm().props.onClick());assert.equal(calls[1][1].guardian_guest_id,'adult');assert.equal(calls[1][1].guardian_token,null);await act(async()=>root.unmount())
+})
+
+test('future and full meal services are disabled and excluded from actionable attention',async()=>{
+ const data=base();Object.assign(data.guests[0],{seated_at:'2026-01-01',can_manage_meals:true,meal_services:[{id:'later',name:'Dinner',status:'open',eligible:true,served:false,can_serve:false,availability_reason:'Collection has not started'},{id:'full',name:'Lunch',status:'open',eligible:true,served:false,can_serve:false,availability_reason:'Collection is full'}]})
+ const h=harness({guestServices:async()=>data});let root;await act(async()=>{root=create(React.createElement(h.Page))});assert.equal(text(root.root.findByProps({className:'gs-summary'}).findAllByType('strong')[3]),'0');await act(async()=>button(root,'Guests1').props.onClick());await act(async()=>button(root,'Open guest →').props.onClick());assert.ok(root.root.findAllByType('button').filter(b=>text(b)==='Mark served').every(b=>b.props.disabled));assert.ok(text(root.root).includes('Collection has not started'));await act(async()=>root.unmount())
+})
+
+test('unmatched room and staff searches explain the empty state and can be cleared',async()=>{
+ const data={...base(),is_supervisor:true,can_configure:true,team:[{id:'staff',name:'Amina',event_role:'staff',scoped:true,assignments:[]}],locations:{tables:[],zones:[]},zones:[{id:'room',name:'Hall A',can_scan:true,inside:[]}]},h=harness({guestServices:async()=>data});let root
+ await act(async()=>{root=create(React.createElement(h.Page))});await act(async()=>button(root,'Rooms1').props.onClick());await change(root.root.findByProps({'aria-label':'Search workspace'}),'nonexistent');assert.ok(text(root.root).includes('No matching rooms'));await act(async()=>button(root,'Clear search').props.onClick());assert.equal(root.root.findAllByProps({className:'gs-room-card'}).length,1)
+ await act(async()=>button(root,'Staff1').props.onClick());await change(root.root.findByProps({'aria-label':'Search workspace'}),'nonexistent');assert.ok(text(root.root).includes('No matching staff'));await act(async()=>root.unmount())
+})
+
+test('an action eligibility denial refreshes scope without falsely revoking event membership',async()=>{
+ const data=base();Object.assign(data.guests[0],{can_manage_meals:true,meal_services:[{id:'meal',name:'Lunch',status:'open',eligible:true,served:false,can_serve:true}]})
+ const h=harness({guestServices:async()=>data,serveGuestMeal:async()=>{data.guests[0].meal_services[0].eligible=false;data.guests[0].meal_services[0].can_serve=false;throw Object.assign(new Error('Guest is not eligible'),{status:403})}});let root
+ await act(async()=>{root=create(React.createElement(h.Page))});await act(async()=>button(root,'Guests1').props.onClick());await act(async()=>button(root,'Open guest →').props.onClick());await act(async()=>button(root,'Mark served').props.onClick());assert.ok(text(root.root).includes('Ada'));assert.ok(text(root.root.findByProps({role:'alert'})).includes('Guest is not eligible'));assert.equal(button(root,'Mark served').props.disabled,true);await act(async()=>root.unmount())
 })

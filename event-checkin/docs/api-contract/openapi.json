@@ -504,6 +504,17 @@
             ],
             "title": "Ends At"
           },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
           "is_lead": {
             "default": false,
             "title": "Is Lead",
@@ -19348,6 +19359,30 @@
             ],
             "title": "Direction",
             "type": "string"
+          },
+          "guardian_guest_id": {
+            "anyOf": [
+              {
+                "maxLength": 36,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guardian Guest Id"
+          },
+          "guardian_token": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guardian Token"
           },
           "token": {
             "maxLength": 500,

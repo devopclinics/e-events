@@ -319,3 +319,71 @@ async def test_placeholder_rename_cannot_modify_real_or_shared_identity(ctx,case
     r=await ctx.client.patch(url(s,f"/members/{s['eu'].id}/placeholder-name"),json={'name':'Changed','if_unmodified_since':version})
     assert r.status_code==409
     async with _Session() as db:assert (await db.get(User,s['staff'].id)).name=='Table host'
+
+@pytest.mark.asyncio
+async def test_guest_services_guardian_qr_and_manual_verification_preserve_policy(ctx):
+    s=await setup(ctx);assert (await configure(ctx,s,[{'zone_id':s['zone'].id,'can_scan_zone':True}])).status_code==200
+    child,guardian=s['guests'][:2]
+    async with _Session() as db:
+        event=await db.get(Event,s['event_id']);event.junior_guardian_handoff_enabled=True;event.manual_checkin_enabled=False
+        event.guardian_authorizations={child.id:[{'guardian_guest_id':guardian.id,'relationship':'Parent'}]};await db.commit()
+    ctx.login(s['staff']);body={'token':child.qr_token,'zone_id':s['zone'].id,'direction':'in'}
+    missing=await ctx.client.post(url(s,'/scan'),json=body)
+    assert missing.json()['status']=='guardian_required' and missing.json()['guardian_candidates'][0]['guardian_guest_id']==guardian.id
+    assert 'service-pass' not in missing.text
+    assert (await ctx.client.post(url(s,'/scan'),json={**body,'guardian_guest_id':guardian.id})).json()['status']=='guardian_required'
+    assert (await ctx.client.post(url(s,'/scan'),json={**body,'guardian_token':'wrong-pass'})).json()['status']=='guardian_required'
+    qr=await ctx.client.post(url(s,'/scan'),json={**body,'guardian_token':guardian.qr_token});assert qr.json()['status']=='ok' and qr.json()['guardian_verification_method']=='guardian_qr'
+    async with _Session() as db:
+        event=await db.get(Event,s['event_id']);event.manual_checkin_enabled=True;await db.commit()
+    manual=await ctx.client.post(url(s,'/scan'),json={**body,'direction':'out','guardian_guest_id':guardian.id});assert manual.json()['status']=='ok' and manual.json()['guardian_verification_method']=='guardian_manual'
+
+@pytest.mark.asyncio
+async def test_assignment_ids_survive_legacy_save_and_explicit_shift_edit(ctx):
+    s=await setup(ctx);assert (await configure(ctx,s,[table(s,can_checkin=True)])).status_code==200
+    ctx.login(s['staff']);first=(await ctx.client.get(url(s))).json()['assignments'][0]
+    assert (await configure(ctx,s,[table(s,can_manage_meals=True)])).status_code==200
+    ctx.login(s['staff']);second=(await ctx.client.get(url(s))).json()['assignments'][0];assert first['id']==second['id']
+    assert (await configure(ctx,s,[table(s,id=second['id'],is_lead=True,starts_at='2026-01-01T00:00:00Z')])).status_code==200
+    ctx.login(s['staff']);third=(await ctx.client.get(url(s))).json()['assignments'][0];assert third['id']==first['id'] and third['is_lead']
+    assert (await configure(ctx,s,[table(s,id='someone-elses-id')])).status_code==404
+
+@pytest.mark.asyncio
+async def test_request_retry_returns_original_after_assignment_removed(ctx):
+    s=await setup(ctx);assert (await configure(ctx,s,[table(s)])).status_code==200
+    ctx.login(s['staff']);assignment=(await ctx.client.get(url(s))).json()['assignments'][0]
+    body={'assignment_id':assignment['id'],'request_key':'stable-retry-after-removal','title':'Water request'}
+    first=await ctx.client.post(url(s,'/requests'),json=body);assert first.status_code==200
+    assert (await configure(ctx,s,[])).status_code==200
+    ctx.login(s['staff']);retry=await ctx.client.post(url(s,'/requests'),json=body);assert retry.status_code==200 and retry.json()['task_id']==first.json()['task_id'] and retry.json()['already_created']
+    assert (await ctx.client.post(url(s,'/requests'),json={**body,'request_key':'new-request-after-removal'})).status_code==403
+    async with _Session() as db:
+        assert await db.scalar(select(func.count()).select_from(Task))==1
+        membership=await db.scalar(select(Membership).where(Membership.user_id==s['staff'].id));await db.delete(membership);await db.commit()
+    assert (await ctx.client.post(url(s,'/requests'),json=body)).status_code==404
+
+@pytest.mark.asyncio
+async def test_workspace_reports_upcoming_full_and_ready_meal_states(ctx):
+    s=await setup(ctx);assert (await configure(ctx,s,[table(s,can_manage_meals=True)])).status_code==200
+    async with _Session() as db:
+        service=await db.get(MealService,s['services'][0].id);service.starts_at=datetime.utcnow()+timedelta(days=1);await db.commit()
+    ctx.login(s['staff']);view=(await ctx.client.get(url(s))).json();service=view['guests'][0]['meal_services'][0]
+    assert service['availability']=='upcoming' and not service['can_serve'] and service['starts_at']
+    assert (await ctx.client.post(url(s,f"/guests/{s['guests'][0].id}/services/{s['services'][0].id}/served"))).status_code==409
+    async with _Session() as db:
+        service=await db.get(MealService,s['services'][0].id);service.starts_at=None;service.capacity=1
+        db.add(GuestMealService(service_id=service.id,guest_id=s['guests'][1].id,fulfillment_status='served'));await db.commit()
+    view=(await ctx.client.get(url(s))).json();service=view['guests'][0]['meal_services'][0];assert service['availability']=='full' and not service['can_serve'] and service['remaining_capacity']==0
+    ready=view['guests'][0]['meal_services'][1];assert ready['availability']=='available' and ready['can_serve']
+
+@pytest.mark.asyncio
+async def test_setup_warnings_are_supervisor_only_and_menu_batch_matches_canonical(ctx):
+    from app.routers.menu import categories_out,_cat_out
+    from app.models import MenuCombination,MenuCombinationItem
+    s=await setup(ctx)
+    async with _Session() as db:
+        combo=MenuCombination(event_id=s['event_id'],category_id=s['category'].id,name='Lunch plate',sort_order=2);db.add(combo);await db.flush()
+        db.add(MenuCombinationItem(combination_id=combo.id,menu_item_id=s['item'].id,quantity=2));await db.commit()
+        cats=[await db.get(MenuCategory,s['category'].id)];batched=await categories_out(cats,db);ordinary=[await _cat_out(cats[0],db)];assert [r.model_dump() for r in batched]==[r.model_dump() for r in ordinary]
+    ctx.login(ctx.ids['user_a']);view=(await ctx.client.get(url(s))).json();assert view['setup_warnings']['unallocated_guests']==1 and view['setup_warnings']['unclaimed_placeholders']==1 and view['setup_warnings']['services_without_windows']==2
+    ctx.login(s['staff']);assert 'setup_warnings' not in (await ctx.client.get(url(s))).json()

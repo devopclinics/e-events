@@ -962,7 +962,7 @@ Before you start: Add staff to the event in Team. Create tables in Seating or ro
 3. If a broad guest, menu, seat or dashboard grant conflicts, remove it in Team before saving scoped access.
 4. Add one assignment per table or room. Repeat to assign multiple locations to one person; assign the same location to supporting staff as needed. Mark the lead where useful.
 5. Optionally set shift start and end using your local time. Empty dates mean an ongoing assignment. Enable event check-in, assisted meals or room scanning separately as appropriate.
-6. Save assignments. A table manager sees current guests at those tables; a room steward sees accepted zone movements. Removing all assignments while retaining restricted access leaves that staff member with no operational access.
+6. Save assignments. Existing assignment identifiers stay stable when coverage is edited. A table manager sees current guests at those tables; a room steward sees accepted zone movements. Removing all assignments while retaining restricted access leaves that staff member with no operational access.
 7. Use Tables in Board or Floor canvas view to review coverage. Use the edit control on a table to update its name or increase capacity; use Seating to reduce capacity after checking seats. In Staff, Edit name is available only for unclaimed event-only placeholders. Real staff identities and sign-ins stay managed through Team. Use existing Tasks for assistance and handover progress.
 
 Check the result: Sign in as the staff member: assigned tables or rooms are visible, another table is unavailable, and an expired shift cannot perform actions.
@@ -1250,14 +1250,14 @@ Go to: Event operations → Guest Services
 2. Use the search and Needs attention filter in My tables or Guests. Choose View guests on a table, then Open guest. Expected, Checked in and Seated describe different stages; use Mark seated in Guest care only after helping the guest reach the table.
 3. If check-in permission is enabled, use Scan a pass or Scan guest pass in Guest care, then scan the pass or paste its link. Only guests already assigned to your tables can be admitted here. Ask a supervisor to handle unassigned guests or table moves.
 4. Choose Help choose menu, review options with the guest, confirm their agreement and save. Served meal categories stay locked; you can still choose a later, unserved meal. Clear an optional single or combo choice with its empty option, or uncheck all choices in an optional multiple-choice category, then save. Legacy served records without a specific category remain locked for supervisor review.
-5. When the meal is delivered, mark the specific meal service served. Each occurrence has its own completion; repeated taps do not create a second fulfilment. Closed, full or out-of-window services cannot be served here.
-6. For a conference room, open Rooms, choose Open room, then Scan entry or Scan exit. Confirm the room and direction before scanning. Existing ticket, capacity and guardian checks apply. This records venue movement, not session attendance.
+5. When the meal is delivered, mark the specific meal service served. Each occurrence has its own completion; repeated taps do not create a second fulfilment. Upcoming, ended, full or closed collections show their availability reason and cannot be served here. Only currently actionable collections contribute to Needs attention.
+6. For a conference room, open Rooms, choose Open room, then Scan entry or Scan exit. Confirm the room and direction before scanning. If an authorized guardian is required, keep the junior present and scan the adult’s pass in the guardian verification panel. Staff identity verification is available only when the organiser enables it; explicitly confirm the adult’s identity before choosing an authorized guardian. Existing ticket, capacity and guardian checks apply. This records venue movement, not session attendance.
 7. Open Requests and choose Request assistance for water, accessibility assistance, housekeeping, delays or a shift handover. Choose a teammate or leave it in the team queue, then create the task.
 8. Open team Tasks to see acknowledgement, progress, comments and completion. Keep sensitive guest details out of these shared notes. Contact the supervisor for urgent issues.
 
 Check the result: The right guest, table or room and meal service are updated. Assistance appears once in the existing Tasks board.
 
-If something is wrong: If a shift expires or a guest moves tables, refresh and ask the organiser to review your assignment. Guest Services requires an online connection; do not assume a failed action was saved.
+If something is wrong: If a shift expires or a guest moves tables, refresh and ask the organiser to review your assignment. Guest Services requires an online connection. If a save is acknowledged but refreshing fails, it stays saved: use Refresh instead of repeating the action. An outdated view disables further actions until refreshed; lost access clears the roster. A request with an uncertain response keeps its retry key to avoid duplicate Tasks.
 
 ### Zone scanning & gates
 

@@ -15,8 +15,11 @@ function harness(api, selection = 'event-a') {
   const attendanceModule={exports:{}}
   runInNewContext(transformSync(readFileSync(new URL('../src/components/MealAttendancePanel.jsx',import.meta.url),'utf8'),{loader:'jsx',format:'cjs',jsx:'automatic'}).code,{module:attendanceModule,exports:attendanceModule.exports,require:name=>name.endsWith('.css')?{}:name==='./QrCameraScanner'?()=>null:require(name),URL})
   const activityModule = { exports: {} }
-  runInNewContext(transformSync(readFileSync(new URL('../src/components/GuestServiceActivity.jsx', import.meta.url), 'utf8'), {loader:'jsx',format:'cjs',jsx:'automatic'}).code, {module:activityModule,exports:activityModule.exports,require:name=>name==='../api'?{api}:require(name),URL,Blob:globalThis.Blob,setTimeout})
+  runInNewContext(transformSync(readFileSync(new URL('../src/components/GuestServiceActivity.jsx', import.meta.url), 'utf8'), {loader:'jsx',format:'cjs',jsx:'automatic'}).code, {module:activityModule,exports:activityModule.exports,require:name=>name==='../api'?{api}:require(name),URL,Blob:globalThis.Blob,setTimeout,clearTimeout})
   const modules = {
+    '../hooks/useGuestServiceOffline': ()=>({online:true,rows:[],syncing:false,storageError:'',actor:null,cache:async()=>{},cached:async()=>null}),
+    '../components/GuestServiceOfflinePanel': ()=>null,
+    '../lib/guestServiceOffline.mjs':{queuedAction:()=>({})},
     '../components/GuestServiceActivity': activityModule.exports,
     '../components/MealAttendancePanel':attendanceModule.exports,
     '../components/MealRequestQueue': queueModule.exports,
@@ -31,7 +34,7 @@ function harness(api, selection = 'event-a') {
   const module = { exports: {} }
   const code = transformSync(readFileSync(new URL('../src/pages/GuestServicesPage.jsx', import.meta.url), 'utf8'), { loader: 'jsx', format: 'cjs', jsx: 'automatic' }).code
   const document = { body: { style: {} }, hidden: false, addEventListener() {}, removeEventListener() {} }
-  runInNewContext(code, { document, module, exports: module.exports, require: name => modules[name] ?? require(name), URL, Date, Map, Object, crypto: { randomUUID: () => 'synthetic-request-key' }, setInterval: callback => { refreshCallback = callback; return 1 }, clearInterval() {} })
+  runInNewContext(code, { document, module, exports: module.exports, require: name => modules[name] ?? require(name), URL, Date, Map, Object, setTimeout, clearTimeout, crypto: { randomUUID: () => 'synthetic-request-key' }, setInterval: callback => { refreshCallback = callback; return 1 }, clearInterval() {} })
   return { Page: module.exports.default, passToken: module.exports.passToken, select: id => { selected = id }, hide: value => { document.hidden = value }, refresh: () => refreshCallback() }
 }
 const base = () => ({ event_id: 'event-a', event_name: 'Conference', is_supervisor: false, can_configure: false, assignments: [{ id: 'assignment', table_id: 'table-a', name: 'Table A', active: true }], zones: [], menu_categories: [], request_assignees: [], guests: [{ id: 'guest-a', name: 'Ada', table_id: 'table-a', table_name: 'Table A', admitted: true, seated_at: null, can_checkin: false, can_manage_meals: false, choices: [], meal_services: [] }] })
@@ -340,5 +343,18 @@ test('supervisor requests assistance by location without a personal assignment',
  await change(form.findAllByType('select')[0],'zone:room-a');await change(form.findByType('input'),'Projector help')
  await act(async()=>form.props.onSubmit({preventDefault(){}}))
  assert.equal(calls.length,1);assert.equal(calls[0][1].zone_id,'room-a');assert.equal(calls[0][1].assignment_id,undefined)
+ await act(async()=>root.unmount())
+})
+
+test('server pages preserve full-scope counters and do not slice page two twice',async()=>{
+ const calls=[],data={...base(),pagination:{view:'guests',page:1,total:60,page_size:24},metrics:{assigned:60,admitted:50,delivered:42,attention:7},guests:[{...base().guests[0],name:'Second page guest'}]}
+ const h=harness({guestServices:async(id,params)=>{calls.push(params);return {...data,pagination:{...data.pagination,page:params.page,view:params.view}}}})
+ let root;await act(async()=>{root=create(React.createElement(h.Page))})
+ await act(async()=>button(root,'Guests60').props.onClick())
+ await act(async()=>button(root,'Next guests').props.onClick())
+ assert.equal(calls.at(-1).paged,true);assert.equal(calls.at(-1).page,2)
+ assert.ok(text(root.root).includes('Second page guest'))
+ const counters=root.root.findByProps({className:'gs-summary'}).findAllByType('strong').map(n=>text(n))
+ assert.deepEqual(counters.slice(1),['50','42','7'])
  await act(async()=>root.unmount())
 })

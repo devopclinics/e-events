@@ -694,3 +694,129 @@ async def test_scan_activity_records_real_outcomes_without_pass_tokens(ctx):
         outcomes={r.detail['outcome'] for r in rows}
         assert 'denied' in outcomes and 'not_found' in outcomes and len(outcomes)==3
         assert all('secret-token' not in str(r.detail) and 'service-pass' not in str(r.detail) for r in rows)
+
+@pytest.mark.asyncio
+async def test_paged_workspace_is_bounded_and_keeps_whole_scope_totals(ctx):
+    s=await setup(ctx);ctx.login(ctx.ids['user_a'])
+    async with _Session() as db:
+        db.add_all([Guest(event_id=s['event_id'],first_name=f'Extra {i:03}',last_name='Guest',table_id=s['tables'][0].id,qr_token=f'paged-{i}',admitted=True,rsvp_status='confirmed') for i in range(70)])
+        await db.commit()
+    response=await ctx.client.get(url(s),params={'paged':True,'view':'tables'})
+    assert response.status_code==200,response.text
+    body=response.json();assert body['guests']==[] and body['metrics']['assigned']==73
+    assert next(t for t in body['tables'] if t['id']==s['tables'][0].id)['metrics']['assigned']==71
+    params={'paged':True,'view':'guests','page':1}
+    first=(await ctx.client.get(url(s),params=params)).json()
+    assert len(first['guests'])==24 and first['pagination']['total']==73
+    second=(await ctx.client.get(url(s),params={**params,'page':2})).json()
+    assert len(second['guests'])==24 and not ({g['id'] for g in first['guests']}&{g['id'] for g in second['guests']})
+    unchanged=(await ctx.client.get(url(s),params={**params,'since':first['revision']})).json()
+    assert unchanged['unchanged'] is True and 'guests' not in unchanged
+    async with _Session() as db:
+        guest=await db.get(Guest,s['guests'][0].id);guest.first_name='Changed';await db.commit()
+    changed=(await ctx.client.get(url(s),params={**params,'since':first['revision']})).json()
+    assert not changed.get('unchanged') and changed['revision']!=first['revision']
+
+@pytest.mark.asyncio
+async def test_paged_meals_and_attendance_match_legacy_totals_without_expanding_staff_scope(ctx):
+    s=await setup(ctx);assert (await configure(ctx,s,[table(s,can_manage_meals=True)])).status_code==200
+    async with _Session() as db:
+        for guest in s['guests']:db.add(GuestMenuChoice(guest_id=guest.id,category_id=s['category'].id,menu_item_id=s['item'].id))
+        await db.commit()
+    ctx.login(s['staff'])
+    legacy=(await ctx.client.get(url(s))).json()
+    paged=await ctx.client.get(url(s),params={'paged':True,'view':'attendance'})
+    assert paged.status_code==200,paged.text
+    for expected,actual in zip(legacy['meal_services'],paged.json()['meal_services']):
+        for key in ['expected','ordered','attended','delivered','not_yet_attended']:assert expected[key]==actual[key],(key,expected,actual)
+    meals=await ctx.client.get(url(s),params={'paged':True,'view':'meals'})
+    assert meals.status_code==200,meals.text
+    assert meals.json()['pagination']['total']==2
+    assert all(r['guest_id']==s['guests'][0].id for r in meals.json()['meal_requests'])
+    before=meals.json()['revision']
+    ctx.login(ctx.ids['user_a']);assert (await configure(ctx,s,[])).status_code==200
+    ctx.login(s['staff'])
+    after=(await ctx.client.get(url(s),params={'paged':True,'view':'meals','since':before})).json()
+    assert not after.get('unchanged') and after['guests']==[] and after['meal_requests']==[]
+
+
+def offline_body(s,action='seated',**extra):
+    return {'client_key':'offline-operation-unique-key','action':action,'guest_id':s['guests'][0].id,'table_id':s['tables'][0].id,'captured_at':datetime.utcnow().isoformat(),**extra}
+
+@pytest.mark.asyncio
+async def test_offline_seating_receipt_is_atomic_and_cannot_reapply_after_correction(ctx):
+    from app.models import GuestServiceOfflineReceipt
+    s=await setup(ctx);assert (await configure(ctx,s,[table(s)])).status_code==200;ctx.login(s['staff'])
+    body=offline_body(s)
+    response=await ctx.client.post(url(s,'/offline-actions'),json=body);assert response.status_code==200,response.text
+    async with _Session() as db:
+        row=await db.get(GuestSeatingPresence,s['guests'][0].id);await db.delete(row);await db.commit()
+    retry=await ctx.client.post(url(s,'/offline-actions'),json=body)
+    assert retry.status_code==200 and retry.json()['already_synced']
+    async with _Session() as db:
+        assert await db.get(GuestSeatingPresence,s['guests'][0].id) is None
+        assert await db.scalar(select(func.count()).select_from(GuestServiceOfflineReceipt))==1
+    other={**body,'guest_id':s['guests'][1].id}
+    assert (await ctx.client.post(url(s,'/offline-actions'),json=other)).status_code==409
+
+@pytest.mark.asyncio
+async def test_offline_replay_rechecks_current_table_shift_admission_and_capacity(ctx):
+    from app.models import GuestServiceOfflineReceipt
+    s=await setup(ctx);assert (await configure(ctx,s,[table(s,can_manage_meals=True)])).status_code==200;ctx.login(s['staff'])
+    body=offline_body(s)
+    async with _Session() as db:
+        g=await db.get(Guest,s['guests'][0].id);g.admitted=False;await db.commit()
+    assert (await ctx.client.post(url(s,'/offline-actions'),json=body)).status_code==409
+    ctx.login(ctx.ids['user_a']);assert (await configure(ctx,s,[])).status_code==200;ctx.login(s['staff'])
+    assert (await ctx.client.post(url(s,'/offline-actions'),json=body)).status_code==403
+    ctx.login(ctx.ids['user_a']);assert (await configure(ctx,s,[table(s,can_manage_meals=True)])).status_code==200
+    async with _Session() as db:
+        g=await db.get(Guest,s['guests'][0].id);g.admitted=True
+        service=await db.get(MealService,s['services'][0].id);service.tracking_mode='both';service.capacity=0
+        await db.commit()
+    ctx.login(s['staff'])
+    headcount=offline_body(s,'attendance',service_id=s['services'][0].id)
+    assert (await ctx.client.post(url(s,'/offline-actions'),json=headcount)).status_code==409
+    async with _Session() as db:assert await db.scalar(select(func.count()).select_from(GuestServiceOfflineReceipt))==0
+
+@pytest.mark.asyncio
+async def test_offline_delivery_and_attendance_use_canonical_ledgers_and_reject_stale_choices(ctx):
+    from app.services.meal_queue import selection_key
+    s=await setup(ctx);assert (await configure(ctx,s,[table(s,can_manage_meals=True)])).status_code==200
+    async with _Session() as db:
+        service=await db.get(MealService,s['services'][0].id);service.tracking_mode='both'
+        choice=GuestMenuChoice(guest_id=s['guests'][0].id,category_id=s['category'].id,menu_item_id=s['item'].id);db.add(choice);await db.flush();key=selection_key([choice]);await db.commit()
+    ctx.login(s['staff'])
+    body=offline_body(s,'served',service_id=s['services'][0].id,expected_selection_key='bad-choice')
+    assert (await ctx.client.post(url(s,'/offline-actions'),json=body)).status_code==409
+    body['expected_selection_key']=key
+    served=await ctx.client.post(url(s,'/offline-actions'),json=body);assert served.status_code==200,served.text
+    attendance=offline_body(s,'attendance',client_key='another-offline-operation',service_id=s['services'][0].id,expected_record_updated_at=served.json()['record_updated_at'])
+    counted=await ctx.client.post(url(s,'/offline-actions'),json=attendance);assert counted.status_code==200,counted.text
+    async with _Session() as db:
+        record=await db.scalar(select(GuestMealService).where(GuestMealService.guest_id==s['guests'][0].id,GuestMealService.service_id==s['services'][0].id))
+        assert record.fulfillment_status=='served' and record.attended_at is not None
+
+@pytest.mark.asyncio
+async def test_offline_expiry_and_table_move_never_write_a_receipt(ctx):
+    from app.models import GuestServiceOfflineReceipt
+    s=await setup(ctx);assert (await configure(ctx,s,[table(s,0),table(s,1)])).status_code==200;ctx.login(s['staff'])
+    expired=offline_body(s,captured_at=(datetime.utcnow()-timedelta(hours=13)).isoformat())
+    assert (await ctx.client.post(url(s,'/offline-actions'),json=expired)).status_code==409
+    body=offline_body(s)
+    async with _Session() as db:
+        guest=await db.get(Guest,s['guests'][0].id);guest.table_id=s['tables'][1].id;guest.seat_number='2';await db.commit()
+    assert (await ctx.client.post(url(s,'/offline-actions'),json=body)).status_code==409
+    async with _Session() as db:
+        assert await db.scalar(select(func.count()).select_from(GuestServiceOfflineReceipt))==0
+        assert await db.get(GuestSeatingPresence,s['guests'][0].id) is None
+
+@pytest.mark.asyncio
+async def test_activity_guest_lookup_is_supervisor_only_and_includes_unallocated_guests(ctx):
+    s=await setup(ctx);ctx.login(ctx.ids['user_a'])
+    response=await ctx.client.get(url(s,'/guest-search'),params={'q':'G One'})
+    assert response.status_code==200 and len(response.json())==1,response.text
+    assert set(response.json()[0])=={'id','name'}
+    assert 'email' not in response.text and 'token' not in response.text
+    ctx.login(s['staff']);assert (await ctx.client.get(url(s,'/guest-search'))).status_code==403
+    ctx.login(ctx.ids['user_b']);assert (await ctx.client.get(url(s,'/guest-search'))).status_code==404

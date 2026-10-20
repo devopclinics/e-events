@@ -14508,6 +14508,100 @@
         "title": "MyTaskOut",
         "type": "object"
       },
+      "OfflineActionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "seated",
+              "served",
+              "attendance"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "captured_at": {
+            "format": "date-time",
+            "title": "Captured At",
+            "type": "string"
+          },
+          "client_key": {
+            "maxLength": 80,
+            "minLength": 16,
+            "title": "Client Key",
+            "type": "string"
+          },
+          "expected_record_updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Record Updated At"
+          },
+          "expected_seated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Seated At"
+          },
+          "expected_selection_key": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Selection Key"
+          },
+          "guest_id": {
+            "maxLength": 36,
+            "minLength": 1,
+            "title": "Guest Id",
+            "type": "string"
+          },
+          "service_id": {
+            "anyOf": [
+              {
+                "maxLength": 36,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Id"
+          },
+          "table_id": {
+            "maxLength": 36,
+            "minLength": 1,
+            "title": "Table Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_key",
+          "action",
+          "guest_id",
+          "table_id",
+          "captured_at"
+        ],
+        "title": "OfflineActionIn",
+        "type": "object"
+      },
       "OperatorInvite": {
         "properties": {
           "email": {
@@ -36386,6 +36480,132 @@
               "title": "Event Id",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "paged",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Paged",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "view",
+            "required": false,
+            "schema": {
+              "default": "tables",
+              "enum": [
+                "tables",
+                "guests",
+                "meals",
+                "attendance",
+                "staff",
+                "rooms",
+                "requests",
+                "activity"
+              ],
+              "title": "View",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "query",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Query",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "table_id",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "title": "Table Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "attention",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Attention",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "stage",
+            "required": false,
+            "schema": {
+              "default": "outstanding",
+              "enum": [
+                "outstanding",
+                "all",
+                "pending",
+                "preparing",
+                "ready",
+                "served",
+                "skipped",
+                "denied"
+              ],
+              "title": "Stage",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "in": "query",
+            "name": "room_id",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "title": "Room Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "room_page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "title": "Room Page",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -36564,6 +36784,62 @@
           }
         ],
         "summary": "Activity",
+        "tags": [
+          "guest-services"
+        ]
+      }
+    },
+    "/api/events/{event_id}/guest-services/guest-search": {
+      "get": {
+        "operationId": "search_activity_guests_api_events__event_id__guest_services_guest_search_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 200,
+              "title": "Q",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Search Activity Guests",
         "tags": [
           "guest-services"
         ]
@@ -37157,6 +37433,61 @@
           }
         ],
         "summary": "Rename Placeholder",
+        "tags": [
+          "guest-services"
+        ]
+      }
+    },
+    "/api/events/{event_id}/guest-services/offline-actions": {
+      "post": {
+        "operationId": "sync_offline_action_api_events__event_id__guest_services_offline_actions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfflineActionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Sync Offline Action",
         "tags": [
           "guest-services"
         ]

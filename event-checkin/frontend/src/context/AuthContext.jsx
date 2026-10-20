@@ -1,3 +1,4 @@
+import { clearGuestServiceCaches } from '../lib/guestServiceOffline.mjs'
 import { createContext, useContext, useState, useEffect } from 'react'
 import { onAuthStateChanged, signOut as fbSignOut } from 'firebase/auth'
 import { auth } from '../firebase'
@@ -32,19 +33,26 @@ export function AuthProvider({ children }) {
         setUser(null)
         return
       }
+      if(typeof navigator!=='undefined'&&navigator.onLine===false&&typeof location!=='undefined'&&location.pathname.startsWith('/guest-services')){
+        try{const saved=JSON.parse(sessionStorage.getItem('festio:gs-offline-profile')||'null');if(saved?.uid===firebaseUser.uid){setUser(saved.profile);return}}catch{}
+      }
       try {
         const token = await firebaseUser.getIdToken()
         const res = await fetch('/api/auth/me', {
           headers: { Authorization: `Bearer ${token}`, ...acquisitionAttributionHeaders() },
         })
         if (res.ok) {
-          setUser(await res.json())
+          const profile=await res.json()
+          setUser(profile)
+          try{sessionStorage.setItem('festio:gs-offline-profile',JSON.stringify({uid:firebaseUser.uid,profile}))}catch{}
           claimPendingReferral(token)
         } else {
           setUser(null)
         }
       } catch {
-        setUser(null)
+        let cached=null
+        if(typeof navigator!=='undefined'&&navigator.onLine===false&&typeof location!=='undefined'&&location.pathname.startsWith('/guest-services'))try{const saved=JSON.parse(sessionStorage.getItem('festio:gs-offline-profile')||'null');if(saved?.uid===firebaseUser.uid)cached=saved.profile}catch{}
+        setUser(cached)
       }
     })
     return () => {
@@ -54,7 +62,10 @@ export function AuthProvider({ children }) {
   }, [])
 
   async function logout() {
+    const previousActor=user?.id
     await fbSignOut(auth)
+    if(previousActor)await clearGuestServiceCaches(previousActor)
+    try{sessionStorage.removeItem('festio:gs-offline-profile')}catch{}
     setUser(null)
   }
 

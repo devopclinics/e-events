@@ -1437,6 +1437,7 @@ class GuestMenuChoice(Base):
     Multi-select stores one row per selected item.
     """
     __tablename__ = "guest_menu_choices"
+    __table_args__ = (Index("ix_guest_menu_choice_guest_category", "guest_id", "category_id"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"))
@@ -3075,3 +3076,18 @@ class GuestServiceRequest(Base):
     table_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     zone_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     task_id: Mapped[str] = mapped_column(String(36), ForeignKey("tasks.id", ondelete="CASCADE"))
+
+
+class GuestServiceOfflineReceipt(Base):
+    """Atomic replay receipt over existing seating/fulfillment/attendance ledgers."""
+    __tablename__ = 'guest_service_offline_receipts'
+    __table_args__ = (UniqueConstraint('event_id','actor_id','client_key',name='uq_guest_service_offline_receipt'),)
+    id: Mapped[str] = mapped_column(String(36),primary_key=True,default=lambda:str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36),ForeignKey('events.id'),index=True)
+    actor_id: Mapped[str] = mapped_column(String(36),ForeignKey('users.id'))
+    client_key: Mapped[str] = mapped_column(String(80))
+    guest_id: Mapped[str] = mapped_column(String(36))
+    action: Mapped[str] = mapped_column(String(20))
+    payload_hash: Mapped[str] = mapped_column(String(64))
+    result: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime,default=datetime.utcnow)

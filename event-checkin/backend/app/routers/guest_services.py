@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Literal
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy import select, delete, func
+from sqlalchemy import select, delete, func, or_, literal
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import get_db
@@ -16,7 +16,7 @@ from ..models import (Event, EventUser, User, Membership, SeatingTable, Zone, Gu
     GuestSeatingPresence, GuestServiceActivity, GuestServiceRequest,
     GuestMenuChoice, MenuItem, MenuCombination, MealService, GuestMealService, ScanEvent)
 from ..schemas import GuestMenuSubmit, ScanZoneRequest, MealProgressIn, MealTrackingIn, MealAttendanceIn, MealAttendanceCorrectionIn
-from ..services.meal_queue import meal_requests, progress_meal, RESERVED
+from ..services.meal_queue import meal_requests, progress_meal, RESERVED, selection_key
 from ..services.guest_services import member, supervisor, assignments_for, guest_scope, active_assignment
 
 from ..services.meal_attendance import service_summaries, set_tracking, record_attendance, correct_attendance, has_orders, headcount_only_categories, meal_event_reason
@@ -145,7 +145,7 @@ async def event_and_guest(event_id, guest_id, actor, db, permission=None):
 
 
 @router.get('/{event_id}/guest-services')
-async def workspace(event_id: str, db: AsyncSession = Depends(get_db), actor: User = Depends(require_event_member)):
+async def workspace(event_id: str, db: AsyncSession = Depends(get_db), actor: User = Depends(require_event_member), paged: bool = False, view: Literal['tables','guests','meals','attendance','staff','rooms','requests','activity'] = 'tables', page: int = 1, query: str = '', table_id: str = 'all', attention: bool = False, stage: Literal['outstanding','all','pending','preparing','ready','served','skipped','denied'] = 'outstanding', since: str | None = None, room_id: str = 'all', room_page: int = 1):
     from .menu import categories_out, meal_service_availability
     from ..models import MenuCategory
     event = await db.get(Event, event_id)
@@ -160,14 +160,38 @@ async def workspace(event_id: str, db: AsyncSession = Depends(get_db), actor: Us
     active = [r for r in mine if active_assignment(r)]
     table_ids = list(table_names) if is_supervisor else list({r.table_id for r in active if r.table_id})
     zone_ids = list(zone_names) if is_supervisor else list({r.zone_id for r in active if r.zone_id in zone_names})
-    guests = (await db.scalars(select(Guest).where(Guest.event_id == event_id, Guest.table_id.in_(table_ids)).order_by(Guest.table_id, Guest.last_name, Guest.first_name))).all() if table_ids else []
+    from ..services.guest_services_paging import revision, table_metrics, needs_attention, attendance_summaries, meal_page, outstanding_meals
+    if page < 1 or page > 100000 or room_page < 1 or room_page > 100000 or len(query) > 200: raise HTTPException(422,'Invalid page or search')
+    services = (await db.scalars(select(MealService).where(MealService.event_id == event_id))).all() if event.menu_enabled else []
+    meal_tables = table_ids if is_supervisor and can_write else [] if is_supervisor else list({r.table_id for r in active if r.table_id and r.can_manage_meals})
+    revision_key=None;page_total=0;metrics={};pairs=None
+    if paged:
+        revision_key=await revision(db,event,actor,all_rows,tables,zones,services,[is_supervisor,can_write,table_ids,zone_ids,sorted(r.id for r in active),view,page,query,table_id,attention,stage,room_id,room_page])
+        if since==revision_key:return {'unchanged':True,'revision':revision_key,'event_id':event_id}
+        disabled=await headcount_only_categories(db,event_id)
+        metrics=await table_metrics(db,event,table_ids,meal_tables,disabled)
+        if view=='meals':
+            pairs,page_total=await meal_page(db,event,meal_tables,page=page,stage=stage,table_id=table_id,query=query)
+            guest_query=select(Guest).where(Guest.event_id==event_id,Guest.id.in_({gid for gid,_ in pairs}))
+        else:
+            guest_query=select(Guest).where(Guest.event_id==event_id,Guest.table_id.in_(table_ids))
+            if table_id!='all':guest_query=guest_query.where(Guest.table_id==table_id)
+            if query:
+                pattern='%'+query.lower()+'%'
+                guest_query=guest_query.outerjoin(SeatingTable,SeatingTable.id==Guest.table_id).where(or_(func.lower(Guest.first_name+' '+Guest.last_name).like(pattern),func.lower(SeatingTable.name).like(pattern)))
+            if attention:guest_query=guest_query.where(needs_attention(event,meal_tables,disabled))
+            page_total=await db.scalar(select(func.count()).select_from(guest_query.subquery())) if view=='guests' else 0
+            guest_query=guest_query.order_by(Guest.table_id,Guest.last_name,Guest.first_name,Guest.id).offset((page-1)*24).limit(24)
+        guests=(await db.scalars(guest_query)).all() if view in ('guests','meals') else []
+    else:
+        guests = (await db.scalars(select(Guest).where(Guest.event_id == event_id, Guest.table_id.in_(table_ids)).order_by(Guest.table_id, Guest.last_name, Guest.first_name, Guest.id))).all() if table_ids else []
     ids = [g.id for g in guests]
     seated = {r.guest_id: r for r in (await db.scalars(select(GuestSeatingPresence).where(GuestSeatingPresence.guest_id.in_(ids)))).all()} if ids else {}
     choices = (await db.execute(select(GuestMenuChoice, MenuItem.name, MenuCombination.name).outerjoin(MenuItem, MenuItem.id == GuestMenuChoice.menu_item_id).outerjoin(MenuCombination, MenuCombination.id == GuestMenuChoice.combination_id).where(GuestMenuChoice.guest_id.in_(ids)))).all() if ids else []
     by_guest = {}
     for choice, item, combo in choices:
         by_guest.setdefault(choice.guest_id, []).append({'category_id': choice.category_id, 'item_id': choice.menu_item_id, 'combination_id': choice.combination_id, 'name': item or combo})
-    services = (await db.scalars(select(MealService).where(MealService.event_id == event_id))).all() if event.menu_enabled else []
+
     service_counts = dict((await db.execute(select(GuestMealService.service_id,func.count()).where(GuestMealService.service_id.in_([s.id for s in services]),GuestMealService.fulfillment_status.in_(RESERVED)).group_by(GuestMealService.service_id))).all()) if services else {}
     now = datetime.utcnow()
     fulfills = {(r.guest_id, r.service_id): r for r in (await db.scalars(select(GuestMealService).where(GuestMealService.guest_id.in_(ids)))).all()} if ids else {}
@@ -191,28 +215,45 @@ async def workspace(event_id: str, db: AsyncSession = Depends(get_db), actor: Us
                 elif not eligible: availability,reason='not_eligible','Guest is not eligible'
                 elif not g.admitted: availability,reason='checkin_required','Guest must check in first'
                 if meal_event_reason(event): availability,reason='event_inactive',meal_event_reason(event)
-                out[-1]['meal_services'].append({'id':service.id,'category_id':service.category_id,'name':service.name,'status':service.status,'tracking_mode':service.tracking_mode,'attended_at':record.attended_at if record else None,'eligible':eligible,'served':served,'starts_at':service.starts_at,'ends_at':service.ends_at,'remaining_capacity':max(0,service.capacity-service_counts.get(service.id,0)) if service.capacity is not None else None,'availability':availability,'availability_reason':reason,'can_serve':availability=='available'})
+                out[-1]['meal_services'].append({'id':service.id,'category_id':service.category_id,'name':service.name,'status':service.status,'tracking_mode':service.tracking_mode,'fulfillment_status':record.fulfillment_status if record else 'pending','record_updated_at':record.updated_at if record else None,'selection_key':selection_key([c for c,_,_ in choices if c.guest_id==g.id and c.category_id==service.category_id]),'attended_at':record.attended_at if record else None,'eligible':eligible,'served':served,'starts_at':service.starts_at,'ends_at':service.ends_at,'remaining_capacity':max(0,service.capacity-service_counts.get(service.id,0)) if service.capacity is not None else None,'availability':availability,'availability_reason':reason,'can_serve':availability=='available'})
 
     # Zone attendance is derived from canonical accepted movements, not registration/admission.
     ranked = select(ScanEvent.id.label('scan_id'),func.row_number().over(partition_by=(ScanEvent.zone_id,ScanEvent.guest_id),order_by=(ScanEvent.scanned_at.desc(),ScanEvent.id.desc())).label('position')).where(ScanEvent.event_id==event_id,ScanEvent.zone_id.in_(zone_ids),ScanEvent.denied.is_(False)).subquery()
-    movements = (await db.execute(select(ScanEvent,Guest.first_name,Guest.last_name).join(ranked,ranked.c.scan_id==ScanEvent.id).join(Guest,Guest.id==ScanEvent.guest_id).where(ranked.c.position==1))).all() if zone_ids else []
+    movement_query=select(ScanEvent,Guest.first_name,Guest.last_name).join(ranked,ranked.c.scan_id==ScanEvent.id).join(Guest,Guest.id==ScanEvent.guest_id).where(ranked.c.position==1)
+    inside_counts={}
+    if paged:
+        if view=='rooms' and zone_ids:
+            inside_counts=dict((await db.execute(select(ScanEvent.zone_id,func.count()).join(ranked,ranked.c.scan_id==ScanEvent.id).where(ranked.c.position==1,ScanEvent.direction=='in').group_by(ScanEvent.zone_id))).all())
+        movement_query=movement_query.where(ScanEvent.zone_id==room_id,ScanEvent.direction=='in').order_by(Guest.last_name,Guest.first_name,Guest.id).offset((room_page-1)*50).limit(50)
+    movements = (await db.execute(movement_query)).all() if zone_ids and (not paged or view=='rooms' and room_id in zone_ids) else []
     latest = {}
     for movement, first, last in movements:
         latest.setdefault((movement.zone_id,movement.guest_id), {'guest_id':movement.guest_id,'name':f'{first} {last}'.strip(),'direction':movement.direction})
     cats = (await db.scalars(select(MenuCategory).where(MenuCategory.event_id == event_id, MenuCategory.guest_visible.is_(True), MenuCategory.display_only.is_(False)).order_by(MenuCategory.sort_order))).all() if any(g['can_manage_meals'] for g in out) and event.menu_enabled else []
     request_members=(await db.execute(select(User.id,User.name).join(EventUser,EventUser.user_id==User.id).where(EventUser.event_id==event_id))).all() if active or is_supervisor else []
-    result = {'request_assignees':[{'id':uid,'name':name} for uid,name in request_members], 'event_id':event_id,'event_name':event.name,'is_supervisor':is_supervisor,'can_configure':can_write,
+    result = {'request_assignees':[{'id':uid,'name':name} for uid,name in request_members], 'event_id':event_id,'event_name':event.name,'actor_id':actor.id,'can_scan_admission':can_write if is_supervisor else any(r.can_checkin for r in active),'is_supervisor':is_supervisor,'can_configure':can_write,
         'assignments':[assignment_out(r,table_names,zone_names) for r in mine], 'guests':out,
-        'zones':[{'id':z.id,'name':z.name,'can_scan':can_write if is_supervisor else any(r.zone_id==z.id and r.can_scan_zone for r in active), 'inside':[v for (zone_id,_),v in latest.items() if zone_id==z.id and v['direction']=='in']} for z in zones if z.id in zone_ids],
+        'zones':[{'id':z.id,'name':z.name,'can_scan':can_write if is_supervisor else any(r.zone_id==z.id and r.can_scan_zone for r in active), **({'inside_count':inside_counts.get(z.id,0),'inside_page':room_page,'inside_page_size':50} if paged else {}),'inside':[v for (zone_id,_),v in latest.items() if zone_id==z.id and v['direction']=='in']} for z in zones if z.id in zone_ids],
         'menu_categories':await categories_out(cats,db),
         'manual_guardian_verification_enabled':bool(event.manual_checkin_enabled),
         'tables':[{'id':t.id,'name':t.name,'capacity':t.capacity,'service_section':t.service_section} for t in tables if t.id in table_ids]}
     meal_guest_ids={g['id'] for g in out if g['can_manage_meals']}
     disabled_categories=await headcount_only_categories(db,event_id)
     result['menu_categories']=[c for c in result['menu_categories'] if c.id not in disabled_categories]
-    attendance_guests=(await db.scalars(select(Guest).where(Guest.event_id==event_id))).all() if is_supervisor else [g for g in guests if g.id in meal_guest_ids]
-    result['meal_services']=await service_summaries(db,event,attendance_guests,table_names,writable=can_write if is_supervisor else bool(meal_guest_ids),configure=can_write,scope='Entire event' if is_supervisor else 'Assigned tables',allow_unpaid=actor.is_platform_superadmin)
-    result['meal_requests']=await meal_requests(db,event,[g for g in guests if g.id in meal_guest_ids],table_names,writable=can_write if is_supervisor else True)
+    if paged:
+        result['meal_request_total']=page_total if view=='meals' and stage=='outstanding' and table_id=='all' and not query else await outstanding_meals(db,event_id,meal_tables) if event.menu_enabled and meal_tables else 0
+        result['offline_supported']=True
+        result['revision']=revision_key
+        result['pagination']={'page':page,'page_size':25 if view=='meals' else 24,'total':page_total,'view':view}
+        result['metrics']={key:sum(row[key] for row in metrics.values()) for key in ['assigned','admitted','seated','attention','delivered']}
+        result['metrics']['tables']=len(table_ids)
+        for table in result['tables']:table['metrics']=metrics.get(table['id'],dict(assigned=0,admitted=0,seated=0,attention=0,delivered=0))
+        result['meal_services']=await attendance_summaries(db,event,literal(True) if is_supervisor else Guest.table_id.in_(meal_tables),table_names,writable=can_write if is_supervisor else bool(meal_tables),configure=can_write,allow_unpaid=actor.is_platform_superadmin,scope='Entire event' if is_supervisor else 'Assigned tables') if view=='attendance' else []
+        result['meal_requests']=[r for r in await meal_requests(db,event,[g for g in guests if g.table_id in meal_tables],table_names,writable=can_write if is_supervisor else True) if (r['guest_id'],r['service_id']) in pairs] if view=='meals' else []
+    else:
+        attendance_guests=(await db.scalars(select(Guest).where(Guest.event_id==event_id))).all() if is_supervisor else [g for g in guests if g.id in meal_guest_ids]
+        result['meal_services']=await service_summaries(db,event,attendance_guests,table_names,writable=can_write if is_supervisor else bool(meal_guest_ids),configure=can_write,scope='Entire event' if is_supervisor else 'Assigned tables',allow_unpaid=actor.is_platform_superadmin)
+        result['meal_requests']=await meal_requests(db,event,[g for g in guests if g.id in meal_guest_ids],table_names,writable=can_write if is_supervisor else True)
     if is_supervisor:
         members=(await db.execute(select(EventUser,User).join(User,User.id==EventUser.user_id).where(EventUser.event_id==event_id))).all()
         renameable_ids=await renameable_placeholder_ids(members,db,event.org_id) if can_write else set()
@@ -446,3 +487,20 @@ async def meal_attendance_correction(event_id: str, service_id: str, guest_id: s
     event=await db.get(Event,event_id);await member(event,actor,db)
     if not await supervisor(event,actor,db,write=True):raise HTTPException(403,'Supervisor permission required')
     return await correct_attendance(event_id,service_id,guest_id,body,db,actor)
+
+
+from ..services.guest_services_offline import OfflineActionIn, replay as replay_offline_action
+
+@router.post('/{event_id}/guest-services/offline-actions')
+async def sync_offline_action(event_id: str, body: OfflineActionIn, db: AsyncSession = Depends(get_db), actor: User = Depends(require_event_member)):
+    return await replay_offline_action(event_id,body,db,actor)
+
+
+@router.get('/{event_id}/guest-services/guest-search')
+async def search_activity_guests(event_id: str, q: str = Query('',max_length=200), db: AsyncSession = Depends(get_db), actor: User = Depends(require_event_member)):
+    event=await db.get(Event,event_id);await member(event,actor,db)
+    if not await supervisor(event,actor,db):raise HTTPException(403,'Supervisor access required')
+    statement=select(Guest.id,Guest.first_name,Guest.last_name).where(Guest.event_id==event_id)
+    if q:statement=statement.where(or_(func.lower(Guest.first_name+' '+Guest.last_name).like('%'+q.lower()+'%'),Guest.id==q))
+    rows=(await db.execute(statement.order_by(Guest.last_name,Guest.first_name,Guest.id).limit(20))).all()
+    return [{'id':gid,'name':f'{first} {last}'.strip()} for gid,first,last in rows]

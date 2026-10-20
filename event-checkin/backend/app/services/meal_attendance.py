@@ -76,7 +76,7 @@ async def set_tracking(event_id,service_id,body,db,actor):
     await db.commit();return {'ok':True,'service_id':service_id,'tracking_mode':mode(service)}
 
 
-async def record_attendance(event_id,service_id,token,db,actor,*,scoped=False):
+async def record_attendance(event_id,service_id,token,db,actor,*,scoped=False,commit=True):
     from .guest_services import guest_scope
     from ..routers.menu import meal_service_availability
     event=await db.get(Event,event_id)
@@ -99,7 +99,8 @@ async def record_attendance(event_id,service_id,token,db,actor,*,scoped=False):
         record=GuestMealService(service_id=service.id,guest_id=guest.id,eligibility_status='eligible',fulfillment_status='pending');db.add(record)
     record.attended_at=datetime.utcnow();record.attended_by_user_id=actor.id
     db.add(GuestServiceActivity(event_id=event_id,actor_id=actor.id,guest_id=guest.id,action='meal_attendance',detail={'service_id':service.id}))
-    await db.commit()
+    if commit: await db.commit()
+    else: await db.flush()
     return {'ok':True,'service_id':service_id,'already_counted':False,'guest_name':f'{guest.first_name} {guest.last_name}'.strip(),'attended_at':record.attended_at,'message':'Meal attendance recorded; order and delivery unchanged'}
 
 

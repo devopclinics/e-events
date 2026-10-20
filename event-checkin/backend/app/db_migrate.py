@@ -62,6 +62,7 @@ def _guarded_drop_column(table: str, column: str) -> str:
 
 
 SCHEMA_PATCHES: list[str] = [
+    "CREATE INDEX IF NOT EXISTS ix_guest_menu_choice_guest_category ON guest_menu_choices (guest_id, category_id)",
     # Supervisor requests target locations without inventing an assignment.
     # Existing assignment references stay intact; reruns avoid unnecessary locks.
     _guarded_drop_not_null("guest_service_requests", "assignment_id"),

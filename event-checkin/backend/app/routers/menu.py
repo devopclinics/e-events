@@ -321,7 +321,7 @@ def meal_service_availability(service, served_count, now=None):
     return 'available','Ready for collection'
 
 
-async def fulfill_category(event_id, category_id, guest_id, station_id, db, current_user, *, service=None, enforce_service_limits=True):
+async def fulfill_category(event_id, category_id, guest_id, station_id, db, current_user, *, service=None, enforce_service_limits=True, commit=True):
     """Canonical fulfillment shared with table-scoped staff; caller authorizes."""
     from ..services.meal_attendance import require_meal_event
     require_meal_event(await db.get(Event, event_id), current_user)
@@ -360,7 +360,8 @@ async def fulfill_category(event_id, category_id, guest_id, station_id, db, curr
             served_at=datetime.utcnow(), served_by_user_id=current_user.id, station_id=station_id,
         ))
     await _sync_legacy_meal_served(guest_id, db)
-    await db.commit()
+    if commit: await db.commit()
+    else: await db.flush()
     return {"ok": True, "already_served": False}
 
 

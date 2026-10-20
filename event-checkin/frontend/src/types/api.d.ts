@@ -2288,6 +2288,18 @@ export interface MyTaskOut {
   updated_at: string
 }
 
+export interface OfflineActionIn {
+  action: 'seated' | 'served' | 'attendance'
+  captured_at: string
+  client_key: string
+  expected_record_updated_at?: (string) | null
+  expected_seated_at?: (string) | null
+  expected_selection_key?: (string) | null
+  guest_id: string
+  service_id?: (string) | null
+  table_id: string
+}
+
 export interface OperatorInvite {
   email: string
 }

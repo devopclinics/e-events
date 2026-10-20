@@ -4,6 +4,8 @@ import { api } from '../api'
 const csvCell = value => `"${String(value ?? '').replace(/^[=+@\-\t\r]/, "'$&").replaceAll('"', '""')}"`
 export default function GuestServiceActivity({ eventId, team, guests }) {
   const [filters, setFilters] = useState({ actor_id: '', guest_id: '', action: '', since: '', until: '' })
+  const [guestSearch,setGuestSearch]=useState(''),[guestOptions,setGuestOptions]=useState(guests)
+  useEffect(()=>{if(!api.searchGuestServiceGuests)return;let live=true;const timer=setTimeout(()=>api.searchGuestServiceGuests(eventId,guestSearch).then(rows=>{if(live)setGuestOptions(rows)}).catch(e=>{if(live){setGuestOptions([]);setError(e.message)}}),250);return()=>{live=false;clearTimeout(timer)}},[eventId,guestSearch])
   const [page, setPage] = useState(0), [result, setResult] = useState(null), [error, setError] = useState(''), [version, setVersion] = useState(0)
   const params = offset => Object.fromEntries(Object.entries({ ...filters, since: filters.since ? new Date(filters.since).toISOString() : '', until: filters.until ? new Date(filters.until).toISOString() : '', offset, limit: 50 }).filter(([, value]) => value !== ''))
   useEffect(() => {
@@ -20,7 +22,7 @@ export default function GuestServiceActivity({ eventId, team, guests }) {
   }
   return <section className="gs-panel" aria-label="Guest Services activity"><h2>Activity history</h2><p>Supervisor history of recorded actions and pass attempts. Filters and exports apply to this event.</p>
     <div className="gs-actions"><label>Staff<select value={filters.actor_id} onChange={e => update('actor_id', e.target.value)}><option value="">All staff</option>{team.map(m => <option key={m.user_id} value={m.user_id}>{m.name}</option>)}</select></label>
-      <label>Guest<select value={filters.guest_id} onChange={e => update('guest_id', e.target.value)}><option value="">All guests</option>{guests.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></label>
+      <label>Find guest<input type="search" aria-label="Find activity guest" placeholder="Name or guest ID" value={guestSearch} onChange={e=>setGuestSearch(e.target.value)}/></label><label>Guest<select value={filters.guest_id} onChange={e => update('guest_id', e.target.value)}><option value="">All guests</option>{filters.guest_id&&!guestOptions.some(g=>g.id===filters.guest_id)&&<option value={filters.guest_id}>Selected guest</option>}{guestOptions.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></label>
       <label>Action<input value={filters.action} placeholder="e.g. meal_served" onChange={e => update('action', e.target.value)} /></label>
       <label>From (local time)<input type="datetime-local" value={filters.since} onChange={e => update('since', e.target.value)} /></label><label>Until (local time)<input type="datetime-local" value={filters.until} onChange={e => update('until', e.target.value)} /></label>
       <button onClick={() => setVersion(v => v + 1)}>Refresh history</button><button disabled={!result?.rows.length} onClick={exportPage}>Export this page (CSV)</button></div>

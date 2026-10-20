@@ -48,7 +48,7 @@ Room occupants come from the latest accepted directional zone movement. A room a
 - Guest and service row locks plus the existing unique fulfilment key prevent duplicate service records. Scoped serving checks eligibility, open state, serving window and capacity. Assisted menu selection locks each served category while permitting later unserved categories. Optional choices can be explicitly cleared; required and served choices cannot. Legacy served flags without category records remain locked for supervisor review. The existing public guest selection policy is preserved.
 - `GuestSeatingPresence` confirms physical seating separately from admission and allocation. A guest moved to another table loses the old seating confirmation in the view. Corrections and assisted choices are auditable.
 - Migrations are additive: metadata creates the new tables; the existing auto-patcher adds the false-default scope column. No guest, task, seat, menu or attendance records are copied or backfilled.
-- The workspace requires a connection and refreshes every 20 seconds; it does not claim offline writes are saved.
+- The workspace checks for changed pages every 20 seconds while visible. Positive seating, meal-delivery and headcount observations can be queued on the staff device; pending is never presented as server-confirmed.
 
 ## Validation
 
@@ -91,3 +91,20 @@ Guest Services → Meal attendance shows assigned-table counts for meal-enabled 
 The attendance scan requires an Event Pass, active event, enabled meals, current meal permission, event admission, eligibility, an enabled headcount mode, serving window and attendance capacity. A service-row lock serializes capacity and the unique guest/service row makes repeated scans idempotent. Attendance capacity and order reservations are independent in Both mode; neither implies the other. Headcount-only service categories disappear from order forms when no occurrence of that category accepts orders.
 
 Supervisors configure tracking and can correct an attendance mark with a meaningful reason and the original scan timestamp. Corrections retain original actor/time/reason in GuestServiceActivity and never undo delivery. Settings cannot hide existing attendance or in-progress/delivered orders; use Both to retain their visibility. Existing modes/settings remain unchanged on upgrade.
+
+
+## Server pages and lightweight refresh
+
+The modern client requests `paged=true` and a view. Guests are queried in stable 24-row SQL pages; meal requests use 25 guest/service pairs, with server stage, table and name/choice search filters. Room occupancy names use 50-row pages and a separate total from canonical latest accepted movements. Table cards and the dashboard use aggregate counts across the full authorised scope, not the loaded guest page. Attendance counts use database aggregates, including unallocated guests for supervisors. The legacy full response remains available for older clients during rollout.
+
+Every read rechecks membership, supervisor rights, current assignments and shift boundaries before comparing a revision. The revision covers roster/menu/fulfillment/seating/scanner changes, team and location metadata, role scope and serving-window transitions. An unchanged response contains no roster payload. The client pauses hidden-tab polling, debounces guest search and forces a full read at least every two minutes. A guest/category choice index supports aggregate existence checks.
+
+## Offline observations and replay
+
+Previously loaded pages are cached in IndexedDB for the signed-in account and selected event (up to 12 pages per event, expiring after 12 hours). The staff service worker caches only the static Guest Services shell and build assets: it does not cache API responses or credentials. Offline reload uses the already signed-in Firebase identity and a matching session profile; a new sign-in requires connection. Explicit sign-out clears cached pages and the session profile. Pending action IDs stay partitioned to the original account and event.
+
+Only positive `seated`, `served`, and `attendance` observations are queued. There are no queued admission/room scans, corrections, menu edits, preparations or setup changes. Count meal attendance by opening an already authorised guest; QR tokens are never persisted in the replay queue. Queued observations store operation/guest/table/service IDs, expected state fingerprints and captured time. They do not optimistically change confirmed counts. The queue is bounded to 100 operations and duplicate pending taps are coalesced. A browser storage failure is shown; it does not claim the observation was saved.
+
+On reconnect the server checks current membership, active assignment, table, admission, paid access, event status, meal mode, eligibility, serving window and capacity. Changed table/state/choices or expired captures stop that action for review; dependent observations for the same guest wait. Separate actions from the same queue can advance their expected ledger timestamp only after a successful acknowledged action. Server receipts are unique per event, actor and client key and are committed atomically with the existing ledger writes. Concurrent retries return the same receipt; a lost response or later attendance/seating correction cannot cause a retry to reapply the original observation. Known access loss clears cached pages. Offline observations and sync times are written to GuestServiceActivity.
+
+Full tests must include PostgreSQL capacity/receipt races, page totals independent of page size, scope changes during an unchanged poll, real browser IndexedDB/service-worker reload, account isolation, reconnect conflicts, responsive views and a representative large-event read workload. Production validation never invents staff assignments or mutates customer attendance solely for testing.

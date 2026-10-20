@@ -630,6 +630,7 @@
         "type": "object"
       },
       "AssistedMenuIn": {
+        "additionalProperties": false,
         "properties": {
           "clear_categories": {
             "items": {
@@ -19276,8 +19277,15 @@
             "title": "Assignee User Id"
           },
           "assignment_id": {
-            "title": "Assignment Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignment Id"
           },
           "notes": {
             "default": "",
@@ -19301,15 +19309,36 @@
             "title": "Request Key",
             "type": "string"
           },
+          "table_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Id"
+          },
           "title": {
             "maxLength": 180,
             "minLength": 1,
             "title": "Title",
             "type": "string"
+          },
+          "zone_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zone Id"
           }
         },
         "required": [
-          "assignment_id",
           "request_key",
           "title"
         ],

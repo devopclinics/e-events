@@ -607,3 +607,90 @@ async def test_inactive_event_cannot_serve_and_workspace_disables_actions(ctx):
     body=(await ctx.client.get(url(s))).json()
     assert body['meal_requests'] and all(not r['can_progress'] for r in body['meal_requests'])
     assert all(not m['can_serve'] for g in body['guests'] for m in g['meal_services'])
+
+
+@pytest.mark.asyncio
+async def test_assisted_menu_rejects_empty_or_unknown_payloads_without_audit(ctx):
+    s=await setup(ctx);assert (await configure(ctx,s,[table(s,can_manage_meals=True)])).status_code==200
+    ctx.login(s['staff']);path=url(s,f"/guests/{s['guests'][0].id}/menu")
+    for body in ({'guest_agreed':True},{'selections':[1],'guest_agreed':True},{'single':{},'guest_agreed':True},{'single':{s['category'].id:s['item'].id},'surprise':1,'guest_agreed':True}):
+        assert (await ctx.client.post(path,json=body)).status_code==422,body
+    async with _Session() as db:
+        assert await db.scalar(select(func.count()).select_from(GuestServiceActivity).where(GuestServiceActivity.action=='assisted_menu'))==0
+
+@pytest.mark.asyncio
+async def test_supervisor_requests_help_for_any_location_without_assignment(ctx):
+    s=await setup(ctx);ctx.login(ctx.ids['user_a'])
+    body={'table_id':s['tables'][2].id,'request_key':'supervisor-table-request','title':'Extra water'}
+    first=await ctx.client.post(url(s,'/requests'),json=body);assert first.status_code==200 and not first.json()['already_created']
+    again=await ctx.client.post(url(s,'/requests'),json=body);assert again.json()=={'task_id':first.json()['task_id'],'already_created':True}
+    room=await ctx.client.post(url(s,'/requests'),json={'zone_id':s['zone'].id,'request_key':'supervisor-room-request','title':'Projector'});assert room.status_code==200
+    for bad in ({'table_id':'missing'},{'table_id':s['tables'][0].id,'zone_id':s['zone'].id},{}):
+        assert (await ctx.client.post(url(s,'/requests'),json={'request_key':'bad-target-key','title':'x',**bad})).status_code in (404,422),bad
+    async with _Session() as db:
+        titles=sorted(t.title for t in (await db.scalars(select(Task))).all());assert titles==['Conference Hall: Projector','Table 2: Extra water']
+
+@pytest.mark.asyncio
+async def test_ordinary_staff_cannot_request_for_unassigned_location(ctx):
+    s=await setup(ctx);assert (await configure(ctx,s,[table(s,0)])).status_code==200
+    ctx.login(s['staff'])
+    assert (await ctx.client.post(url(s,'/requests'),json={'table_id':s['tables'][1].id,'request_key':'staff-unassigned-key','title':'Water'})).status_code==403
+    assert (await ctx.client.post(url(s,'/requests'),json={'table_id':s['tables'][0].id,'request_key':'staff-unassigned-key2','title':'Water'})).status_code==403
+
+@pytest.mark.asyncio
+async def test_served_meal_request_is_labelled_delivered(ctx):
+    s=await setup(ctx);assert (await configure(ctx,s,[table(s,can_manage_meals=True)])).status_code==200
+    ctx.login(s['staff']);g=s['guests'][0]
+    assert (await ctx.client.post(url(s,f"/guests/{g.id}/menu"),json={'single':{s['category'].id:s['item'].id},'guest_agreed':True})).status_code==200
+    assert (await ctx.client.post(url(s,f"/guests/{g.id}/services/{s['services'][0].id}/served"))).status_code==200
+    row=[r for r in (await ctx.client.get(url(s))).json()['meal_requests'] if r['guest_id']==g.id and r['service_id']==s['services'][0].id][0]
+    assert row['status']=='served' and row['availability_reason']=='Delivered' and not row['can_progress']
+
+@pytest.mark.asyncio
+async def test_location_request_uses_explicit_references_and_preserves_retry_receipts(ctx):
+    from app.models import GuestServiceRequest
+    s=await setup(ctx);ctx.login(ctx.ids['user_a'])
+    assert not ctx.ids['user_a'].is_platform_superadmin
+    async with _Session() as db:
+        membership=await db.scalar(select(Membership).where(Membership.user_id==ctx.ids['user_a'].id,Membership.org_id==ctx.ids['org_a']));membership.role='admin';await db.commit()
+    bodies=[{'table_id':s['tables'][0].id,'request_key':'explicit-table-request','title':'Water'},
+            {'zone_id':s['zone'].id,'request_key':'explicit-zone-request','title':'Sound'}]
+    for body in bodies:
+        first=await ctx.client.post(url(s,'/requests'),json=body);assert first.status_code==200,first.text
+        retry=await ctx.client.post(url(s,'/requests'),json=body)
+        assert retry.json()=={'task_id':first.json()['task_id'],'already_created':True}
+    async with _Session() as db:
+        rows=(await db.scalars(select(GuestServiceRequest).where(GuestServiceRequest.event_id==s['event_id']))).all()
+        assert len(rows)==2
+        assert all(r.assignment_id is None for r in rows)
+        assert {r.table_id for r in rows}=={None,s['tables'][0].id}
+        assert {r.zone_id for r in rows}=={None,s['zone'].id}
+        assert await db.scalar(select(func.count()).select_from(Task))==2
+
+@pytest.mark.asyncio
+async def test_supervisor_location_request_rejects_other_event_table_and_room(ctx):
+    s=await setup(ctx)
+    async with _Session() as db:
+        event=Event(org_id=ctx.ids['org_b'],name='Other event',couples_name='Other',event_date=datetime.utcnow(),checkin_base_url='http://test');db.add(event);await db.flush()
+        t=SeatingTable(event_id=event.id,name='Other table',capacity=4);z=Zone(event_id=event.id,name='Other room')
+        db.add_all([t,z]);await db.commit()
+    ctx.login(ctx.ids['user_a'])
+    for field,value in [('table_id',t.id),('zone_id',z.id)]:
+        response=await ctx.client.post(url(s,'/requests'),json={field:value,'request_key':'foreign-location-'+field,'title':'Water'})
+        assert response.status_code==404,response.text
+    async with _Session() as db:
+        assert await db.scalar(select(func.count()).select_from(Task))==0
+
+@pytest.mark.asyncio
+async def test_scan_activity_records_real_outcomes_without_pass_tokens(ctx):
+    s=await setup(ctx);assert (await configure(ctx,s,[table(s,can_checkin=True)])).status_code==200
+    ctx.login(s['staff'])
+    assert (await ctx.client.post(url(s,'/scan'),json={'token':s['guests'][0].qr_token})).status_code==200
+    assert (await ctx.client.post(url(s,'/scan'),json={'token':s['guests'][1].qr_token})).status_code==403
+    assert (await ctx.client.post(url(s,'/scan'),json={'token':'unknown-secret-token'})).status_code==404
+    async with _Session() as db:
+        rows=(await db.scalars(select(GuestServiceActivity).where(GuestServiceActivity.event_id==s['event_id'],GuestServiceActivity.action=='scan_attempt'))).all()
+        assert len(rows)==3
+        outcomes={r.detail['outcome'] for r in rows}
+        assert 'denied' in outcomes and 'not_found' in outcomes and len(outcomes)==3
+        assert all('secret-token' not in str(r.detail) and 'service-pass' not in str(r.detail) for r in rows)

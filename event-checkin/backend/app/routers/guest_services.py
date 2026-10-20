@@ -6,7 +6,7 @@ Meal progress uses the canonical fulfillment ledger; assistance stays in Tasks.
 from datetime import datetime, timezone
 from typing import Literal
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select, delete, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -85,17 +85,34 @@ class SeatedIn(BaseModel):
 
 
 class AssistedMenuIn(GuestMenuSubmit):
+    # Unknown keys used to be dropped silently, so a malformed client got 200 "saved: 0" and a false audit row.
+    model_config = ConfigDict(extra='forbid')
     guest_agreed: bool = False
     clear_categories: list[str] = Field(default_factory=list, max_length=100)
 
+    @model_validator(mode='after')
+    def require_a_change(self):
+        if not (any(self.single.values()) or any(self.multi.values()) or any(self.combo.values()) or self.clear_categories):
+            raise ValueError('Choose at least one menu item, or name a category to clear')
+        return self
+
 
 class RequestIn(BaseModel):
-    assignment_id: str
+    # Staff raise requests from an assignment; supervisors may name any table or room instead.
+    assignment_id: str | None = None
+    table_id: str | None = None
+    zone_id: str | None = None
     request_key: str = Field(min_length=8, max_length=80)
     title: str = Field(min_length=1, max_length=180)
     notes: str = Field(default='', max_length=2000)
     priority: Literal['low', 'normal', 'high'] = 'normal'
     assignee_user_id: str | None = None
+
+    @model_validator(mode='after')
+    def one_target(self):
+        if sum(bool(x) for x in (self.assignment_id, self.table_id, self.zone_id)) != 1:
+            raise ValueError('Choose exactly one assignment, table or room')
+        return self
 
 
 class ScanIn(BaseModel):
@@ -335,16 +352,32 @@ async def scan(event_id: str, body: ScanIn, background_tasks: BackgroundTasks, d
     event=await db.get(Event,event_id); await member(event,actor,db)
     if not event.is_paid and not actor.is_platform_superadmin: raise HTTPException(402,'This event needs an Event Pass for guest operations')
     g=await db.scalar(select(Guest).where(Guest.event_id==event_id,Guest.qr_token==body.token))
-    if not g: raise HTTPException(404,'Pass not found in this event')
-    audit(db,event_id,actor,'scan_attempt',g.id,{'zone_id':body.zone_id,'direction':body.direction if body.zone_id else 'in'})
+    detail={'zone_id':body.zone_id,'direction':body.direction if body.zone_id else 'in','outcome':'attempted'}
+    attempt=GuestServiceActivity(event_id=event_id,actor_id=actor.id,action='scan_attempt',guest_id=g.id if g else None,detail=detail)
+    db.add(attempt)
     await db.commit()
-    if body.zone_id:
-        if not await supervisor(event,actor,db,write=True) and not any(r.zone_id==body.zone_id and r.can_scan_zone for r in await assignments_for(event,actor,db)):
-            raise HTTPException(403,'Zone scan is outside your active assignments')
-        result=await scan_qr_zone(body.token,ScanZoneRequest(zone_id=body.zone_id,direction=body.direction,guardian_token=body.guardian_token,guardian_guest_id=body.guardian_guest_id),background_tasks,db,actor)
-    else:
-        await guest_scope(event,actor,g,db,permission='can_checkin')
-        result=await scan_qr(body.token,background_tasks,None,db,actor)
+    attempt_id=attempt.id
+    if not g:
+        attempt.detail={**detail,'outcome':'not_found','http_status':404}
+        await db.commit()
+        raise HTTPException(404,'Pass not found in this event')
+    try:
+        if body.zone_id:
+            if not await supervisor(event,actor,db,write=True) and not any(r.zone_id==body.zone_id and r.can_scan_zone for r in await assignments_for(event,actor,db)):
+                raise HTTPException(403,'Zone scan is outside your active assignments')
+            result=await scan_qr_zone(body.token,ScanZoneRequest(zone_id=body.zone_id,direction=body.direction,guardian_token=body.guardian_token,guardian_guest_id=body.guardian_guest_id),background_tasks,db,actor)
+        else:
+            await guest_scope(event,actor,g,db,permission='can_checkin')
+            result=await scan_qr(body.token,background_tasks,None,db,actor)
+    except HTTPException as exc:
+        # Scanner errors may roll back their transaction. Reload only the already
+        # persisted attempt, then record the denial without committing scan writes.
+        await db.rollback()
+        attempt=await db.get(GuestServiceActivity,attempt_id)
+        attempt.detail={**detail,'outcome':'denied','http_status':exc.status_code}
+        await db.commit()
+        raise
+    attempt.detail={**detail,'outcome':result.status,'http_status':200}
     await db.commit()
     # Do not forward the legacy scanner's full GuestOut (contacts/pass credentials).
     return {'guardian_candidates':getattr(result,'guardian_candidates',[]) if result.status=='guardian_required' else [],'guardian_name':getattr(result,'guardian_name',None),'guardian_verification_method':getattr(result,'guardian_verification_method',None),'guest_name':getattr(result,'guest_name',None),'status':result.status,'message':getattr(result, 'message', None) or getattr(result, 'deny_reason', None) or f'{result.guest_name}: {result.zone_name} {result.direction}'}
@@ -362,21 +395,29 @@ async def assistance(event_id: str, body: RequestIn, background_tasks: Backgroun
     # Acknowledging the caller's own completed request does not require the old shift/location to still exist.
     existing=await db.scalar(select(GuestServiceRequest).where(GuestServiceRequest.event_id==event_id,GuestServiceRequest.actor_id==actor.id,GuestServiceRequest.request_key==body.request_key))
     if existing:return {'task_id':existing.task_id,'already_created':True}
-    assignment=await db.get(GuestServiceAssignment,body.assignment_id)
-    eu=await db.get(EventUser,assignment.event_user_id) if assignment else None
-    if not eu or eu.event_id!=event_id or not active_assignment(assignment): raise HTTPException(403,'Active assignment required')
-    if eu.user_id!=actor.id and not await supervisor(event,actor,db,write=True): raise HTTPException(403,'Assignment belongs to another staff member')
+    assignment=None
+    if body.assignment_id:
+        assignment=await db.get(GuestServiceAssignment,body.assignment_id)
+        eu=await db.get(EventUser,assignment.event_user_id) if assignment else None
+        if not eu or eu.event_id!=event_id or not active_assignment(assignment): raise HTTPException(403,'Active assignment required')
+        if eu.user_id!=actor.id and not await supervisor(event,actor,db,write=True): raise HTTPException(403,'Assignment belongs to another staff member')
+        location_id,location_kind=assignment.table_id or assignment.zone_id,SeatingTable if assignment.table_id else Zone
+    else:
+        # Supervisors look after the whole event, so they can raise help for any of its tables or rooms without being assigned.
+        if not await supervisor(event,actor,db,write=True): raise HTTPException(403,'Active assignment required')
+        location_id,location_kind=body.table_id or body.zone_id,SeatingTable if body.table_id else Zone
     if not body.title.strip(): raise HTTPException(400,'Request title is required')
     if body.assignee_user_id and not await db.scalar(select(EventUser.id).where(EventUser.event_id==event_id,EventUser.user_id==body.assignee_user_id)):
         raise HTTPException(400,'Assign requests to this event team only')
     existing=await db.scalar(select(GuestServiceRequest).where(GuestServiceRequest.event_id==event_id,GuestServiceRequest.actor_id==actor.id,GuestServiceRequest.request_key==body.request_key))
     if existing: return {'task_id':existing.task_id,'already_created':True}
-    location=await db.get(SeatingTable if assignment.table_id else Zone,assignment.table_id or assignment.zone_id)
+    location=await db.get(location_kind,location_id)
+    if location and location.event_id!=event_id: location=None
     from .tasks import add_task_record, _notify_assignee
     from ..schemas import TaskCreate
-    if not location: raise HTTPException(409,'This location was removed; refresh assignments')
+    if not location: raise HTTPException(404 if not assignment else 409,'Location not found in this event' if not assignment else 'This location was removed; refresh assignments')
     event,task,assignee=await add_task_record(event_id,TaskCreate(title=f'{location.name}: {body.title.strip()}'[:255],notes=body.notes,priority=body.priority,assignee_user_id=body.assignee_user_id),actor,db)
-    db.add(GuestServiceRequest(event_id=event_id,actor_id=actor.id,request_key=body.request_key,assignment_id=assignment.id,task_id=task.id))
+    db.add(GuestServiceRequest(event_id=event_id,actor_id=actor.id,request_key=body.request_key,assignment_id=assignment.id if assignment else None,table_id=location.id if location_kind is SeatingTable else None,zone_id=location.id if location_kind is Zone else None,task_id=task.id))
     try: await db.commit()
     except IntegrityError:
         await db.rollback()

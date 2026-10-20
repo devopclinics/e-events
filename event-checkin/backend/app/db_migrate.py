@@ -62,6 +62,9 @@ def _guarded_drop_column(table: str, column: str) -> str:
 
 
 SCHEMA_PATCHES: list[str] = [
+    # Supervisor requests target locations without inventing an assignment.
+    # Existing assignment references stay intact; reruns avoid unnecessary locks.
+    _guarded_drop_not_null("guest_service_requests", "assignment_id"),
     "ALTER TABLE guests ADD COLUMN IF NOT EXISTS is_junior BOOLEAN NOT NULL DEFAULT false",
     "ALTER TABLE events ADD COLUMN IF NOT EXISTS setup_preferences JSON",
     "ALTER TABLE events ADD COLUMN IF NOT EXISTS menu_selection_timing VARCHAR(30) NOT NULL DEFAULT 'after_admission'",

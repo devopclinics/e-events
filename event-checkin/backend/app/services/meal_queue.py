@@ -44,6 +44,8 @@ async def meal_requests(db, event, guests, table_names, *, writable=True):
                 available, reason = 'checkin_required', 'Guest must check in first'
             if meal_event_reason(event):
                 available, reason = 'event_inactive', meal_event_reason(event)
+            if status == 'served':
+                available, reason = 'served', 'Delivered'
             if not writable:
                 reason = 'View-only access'
             next_status = {'pending': 'preparing', 'preparing': 'ready', 'ready': 'served'}.get(status)

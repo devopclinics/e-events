@@ -2989,11 +2989,13 @@ export interface ReminderTestSendRequest {
 
 export interface RequestIn {
   assignee_user_id?: (string) | null
-  assignment_id: string
+  assignment_id?: (string) | null
   notes?: string
   priority?: 'low' | 'normal' | 'high'
   request_key: string
+  table_id?: (string) | null
   title: string
+  zone_id?: (string) | null
 }
 
 export interface RevokeRequest {

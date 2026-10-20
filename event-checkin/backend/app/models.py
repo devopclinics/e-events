@@ -3070,5 +3070,8 @@ class GuestServiceRequest(Base):
     event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
     actor_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
     request_key: Mapped[str] = mapped_column(String(80))
-    assignment_id: Mapped[str] = mapped_column(String(36))
+    # Historical references survive assignment/location removal; no cascading FK.
+    assignment_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    table_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    zone_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     task_id: Mapped[str] = mapped_column(String(36), ForeignKey("tasks.id", ondelete="CASCADE"))

@@ -227,6 +227,14 @@ test('future and full meal services are disabled and excluded from actionable at
  const h=harness({guestServices:async()=>data});let root;await act(async()=>{root=create(React.createElement(h.Page))});assert.equal(text(root.root.findByProps({className:'gs-summary'}).findAllByType('strong')[3]),'0');await act(async()=>button(root,'Guests1').props.onClick());await act(async()=>button(root,'Open guest →').props.onClick());assert.ok(root.root.findAllByType('button').filter(b=>text(b)==='Mark served').every(b=>b.props.disabled));assert.ok(text(root.root).includes('Collection has not started'));await act(async()=>root.unmount())
 })
 
+test('guests who have not arrived are not counted as needing attention and counts are singular',async()=>{
+ const data={...base(),is_supervisor:true,can_configure:true,tables:[{id:'table-a',name:'Table A',capacity:8}],locations:{tables:[{id:'table-a',name:'Table A',capacity:8}],zones:[]},team:[]};data.guests[0].admitted=false
+ const h=harness({guestServices:async()=>data});let root;await act(async()=>{root=create(React.createElement(h.Page))})
+ assert.equal(text(root.root.findByProps({className:'gs-summary'}).findAllByType('strong')[3]),'0')
+ assert.ok(text(root.root).includes('1 table · Page 1 of 1'));assert.ok(!text(root.root).includes('1 tables'))
+ await act(async()=>root.unmount())
+})
+
 test('unmatched room and staff searches explain the empty state and can be cleared',async()=>{
  const data={...base(),is_supervisor:true,can_configure:true,team:[{id:'staff',name:'Amina',event_role:'staff',scoped:true,assignments:[]}],locations:{tables:[],zones:[]},zones:[{id:'room',name:'Hall A',can_scan:true,inside:[]}]},h=harness({guestServices:async()=>data});let root
  await act(async()=>{root=create(React.createElement(h.Page))});await act(async()=>button(root,'Rooms1').props.onClick());await change(root.root.findByProps({'aria-label':'Search workspace'}),'nonexistent');assert.ok(text(root.root).includes('No matching rooms'));await act(async()=>button(root,'Clear search').props.onClick());assert.equal(root.root.findAllByProps({className:'gs-room-card'}).length,1)
@@ -321,4 +329,16 @@ test('supervisor can open activity and filter its server-paged records', async (
   const input=root.root.findAllByType('input').find(n=>n.props.placeholder==='e.g. meal_served')
   await change(input,'scan_attempt');assert.equal(calls.at(-1)[1].action,'scan_attempt')
   await act(async()=>root.unmount())
+})
+
+test('supervisor requests assistance by location without a personal assignment',async()=>{
+ const data={...base(),is_supervisor:true,can_configure:true,assignments:[],team:[],locations:{tables:[{id:'table-a',name:'Table A',capacity:8}],zones:[{id:'room-a',name:'Hall'}]}}
+ const calls=[],h=harness({guestServices:async()=>data,guestServiceRequest:async(...args)=>{calls.push(args);return {task_id:'help-task'}}})
+ let root;await act(async()=>{root=create(React.createElement(h.Page))})
+ await act(async()=>button(root,'Requests').props.onClick());await act(async()=>button(root,'Request assistance').props.onClick())
+ const form=root.root.findAllByType('form').at(-1)
+ await change(form.findAllByType('select')[0],'zone:room-a');await change(form.findByType('input'),'Projector help')
+ await act(async()=>form.props.onSubmit({preventDefault(){}}))
+ assert.equal(calls.length,1);assert.equal(calls[0][1].zone_id,'room-a');assert.equal(calls[0][1].assignment_id,undefined)
+ await act(async()=>root.unmount())
 })

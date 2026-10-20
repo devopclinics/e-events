@@ -25,7 +25,8 @@
   --shadow: 0 1px 0 rgba(0,0,0,.4), 0 12px 32px -18px rgba(0,0,0,.7);
 }
 
-.rd-mockflag { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 50;
+/* In normal flow at the end of the page: a fixed pill used to cover table cards and form actions. */
+.rd-mockflag { position: static; width: fit-content; margin: 24px auto 16px; z-index: 1;
   background: var(--surface); border: 1px dashed var(--line); color: var(--faint); font-size: 10.5px;
   letter-spacing: .02em; border-radius: 100px; padding: 6px 14px; box-shadow: var(--shadow);
   max-width: min(92vw, 620px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -576,3 +576,34 @@ async def test_global_headcount_includes_unallocated_guests_without_expanding_st
     response=await ctx.client.post(f"/api/events/{s['event_id']}/meal-services/{s['services'][0].id}/attendance",json={'token':s['guests'][1].qr_token});assert response.status_code==200,response.text
     ctx.login(s['staff']);view=(await ctx.client.get(url(s))).json();assert view['meal_services'][0]['expected']==1 and view['meal_services'][0]['attended']==0
     assert all(s['guests'][1].id!=row['guest_id'] for service in view['meal_services'] for row in service['recent_attendees'])
+
+@pytest.mark.asyncio
+async def test_audit_history_keeps_denied_scan_and_enforces_supervisor(ctx):
+    s=await setup(ctx)
+    assert (await configure(ctx,s,[table(s,can_checkin=True)])).status_code==200
+    ctx.login(s['staff'])
+    assert (await ctx.client.post(url(s,'/scan'),json={'token':s['guests'][0].qr_token,'zone_id':s['zone'].id})).status_code==403
+    assert (await ctx.client.get(url(s,'/activity'))).status_code==403
+    ctx.login(ctx.ids['user_a'])
+    response=await ctx.client.get(url(s,'/activity'),params={'action':'scan_attempt','actor_id':s['staff'].id,'limit':1})
+    assert response.status_code==200
+    assert response.json()['total']==1
+    assert response.json()['rows'][0]['guest_id']==s['guests'][0].id
+    assert 'service-pass' not in response.text
+    ctx.login(ctx.ids['user_b'])
+    assert (await ctx.client.get(url(s,'/activity'))).status_code==404
+
+@pytest.mark.asyncio
+async def test_inactive_event_cannot_serve_and_workspace_disables_actions(ctx):
+    s=await setup(ctx)
+    assert (await configure(ctx,s,[table(s,can_manage_meals=True)])).status_code==200
+    async with _Session() as db:
+        event=await db.get(Event,s['event_id']);event.status='paused'
+        db.add(GuestMenuChoice(guest_id=s['guests'][0].id,category_id=s['category'].id,menu_item_id=s['item'].id))
+        await db.commit()
+    ctx.login(s['staff'])
+    response=await ctx.client.post(url(s,f"/guests/{s['guests'][0].id}/services/{s['services'][0].id}/served"))
+    assert response.status_code==409,response.text
+    body=(await ctx.client.get(url(s))).json()
+    assert body['meal_requests'] and all(not r['can_progress'] for r in body['meal_requests'])
+    assert all(not m['can_serve'] for g in body['guests'] for m in g['meal_services'])

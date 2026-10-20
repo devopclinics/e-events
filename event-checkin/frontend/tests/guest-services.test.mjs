@@ -14,7 +14,10 @@ function harness(api, selection = 'event-a') {
   runInNewContext(transformSync(readFileSync(new URL('../src/components/MealRequestQueue.jsx',import.meta.url),'utf8'),{loader:'jsx',format:'cjs',jsx:'automatic'}).code,{module:queueModule,exports:queueModule.exports,require:name=>name.endsWith('.css')?{}:require(name),Map,Set,JSON})
   const attendanceModule={exports:{}}
   runInNewContext(transformSync(readFileSync(new URL('../src/components/MealAttendancePanel.jsx',import.meta.url),'utf8'),{loader:'jsx',format:'cjs',jsx:'automatic'}).code,{module:attendanceModule,exports:attendanceModule.exports,require:name=>name.endsWith('.css')?{}:name==='./QrCameraScanner'?()=>null:require(name),URL})
+  const activityModule = { exports: {} }
+  runInNewContext(transformSync(readFileSync(new URL('../src/components/GuestServiceActivity.jsx', import.meta.url), 'utf8'), {loader:'jsx',format:'cjs',jsx:'automatic'}).code, {module:activityModule,exports:activityModule.exports,require:name=>name==='../api'?{api}:require(name),URL,Blob:globalThis.Blob,setTimeout})
   const modules = {
+    '../components/GuestServiceActivity': activityModule.exports,
     '../components/MealAttendancePanel':attendanceModule.exports,
     '../components/MealRequestQueue': queueModule.exports,
     '../api': { api },
@@ -27,8 +30,9 @@ function harness(api, selection = 'event-a') {
   }
   const module = { exports: {} }
   const code = transformSync(readFileSync(new URL('../src/pages/GuestServicesPage.jsx', import.meta.url), 'utf8'), { loader: 'jsx', format: 'cjs', jsx: 'automatic' }).code
-  runInNewContext(code, { module, exports: module.exports, require: name => modules[name] ?? require(name), URL, Date, Map, Object, crypto: { randomUUID: () => 'synthetic-request-key' }, setInterval: callback => { refreshCallback = callback; return 1 }, clearInterval() {} })
-  return { Page: module.exports.default, passToken: module.exports.passToken, select: id => { selected = id }, refresh: () => refreshCallback() }
+  const document = { body: { style: {} }, hidden: false, addEventListener() {}, removeEventListener() {} }
+  runInNewContext(code, { document, module, exports: module.exports, require: name => modules[name] ?? require(name), URL, Date, Map, Object, crypto: { randomUUID: () => 'synthetic-request-key' }, setInterval: callback => { refreshCallback = callback; return 1 }, clearInterval() {} })
+  return { Page: module.exports.default, passToken: module.exports.passToken, select: id => { selected = id }, hide: value => { document.hidden = value }, refresh: () => refreshCallback() }
 }
 const base = () => ({ event_id: 'event-a', event_name: 'Conference', is_supervisor: false, can_configure: false, assignments: [{ id: 'assignment', table_id: 'table-a', name: 'Table A', active: true }], zones: [], menu_categories: [], request_assignees: [], guests: [{ id: 'guest-a', name: 'Ada', table_id: 'table-a', table_name: 'Table A', admitted: true, seated_at: null, can_checkin: false, can_manage_meals: false, choices: [], meal_services: [] }] })
 const text = node => node.children.map(c => typeof c === 'string' ? c : text(c)).join('')
@@ -295,4 +299,26 @@ test('switching meal occurrence hides the previous scan receipt and irrelevant t
  await change(root.root.findByProps({'aria-label':'Meal attendance pass'}),'guest-pass');await act(async()=>root.root.findByType('form').props.onSubmit({preventDefault(){}}));assert.ok(text(root.root).includes('Ada: Meal attendance recorded'))
  await change(root.root.findByProps({'aria-label':'Attendance meal service'}),'meal-two');assert.ok(!text(root.root).includes('Ada: Meal attendance recorded'))
  await act(async()=>root.unmount())
+})
+
+test('hidden Guest Services tabs pause automatic workspace downloads', async () => {
+  let calls=0
+  const h=harness({guestServices:async()=>{calls++;return base()}})
+  let root;await act(async()=>{root=create(React.createElement(h.Page))})
+  assert.equal(calls,1)
+  h.hide(true);await act(async()=>h.refresh());assert.equal(calls,1)
+  h.hide(false);await act(async()=>h.refresh());assert.equal(calls,2)
+  await act(async()=>root.unmount())
+})
+
+test('supervisor can open activity and filter its server-paged records', async () => {
+  const data={...base(),is_supervisor:true,team:[],tables:[]}, calls=[]
+  const h=harness({guestServices:async()=>data,guestServiceActivity:async(id,params)=>{calls.push([id,params]);return {total:1,rows:[{id:'entry',action:'scan_attempt',actor_name:'Table host',guest_name:'Ada',created_at:'2026-10-20T12:00:00',detail:{zone_id:'hall'}}]}}})
+  let root;await act(async()=>{root=create(React.createElement(h.Page))})
+  await act(async()=>button(root,'Activity').props.onClick())
+  assert.match(JSON.stringify(root.toJSON()),/Table host/)
+  assert.equal(calls[0][1].limit,50)
+  const input=root.root.findAllByType('input').find(n=>n.props.placeholder==='e.g. meal_served')
+  await change(input,'scan_attempt');assert.equal(calls.at(-1)[1].action,'scan_attempt')
+  await act(async()=>root.unmount())
 })

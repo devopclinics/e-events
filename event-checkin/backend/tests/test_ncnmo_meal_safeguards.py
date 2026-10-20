@@ -8,6 +8,7 @@ from conftest import _Session
 async def setup_meal(ctx, name):
     async with _Session() as session:
         event = await session.get(Event, ctx.ids["event_a"])
+        event.status = "active"
         event.is_paid = True
         event.menu_enabled = True
         category = MenuCategory(event_id=event.id, name=name, display_only=False)

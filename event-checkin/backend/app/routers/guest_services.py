@@ -5,7 +5,7 @@ Meal progress uses the canonical fulfillment ledger; assistance stays in Tasks.
 """
 from datetime import datetime, timezone
 from typing import Literal
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select, delete, func
 from sqlalchemy.exc import IntegrityError
@@ -19,7 +19,7 @@ from ..schemas import GuestMenuSubmit, ScanZoneRequest, MealProgressIn, MealTrac
 from ..services.meal_queue import meal_requests, progress_meal, RESERVED
 from ..services.guest_services import member, supervisor, assignments_for, guest_scope, active_assignment
 
-from ..services.meal_attendance import service_summaries, set_tracking, record_attendance, correct_attendance, has_orders, headcount_only_categories
+from ..services.meal_attendance import service_summaries, set_tracking, record_attendance, correct_attendance, has_orders, headcount_only_categories, meal_event_reason
 
 router = APIRouter()
 
@@ -173,6 +173,7 @@ async def workspace(event_id: str, db: AsyncSession = Depends(get_db), actor: Us
                 if served: availability,reason='served','Served — choices locked'
                 elif not eligible: availability,reason='not_eligible','Guest is not eligible'
                 elif not g.admitted: availability,reason='checkin_required','Guest must check in first'
+                if meal_event_reason(event): availability,reason='event_inactive',meal_event_reason(event)
                 out[-1]['meal_services'].append({'id':service.id,'category_id':service.category_id,'name':service.name,'status':service.status,'tracking_mode':service.tracking_mode,'attended_at':record.attended_at if record else None,'eligible':eligible,'served':served,'starts_at':service.starts_at,'ends_at':service.ends_at,'remaining_capacity':max(0,service.capacity-service_counts.get(service.id,0)) if service.capacity is not None else None,'availability':availability,'availability_reason':reason,'can_serve':availability=='available'})
 
     # Zone attendance is derived from canonical accepted movements, not registration/admission.
@@ -193,7 +194,7 @@ async def workspace(event_id: str, db: AsyncSession = Depends(get_db), actor: Us
     disabled_categories=await headcount_only_categories(db,event_id)
     result['menu_categories']=[c for c in result['menu_categories'] if c.id not in disabled_categories]
     attendance_guests=(await db.scalars(select(Guest).where(Guest.event_id==event_id))).all() if is_supervisor else [g for g in guests if g.id in meal_guest_ids]
-    result['meal_services']=await service_summaries(db,event,attendance_guests,table_names,writable=can_write if is_supervisor else bool(meal_guest_ids),configure=can_write,scope='Entire event' if is_supervisor else 'Assigned tables')
+    result['meal_services']=await service_summaries(db,event,attendance_guests,table_names,writable=can_write if is_supervisor else bool(meal_guest_ids),configure=can_write,scope='Entire event' if is_supervisor else 'Assigned tables',allow_unpaid=actor.is_platform_superadmin)
     result['meal_requests']=await meal_requests(db,event,[g for g in guests if g.id in meal_guest_ids],table_names,writable=can_write if is_supervisor else True)
     if is_supervisor:
         members=(await db.execute(select(EventUser,User).join(User,User.id==EventUser.user_id).where(EventUser.event_id==event_id))).all()
@@ -203,6 +204,32 @@ async def workspace(event_id: str, db: AsyncSession = Depends(get_db), actor: Us
         result['team']=[{'id':m.id,'user_id':u.id,'name':u.name,'event_role':m.event_role,'scoped':m.guest_service_scoped,'updated_at':m.updated_at,'can_rename_placeholder':u.id in renameable_ids,'assignments':[assignment_out(r,table_names,zone_names) for r in all_rows if r.event_user_id==m.id]} for m,u in members]
         result['locations']={'tables':[{'id':t.id,'name':t.name,'capacity':t.capacity,'category':t.category,'service_section':t.service_section,'sort_order':t.sort_order,'updated_at':t.updated_at} for t in tables], 'zones':[{'id':z.id,'name':z.name} for z in zones]}
     return result
+
+
+@router.get('/{event_id}/guest-services/activity')
+async def activity(event_id: str, guest_id: str | None = None, actor_id: str | None = None,
+                   action: str | None = None, since: datetime | None = None, until: datetime | None = None,
+                   offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200),
+                   db: AsyncSession = Depends(get_db), actor: User = Depends(require_event_member)):
+    event = await db.get(Event, event_id)
+    await member(event, actor, db)
+    if not await supervisor(event, actor, db):
+        raise HTTPException(403, 'Supervisor access required for activity history')
+    filters = [GuestServiceActivity.event_id == event_id]
+    for column, value in [(GuestServiceActivity.guest_id, guest_id), (GuestServiceActivity.actor_id, actor_id), (GuestServiceActivity.action, action)]:
+        if value: filters.append(column == value)
+    for value, lower in [(since, True), (until, False)]:
+        if value:
+            value = value.astimezone(timezone.utc).replace(tzinfo=None) if value.tzinfo else value
+            filters.append(GuestServiceActivity.created_at >= value if lower else GuestServiceActivity.created_at <= value)
+    total = await db.scalar(select(func.count()).select_from(GuestServiceActivity).where(*filters))
+    rows = (await db.execute(select(GuestServiceActivity, User.name, Guest.first_name, Guest.last_name)
+        .outerjoin(User, User.id == GuestServiceActivity.actor_id)
+        .outerjoin(Guest, (Guest.id == GuestServiceActivity.guest_id) & (Guest.event_id == event_id))
+        .where(*filters).order_by(GuestServiceActivity.created_at.desc(), GuestServiceActivity.id.desc()).offset(offset).limit(limit))).all()
+    return {'total': total, 'offset': offset, 'limit': limit, 'rows': [dict(id=row.id, created_at=row.created_at,
+        action=row.action, actor_id=row.actor_id, actor_name=name or 'Former staff member', guest_id=row.guest_id,
+        guest_name=' '.join(x for x in (first, last) if x) or None, detail=row.detail) for row,name,first,last in rows]}
 
 
 @router.patch('/{event_id}/guest-services/members/{member_id}/placeholder-name')
@@ -310,6 +337,7 @@ async def scan(event_id: str, body: ScanIn, background_tasks: BackgroundTasks, d
     g=await db.scalar(select(Guest).where(Guest.event_id==event_id,Guest.qr_token==body.token))
     if not g: raise HTTPException(404,'Pass not found in this event')
     audit(db,event_id,actor,'scan_attempt',g.id,{'zone_id':body.zone_id,'direction':body.direction if body.zone_id else 'in'})
+    await db.commit()
     if body.zone_id:
         if not await supervisor(event,actor,db,write=True) and not any(r.zone_id==body.zone_id and r.can_scan_zone for r in await assignments_for(event,actor,db)):
             raise HTTPException(403,'Zone scan is outside your active assignments')

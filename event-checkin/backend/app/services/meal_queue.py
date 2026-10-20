@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from sqlalchemy import select, func
 from ..models import Guest, GuestMenuChoice, MenuItem, MenuCombination, MealService, GuestMealService, Event, GuestServiceActivity
 
-from .meal_attendance import has_orders
+from .meal_attendance import has_orders, meal_event_reason, require_meal_event
 
 RESERVED = ('preparing', 'ready', 'served')
 LABELS = {'pending': 'New', 'preparing': 'Preparing', 'ready': 'Ready', 'served': 'Delivered', 'skipped': 'Skipped', 'denied': 'Denied'}
@@ -42,6 +42,8 @@ async def meal_requests(db, event, guests, table_names, *, writable=True):
                 available, reason = 'not_eligible', 'Guest is not eligible'
             elif not guest.admitted:
                 available, reason = 'checkin_required', 'Guest must check in first'
+            if meal_event_reason(event):
+                available, reason = 'event_inactive', meal_event_reason(event)
             if not writable:
                 reason = 'View-only access'
             next_status = {'pending': 'preparing', 'preparing': 'ready', 'ready': 'served'}.get(status)
@@ -57,8 +59,7 @@ async def progress_meal(event_id, service_id, guest_id, body, db, actor, *, scop
     if not guest or guest.event_id != event_id or not service or service.event_id != event_id:
         raise HTTPException(404, 'Guest or meal service not found')
     event = await db.get(Event, event_id)
-    if not event or not event.menu_enabled or event.status != 'active':
-        raise HTTPException(409, 'Meal workflow requires an active event with meals enabled')
+    require_meal_event(event, actor)
     if scoped:
         from .guest_services import guest_scope
         await guest_scope(event,actor,guest,db,permission='can_manage_meals')

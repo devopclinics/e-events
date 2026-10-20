@@ -542,6 +542,7 @@ async function downloadFile(path, filename, { withAuth = true } = {}) {
 }
 
 export const api = {
+  guestServiceActivity: (eventId, params) => req('GET', `/events/${eventId}/guest-services/activity?${new URLSearchParams(params)}`),
   guestServices: eventId => req('GET', `/events/${eventId}/guest-services`),
   renameGuestServicePlaceholder: (eventId, memberId, body) => req('PATCH', `/events/${eventId}/guest-services/members/${memberId}/placeholder-name`, body),
   configureGuestServices: (eventId, memberId, body) => req('PUT', `/events/${eventId}/guest-services/members/${memberId}`, body),

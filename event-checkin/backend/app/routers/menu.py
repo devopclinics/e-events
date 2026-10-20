@@ -323,6 +323,8 @@ def meal_service_availability(service, served_count, now=None):
 
 async def fulfill_category(event_id, category_id, guest_id, station_id, db, current_user, *, service=None, enforce_service_limits=True):
     """Canonical fulfillment shared with table-scoped staff; caller authorizes."""
+    from ..services.meal_attendance import require_meal_event
+    require_meal_event(await db.get(Event, event_id), current_user)
     cat = await _category_or_404(event_id, category_id, db)
     guest = await db.scalar(select(Guest).where(Guest.id == guest_id).with_for_update().execution_options(populate_existing=True))
     if not guest or guest.event_id != event_id:
@@ -540,7 +542,7 @@ async def menu_dashboard(event_id: str, db: AsyncSession = Depends(get_db), curr
         combination_totals=combination_totals,
         guests=dashboard_guests,
         multi_category_serving=selectable_count >= 2,
-        meal_services=await service_summaries(db,await db.get(Event,event_id),guests,table_name_by_id,writable=True,configure=await supervisor(await db.get(Event,event_id),current_user,db,write=True),scope='Entire event'),
+        meal_services=await service_summaries(db,await db.get(Event,event_id),guests,table_name_by_id,writable=True,configure=await supervisor(await db.get(Event,event_id),current_user,db,write=True),scope='Entire event',allow_unpaid=current_user.is_platform_superadmin),
         meal_attendance_can_configure=await supervisor(await db.get(Event,event_id),current_user,db,write=True),
         meal_requests=await meal_requests(db,await db.get(Event,event_id),guests,table_name_by_id),
     )

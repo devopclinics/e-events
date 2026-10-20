@@ -627,6 +627,8 @@ async def mark_meal_served(
     current_user: User = Depends(require_paid_event_member),
 ):
     _ev = await db.get(Event, event_id)
+    from ..services.meal_attendance import require_meal_event
+    require_meal_event(_ev, current_user)
     if not await is_org_manager(current_user, _ev.org_id if _ev else None, db):
         eu = await db.scalar(select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == current_user.id))
         if not eu:

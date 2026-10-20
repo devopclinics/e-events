@@ -5,6 +5,20 @@ from sqlalchemy import select, func
 from ..models import Event, Guest, MealService, GuestMealService, GuestMenuChoice, GuestServiceActivity
 
 
+def meal_event_reason(event):
+    return None if event and event.menu_enabled and event.status == 'active' else 'Meal operations require an active event with meals enabled'
+
+
+def require_meal_event(event, actor):
+    if not event:
+        raise HTTPException(404, 'Event not found')
+    if not event.is_paid and not actor.is_platform_superadmin:
+        raise HTTPException(402, 'This event needs an Event Pass for guest operations')
+    reason = meal_event_reason(event)
+    if reason:
+        raise HTTPException(409, reason)
+
+
 def mode(service):
     return service.tracking_mode or 'orders'
 
@@ -24,7 +38,7 @@ async def headcount_only_categories(db, event_id):
     return disabled
 
 
-async def service_summaries(db, event, guests, table_names, *, writable=False, configure=False, scope='Assigned tables'):
+async def service_summaries(db, event, guests, table_names, *, writable=False, configure=False, scope='Assigned tables', allow_unpaid=False):
     if not event.menu_enabled:
         return []
     services=(await db.scalars(select(MealService).where(MealService.event_id==event.id).order_by(MealService.created_at,MealService.id))).all()
@@ -32,13 +46,19 @@ async def service_summaries(db, event, guests, table_names, *, writable=False, c
     records=(await db.scalars(select(GuestMealService).where(GuestMealService.guest_id.in_(ids)))).all() if ids else []
     picks=set((await db.execute(select(GuestMenuChoice.guest_id,GuestMenuChoice.category_id).where(GuestMenuChoice.guest_id.in_(ids)))).all()) if ids else set()
     by_id={g.id:g for g in guests};rows=[]
+    records_by_service = {}
+    picks_by_category = {}
+    for record in records:
+        records_by_service.setdefault(record.service_id, {})[record.guest_id] = record
+    for gid, cid in picks:
+        picks_by_category.setdefault(cid, set()).add(gid)
     for service in services:
-        entries={r.guest_id:r for r in records if r.service_id==service.id}
+        entries=records_by_service.get(service.id, {})
         eligible={g.id for g in guests if g.rsvp_status!='declined' and (g.id not in entries or entries[g.id].eligibility_status=='eligible')}
         attended={gid for gid,r in entries.items() if r.attended_at is not None}
-        ordered={gid for gid,cid in picks if cid==service.category_id}
+        ordered=picks_by_category.get(service.category_id, set())
         recent=sorted((r for r in entries.values() if r.attended_at),key=lambda r:(r.attended_at,r.guest_id),reverse=True)[:10]
-        rows.append(dict(id=service.id,name=service.name,category_id=service.category_id,tracking_mode=mode(service),status=service.status,starts_at=service.starts_at,ends_at=service.ends_at,capacity=service.capacity,scope=scope,can_scan=bool(writable and has_headcount(service)),can_configure=configure,expected=len(eligible),attended=len(attended),not_yet_attended=len(eligible-attended),ordered=len(ordered),attended_without_order=len(attended-ordered),preparing=sum(r.fulfillment_status=='preparing' for r in entries.values()),ready=sum(r.fulfillment_status=='ready' for r in entries.values()),delivered=sum(r.fulfillment_status=='served' for r in entries.values()),recent_attendees=[dict(guest_id=r.guest_id,name=f'{by_id[r.guest_id].first_name} {by_id[r.guest_id].last_name}'.strip(),table_name=table_names.get(by_id[r.guest_id].table_id) or 'No table',attended_at=r.attended_at,can_correct=configure) for r in recent]))
+        rows.append(dict(id=service.id,name=service.name,category_id=service.category_id,tracking_mode=mode(service),status=service.status,starts_at=service.starts_at,ends_at=service.ends_at,capacity=service.capacity,scope=scope,can_scan=bool(writable and not meal_event_reason(event) and (event.is_paid or allow_unpaid) and has_headcount(service)),availability_reason=meal_event_reason(event),can_configure=configure,expected=len(eligible),attended=len(attended),not_yet_attended=len(eligible-attended),ordered=len(ordered),attended_without_order=len(attended-ordered),preparing=sum(r.fulfillment_status=='preparing' for r in entries.values()),ready=sum(r.fulfillment_status=='ready' for r in entries.values()),delivered=sum(r.fulfillment_status=='served' for r in entries.values()),recent_attendees=[dict(guest_id=r.guest_id,name=f'{by_id[r.guest_id].first_name} {by_id[r.guest_id].last_name}'.strip(),table_name=table_names.get(by_id[r.guest_id].table_id) or 'No table',attended_at=r.attended_at,can_correct=configure) for r in recent]))
     return rows
 
 
@@ -60,9 +80,7 @@ async def record_attendance(event_id,service_id,token,db,actor,*,scoped=False):
     from .guest_services import guest_scope
     from ..routers.menu import meal_service_availability
     event=await db.get(Event,event_id)
-    if not event:raise HTTPException(404,'Event not found')
-    if not event.is_paid and not actor.is_platform_superadmin:raise HTTPException(402,'This event needs an Event Pass for guest operations')
-    if not event.menu_enabled or event.status!='active':raise HTTPException(409,'Meal attendance requires an active event with meals enabled')
+    require_meal_event(event, actor)
     guest=await db.scalar(select(Guest).where(Guest.event_id==event_id,Guest.qr_token==token).with_for_update().execution_options(populate_existing=True))
     if not guest:raise HTTPException(404,'Pass not found in this event')
     if scoped:await guest_scope(event,actor,guest,db,permission='can_manage_meals')
@@ -86,6 +104,9 @@ async def record_attendance(event_id,service_id,token,db,actor,*,scoped=False):
 
 
 async def correct_attendance(event_id,service_id,guest_id,body,db,actor):
+    event = await db.get(Event, event_id)
+    if not event: raise HTTPException(404, 'Event not found')
+    if not event.is_paid and not actor.is_platform_superadmin: raise HTTPException(402, 'This event needs an Event Pass for guest operations')
     # Same guest -> service lock ordering as recording and fulfillment.
     guest=await db.scalar(select(Guest).where(Guest.id==guest_id,Guest.event_id==event_id).with_for_update())
     service=await db.scalar(select(MealService).where(MealService.id==service_id,MealService.event_id==event_id).with_for_update())

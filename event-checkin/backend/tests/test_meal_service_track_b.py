@@ -15,6 +15,7 @@ from conftest import _Session
 async def test_mark_served_self_heals_meal_service_and_creates_audit_row(ctx):
     async with _Session() as s:
         ev = await s.get(Event, ctx.ids["event_a"])
+        ev.status = "active"
         ev.is_paid = True
         ev.menu_enabled = True
         cat = MenuCategory(event_id=ev.id, name="Dinner", display_only=False)
@@ -51,6 +52,7 @@ async def test_mark_served_self_heals_meal_service_and_creates_audit_row(ctx):
 async def test_unmark_served_preserves_audit_row_instead_of_deleting(ctx):
     async with _Session() as s:
         ev = await s.get(Event, ctx.ids["event_a"])
+        ev.status = "active"
         ev.is_paid = True
         ev.menu_enabled = True
         cat = MenuCategory(event_id=ev.id, name="Lunch", display_only=False)
@@ -83,6 +85,7 @@ async def test_unmark_served_preserves_audit_row_instead_of_deleting(ctx):
 async def test_legacy_single_button_dual_writes_guest_meal_service(ctx):
     async with _Session() as s:
         ev = await s.get(Event, ctx.ids["event_a"])
+        ev.status = "active"
         ev.is_paid = True
         ev.menu_enabled = True
         cat = MenuCategory(event_id=ev.id, name="Only Category", display_only=False)
@@ -111,6 +114,7 @@ async def test_legacy_single_button_dual_writes_guest_meal_service(ctx):
 async def test_legacy_single_button_skips_dual_write_when_categories_ambiguous(ctx):
     async with _Session() as s:
         ev = await s.get(Event, ctx.ids["event_a"])
+        ev.status = "active"
         ev.is_paid = True
         ev.menu_enabled = True
         s.add_all([

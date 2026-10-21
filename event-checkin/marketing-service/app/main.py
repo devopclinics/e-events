@@ -704,9 +704,12 @@ def _deliver_follow_up(lead: Lead, sequence: ModuleRecord, step_index: int = 0, 
         query = dict(parse_qsl(parsed.query, keep_blank_values=True))
         query.update(utm_source="festio", utm_medium="email", utm_campaign="organizer-welcome" if sequence.payload.get("stage")=="registered" else "organizer-setup", utm_content=f"step-{step_index+1}")
         cta_url = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(query), parsed.fragment))
+    from .email_infographics import render_infographic
+    infographic_html, infographic_text = render_infographic(sequence.payload, step_index)
     message.set_content(
         f"Hi {first_name},\n\n{step.get('body') or 'Your Festio event is ready for the next step.'}\n\n"
-        f"{step.get('cta') or 'Open Festio'}: {cta_url}\n\n"
+        + (f"{infographic_text}\n\n" if infographic_text else "")
+        + f"{step.get('cta') or 'Open Festio'}: {cta_url}\n\n"
         f"You received this because you opted in to Festio event setup emails. Unsubscribe: "
         f"https://festio.events/api/marketing/unsubscribe/{lead.id}\n"
     )
@@ -714,7 +717,7 @@ def _deliver_follow_up(lead: Lead, sequence: ModuleRecord, step_index: int = 0, 
     body = str(step.get("body") or "Your Festio event is ready for the next step.")
     cta = str(step.get("cta") or "Open Festio")
     body_html = "<br><br>".join(escape(part) for part in body.split("\n\n"))
-    message.add_alternative(f"""<!doctype html><html><body style="margin:0;background:#f5f1e9;font-family:Arial,sans-serif;color:#172033"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:36px 16px"><div style="display:none;max-height:0;overflow:hidden;opacity:0">{escape(preview)}</div><table role="presentation" width="100%" style="max-width:600px;background:#fff;border-radius:18px;overflow:hidden"><tr><td style="padding:20px 32px;background:#075b5d"><a href="https://festio.events" style="color:#fff;text-decoration:none;font-size:20px;font-weight:700">Festio</a></td></tr><tr><td style="padding:36px 32px"><p style="font-size:17px">Hi {escape(first_name)},</p><h1 style="font-size:28px;line-height:1.2">{escape(subject)}</h1><p style="font-size:16px;line-height:1.7;color:#526070">{body_html}</p><p style="margin:28px 0"><a href="{escape(cta_url)}" style="display:inline-block;background:#a85d32;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:700">{escape(cta)}</a></p><p style="font-size:13px;color:#78828f">You received this because you opted in to Festio event setup emails. <a href="{unsubscribe_url}">Unsubscribe</a>.</p></td></tr></table></td></tr></table></body></html>""", subtype="html")
+    message.add_alternative(f"""<!doctype html><html><body style="margin:0;background:#f5f1e9;font-family:Arial,sans-serif;color:#172033"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:36px 16px"><div style="display:none;max-height:0;overflow:hidden;opacity:0">{escape(preview)}</div><table role="presentation" width="100%" style="max-width:600px;background:#fff;border-radius:18px;overflow:hidden"><tr><td style="padding:20px 32px;background:#075b5d"><a href="https://festio.events" style="color:#fff;text-decoration:none;font-size:20px;font-weight:700">Festio</a></td></tr><tr><td style="padding:36px 32px"><p style="font-size:17px">Hi {escape(first_name)},</p><h1 style="font-size:28px;line-height:1.2">{escape(subject)}</h1><p style="font-size:16px;line-height:1.7;color:#526070">{body_html}</p>{infographic_html}<p style="margin:28px 0"><a href="{escape(cta_url)}" style="display:inline-block;background:#a85d32;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:700">{escape(cta)}</a></p><p style="font-size:13px;color:#78828f">You received this because you opted in to Festio event setup emails. <a href="{unsubscribe_url}">Unsubscribe</a>.</p></td></tr></table></td></tr></table></body></html>""", subtype="html")
     resend_key = os.getenv("RESEND_API_KEY", "")
     if resend_key:
         if pre_submit:

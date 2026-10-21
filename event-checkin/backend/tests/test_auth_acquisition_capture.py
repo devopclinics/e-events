@@ -135,7 +135,10 @@ async def test_existing_user_verified_upgrade_preserves_acquisition_without_head
         await auth.get_current_user(request(None), credentials, db)
         assert login_request.state.verified_email_identity == (user.id, user.email)
         rows = (await db.execute(select(MarketingOutbox))).scalars().all()
-        assert len(rows) == 2
+        assert len(rows) == 3
+        event_rows = [row for row in rows if row.payload.get("stage") == "event_created"]
+        assert len(event_rows) == 1 and event_rows[0].payload["email_verified"] is True
+        assert not any(field.startswith("consent_") for field in event_rows[0].payload)
         assert (await db.get(MarketingOutbox, legacy_id)).payload == legacy_snapshot
         verified_id = marketing_client.lifecycle_event_id("registered", user.id, "verified-email-v2")
         captured = (await db.get(MarketingOutbox, verified_id)).payload

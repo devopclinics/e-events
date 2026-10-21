@@ -94,9 +94,12 @@ async def _capture_registration(
         key: attribution[key][:limit] for key, limit in attribution_limits.items()
         if isinstance(attribution.get(key), str) and attribution[key]
     }
+    from .models import MarketingOutbox
+    registration_id = lifecycle_event_id("registered", user.id, identity_namespace)
+    first_verified_capture = email_verified and await db.get(MarketingOutbox, registration_id) is None
     await ingest_marketing_lead(
         db, user, stage="registered", registered_at=user.created_at.isoformat() if user.created_at else None,
-        event_id=lifecycle_event_id("registered", user.id, identity_namespace),
+        event_id=registration_id,
         # No header means no new acquisition claim. Marketing supplies its
         # website default only when creating a lead, not on identity refresh.
         email_verified=email_verified, **fields,
@@ -111,6 +114,21 @@ async def _capture_registration(
             event_id=lifecycle_event_id("signup_consent", user.id, identity_namespace),
             email_verified=email_verified,
         )
+
+
+    if first_verified_capture:
+        # An event can be created before the first verified login. Replay a
+        # subject-bound source milestone now so that an earlier pending identity
+        # cannot leave the verified account stuck in creation reminders.
+        from .models import Event, Membership, Organization
+        owned = await db.scalar(select(Event).join(Membership, Membership.org_id == Event.org_id).join(
+            Organization, Organization.id == Event.org_id).where(
+                Membership.user_id == user.id, Membership.role == "owner", Organization.is_active.is_(True)
+            ).order_by(Event.created_at.desc(), Event.id).limit(1))
+        if owned:
+            await ingest_marketing_lead(db, user, stage="event_created", email_verified=True,
+                event_type=owned.event_type, guest_count=owned.guest_cap,
+                event_id=lifecycle_event_id("verified-owner-event-v1", user.id, owned.id))
 
 
 async def get_current_user(

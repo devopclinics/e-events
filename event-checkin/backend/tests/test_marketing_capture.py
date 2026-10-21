@@ -289,3 +289,15 @@ async def test_signup_attribution_is_bounded_to_marketing_columns(ctx):
         assert {key: len(row.payload[key]) for key in attribution if key != "consent_email"} == {
             "source": 100, "medium": 100, "campaign": 160, "referrer": 500, "landing_page": 500,
         }
+
+
+async def test_verification_after_event_creation_captures_owned_event(ctx):
+    async with _Session() as db:
+        user=await db.get(User,ctx.ids['user_a'].id)
+        await auth._capture_registration(db,user,_request({'consent_email':True}),email_verified=True)
+        await db.commit()
+    rows=await _rows()
+    event_rows=[r for r in rows if r.payload.get('stage')=='event_created']
+    assert len(event_rows)==1
+    assert event_rows[0].payload['email_verified'] is True
+    assert event_rows[0].payload['organizer_account'] is True

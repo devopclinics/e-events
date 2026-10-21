@@ -109,3 +109,22 @@ async def email_readiness(reply_domain: str = Query(...), challenge: str = Query
                         "jti": challenge, "iat": moment, "exp": moment + timedelta(seconds=5)},
                        settings.planner_internal_token, algorithm="HS256")
     return {**result, "proof": proof}
+
+
+@router.get("/api/internal/marketing/organizer-account-context")
+async def organizer_account_context(account_id: str = Query(..., min_length=1, max_length=128),
+                                    challenge: str = Query(...), db: AsyncSession = Depends(get_db),
+                                    claims: dict = Depends(require_marketing_readiness)):
+    if challenge != claims["jti"]:
+        raise HTTPException(403, "Context challenge mismatch")
+    from app.models import User, Membership, Organization, Event
+    owner_orgs = select(Membership.org_id).join(User, User.id == Membership.user_id).join(Organization, Organization.id == Membership.org_id).where(
+        User.is_active.is_(True), Organization.is_active.is_(True), Membership.role == "owner",
+        ((User.firebase_uid == account_id) | (User.firebase_uid.is_(None) & (User.id == account_id))))
+    owner = await db.scalar(select(func.count()).select_from(owner_orgs.subquery()))
+    count = await db.scalar(select(func.count(Event.id)).where(Event.org_id.in_(owner_orgs))) or 0
+    at = datetime.now(timezone.utc)
+    proof = dict(account_id=account_id, current_owner=bool(owner), event_count=count,
+                 sub="organizer-account-context-response", iss="festio-backend", aud="organizer-account-context-response",
+                 jti=challenge, iat=at, exp=at + timedelta(seconds=5))
+    return {"proof": jwt.encode(proof, settings.planner_internal_token, algorithm="HS256")}

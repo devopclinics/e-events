@@ -24,8 +24,28 @@ export function demoRequestAttempt(previous, body, newKey = () => crypto.randomU
 
 export function leadAutomationStatus(lead) {
   if (lead.automation_paused || lead.handoff_requested_at || lead.suppression_reason || lead.unsubscribed) return 'Needs human review'
+  if (lead.automation?.automatic_eligible === false) return 'Not enrolled in automatic onboarding'
   if (lead.automation?.complete) return 'Complete'
   if (!lead.automation) return 'Not enrolled'
   if (!lead.next_follow_up_at) return 'No follow-up scheduled'
   return `Scheduled · Step ${lead.automation.step}/${lead.automation.total_steps}`
+}
+
+// Retain the checkbox only for its own UID/mailbox until a verified sign-in.
+// A cached checkbox never supplies email-verification authority to the backend.
+export function rememberSignupConsent(uid, email, optedIn, storage = globalThis.localStorage, now = Date.now()) {
+  try { storage.setItem(`festio:signup-consent:${uid}`, JSON.stringify({ email: email.toLowerCase(), optedIn: optedIn === true, at: now })) } catch {}
+}
+
+export function verifiedSignupConsent(user, storage = globalThis.localStorage, now = Date.now()) {
+  if (!user?.emailVerified || !user?.uid || !user?.email) return {}
+  try {
+    const saved = JSON.parse(storage.getItem(`festio:signup-consent:${user.uid}`) || 'null')
+    if (!saved || saved.email !== user.email.toLowerCase() || typeof saved.optedIn !== 'boolean' || !Number.isFinite(saved.at) || saved.at > now || now - saved.at > 7 * 86400000) return {}
+    return { 'X-Festio-Attribution': signupAttributionHeader(saved.optedIn) }
+  } catch { return {} }
+}
+
+export function clearSignupConsent(uid, storage = globalThis.localStorage) {
+  try { storage.removeItem(`festio:signup-consent:${uid}`) } catch {}
 }

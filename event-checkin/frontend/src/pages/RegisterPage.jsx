@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'
+import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from 'firebase/auth'
 import { auth } from '../firebase'
 import { googleSignIn } from '../auth/googleSignIn'
 import { useAuth } from '../context/AuthContext'
 import { setPreferredView } from '../App'
 import MarketingEmailConsent from '../components/MarketingEmailConsent'
-import { signupAttributionHeader } from '../lib/marketingConsent.mjs'
+import { signupAttributionHeader, rememberSignupConsent, clearSignupConsent } from '../lib/marketingConsent.mjs'
 
-function ViewPicker({ role, onPick }) {
+function ViewPicker({ role, onPick, verificationNotice }) {
   const views = [
     { key: 'setup', icon: 'SET', label: 'Create an event', desc: 'Start with a draft event and preview before paying' },
     ...(role === 'admin' ? [{ key: 'admin',     icon: 'OPS', label: 'Event Setup',  desc: 'Manage existing events, guests, and invitations' }] : []),
@@ -21,6 +21,7 @@ function ViewPicker({ role, onPick }) {
         <div className="text-center mb-6">
           <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-lg bg-teal-600 text-white font-bold">F</div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Welcome to Festio!</h1>
+          {verificationNotice && <p role="status" className="mt-3 text-sm text-teal-800 dark:text-teal-200">{verificationNotice}</p>}
           <p className="text-gray-500 dark:text-slate-400 text-sm mt-2">Choose the view you want to open by default when you sign in.</p>
         </div>
         <div className="space-y-3">
@@ -57,12 +58,13 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [pickerRole, setPickerRole] = useState(null)
+  const [verificationNotice, setVerificationNotice] = useState('')
 
   useEffect(() => {
-    if (user && !pickerRole) {
+    if (user && !pickerRole && !loading) {
       navigate(goToRedesign ? `/setup-redesign${setupQuery}` : `/setup${setupQuery}`, { replace: true })
     }
-  }, [user, pickerRole, navigate, setupQuery, goToRedesign])
+  }, [user, pickerRole, loading, navigate, setupQuery, goToRedesign])
 
   // Partner referral: remember the code through the Firebase signup redirect
   // so AuthContext can attribute this org once the account exists.
@@ -81,7 +83,14 @@ export default function RegisterPage() {
     setLoading(true); setError('')
     try {
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password)
+      rememberSignupConsent(cred.user.uid, cred.user.email, marketingEmail)
       await updateProfile(cred.user, { displayName: form.name })
+      try {
+        await sendEmailVerification(cred.user)
+        setVerificationNotice("We sent an email verification link. Verify your email, then sign in again to receive the setup emails you selected. You can start your event now.")
+      } catch {
+        setVerificationNotice("Your account is ready. Email verification could not be sent; contact support if you need help verifying your address. Setup emails stay paused until verification.")
+      }
       // Sync with backend (creates the DB record)
       const token = await cred.user.getIdToken(true)
       const response = await fetch('/api/auth/me', { headers: {
@@ -89,6 +98,7 @@ export default function RegisterPage() {
         'X-Festio-Attribution': signupAttributionHeader(marketingEmail),
       } })
       if (!response.ok) throw new Error('Account sync failed')
+      if (cred.user.emailVerified) clearSignupConsent(cred.user.uid)
       setPickerRole('official')
     } catch (err) {
       setError(friendlyError(err.code))
@@ -101,12 +111,14 @@ export default function RegisterPage() {
     setLoading(true); setError('')
     try {
       const cred = await googleSignIn()
+      rememberSignupConsent(cred.user.uid, cred.user.email, marketingEmail)
       const token = await cred.user.getIdToken(true)
       const response = await fetch('/api/auth/me', { headers: {
         Authorization: `Bearer ${token}`,
         'X-Festio-Attribution': signupAttributionHeader(marketingEmail),
       } })
       if (!response.ok) throw new Error('Account sync failed')
+      if (cred.user.emailVerified) clearSignupConsent(cred.user.uid)
       setPickerRole('official')
     } catch (err) {
       if (err.code !== 'auth/popup-closed-by-user') setError(friendlyError(err.code))
@@ -130,7 +142,7 @@ export default function RegisterPage() {
     navigate(view === 'setup' ? `/setup${setupQuery}` : view === 'admin' ? '/admin' : `/${view}`, { replace: true })
   }
 
-  if (pickerRole) return <ViewPicker role={pickerRole} onPick={handlePick} />
+  if (pickerRole) return <ViewPicker role={pickerRole} onPick={handlePick} verificationNotice={verificationNotice} />
 
   const field = 'w-full border border-slate-300 dark:border-slate-700 rounded-md px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800 text-gray-900 dark:text-white'
 

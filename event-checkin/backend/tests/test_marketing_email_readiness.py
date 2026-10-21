@@ -129,3 +129,22 @@ async def test_blank_internal_readiness_key_cannot_authenticate_or_sign(ctx, rea
         params={"reply_domain": "reply.example.test", "challenge": "a" * 32}, headers=auth() if secret else {})
     assert response.status_code == 503
     assert "proof" not in response.json()
+
+
+async def test_account_context_checks_actual_owned_events_and_revocation(ctx, readiness_config):
+    import jwt
+    from app.models import User, Membership
+    async with _Session() as db:
+        user = await db.get(User, ctx.ids['user_a'].id)
+        user.firebase_uid = 'new-organizer-uid'
+        await db.commit()
+    response = await ctx.client.get('/api/internal/marketing/organizer-account-context', params={'account_id':'new-organizer-uid','challenge':'a'*32}, headers=auth())
+    assert response.status_code == 200
+    proof = jwt.decode(response.json()['proof'], settings.planner_internal_token, algorithms=['HS256'], audience='organizer-account-context-response', issuer='festio-backend')
+    assert proof['current_owner'] is True and proof['event_count'] > 0
+    async with _Session() as db:
+        user = await db.get(User, ctx.ids['user_a'].id); user.is_active=False
+        await db.commit()
+    response = await ctx.client.get('/api/internal/marketing/organizer-account-context', params={'account_id':'new-organizer-uid','challenge':'a'*32}, headers=auth())
+    proof = jwt.decode(response.json()['proof'], settings.planner_internal_token, algorithms=['HS256'], audience='organizer-account-context-response', issuer='festio-backend')
+    assert proof['current_owner'] is False and proof['event_count']==0

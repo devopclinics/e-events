@@ -35,17 +35,17 @@ def message_context(m, lead, sequence, index):
         steps=[]
         if mode in {"rsvp","hybrid","private"} and personal and not registration_seen:
             if not current.get("real_guest_count"):
-                steps.append(("guest_imported","Review the intended attendee list and add or import it when ready.","audience" if mode!="private" else "operations","rsvp" if mode!="private" else "checkin"))
+                steps.append(("guest_imported","Bring your guest list into one place so you can plan invitations and keep responses organised. Add or import the people you want to invite.","audience" if mode!="private" else "operations","rsvp" if mode!="private" else "checkin"))
             if mode!="private" or current.get("rsvp_enabled") is True:
-                steps.append(("invitation_delivered","Review invitation content, recipient consent and delivery exceptions before deciding whether to send.","audience","invitation"))
+                steps.append(("invitation_delivered","Help guests know what to expect. Preview your invitation, confirm the right recipients, and share it when you are ready.","audience","invitation"))
         if mode in {"rsvp","hybrid"} or (mode=="private" and current.get("rsvp_enabled") is True):
-            steps.append(("rsvp_received","Review the RSVP flow and actual guest responses. A controlled test is a rehearsal.","audience","rsvp"))
+            steps.append(("rsvp_received","Make it simple for guests to respond. Preview your RSVP page, then track real responses in your event workspace.","audience","rsvp"))
         if mode in {"ticketed","hybrid"}:
-            steps.append(("ticket_order_paid","Review ticket products, checkout and paid/free order exceptions. Rehearsals and free orders are separate from real paid ticket sales.","audience","tickets"))
+            steps.append(("ticket_order_paid","Give guests a clear route to registration. Set up your ticket options, check pricing and payment details, and preview checkout before you share it.","audience","tickets"))
         # First value does not finish onboarding. Continue selected operations,
         # without requiring an import/invitation for open RSVP or ticketed modes.
         choice=next((step for step in steps if step[0] not in milestones),
-            ("operations","Review outstanding selected operations and delivery or payment exceptions in your event guide.","operations","finance"))
+            ("operations","Keep the team ready for event day. Your event guide brings outstanding setup tasks together so you can focus on the next useful step.","operations","finance"))
         if sequence.payload.get("category") == "organizer_retention":
             choice = ("reuse", "Review closeout exceptions and create a new draft when you are ready. A copied draft needs new dates and its own checks.", "closeout", "reuse")
         date_note = ""
@@ -65,8 +65,11 @@ def message_context(m, lead, sequence, index):
                 date_note = " Your event date has passed; review closeout rather than inferring completion from the date." if local_day > end_day else " Check outstanding operations for your event day." if event_day<=local_day<=end_day else " Check the event date and timezone before scheduling the next task."
             except (ValueError, KeyError):
                 date_note = " Confirm the event timezone before scheduling guidance."
-        return {"body": choice[1]+date_note,
-            "cta_url": "https://festio.events/setup-redesign?"+urlencode({"event": event_id, "view": choice[2], "task": choice[3]}), "cta": "Review your next event task"}
+        steps_copy = sequence.payload.get("steps") or []
+        introduction = str(steps_copy[index].get("body") or "") if index < len(steps_copy) else ""
+        guidance = (introduction + "\n\nNext step: " if introduction else "") + choice[1] + date_note
+        return {"body": guidance,
+            "cta_url": "https://festio.events/setup-redesign?"+urlencode({"event": event_id, "view": choice[2], "task": choice[3]}), "cta": "Continue my event"}
 
 
 def validate_current_event(m,lead):

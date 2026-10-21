@@ -577,7 +577,19 @@ def lead_automation_map(db: Session, leads: list[Lead]) -> dict[str, dict | None
             last_touch[key] = touch
     result: dict[str, dict | None] = {}
     for lead in leads:
-        matching = next((s for s in sequences if not s.payload.get("stage") or s.payload.get("stage") == lead.stage), None)
+        automatic_eligible = False
+        available = sequences
+        if email_pilot.enabled("production"):
+            import sys
+            try:
+                automatic_eligible = email_pilot.eligible(sys.modules[__name__], db, lead, "production")
+                if automatic_eligible:
+                    pins = email_pilot.template_pins("production")
+                    available = [seq for seq in sequences if seq.id in {pin["id"] for pin in pins.values()}]
+            except email_pilot.EmailBlocked:
+                automatic_eligible = False
+        stage = email_pilot.stage_for(db, lead) if automatic_eligible else lead.stage
+        matching = next((s for s in available if not s.payload.get("stage") or s.payload.get("stage") == stage), None)
         if not matching:
             result[lead.id] = None
             continue
@@ -587,6 +599,7 @@ def lead_automation_map(db: Session, leads: list[Lead]) -> dict[str, dict | None
         touch = last_touch.get((lead.id, matching.id))
         result[lead.id] = {
             "sequence_id": matching.id,
+            "automatic_eligible": automatic_eligible if email_pilot.enabled("production") else None,
             "sequence_name": matching.name,
             "step": min(sent, len(steps)),
             "total_steps": len(steps),
@@ -683,17 +696,25 @@ def _deliver_follow_up(lead: Lead, sequence: ModuleRecord, step_index: int = 0, 
     message["List-Unsubscribe"] = f"<{unsubscribe_url}>"
     message["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
     first_name = (lead.name or "there").split()[0]
+    preview = str(step.get("preview") or step.get("body") or "Your next event starts here.")[:160]
     cta_url = safe_cta_url(step.get("cta_url") or sequence.payload.get("cta_url"))
+    if sequence.payload.get("journey_context") is True:
+        from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+        parsed = urlsplit(cta_url)
+        query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+        query.update(utm_source="festio", utm_medium="email", utm_campaign="organizer-welcome" if sequence.payload.get("stage")=="registered" else "organizer-setup", utm_content=f"step-{step_index+1}")
+        cta_url = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(query), parsed.fragment))
     message.set_content(
         f"Hi {first_name},\n\n{step.get('body') or 'Your Festio event is ready for the next step.'}\n\n"
         f"{step.get('cta') or 'Open Festio'}: {cta_url}\n\n"
-        f"You are receiving this because you registered for Festio. Unsubscribe: "
+        f"You received this because you opted in to Festio event setup emails. Unsubscribe: "
         f"https://festio.events/api/marketing/unsubscribe/{lead.id}\n"
     )
     subject = str(step.get("subject") or sequence.name)
     body = str(step.get("body") or "Your Festio event is ready for the next step.")
     cta = str(step.get("cta") or "Open Festio")
-    message.add_alternative(f"""<!doctype html><html><body style="margin:0;background:#f5f1e9;font-family:Arial,sans-serif;color:#172033"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:36px 16px"><table role="presentation" width="600" style="max-width:600px;background:#fff;border-radius:18px;overflow:hidden"><tr><td style="padding:20px 32px;background:#075b5d"><a href="https://festio.events" style="color:#fff;text-decoration:none;font-size:20px;font-weight:700">Festio</a></td></tr><tr><td style="padding:36px 32px"><p style="font-size:17px">Hi {escape(first_name)},</p><h1 style="font-size:28px;line-height:1.2">{escape(subject)}</h1><p style="font-size:16px;line-height:1.7;color:#526070">{escape(body)}</p><p style="margin:28px 0"><a href="{escape(cta_url)}" style="display:inline-block;background:#a85d32;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:700">{escape(cta)}</a></p><p style="font-size:13px;color:#78828f">You received this because you asked Festio for event updates. <a href="{unsubscribe_url}">Unsubscribe</a>.</p></td></tr></table></td></tr></table></body></html>""", subtype="html")
+    body_html = "<br><br>".join(escape(part) for part in body.split("\n\n"))
+    message.add_alternative(f"""<!doctype html><html><body style="margin:0;background:#f5f1e9;font-family:Arial,sans-serif;color:#172033"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:36px 16px"><div style="display:none;max-height:0;overflow:hidden;opacity:0">{escape(preview)}</div><table role="presentation" width="100%" style="max-width:600px;background:#fff;border-radius:18px;overflow:hidden"><tr><td style="padding:20px 32px;background:#075b5d"><a href="https://festio.events" style="color:#fff;text-decoration:none;font-size:20px;font-weight:700">Festio</a></td></tr><tr><td style="padding:36px 32px"><p style="font-size:17px">Hi {escape(first_name)},</p><h1 style="font-size:28px;line-height:1.2">{escape(subject)}</h1><p style="font-size:16px;line-height:1.7;color:#526070">{body_html}</p><p style="margin:28px 0"><a href="{escape(cta_url)}" style="display:inline-block;background:#a85d32;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:700">{escape(cta)}</a></p><p style="font-size:13px;color:#78828f">You received this because you opted in to Festio event setup emails. <a href="{unsubscribe_url}">Unsubscribe</a>.</p></td></tr></table></td></tr></table></body></html>""", subtype="html")
     resend_key = os.getenv("RESEND_API_KEY", "")
     if resend_key:
         if pre_submit:
@@ -1204,6 +1225,9 @@ def dashboard(identity: Identity = Depends(decode_identity), db: Session = Depen
     sla_overdue = db.scalar(select(func.count(Lead.id)).where(Lead.stage == "registered", Lead.next_follow_up_at.is_not(None), Lead.next_follow_up_at <= now())) or 0
     pipeline_value = db.scalar(select(func.sum(Lead.deal_value * func.coalesce(Lead.probability, 0) / 100.0))) or 0
     automation = automation_dashboard_stats(db)
+    from .onboarding import operational_status
+    import sys
+    automation["runtime"] = operational_status(sys.modules[__name__], db)
     return {"total_leads": total, "stages": stages, "modules": modules, "follow_ups_due": due, "email_marketable": consented, "unowned": unowned, "sla_overdue": sla_overdue, "expected_pipeline_value": round(float(pipeline_value), 2), "conversion": {"registered": total, "event_created": event_created, "paid": paid, "event_creation_rate": round(event_created * 100 / total, 1) if total else 0, "paid_rate": round(paid * 100 / total, 1) if total else 0}, "automation": automation}
 
 
@@ -1844,8 +1868,11 @@ def ingest_delivery(body:dict, identity:Identity=Depends(decode_identity), db:Se
     if duplicate: return {"recorded": True, "duplicate": True}
     email=(body.get("email") or "").lower(); row=db.scalar(select(Lead).where(Lead.email==email))
     if not row:
-        db.rollback()
-        return {"recorded":False}
+        # Guest/transactional delivery webhooks need not belong to a Marketing
+        # lead. Commit a receipt-only tombstone so unrelated traffic cannot
+        # retry forever and block the stop/readiness barrier for all clients.
+        db.commit()
+        return {"recorded": True, "unmatched": True}
     if receipt: receipt.lead_id = row.id
     event=str(body.get("event") or "delivered").replace("email.", "")
     provider_id = body.get("provider_id")
@@ -1887,7 +1914,7 @@ def claim_sequence_step(db: Session, lead: Lead, sequence: ModuleRecord, step_in
             db.rollback()
             return None
     else:
-        attempt = SendAttempt(id=key, lead_id=lead.id, status="sending", attempts=1)
+        attempt = SendAttempt(id=key, lead_id=lead.id, status="sending", attempts=1, updated_at=now())
         db.add(attempt)
     try:
         db.commit()  # Persist before contacting any provider, not after.
@@ -1943,7 +1970,7 @@ def run_automation_service(db: Session, identity: Identity, *, dry_run: bool = F
     if email_mode != "legacy":
         import sys
         email_pilot.config(email_mode)
-        pins = email_pilot.template_pins()
+        pins = email_pilot.template_pins(email_mode)
         sequences = [seq for seq in sequences if seq.id in {pin["id"] for pin in pins.values()}]
         leads = [lead for lead in leads if email_pilot.eligible(sys.modules[__name__], db, lead, email_mode)]
     result = {"queued": 0, "sent": 0, "failed": 0, "eligible": len(leads), "active_sequences": len(sequences), "dry_run": dry_run, "outbound_enabled": outbound_enabled()}
@@ -1952,6 +1979,9 @@ def run_automation_service(db: Session, identity: Identity, *, dry_run: bool = F
     if not dry_run and not gate:
         return {**result, "disabled": True}
     for lead in leads:
+        if email_mode == "production":
+            from .onboarding import record_enrollment
+            record_enrollment(sys.modules[__name__], db, lead)
         if stop_requested and stop_requested():
             result["stopping"] = True
             break
@@ -1960,7 +1990,7 @@ def run_automation_service(db: Session, identity: Identity, *, dry_run: bool = F
         if not matching:
             continue
         if email_mode != "legacy":
-            email_pilot.approved_template(db, matching, lifecycle_stage)
+            email_pilot.approved_template(db, matching, lifecycle_stage, email_mode)
         sent_count = db.scalar(select(func.count(Activity.id)).where(Activity.lead_id == lead.id, Activity.kind == "email_sent", Activity.actor != "resend", Activity.data["sequence_id"].as_string() == matching.id)) or 0
         steps = sequence_steps(matching)
         max_touches = max(1, int(matching.payload.get("max_touches") or len(steps)))
@@ -2004,8 +2034,12 @@ def run_automation_service(db: Session, identity: Identity, *, dry_run: bool = F
             else:
                 delivery = send_follow_up(lead, matching, sent_count, email_mode=email_mode,
                                           stop_requested=stop_requested)
-        except EmailBlocked:
+        except EmailBlocked as exc:
             release_unsent_claim(db, attempt)
+            result["skipped"] = result.get("skipped", 0) + 1
+            reasons = result.setdefault("blocked_reasons", {})
+            reason = str(exc.detail)
+            reasons[reason] = reasons.get(reason, 0) + 1
             continue
         except HTTPException:
             # Validation/eligibility exceptions in this function occur before
@@ -2055,7 +2089,8 @@ def run_automation_service(db: Session, identity: Identity, *, dry_run: bool = F
 
 @app.post("/api/marketing/automation/run")
 def run_automation(dry_run: bool = Query(False), lead_id: str | None = Query(None), identity: Identity = Depends(require_manager), db: Session = Depends(db_session)):
-    return run_automation_service(db, identity, dry_run=dry_run, lead_id=lead_id)
+    return run_automation_service(db, identity, dry_run=dry_run, lead_id=lead_id,
+                                  email_mode="production" if email_pilot.enabled("production") else "legacy")
 
 
 @app.post("/api/marketing/email-pilot/run")
@@ -2226,3 +2261,18 @@ def signalhouse_sms_webhook(body: dict, x_webhook_token: str | None = Header(def
 from . import organizer_journey
 import sys as _sys
 organizer_journey.install(_sys.modules[__name__])
+
+
+@app.on_event("startup")
+def start_onboarding_scheduler():
+    from .onboarding import OnboardingScheduler
+    import sys
+    app.state.onboarding_scheduler = OnboardingScheduler(sys.modules[__name__])
+    app.state.onboarding_scheduler.start()
+
+
+@app.on_event("shutdown")
+async def stop_onboarding_scheduler():
+    clock = getattr(app.state, "onboarding_scheduler", None)
+    if clock:
+        await asyncio.to_thread(clock.stop)

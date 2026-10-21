@@ -77,11 +77,17 @@ def utc(value):
 
 
 def enabled(mode):
-    name = {"pilot": "MARKETING_EMAIL_PILOT_ENABLED", "test": "MARKETING_EMAIL_TEST_ENABLED"}.get(mode)
+    name = {"pilot": "MARKETING_EMAIL_PILOT_ENABLED", "test": "MARKETING_EMAIL_TEST_ENABLED", "production": "MARKETING_ONBOARDING_ENABLED"}.get(mode)
     return bool(name and os.getenv(name, "false").lower() in {"true", "1", "yes"})
 
 
 def config(mode):
+    if mode == "production":
+        launch = utc(os.getenv("MARKETING_ONBOARDING_LAUNCH_AT", ""))
+        raw = os.getenv("MARKETING_ONBOARDING_LAUNCH_AT", "")
+        if not launch or not (raw.endswith("Z") or "+" in raw[10:] or "-" in raw[10:]):
+            raise EmailBlocked("Timezone-qualified onboarding launch required")
+        return None, launch
     try:
         accounts = json.loads(os.getenv("MARKETING_EMAIL_" + mode.upper() + "_ACCOUNTS", "[]"))
     except (ValueError, TypeError):
@@ -176,7 +182,7 @@ def stage_for(db, lead):
 
 def eligible(m, db, lead, mode, *, retention=False):
     accounts, launch = config(mode)
-    if not enabled(mode) or stopped(lead) or (not retention and stage_for(db,lead) not in {"registered", "event_created"}) or lead.festio_user_id not in accounts:
+    if not enabled(mode) or stopped(lead) or (not retention and stage_for(db,lead) not in {"registered", "event_created"}) or (accounts is not None and lead.festio_user_id not in accounts):
         return False
     proof = db.get(IdentityEvidence, lead.festio_user_id)
     if (not proof or proof.lead_id != lead.id
@@ -211,9 +217,9 @@ def template_fingerprint(sequence):
         raise EmailBlocked("Template cannot be pinned")
 
 
-def template_pins():
+def template_pins(mode="pilot"):
     try:
-        pins = json.loads(os.getenv("MARKETING_EMAIL_PILOT_TEMPLATES", "{}"))
+        pins = json.loads(os.getenv("MARKETING_ONBOARDING_TEMPLATES" if mode == "production" else "MARKETING_EMAIL_PILOT_TEMPLATES", "{}"))
     except (ValueError, TypeError):
         raise EmailBlocked("Approved template pins required")
     if not isinstance(pins, dict) or set(pins) != {"registered", "event_created"}:
@@ -228,7 +234,7 @@ def template_pins():
     return pins
 
 
-def approved_template(db, sequence, stage):
+def approved_template(db, sequence, stage, mode="pilot"):
     if sequence.payload.get("category") == "organizer_retention":
         try:
             pin = json.loads(os.getenv("MARKETING_ORGANIZER_RETENTION_TEMPLATE", "{}"))
@@ -238,7 +244,7 @@ def approved_template(db, sequence, stage):
         if not current or current.status != "active" or pin.get("id") != current.id or pin.get("sha256") != template_fingerprint(current) or template_fingerprint(sequence) != pin.get("sha256"):
             raise EmailBlocked("Retention template differs from its approved pin")
         return True
-    pin = template_pins().get(stage)
+    pin = template_pins(mode).get(stage)
     current = db.get(type(sequence), sequence.id, populate_existing=True)
     if (not pin or not current or current.id != pin["id"] or current.module != "sequences"
             or current.status != "active" or current.payload.get("stage") != stage
@@ -316,10 +322,10 @@ def reserve(m, lead, sequence, index, mode):
         else:
             raise EmailBlocked("Unsupported atomic email-cap database")
         if mode != "legacy":
-            accounts, launch = config("pilot")
-            cohort_key = key("cohort:", launch.isoformat())
-            approved_template(db, sequence, stage_for(db,current))
-            fingerprint = key("", json.dumps({"accounts": sorted(accounts), "templates": template_pins()}, sort_keys=True))
+            accounts, launch = config(mode if mode == "production" else "pilot")
+            cohort_key = key("onboarding:" if mode == "production" else "cohort:", launch.isoformat())
+            approved_template(db, sequence, stage_for(db,current), mode)
+            fingerprint = key("", json.dumps({"accounts": sorted(accounts) if accounts is not None else "future_verified_organizers", "templates": template_pins(mode)}, sort_keys=True))
             db.execute(insert(EmailCap).values(key=cohort_key, claim_id=fingerprint,
                        blocked_until=launch, uncertain=False).on_conflict_do_nothing(index_elements=["key"]))
             recorded = db.scalar(select(EmailCap.claim_id).where(EmailCap.key == cohort_key))
@@ -432,17 +438,20 @@ def send(m, lead, sequence, index=0, mode="legacy", stop_requested=None):
         raise EmailBlocked("Email pilot is stopping")
     if mode == "legacy":
         m.require_outbound_enabled()
-    elif mode not in {"pilot", "test"} or not enabled(mode):
+    elif mode not in {"pilot", "test", "production"} or not enabled(mode):
         raise EmailBlocked("Email-only gate is disabled")
     if mode != "legacy" and not os.getenv("RESEND_API_KEY"):
         raise EmailBlocked("Pilot requires the verified Resend delivery path; SMTP fallback is disabled")
+    if mode == "production":
+        from .onboarding import validate_account
+        validate_account(m, lead, sequence)
     recover_stale_claims(m)
     steps = m.sequence_steps(sequence)
     step = steps[min(index, len(steps) - 1)] if steps else {}
     m.safe_cta_url(step.get("cta_url") or sequence.payload.get("cta_url"))
     if mode != "legacy":
         with m.SessionLocal() as db:
-            approved_template(db, sequence, stage_for(db,lead))
+            approved_template(db, sequence, stage_for(db,lead), mode)
     readiness(m)
     if stop_requested and stop_requested():
         raise EmailBlocked("Email pilot is stopping")
@@ -457,7 +466,7 @@ def send(m, lead, sequence, index=0, mode="legacy", stop_requested=None):
                     or (mode != "legacy" and not eligible(m, db, current, mode, retention=sequence.payload.get("category") == "organizer_retention"))):
                 raise EmailBlocked("Eligibility changed before dispatch")
             if mode != "legacy":
-                approved_template(db, sequence, stage_for(db,current))
+                approved_template(db, sequence, stage_for(db,current), mode)
         if stop_requested and stop_requested():
             raise EmailBlocked("Email pilot is stopping")
         if sequence.payload.get("category") == "organizer_retention":
@@ -467,6 +476,10 @@ def send(m, lead, sequence, index=0, mode="legacy", stop_requested=None):
             from .journey_context import validate_current_event
             validate_current_event(m,lead)
         def pre_submit():
+            if mode == "production":
+                from .onboarding import validate_account
+                validate_account(m, lead, sequence)
+
             # Context/readiness HTTP is complete. Never submit an older ORM
             # snapshot after a concurrent unsubscribe, takeover or identity edit.
             if stop_requested and stop_requested():
@@ -486,7 +499,7 @@ def send(m, lead, sequence, index=0, mode="legacy", stop_requested=None):
                         or (mode!="legacy" and not eligible(m,fresh,current,mode,retention=sequence.payload.get("category")=="organizer_retention"))):
                     raise EmailBlocked("Eligibility changed during context lookup")
                 if mode!="legacy":
-                    approved_template(fresh,sequence,stage_for(fresh,current))
+                    approved_template(fresh,sequence,stage_for(fresh,current), mode)
         result = m._deliver_follow_up(lead, sequence, index, pre_submit=pre_submit)
     except HTTPException:
         finish(m, claim, "cancelled")

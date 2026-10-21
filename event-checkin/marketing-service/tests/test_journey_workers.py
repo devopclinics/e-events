@@ -500,9 +500,9 @@ class SimulatedProcessDeath(BaseException):
 
 
 @pytest.mark.parametrize("mode,personal,rsvp,expected",[
-    ("rsvp",False,True,"RSVP flow"),("rsvp",True,True,"attendee list"),
-    ("ticketed",False,False,"ticket products"),("hybrid",False,True,"RSVP flow"),
-    ("private",True,False,"attendee list"),("private",False,False,"selected operations"),
+    ("rsvp",False,True,"RSVP page"),("rsvp",True,True,"guest list"),
+    ("ticketed",False,False,"ticket options"),("hybrid",False,True,"RSVP page"),
+    ("private",True,False,"guest list"),("private",False,False,"outstanding setup tasks"),
 ])
 def test_mode_specific_guidance_continues_after_first_value(service,monkeypatch,mode,personal,rsvp,expected):
     m,_,_=service
@@ -517,7 +517,7 @@ def test_mode_specific_guidance_continues_after_first_value(service,monkeypatch,
         for milestone in ["guest_imported","invitation_delivered","rsvp_received","ticket_order_paid"]:
             db.add(journey.Evidence(id=milestone,fingerprint="synthetic",account_id="account",org_id="org",event_id="event",use_case="test",milestone=milestone,source_id=milestone,occurred_at=m.now().isoformat()))
         db.commit()
-    assert "selected operations" in journey_context.message_context(m,lead,sequence,0)["body"]
+    assert "outstanding setup tasks" in journey_context.message_context(m,lead,sequence,0)["body"]
 
 
 def test_email_provider_accepted_then_process_died_before_ledger_finish_is_not_retried(pilot,monkeypatch):

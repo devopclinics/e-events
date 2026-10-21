@@ -10,7 +10,7 @@ const require=createRequire(import.meta.url)
 function harness({online=false,path='/guest-services',saved={uid:'known-user',profile:{id:'cached-actor',role:'staff'}}}={}){
  let listener,context
  const storage=new Map(saved?[['festio:gs-offline-profile',JSON.stringify(saved)]]:[]),cleared=[]
- const modules={'../firebase':{auth:{}},'firebase/auth':{onAuthStateChanged:(_,fn)=>{listener=fn;return()=>{}},signOut:async()=>{}},'../lib/acquisitionAttribution.mjs':{acquisitionAttributionHeaders:()=>({})},'../lib/guestServiceOffline.mjs':{clearGuestServiceCaches:async id=>cleared.push(id)}}
+ const modules={'../lib/marketingConsent.mjs':{verifiedSignupConsent:()=>({}),clearSignupConsent:()=>{}},'../firebase':{auth:{}},'firebase/auth':{onAuthStateChanged:(_,fn)=>{listener=fn;return()=>{}},signOut:async()=>{}},'../lib/acquisitionAttribution.mjs':{acquisitionAttributionHeaders:()=>({})},'../lib/guestServiceOffline.mjs':{clearGuestServiceCaches:async id=>cleared.push(id)}}
  const module={exports:{}},code=transformSync(readFileSync(new URL('../src/context/AuthContext.jsx',import.meta.url),'utf8'),{loader:'jsx',jsx:'automatic',format:'cjs'}).code
  runInNewContext(code,{module,exports:module.exports,require:name=>modules[name]||require(name),navigator:{onLine:online},location:{pathname:path},window:{setTimeout:()=>1,clearTimeout(){}},sessionStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},localStorage:{getItem:()=>null},fetch:async()=>({ok:true,json:async()=>({id:'verified-actor',role:'staff'})}),JSON})
  const Probe=()=>{context=module.exports.useAuth();return React.createElement('span',null,context.user?.id||'signedout')}

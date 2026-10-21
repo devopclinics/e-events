@@ -632,13 +632,21 @@ function Dashboard({ data, run, message, navigate }) {
           </button>
           <footer>
             <span>
-              <i /> Automation checks every 15 min
+              <i /> Onboarding: {data?.automation?.runtime?.state || "Status unavailable"}
             </span>
             {message && <strong>{message}</strong>}
           </footer>
         </aside>
       </div>
       <section className="mk-automation-panel">
+        <div role="status" className="mk-automation-status">
+          <h3>Automatic client onboarding: {data?.automation?.runtime?.state || 'status unavailable'}</h3>
+          <p>{data?.automation?.runtime?.scheduler_running ? 'Worker running · checks every minute' : 'Automatic worker is not running'}</p>
+          {data?.automation?.runtime?.last_run?.checked_at && <p>Last check: {new Date(data.automation.runtime.last_run.checked_at).toLocaleString()}</p>}
+          {(data?.automation?.runtime?.blockers || []).map((reason) => <p key={reason}>{reason}</p>)}
+          <p>New-client conversion: {data?.automation?.runtime?.conversion?.first_event_created || 0} first events / {data?.automation?.runtime?.conversion?.enrolled || 0} enrolled clients ({data?.automation?.runtime?.conversion?.rate || 0}%). Based on recorded event-creation milestones.</p>
+          <p>“Active” templates are available for use. Messages require an eligible client, current consent and a running worker. Sent counts mean provider accepted; delivered counts come from delivery receipts.</p>
+        </div>
         <div className="mk-automation-panel-head">
           <div>
             <span>SEQUENCE AUTOMATION</span>

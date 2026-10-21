@@ -31,10 +31,11 @@ const modules = {
     }
   };`,
   firebase: `export const auth = {};`,
-  firebaseAuth: `const credential = () => ({ user: { getIdToken: async () => 'fixture-auth-token' } });
-    export async function createUserWithEmailAndPassword() { window.fixtureSignupProvider = 'password'; return credential(); }
-    export async function updateProfile() {}`,
-  google: `export async function googleSignIn() { window.fixtureSignupProvider = 'google'; return { user: { getIdToken: async () => 'fixture-auth-token' } }; }`,
+  firebaseAuth: `const credential = email => ({ user: { uid: 'fixture-password-user', email, emailVerified: false, getIdToken: async () => 'fixture-auth-token' } });
+    export async function createUserWithEmailAndPassword(auth, email) { window.fixtureSignupProvider = 'password'; return credential(email); }
+    export async function updateProfile() {}
+    export async function sendEmailVerification(user) { (window.fixtureVerificationCalls ||= []).push(user.uid); }`,
+  google: `export async function googleSignIn() { window.fixtureSignupProvider = 'google'; return { user: { uid: 'fixture-google-user', email: 'person@example.test', emailVerified: true, getIdToken: async () => 'fixture-auth-token' } }; }`,
   app: `export const setPreferredView = () => {}; export const getPreferredView = () => '/admin';`,
 }
 const aliases = {

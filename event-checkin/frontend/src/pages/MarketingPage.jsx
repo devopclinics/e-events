@@ -1,4 +1,4 @@
-import { leadAutomationStatus } from "../lib/marketingConsent.mjs";
+import { leadAutomationStatus, onboardingPreviewLeads } from "../lib/marketingConsent.mjs";
 import React, { Component, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api";
@@ -2986,7 +2986,7 @@ export default function MarketingPage() {
                 run={async () => {
                   try {
                     const leads = await api.marketingLeads('follow_up=due&consent=true');
-                    setAutomationQueue(leads);
+                    setAutomationQueue(onboardingPreviewLeads(leads, dash?.automation?.runtime));
                   } catch (error) {
                     setMessage(error.message);
                   }
@@ -3025,7 +3025,7 @@ export default function MarketingPage() {
               <div>
                 <span className="mk-drawer-eyebrow">AUTOMATION PREVIEW</span>
                 <h2>Ready to send</h2>
-                <p>{automationQueue.length === 0 ? 'No leads are due right now.' : `${automationQueue.length} lead${automationQueue.length !== 1 ? 's' : ''} will receive a follow-up email.`}</p>
+                <p>{automationQueue.length === 0 ? 'No leads are due right now.' : `${automationQueue.length} eligible candidate${automationQueue.length !== 1 ? 's' : ''}. Consent, current event state and message limits are checked again before sending.`}</p>
               </div>
               <button onClick={() => !automationRunning && setAutomationQueue(null)}>Close</button>
             </header>
@@ -3071,7 +3071,7 @@ export default function MarketingPage() {
                   setAutomationRunning(true);
                   try {
                     const r = await api.marketingRunAutomation();
-                    setMessage(`${r.queued} follow-up(s) queued`);
+                    setMessage(r.disabled ? "Automatic sending is disabled. Check the runtime status." : `${r.sent || 0} message(s) accepted by the provider; ${r.failed || 0} failed. Acceptance is separate from delivery.`);
                     setDash(await api.marketingDashboard());
                   } catch (error) {
                     setMessage(error.message);

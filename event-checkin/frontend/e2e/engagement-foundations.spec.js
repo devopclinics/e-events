@@ -255,6 +255,11 @@ for (const provider of ['password', 'google']) for (const optIn of [false, true]
     expect(requests.signup).toHaveLength(1)
     expect(JSON.parse(decodeURIComponent(requests.signup[0]['x-festio-attribution']))).toEqual({ consent_email: optIn })
     expect(await page.evaluate(() => window.fixtureSignupProvider)).toBe(provider)
+    expect(await page.evaluate(() => (window.fixtureVerificationCalls || []).length)).toBe(provider === 'password' ? 1 : 0)
+    if (provider === 'password') {
+      await expect(page.getByRole('status')).toContainText('We sent an email verification link')
+      expect(await page.evaluate(() => JSON.parse(localStorage.getItem('festio:signup-consent:fixture-password-user')).optedIn)).toBe(optIn)
+    } else expect(await page.evaluate(() => localStorage.getItem('festio:signup-consent:fixture-google-user'))).toBeNull()
   })
 }
 

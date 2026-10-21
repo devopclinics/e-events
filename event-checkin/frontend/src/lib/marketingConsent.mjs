@@ -49,3 +49,7 @@ export function verifiedSignupConsent(user, storage = globalThis.localStorage, n
 export function clearSignupConsent(uid, storage = globalThis.localStorage) {
   try { storage.removeItem(`festio:signup-consent:${uid}`) } catch {}
 }
+
+export function onboardingPreviewLeads(leads, runtime) {
+  return runtime?.enabled ? leads.filter(lead => lead.automation?.automatic_eligible === true) : leads
+}

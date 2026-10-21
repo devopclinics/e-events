@@ -62,7 +62,7 @@ def message_context(m, lead, sequence, index):
                         choice=("closeout","Review results, delivery and payment exceptions before recording event completion.","closeout","closeout")
                     elif event_day<=local_day<=end_day and current.get("manual_checkin_enabled") is True and "checkin_succeeded" not in milestones:
                         choice=("checkin_succeeded","Review check-in access and staff readiness before admitting real attendees.","operations","checkin")
-                date_note = " Your event date has passed; review closeout rather than inferring completion from the date." if local_day > end_day else " Check outstanding operations for your event day." if event_day<=local_day<=end_day else " Check the event date and timezone before scheduling the next task."
+                date_note = " Your event date has passed. Review results and finish any remaining closeout tasks." if local_day > end_day else " Check outstanding operations for your event day." if event_day<=local_day<=end_day else " Check the event date and timezone before scheduling the next task."
             except (ValueError, KeyError):
                 date_note = " Confirm the event timezone before scheduling guidance."
         steps_copy = sequence.payload.get("steps") or []

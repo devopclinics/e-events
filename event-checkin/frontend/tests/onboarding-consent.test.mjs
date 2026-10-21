@@ -18,3 +18,10 @@ test('expired or malformed local choices never grant consent', () => {
  s.setItem('festio:signup-consent:one','broken')
  assert.deepEqual(verifiedSignupConsent({uid:'one',email:'one@example.com',emailVerified:true},s,2000),{})
 })
+
+test('automatic preview excludes historical contacts and missing eligibility proof', async () => {
+ const {onboardingPreviewLeads}=await import('../src/lib/marketingConsent.mjs')
+ const leads=[{id:'old',automation:{automatic_eligible:false}},{id:'unknown'},{id:'eligible',automation:{automatic_eligible:true}}]
+ assert.deepEqual(onboardingPreviewLeads(leads,{enabled:true}).map(x=>x.id),['eligible'])
+ assert.equal(onboardingPreviewLeads(leads,{enabled:false}).length,3)
+})

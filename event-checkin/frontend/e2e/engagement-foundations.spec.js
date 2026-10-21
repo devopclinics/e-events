@@ -333,3 +333,28 @@ for (const width of [390, 1440]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   })
 }
+
+for (const width of [390, 1440]) test(`Marketing grouped navigation and shared themes at ${width}px`, async ({ page }) => {
+  await setup(page)
+  await page.setViewportSize({ width, height: 1000 })
+  await navigate(page, 'Marketing')
+  await expect(page.getByRole('heading', { name: 'Automatic client onboarding: running', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Switch to dark theme', exact: true })).toBeVisible()
+  if (width === 390) {
+    await page.getByRole('button', { name: 'Menu', exact: true }).click()
+    await expect(page.getByRole('navigation', { name: 'Marketing workspace navigation' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#marketing-navigation')).not.toBeVisible()
+  }
+  await page.getByRole('button', { name: 'Switch to dark theme', exact: true }).click()
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.getByRole('button', { name: 'Review email journey', exact: true }).click()
+  await expect(page).toHaveURL(/tab=sequences/)
+  await page.getByRole('button', { name: 'Open studio →', exact: true }).click()
+  await expect(page.locator('.mk-sequence-studio')).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await page.goBack()
+  await expect(page.getByRole('heading', { name: 'Automatic client onboarding: running', exact: true })).toBeVisible()
+})

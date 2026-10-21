@@ -13,6 +13,9 @@ const modules = {
     }
     export const useAuth = () => useContext(Auth);`,
   api: `export const api = {
+    marketingModule: async () => [{ id: 'sequence-one', name: 'Sample welcome sequence', status: 'draft', payload: { stage: 'registered', steps: [{ subject: 'Welcome to Festio', body: 'Create your first event.', cta: 'Create event', cta_url: 'https://festio.events/setup-redesign' }] } }],
+    marketingMe: async () => ({ name: 'Sample marketing operator', email: 'example@example.test', role: 'manager' }),
+    marketingDashboard: async () => ({ total_leads: 24, conversion: { registered: 24, event_created: 8, paid: 0 }, automation: { runtime: { state: 'running', scheduler_running: true, blockers: [], conversion: { enrolled: 24, first_event_created: 8, rate: 33 }, last_run: { checked_at: '2026-10-21T14:00:00Z' } }, sequences: [] }, stages: {} }),
     listEvents: async () => [{ id: 'event-one', name: 'Sample event', org_id: 'org-one', event_date: '2026-11-11T08:00:00', timezone: 'Africa/Lagos', is_paid: true }],
     getEventDesign: async () => ({ is_published: true, published_version: 2, published_snapshot: {} }),
     website: async () => ({ published_release_id: 'release-one', published_version: 3, public_url: 'https://festio.events/site/sample', draft_is_newer: true }),

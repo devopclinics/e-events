@@ -10,7 +10,7 @@ export default function MarketingEmailConsent({ checked, onChange, disabled = fa
         className="mt-1 h-4 w-4 shrink-0 accent-teal-600"
         style={{ width: 16, height: 16 }}
       />
-      <span>Email me Festio product news and offers (optional). I can unsubscribe at any time. This choice does not affect account or demo-request service messages.</span>
+      <span>Email me Festio welcome and event-setup tips, product news and offers (optional). I can unsubscribe at any time. Essential account and requested service messages are separate.</span>
     </label>
   )
 }

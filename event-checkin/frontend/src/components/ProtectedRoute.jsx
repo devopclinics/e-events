@@ -1,5 +1,5 @@
 import { useContext, useEffect, useRef, useState } from 'react'
-import { Navigate, useLocation, useNavigate, UNSAFE_LocationContext, UNSAFE_RouteContext, UNSAFE_NavigationContext } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate, UNSAFE_LocationContext, UNSAFE_RouteContext, UNSAFE_NavigationContext } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
@@ -10,6 +10,10 @@ const Spinner = () => (
     <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
   </div>
 )
+
+function AccessNotice({ title, children, upgrade = false }) {
+  return <main className="max-w-xl mx-auto p-8" role="region" aria-label="Access information"><h1 className="text-2xl font-bold">{title}</h1><p className="my-4">{children}</p><nav className="flex flex-wrap gap-4" aria-label="Available next steps"><Link to="/events-redesign">Choose an event</Link><Link to="/scanner-redesign">Open scanner</Link><Link to="/help-redesign">Get help</Link>{upgrade && <Link to="/pricing">View plans</Link>}</nav></main>
+}
 
 export default function ProtectedRoute({
   children,
@@ -84,11 +88,12 @@ export default function ProtectedRoute({
     const search=params.toString()
     return location.pathname+(search?'?'+search:'')+(location.hash||'')
   }
-  // paidOnly: the route is a paid perk (Design Studio, Help) — allowed when the
+  // paidOnly: the route is a paid product tool (for example Design Studio), allowed when the
   // selected event is paid (mirrors the nav's canUseDesignStudio flag), or the
   // user is a platform superadmin.
   const paidKey=(user?.id||'')+':'+currentEventId
   const [paidState, setPaidState] = useState({key:null,status:'checking'})
+  const [paidRetry, setPaidRetry] = useState(0)
 
   useEffect(() => {
     if (!paidOnly || !user) return
@@ -99,9 +104,9 @@ export default function ProtectedRoute({
     if (!currentEventId) { finish('denied'); return }
     api.listEvents()
       .then((evs) => finish(evs.find((e) => e.id === currentEventId)?.is_paid ? 'ok' : 'denied'))
-      .catch(() => finish('denied'))
+      .catch(() => finish('error'))
     return()=>{alive=false}
-  }, [paidOnly, user, currentEventId,paidKey])
+  }, [paidOnly, user, currentEventId,paidKey,paidRetry])
 
   const ready=!loading&&user&&!eventQuery.conflict&&(!requestedEvent||(
     eventReturn.key===returnKey&&eventReturn.status==='verified'&&currentEventId===requestedEvent))&&
@@ -141,12 +146,13 @@ export default function ProtectedRoute({
       return <div role="alert">Review the pending event change before opening this link. <a href={eventLocation(null)}>Keep the current event</a></div>
     }
   }
-  if (platformSuperadminOnly && !user.is_platform_superadmin) return <Navigate to="/admin" replace />
-  if (adminOnly && user.role !== 'admin') return <Navigate to="/scanner" replace />
-  if (setupOnly && !['admin', 'event_manager'].includes(user.role)) return <Navigate to="/scanner" replace />
+  if (platformSuperadminOnly && !user.is_platform_superadmin) return <AccessNotice title="Platform administration access required">This page is for authorised platform administrators. Contact your administrator if you need access.</AccessNotice>
+  if (adminOnly && user.role !== 'admin') return <AccessNotice title="Organiser access required">Your current role cannot edit this page. Ask your organisation administrator for the appropriate access.</AccessNotice>
+  if (setupOnly && !['admin', 'event_manager'].includes(user.role)) return <AccessNotice title="Event setup access required">Your current role is for assigned event operations. Ask your administrator if you need setup access.</AccessNotice>
   if (paidOnly) {
     if (paidState.key!==paidKey||paidState.status==='checking') return <Spinner />
-    if (paidState.status==='denied') return <Navigate to="/admin" replace />
+    if (paidState.status==='error') return <main className="max-w-xl mx-auto p-8"><h1>Event access could not be verified</h1><p>Check your connection and retry. This does not mean you need to buy another pass.</p><button type="button" onClick={() => setPaidRetry(v => v + 1)}>Retry access check</button><Link to="/help-redesign">Get help</Link></main>
+    if (paidState.status==='denied') return <AccessNotice title="An active Event Pass is required" upgrade>Select the correct event and check its Event Pass. If access was recently purchased, retry after the payment is confirmed.</AccessNotice>
   }
 
   return workspace({children,locationContext,routeContext})

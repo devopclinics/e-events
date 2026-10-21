@@ -303,3 +303,33 @@ test('chat fits a narrow mobile viewport', async ({ page }) => {
   expect(panel.x + panel.width).toBeLessThanOrEqual(375)
   expect(panel.y + panel.height).toBeLessThanOrEqual(667)
 })
+
+for (const width of [390, 1440]) {
+  test(`password recovery is readable at ${width}px without disclosing account existence`, async ({ page }) => {
+    await setup(page)
+    await page.setViewportSize({ width, height: 950 })
+    await navigate(page, 'Login')
+    await page.getByRole('button', { name: 'Forgot password?' }).click()
+    await page.getByLabel('Email', { exact: true }).fill('person@example.test')
+    await page.getByRole('button', { name: 'Send reset link', exact: true }).click()
+    await expect(page.getByRole('status')).toContainText('If this address has an email/password account')
+    expect(await page.evaluate(() => window.fixturePasswordResetCalls)).toEqual(['person@example.test'])
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.getByRole('button', { name: 'Back to sign in' }).click()
+    await expect(page.getByLabel('Password', { exact: true })).toBeVisible()
+  })
+  test(`guest overview separates publication states and organisation scope at ${width}px`, async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('eq.currentEventId', 'event-one'))
+    await setup(page)
+    await page.setViewportSize({ width, height: 950 })
+    await page.evaluate(() => window.fixtureSetUser({ id: 'organizer-1', name: 'Organiser', role: 'admin' }))
+    await navigate(page, 'Guest overview')
+    await expect(page.getByRole('heading', { name: 'Guest experience overview', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Personal GuestHub' })).toBeVisible()
+    await expect(page.getByText('Published version 3 · draft or source changes need review')).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await navigate(page, 'Organisation')
+    await expect(page.getByRole('heading', { name: 'Integrations & subscription' })).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  })
+}

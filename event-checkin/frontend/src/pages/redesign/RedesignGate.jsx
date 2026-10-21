@@ -1,3 +1,4 @@
+import { legacyDestination } from './legacyDestination.mjs'
 import { useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
@@ -35,6 +36,7 @@ export default function RedesignGate({ redesignRoute, children }) {
   const { user, loading } = useAuth()
   const location = useLocation()
   const requestedPreference = preferenceFromSearch(location.search)
+  const target = legacyDestination(redesignRoute, location.search, location.hash)
   const [uiPreference] = useState(() => {
     if (requestedPreference) {
       setUiPreference(requestedPreference)
@@ -64,7 +66,7 @@ export default function RedesignGate({ redesignRoute, children }) {
   }
 
   if (!user?.is_platform_superadmin) {
-    return <Navigate to={redesignRoute} replace />
+    return <Navigate to={target} replace />
   }
 
   // Superadmin from here on — explicit legacy preference wins.
@@ -73,5 +75,5 @@ export default function RedesignGate({ redesignRoute, children }) {
     return children
   }
 
-  return <Navigate to={redesignRoute} replace />
+  return <Navigate to={target} replace />
 }

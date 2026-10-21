@@ -1,3 +1,4 @@
+import WorkspaceContext from './WorkspaceContext'
 import {guideHref,readGuideResume,SETUP_STAGES} from '../guideNavigation.mjs'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
@@ -311,9 +312,9 @@ export function Icon({ name, size = 18, className }) {
 
 // Preserve destination-level visibility rules before grouping navigation.
 const TOP_LINKS = [
-  { id: 'setup', label: 'Event Setup', to: '/admin-redesign', icon: 'calendar' },
+  { id: 'setup', label: 'Event overview', to: '/admin-redesign', icon: 'calendar' },
   {
-    id: 'guide', label: 'Setup Guide', to: '/setup-redesign?view=guide', icon: 'grid',
+    id: 'guide', label: 'Setup checklist', to: '/setup-redesign?view=guide', icon: 'grid',
     gate: ({ user }) => ['admin', 'event_manager'].includes(user?.role),
   },
   { id: 'events', label: 'Events', to: '/events-redesign', icon: 'calendar' },
@@ -321,6 +322,7 @@ const TOP_LINKS = [
     id: 'design', label: 'Design Studio', to: '/design-studio-redesign', icon: 'palette',
     gate: ({ user, event }) => user?.role === 'admin',
   },
+  { id: 'guestoverview', label: 'Guest experience overview', to: '/guest-experience', icon: 'eye', gate: ({ user }) => user?.role === 'admin' },
   { id: 'guesthub', label: 'GuestHub', to: '/design-studio-redesign?surface=hub', icon: 'eye', gate: ({ user }) => user?.role === 'admin' },
   { id: 'website', label: 'Event website', to: '/design-studio-redesign/website', icon: 'external', gate: ({ user }) => user?.role === 'admin' },
   { id: 'live', label: 'Festio Live', to: '/live-redesign', icon: 'mic', gate: ({ user, event }) => ['admin', 'event_manager'].includes(user?.role) || !!event?.engagement_enabled },
@@ -337,7 +339,7 @@ const TOP_LINKS = [
   { id: 'guestservices', label: 'Guest Services', to: '/guest-services', icon: 'users' },
   { id: 'mytasks', label: 'My Tasks', to: '/team-redesign?tab=mytasks', icon: 'file' },
   {
-    id: 'org', label: 'Org Settings', to: '/billing-redesign?tab=org', icon: 'settings',
+    id: 'org', label: 'Organisation', to: '/organisation', icon: 'settings',
     gate: ({ user }) => user?.role === 'admin',
   },
   {
@@ -347,27 +349,27 @@ const TOP_LINKS = [
   { id: 'checkin', label: 'Check-in', to: '/scanner-redesign', icon: 'ticket' },
   { id: 'academy', label: 'Academy', to: '/training', icon: 'book' },
   {
-    id: 'orders', label: 'Meals & orders', to: '/kitchen-redesign', icon: 'card',
+    id: 'orders', label: 'Kitchen orders', to: '/kitchen-redesign', icon: 'card',
     gate: ({ user }) => ['admin', 'event_manager'].includes(user?.role),
   },
   {
-    id: 'console', label: 'Console', to: '/superadmin-redesign?tab=console', icon: 'shield',
+    id: 'console', label: 'Platform admin', to: '/superadmin-redesign?tab=console', icon: 'shield',
     gate: ({ user }) => !!user?.is_platform_superadmin,
   },
   {
-    id: 'media', label: 'Media', to: '/media-redesign', icon: 'file',
+    id: 'media', label: 'Platform media', to: '/media-redesign', icon: 'file',
     gate: ({ user }) => !!user?.is_platform_superadmin,
   },
   {
     id: 'help', label: 'Help', to: '/help-redesign', icon: 'help',
-    gate: ({ user, event }) => user?.role !== 'event_manager' && (!!event?.is_paid || !!user?.is_platform_superadmin),
+    gate: ({ user }) => !!user,
   },
 ]
 
 const SIDEBAR_NAV = [
   ['grp', 'Setup Progress'],
-  ['calendar', 'Start here', '/admin-redesign', 'overview'],
-  ['grid', 'Setup Guide', '/setup-redesign?view=guide', 'guide', null, 'setupGuide'],
+  ['calendar', 'Event overview', '/admin-redesign', 'overview'],
+  ['grid', 'Setup checklist', '/setup-redesign?view=guide', 'guide', null, 'setupGuide'],
   ['users', 'Guests', '/guests-redesign?tab=guests', 'guests'],
   ['send', 'Invites & RSVP', '/guests-redesign?tab=invite', 'invite'],
   ['message', 'Guest inbox', '/communications-redesign?tab=hub', 'communication'],
@@ -379,7 +381,7 @@ const SIDEBAR_NAV = [
   ['grp', 'Add-ons', null, null, null, 'anyAddon'],
   ['ticket', 'Venue Access', '/checkin-redesign?tab=zones', 'access', null, 'venueAccess'],
   ['chair', 'Seating', '/addons-redesign?tab=seating', 'seating', null, 'seating'],
-  ['card', 'Meals & orders', '/kitchen-redesign', 'menu', null, 'orders'],
+  ['card', 'Kitchen orders', '/kitchen-redesign', 'menu', null, 'orders'],
   ['upload', 'Deliveries', '/addons-redesign?tab=logistics', 'logistics', null, 'logistics'],
   ['image', 'Gift list', '/addons-redesign?tab=registry', 'registry', null, 'registry'],
   ['users', 'Speakers', '/addons-redesign?tab=speakers', 'speakers', null, 'speakers'],
@@ -618,8 +620,8 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
                   <span className="rr-topbar-avatar">{user.name?.[0]?.toUpperCase() || '?'}</span>
                   <Icon name="chevrondown" size={12} />
                 </summary>
-                <nav className="rr-account-panel" aria-label="Organisation and account links">
-                  {navigation.accountLinks.map(link => <Link key={link.id} to={destination(link)} aria-current={navigation.activeId === link.id ? 'page' : undefined}><Icon name={link.icon} size={15} />{link.id === 'org' ? 'Organisation settings' : link.label}</Link>)}
+                <nav className="rr-account-panel" aria-label="Organisation and account links"><strong style={{padding:12,fontSize:12}}>Organisation, learning & platform tools</strong>
+                  {navigation.accountLinks.map(link => <Link key={link.id} to={destination(link)} aria-current={navigation.activeId === link.id ? 'page' : undefined}><Icon name={link.icon} size={15} />{link.id === 'org' ? 'Organisation' : link.label}</Link>)}
                   <button type="button" onClick={logout}><Icon name="external" size={15} />Sign out</button>
                 </nav>
               </details>
@@ -670,6 +672,7 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
 
         <main className={`rr-main ${withEventSidebar ? '' : 'rr-main-wide'}`}>
           {resume?.task && location.pathname!=='/setup-redesign' && <Link className="guide-return" to={setupHref} style={{display:'block',padding:12,marginBottom:12}}>← Return to {SETUP_STAGES.find(([id])=>id===resume.view)?.[1] || 'Setup Guide'}</Link>}
+          <WorkspaceContext pathname={location.pathname} search={location.search} eventName={event?.name} role={user?.role} />
           <RedesignRouteBoundary onError={handleRouteError}>
             {children}
           </RedesignRouteBoundary>

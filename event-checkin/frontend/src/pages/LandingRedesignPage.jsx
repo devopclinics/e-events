@@ -425,10 +425,10 @@ export default function LandingRedesignPage() {
 
       <div className="lr-strip">
         <div className="lr-shell lr-strip-grid">
-          <div><strong>50K+</strong><span>guest experiences run</span></div>
-          <div><strong>99.9%</strong><span>pass scan reliability</span></div>
-          <div><strong>&lt;3s</strong><span>average check-in time</span></div>
-          <div><strong>25</strong><span>guest hub styles to choose from</span></div>
+          <div><strong>One guest list</strong><span>from invitation to arrival</span></div>
+          <div><strong>QR admission</strong><span>with recorded check-in outcomes</span></div>
+          <div><strong>Connected teams</strong><span>shared event-day information</span></div>
+          <div><strong>Your event style</strong><span>customisable guest experiences</span></div>
         </div>
       </div>
 

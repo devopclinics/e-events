@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
-import { signInWithEmailAndPassword } from 'firebase/auth'
+import { sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth'
 import { auth } from '../firebase'
 import { googleSignIn } from '../auth/googleSignIn'
 import { oidcSignIn } from '../auth/oidcSignIn'
@@ -15,7 +15,7 @@ import { useCurrentEvent } from '../hooks/useCurrentEvent'
 function ViewPicker({ role, onPick }) {
   const views = [
     ...(role === 'admin' ? [{ key: 'setup', icon: 'NEW', label: 'Create event', desc: 'Create a draft event and get a plan recommendation' }] : []),
-    ...(role === 'admin' ? [{ key: 'admin',     icon: 'SET', label: 'Event Setup',  desc: 'Create events, import guests, and send invitations' }] : []),
+    ...(role === 'admin' ? [{ key: 'admin',     icon: 'SET', label: 'Event overview',  desc: 'Create events, import guests, and send invitations' }] : []),
     { key: 'dashboard', icon: 'RES', label: 'Results',    desc: 'RSVP progress, check-ins, and attendance' },
     { key: 'scanner',   icon: 'QR', label: 'Check-in',   desc: 'Scan guest QR codes at the entrance' },
   ]
@@ -55,6 +55,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [pickerRole, setPickerRole] = useState(null)
+  const [recovering, setRecovering] = useState(false)
+  const [recoveryNotice, setRecoveryNotice] = useState('')
 
   useEffect(() => {
     let cancelled=false
@@ -88,7 +90,9 @@ export default function LoginPage() {
 
   function afterSignIn(role) {
     if (requestedReturn) return // Authenticated effect validates tenant access first.
-    if (!localStorage.getItem('preferredView')) {
+    let preferred = null
+    try { preferred = localStorage.getItem('preferredView') } catch { /* Sign-in works without browser storage. */ }
+    if (!preferred) {
       setPickerRole(role)
     } else {
       navigate(getPreferredView(role), { replace: true })
@@ -97,6 +101,17 @@ export default function LoginPage() {
 
   async function submit(e) {
     e.preventDefault()
+    if (recovering) {
+      setLoading(true); setError(''); setRecoveryNotice('')
+      try {
+        await sendPasswordResetEmail(auth, form.email.trim())
+        setRecoveryNotice('If this address has an email/password account, you will receive a password reset link. Check your inbox and spam folder. If you normally use Google or SSO, continue with that sign-in method.')
+      } catch (err) {
+        if (['auth/user-not-found', 'auth/invalid-credential'].includes(err.code)) setRecoveryNotice('If this address has an email/password account, you will receive a password reset link. Check your inbox and spam folder.')
+        else setError(err.code === 'auth/too-many-requests' ? 'Too many requests. Please try again later.' : 'The reset request could not be completed. Check your connection and email address, then try again.')
+      } finally { setLoading(false) }
+      return
+    }
     setLoading(true); setError('')
     try {
       const cred = await signInWithEmailAndPassword(auth, form.email, form.password)
@@ -161,7 +176,7 @@ export default function LoginPage() {
             F
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Festio</h1>
-          <p className="text-gray-500 dark:text-slate-400 text-sm mt-1">Sign in to your account</p>
+          <p className="text-gray-500 dark:text-slate-400 text-sm mt-1">{recovering ? 'Reset your password' : 'Sign in to your account'}</p>
         </div>
 
         <button onClick={signInWithGoogle} disabled={loading}
@@ -194,15 +209,17 @@ export default function LoginPage() {
             <label htmlFor="login-email" className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Email</label>
             <input id="login-email" className={field} type="email" value={form.email} onChange={set('email')} required autoComplete="email" />
           </div>
-          <div>
+          {!recovering && <div>
             <label htmlFor="login-password" className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Password</label>
             <input id="login-password" className={field} type="password" value={form.password} onChange={set('password')} required autoComplete="current-password" />
-          </div>
+          </div>}
           {error && <p className="text-red-600 text-sm">{error}</p>}
           <button type="submit" disabled={loading}
             className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-            {loading ? 'Signing in…' : 'Sign In'}
+            {loading ? (recovering ? 'Requesting reset…' : 'Signing in…') : (recovering ? 'Send reset link' : 'Sign In')}
           </button>
+          {recoveryNotice && <p role="status" className="text-sm text-teal-800 dark:text-teal-200">{recoveryNotice}</p>}
+          <button type="button" disabled={loading} className="text-sm text-indigo-600 dark:text-indigo-300 underline" onClick={() => { setRecovering(v => !v); setError(''); setRecoveryNotice(''); setForm(v => ({ ...v, password: '' })) }}>{recovering ? 'Back to sign in' : 'Forgot password?'}</button>
         </form>
 
         <p className="text-center text-sm text-gray-500 dark:text-slate-400 mt-6">

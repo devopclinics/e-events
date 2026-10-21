@@ -13,6 +13,9 @@ const modules = {
     }
     export const useAuth = () => useContext(Auth);`,
   api: `export const api = {
+    listEvents: async () => [{ id: 'event-one', name: 'Sample event', org_id: 'org-one', event_date: '2026-11-11T08:00:00', timezone: 'Africa/Lagos', is_paid: true }],
+    getEventDesign: async () => ({ is_published: true, published_version: 2, published_snapshot: {} }),
+    website: async () => ({ published_release_id: 'release-one', published_version: 3, public_url: 'https://festio.events/site/sample', draft_is_newer: true }),
     platformSettings: async () => {
       window.fixtureSettingsCalls = (window.fixtureSettingsCalls || 0) + 1;
       if (window.fixtureDeferSettings) return new Promise(resolve => window.fixtureResolveSettings = resolve);
@@ -30,17 +33,20 @@ const modules = {
       return { ok: true, status: 'requested', request_id: 'local-test-request' };
     }
   };`,
-  firebase: `export const auth = {};`,
+  firebase: `export const auth = {}; export const oidcProvider = null; export const oidcProviderLabel = 'SSO';`,
   firebaseAuth: `const credential = email => ({ user: { uid: 'fixture-password-user', email, emailVerified: false, getIdToken: async () => 'fixture-auth-token' } });
     export async function createUserWithEmailAndPassword(auth, email) { window.fixtureSignupProvider = 'password'; return credential(email); }
+    export async function signInWithEmailAndPassword(auth, email) { return credential(email); }
+    export async function sendPasswordResetEmail(auth, email) { (window.fixturePasswordResetCalls ||= []).push(email); if (window.fixtureResetFailure) throw { code: window.fixtureResetFailure }; }
     export async function updateProfile() {}
     export async function sendEmailVerification(user) { (window.fixtureVerificationCalls ||= []).push(user.uid); }`,
   google: `export async function googleSignIn() { window.fixtureSignupProvider = 'google'; return { user: { uid: 'fixture-google-user', email: 'person@example.test', emailVerified: true, getIdToken: async () => 'fixture-auth-token' } }; }`,
+  oidc: `export async function oidcSignIn() { throw new Error('SSO is not used in this local fixture'); }`,
   app: `export const setPreferredView = () => {}; export const getPreferredView = () => '/admin';`,
 }
 const aliases = {
-  '../context/AuthContext': 'auth', '../api': 'api', '../firebase': 'firebase',
-  'firebase/auth': 'firebaseAuth', '../auth/googleSignIn': 'google', '../App': 'app',
+  '../context/AuthContext': 'auth', '../../context/AuthContext': 'auth', '../api': 'api', '../../api': 'api', '../firebase': 'firebase',
+  'firebase/auth': 'firebaseAuth', '../auth/googleSignIn': 'google', '../auth/oidcSignIn': 'oidc', '../App': 'app',
 }
 const definitions = {
   VITE_CHATWOOT_BASE_URL: 'https://support.chat.test',
@@ -84,7 +90,7 @@ await server.listen()
 
 // Smoke-check the fixture's transformed module graph without a browser.
 if (process.argv.includes('--check')) {
-  for (const url of ['/e2e/fixtures/engagement.jsx', '/src/components/SupportWidget.jsx', '/src/pages/RegisterPage.jsx', '/src/pages/LandingPage.jsx', '/src/pages/LandingRedesignPage.jsx']) {
+  for (const url of ['/e2e/fixtures/engagement.jsx', '/src/components/SupportWidget.jsx', '/src/pages/RegisterPage.jsx', '/src/pages/LoginPage.jsx', '/src/pages/GuestExperienceOverview.jsx', '/src/pages/LandingPage.jsx', '/src/pages/LandingRedesignPage.jsx']) {
     const transformed = await server.transformRequest(url)
     if (!transformed?.code) throw new Error(`No transformed fixture code: ${url}`)
   }

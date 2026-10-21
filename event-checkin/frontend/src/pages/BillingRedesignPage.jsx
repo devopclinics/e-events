@@ -17,8 +17,8 @@ const WEBHOOK_EVENT_TYPES = [
 function TabsStrip({ tab, goTab }) {
   return (
     <div className="rr-tabs">
-      <button className={tab === 'billing' ? 'active' : ''} onClick={() => goTab('billing')}>Billing</button>
-      <button className={tab === 'org' ? 'active' : ''} onClick={() => goTab('org')}>Org Settings</button>
+      <button className={tab === 'billing' ? 'active' : ''} onClick={() => goTab('billing')}>Event access & messaging</button>
+      <button className={tab === 'org' ? 'active' : ''} onClick={() => goTab('org')}>Organisation settings</button>
     </div>
   )
 }
@@ -822,7 +822,7 @@ function OrgTab({ notify, eventId }) {
         <div className="rr-panel bl-org-toolbar">
           <div><strong>Organization settings</strong><span>People, integrations, billing, and shared resources</span></div>
           <nav aria-label="Organization settings sections">
-            <a href="#org-team">Team</a><a href="#org-api">API</a><a href="#org-subscription">Plan</a><a href="#org-referral">Referrals</a><a href="#org-webhooks">Webhooks</a><a href="#org-collections">Collections</a>
+            <a href="#org-team">Team</a><a href="#org-api">API</a><a href="#org-subscription">Integration subscription</a><a href="#org-referral">Referrals</a><a href="#org-webhooks">Webhooks</a><a href="#org-collections">Collections</a>
           </nav>
         </div>
       </div>
@@ -977,7 +977,7 @@ function OrgTab({ notify, eventId }) {
 
       <div className="rr-panel bl-org-section bl-org-subscription" id="org-subscription">
         <div className="rd-panel-head bl-panel-head-row">
-          <div><h3><Icon name="card" size={14} /> Subscription</h3><p>Unlocks read-write API keys for this organization</p></div>
+          <div><h3><Icon name="card" size={14} /> Integration subscription</h3><p>Recurring organisation subscription for read-write API access. Separate from Event Passes and messaging credits.</p></div>
         </div>
         <div className="rd-panel-body">
           {subscriptionError && <p className="rp-field-error">{subscriptionError}</p>}
@@ -1204,12 +1204,13 @@ export default function BillingRedesignPage() {
       <RedesignShell topActive="org" withEventSidebar={false} eventActive={null}>
         <div className="rr-pagehead">
           <div>
-            <div className="rr-title-row"><h1><Icon name="settings" size={20} /> Org Settings</h1></div>
+            <div className="rr-title-row"><h1><Icon name="settings" size={20} /> Organisation settings</h1></div>
             <div className="rr-meta"><Icon name="calendar" size={13} /> {orgIdentity?.org_name || 'Your organization'}{orgIdentity?.plan && <><span className="rr-dot">·</span> {orgIdentity.plan}</>}</div>
           </div>
         </div>
 
         <TabsStrip tab={tab} goTab={goTab} />
+        <nav className="rr-tabs" aria-label="Billing destinations"><a href="/billing-redesign?tab=billing">Event Pass & messaging wallet</a><a href="/billing-redesign?tab=org#org-team">Organisation team</a><a href="/billing-redesign?tab=org#org-subscription">Integration subscription</a></nav>
         <OrgTab notify={notify} eventId={eventId} />
 
         {toast && <div className="rd-toast"><Icon name="check" />{toast}</div>}
@@ -1222,12 +1223,13 @@ export default function BillingRedesignPage() {
     <RedesignShell topActive="setup" withEventSidebar eventActive="billing">
       <div className="rr-pagehead">
         <div>
-          <div className="rr-title-row"><h1>Billing</h1></div>
+          <div className="rr-title-row"><h1>Event access & messaging</h1></div>
           <div className="rr-meta"><Icon name="card" size={13} /> Event Passes, hosted checkout, and message credits</div>
         </div>
       </div>
 
       <TabsStrip tab={tab} goTab={goTab} />
+        <nav className="rr-tabs" aria-label="Billing destinations"><a href="/billing-redesign?tab=billing">Event Pass & messaging wallet</a><a href="/billing-redesign?tab=org#org-team">Organisation team</a><a href="/billing-redesign?tab=org#org-subscription">Integration subscription</a></nav>
       <BillingTab notify={notify} eventId={eventId} onBuyPass={(plan) => openCheckout('pass', plan)} onBuyCredits={(plan) => openCheckout('credits', plan)} onBuyAddon={(plan) => openCheckout('addon', plan)} />
 
       {toast && <div className="rd-toast"><Icon name="check" />{toast}</div>}

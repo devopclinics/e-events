@@ -12,9 +12,10 @@ const copy = value => JSON.parse(JSON.stringify(value))
 
 export function createAcquisitionHarness({
   href = 'https://festio.example.test/register', referrer = '', stored,
-  storageUnavailable = false, order = 'listener-first', readSource = readFileSync,
+  storageUnavailable = false, order = 'listener-first', readSource = readFileSync, resetError = null,
 } = {}) {
   const requests = []
+  const passwordResets = []
   const values = new Map(stored === undefined ? [] : [['festioMarketingAttribution', typeof stored === 'string' ? stored : JSON.stringify(stored)]])
   const storage = {
     getItem(key) { if (storageUnavailable) throw new Error('Storage blocked'); return values.get(key) ?? null },
@@ -52,6 +53,7 @@ export function createAcquisitionHarness({
     return { user: firebaseUser }
   }
   const firebaseAuth = {
+    async sendPasswordResetEmail(_, email) { passwordResets.push(email); if (resetError) throw { code: resetError } },
     onAuthStateChanged(_, callback) { listener = callback; return () => { listener = undefined } },
     createUserWithEmailAndPassword: credential, signInWithEmailAndPassword: credential,
     updateProfile: async () => {}, signOut: async () => {},
@@ -112,7 +114,17 @@ export function createAcquisitionHarness({
   render(load(resolve(sourceRoot, 'context/AuthContext.jsx')).AuthProvider)
 
   return {
-    requests, storage, hostWindow, emitUser,
+    requests, storage, hostWindow, emitUser, passwordResets,
+    async recoverPassword(email) {
+      const Page = load(resolve(sourceRoot, 'pages/LoginPage.jsx')).default
+      let tree = render(Page)
+      find(tree, node => node.type === 'button' && node.props?.children === 'Forgot password?').props.onClick()
+      tree = render(Page)
+      find(tree, node => node.props?.id === 'login-email').props.onChange({ target: { value: email } })
+      tree = render(Page)
+      await find(tree, node => node.type === 'form').props.onSubmit({ preventDefault() {} })
+      return render(Page)
+    },
     load: relative => load(resolve(sourceRoot, relative)),
     async signup(provider = 'password', optIn = false) {
       const Page = load(resolve(sourceRoot, 'pages/RegisterPage.jsx')).default

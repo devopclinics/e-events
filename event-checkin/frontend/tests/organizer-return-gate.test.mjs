@@ -26,9 +26,9 @@ test('every literal guide recipe destination is registered and survives safe nav
   }
 })
 
-function harness({initialSelection='A',path='/setup-redesign',search='?event=B&view=audience&task=rsvp',paidOnly=false,guard=()=>true}={}){
+function harness({initialSelection='A',path='/setup-redesign',search='?event=B&view=audience&task=rsvp',paidOnly=false,adminOnly=false,guard=()=>true}={}){
   let selected=initialSelection,cursor=0,pending=[]
-  const requests=[]
+  const requests=[], failures=[]
   const states=[],deps=[],cleanups=[]
   const user={id:'owner',role:'admin'}
   const location={pathname:path,search}
@@ -39,15 +39,15 @@ function harness({initialSelection='A',path='/setup-redesign',search='?event=B&v
     useEffect(fn,next){const i=cursor++;if(!deps[i]||next.some((x,j)=>x!==deps[i][j])){deps[i]=next;pending.push(()=>{cleanups[i]?.();cleanups[i]=fn()})}}}
   const jsx=(type,props)=>type==='Provider'||type==='div'&&!props.role&&'aria-busy' in props?props.children:({type,props})
   const modules={react,'react/jsx-runtime':{jsx,jsxs:jsx},'react-router-dom':{Navigate:'Navigate',useLocation:()=>location,useNavigate:()=>()=>{},UNSAFE_LocationContext:{Provider:'Provider'},UNSAFE_RouteContext:{Provider:'Provider'},UNSAFE_NavigationContext:{}},
-    '../context/AuthContext':{useAuth:()=>({user,loading:false})},'../api':{api:{listEvents:()=>new Promise(resolve=>{requests.push(resolve)})}},
+    '../context/AuthContext':{useAuth:()=>({user,loading:false})},'../api':{api:{listEvents:()=>new Promise((resolve,reject)=>{requests.push(resolve);failures.push(reject)})}},
     '../hooks/useCurrentEvent':{useCurrentEvent:()=>[selected,setCurrent]},
     '../pages/organizerGuidance.mjs':{eventIdentityFromQuery,authenticatedOrganizerReturn}}
   const source=readFileSync(new URL('../src/components/ProtectedRoute.jsx',import.meta.url),'utf8')
   const code=transformSync(source,{loader:'jsx',format:'cjs',jsx:'automatic'}).code
   const module={exports:{}}
   runInNewContext(code,{module,exports:module.exports,require:name=>{assert.ok(name in modules,name);return modules[name]},URLSearchParams})
-  const render=()=>{cursor=0;const result=module.exports.default({children:'event-tasks',paidOnly});for(const fn of pending.splice(0))fn();return result}
-  return {user,render,resolve:(events,index=0)=>requests[index](events),selections,switchEvent:setCurrent,
+  const render=()=>{cursor=0;const result=module.exports.default({children:'event-tasks',paidOnly,adminOnly});for(const fn of pending.splice(0))fn();return result}
+  return {user,render,reject:(error,index=0)=>failures[index](error),resolve:(events,index=0)=>requests[index](events),selections,switchEvent:setCurrent,
     navigate(to){const url=new URL(to,'https://festio.events');location.pathname=url.pathname;location.search=url.search},
     get selected(){return selected},get requestCount(){return requests.length}}
 }
@@ -202,4 +202,21 @@ test('saved return authorization cannot be restored for a different authenticate
   h.resolve([],2);await Promise.resolve();await Promise.resolve();assert.equal(h.render().props.role,'alert')
   h.resolve([{id:'B'}],1);await Promise.resolve();await Promise.resolve();assert.equal(h.render().props.role,'alert')
   assert.equal(h.selected,'A')
+})
+
+test('staff denied an organiser editor receive an explanation, not a scanner redirect', () => {
+  const h = harness({ adminOnly: true, search: '' })
+  h.user.role = 'staff'
+  assert.equal(h.render().props.title, 'Organiser access required')
+})
+test('unpaid event access is explained without mounting the editor', async () => {
+  const h = harness({ paidOnly: true, search: '' })
+  h.render();h.resolve([{ id: 'A', is_paid: false }]);await Promise.resolve();await Promise.resolve()
+  assert.equal(h.render().props.title, 'An active Event Pass is required')
+})
+test('failed entitlement lookup asks for retry instead of incorrectly demanding payment', async () => {
+  const h = harness({ paidOnly: true, search: '' })
+  h.render();h.reject(new Error('Offline'));await Promise.resolve();await Promise.resolve()
+  assert.match(JSON.stringify(h.render()), /Event access could not be verified/)
+  assert.doesNotMatch(JSON.stringify(h.render()), /An active Event Pass is required/)
 })

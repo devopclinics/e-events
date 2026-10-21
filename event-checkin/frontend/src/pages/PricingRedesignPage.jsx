@@ -181,7 +181,7 @@ export default function PricingRedesignPage() {
           <div className="pr-head-copy">
             <span className="pr-eyebrow"><i /> Pay once per event</span>
             <h1>Pricing for event operations</h1>
-            <p>Start free for RSVP and email invites, then pay only when you activate premium tools like SMS/WhatsApp, QR check-in, Design Studio, seating, access control, logistics, registry, or Experience workflows.</p>
+            <p>Start free with RSVP, email invitations and basic QR admission for up to 25 guests. An Event Pass unlocks premium tools such as Design Studio and credit-based messaging; seating, venue access zones and other modules depend on your event entitlements.</p>
           </div>
           <div className="pr-currency">
             {['USD', 'NGN'].map((c) => (
@@ -196,8 +196,8 @@ export default function PricingRedesignPage() {
           <div className="pr-promo-banner">
             <div>
               <span>Limited-time offer for paid events</span>
-              <strong>All add-ons are included at no extra charge for six months.</strong>
-              <p>Activate an Event Pass and use Seating, Venue Access, Orders, Logistics, Registry, Experience, Planner, and FestioMe through {promoUntil.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}.</p>
+              <strong>All add-ons are included until the promotion ends.</strong>
+              <p>Activate an Event Pass and use Seating, Venue Access, Orders, Logistics, Registry, Experience, Planner, and FestioMe through {promoUntil.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}. This is a fixed promotion end date, not six months from your purchase. Review checkout for the event access terms and any separate recurring subscription.</p>
             </div>
             <Link className="pr-btn primary" to="/register?redesign=1">Create a paid event</Link>
           </div>
@@ -257,7 +257,7 @@ export default function PricingRedesignPage() {
               <div className="pr-section-head">
                 <div>
                   <h2>Add-ons</h2>
-                  <p>{addonPromoActive ? 'Every add-on is included with paid Event Passes during the six-month promotion. Free events cannot use add-ons.' : "Build the event you're actually running. Buy only the modules your paid event needs."}</p>
+                  <p>{addonPromoActive ? 'Every add-on is included with paid Event Passes during the promotion ending on the date shown above. Free events cannot use add-ons.' : "Build the event you're actually running. Buy only the modules your paid event needs."}</p>
                 </div>
               </div>
               <div className="pr-addon-grid">

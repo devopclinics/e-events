@@ -5,6 +5,7 @@ import { useCurrentEvent } from './hooks/useCurrentEvent'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
 import ProtectedRoute from './components/ProtectedRoute'
+import NotFoundPage from './pages/NotFoundPage'
 import SupportWidget from './components/SupportWidget'
 import RedesignGate from './pages/redesign/RedesignGate'
 import { setUiPreference } from './pages/redesign/uiPreference'
@@ -62,6 +63,8 @@ const ExperienceRedesignPage = lazy(() => import('./pages/ExperienceRedesignPage
 const CheckinRedesignPage = lazy(() => import('./pages/CheckinRedesignPage'))
 const SuperadminRedesignPage = lazy(() => import('./pages/SuperadminRedesignPage'))
 const MediaRedesignPage = lazy(() => import('./pages/MediaRedesignPage'))
+const OrganisationOverview = lazy(() => import('./pages/OrganisationOverview'))
+const GuestExperienceOverview = lazy(() => import('./pages/GuestExperienceOverview'))
 const DesignStudioRedesignPage = lazy(() => import('./pages/DesignStudioWorkspace'))
 const EventResultsRedesignPage = lazy(() => import('./pages/EventResultsRedesignPage'))
 const FestioMeRedesignPage = lazy(() => import('./pages/FestioMeRedesignPage'))
@@ -168,9 +171,9 @@ function Nav({ hasMenu, eventName, canUseDesignStudio, hasFestioMe, canManageCur
 
   const links = [
     ...(((!eventName && ['admin', 'event_manager'].includes(user?.role)) || canManageCurrentEvent || hasGuestDirectory)
-      ? [{ to: '/admin', label: hasGuestDirectory && !canManageCurrentEvent ? 'Guests' : 'Event Setup', end: true }]
+      ? [{ to: '/admin', label: hasGuestDirectory && !canManageCurrentEvent ? 'Guests' : 'Event overview', end: true }]
       : []),
-    ...(['admin', 'event_manager'].includes(user?.role) ? [{ to: '/setup-redesign?view=guide', label: 'Setup Guide' }] : []),
+    ...(['admin', 'event_manager'].includes(user?.role) ? [{ to: '/setup-redesign?view=guide', label: 'Setup checklist' }] : []),
     ...(user?.role === 'admin' && canUseDesignStudio ? [{ to: '/design-studio', label: 'Design Studio' }] : []),
     { to: '/dashboard', label: 'Results' },
     { to: '/my-tasks', label: 'My Tasks' },
@@ -181,10 +184,8 @@ function Nav({ hasMenu, eventName, canUseDesignStudio, hasFestioMe, canManageCur
     ...(hasMenu ? [{ to: '/kitchen', label: 'Orders' }] : []),
     ...(user?.is_platform_superadmin ? [{ to: '/console', label: 'Console' }] : []),
     ...(user?.is_platform_superadmin ? [{ to: '/media-library', label: 'Media' }] : []),
-    // Help is a paid perk: visible only when the selected event is paid
-    // (same flag as Design Studio). Superadmins always see it.
-    ...(user?.role !== 'event_manager' && (canUseDesignStudio || user?.is_platform_superadmin)
-      ? [{ to: '/help', label: 'Help' }] : []),
+    // Basic help is available across plans and roles; product actions keep their own gates.
+    { to: '/help', label: 'Help' },
   ]
 
   return (
@@ -537,6 +538,8 @@ function AppRoutes() {
       <Route path="/addons-redesign" element={<ProtectedRoute><AddonsRedesignPage /></ProtectedRoute>} />
       <Route path="/team-redesign" element={<ProtectedRoute><TeamRedesignPage /></ProtectedRoute>} />
       <Route path="/experience-redesign" element={<ProtectedRoute><ExperienceRedesignPage /></ProtectedRoute>} />
+      <Route path="/organisation" element={<ProtectedRoute adminOnly><OrganisationOverview /></ProtectedRoute>} />
+      <Route path="/guest-experience" element={<ProtectedRoute adminOnly><GuestExperienceOverview /></ProtectedRoute>} />
       <Route path="/guest-services" element={<ProtectedRoute><GuestServicesPage /></ProtectedRoute>} />
       <Route path="/checkin-redesign" element={<ProtectedRoute><CheckinRedesignPage /></ProtectedRoute>} />
       <Route path="/superadmin-redesign" element={<ProtectedRoute platformSuperadminOnly><SuperadminRedesignPage /></ProtectedRoute>} />
@@ -552,7 +555,7 @@ function AppRoutes() {
       <Route path="/vendor-portal/:token" element={<VendorPortalPage />} />
       {(['festio.events', 'staging.festio.events', 'localhost'].includes(window.location.hostname)) &&
         <Route path="/ticketing-redesign" element={<ProtectedRoute adminOnly><TicketingRedesignPage /></ProtectedRoute>} />}
-      <Route path="/help-redesign" element={<ProtectedRoute paidOnly><HelpRedesignPage /></ProtectedRoute>} />
+      <Route path="/help-redesign" element={<ProtectedRoute><HelpRedesignPage /></ProtectedRoute>} />
       <Route path="/scanner-redesign" element={<ProtectedRoute><ScannerRedesignPage /></ProtectedRoute>} />
       <Route path="/kitchen-redesign" element={<ProtectedRoute><KitchenRedesignPage /></ProtectedRoute>} />
       <Route path="/selfcheckin-redesign" element={<SelfCheckinRedesignPage />} />
@@ -583,16 +586,16 @@ function AppRoutes() {
               <Route path="/floor-plan/:eventId" element={<ProtectedRoute adminOnly><RedesignGate redesignRoute="/floorplan-redesign"><FloorPlanPage /></RedesignGate></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute><RedesignGate redesignRoute="/event-results-redesign"><DashboardPage /></RedesignGate></ProtectedRoute>} />
               <Route path="/results" element={<ProtectedRoute><RedesignGate redesignRoute="/event-results-redesign"><ResultsPage /></RedesignGate></ProtectedRoute>} />
-              <Route path="/my-tasks" element={<ProtectedRoute><RedesignGate redesignRoute="/team-redesign"><MyTasksPage /></RedesignGate></ProtectedRoute>} />
-              <Route path="/org-settings" element={<ProtectedRoute><RedesignGate redesignRoute="/billing-redesign"><OrgSettingsPage /></RedesignGate></ProtectedRoute>} />
+              <Route path="/my-tasks" element={<ProtectedRoute><RedesignGate redesignRoute="/team-redesign?tab=mytasks"><MyTasksPage /></RedesignGate></ProtectedRoute>} />
+              <Route path="/org-settings" element={<ProtectedRoute><RedesignGate redesignRoute="/billing-redesign?tab=org"><OrgSettingsPage /></RedesignGate></ProtectedRoute>} />
               <Route path="/api-explorer" element={<ProtectedRoute><RedesignGate redesignRoute="/api-explorer-redesign"><ApiExplorerPage /></RedesignGate></ProtectedRoute>} />
               <Route path="/festiome" element={<ProtectedRoute><RedesignGate redesignRoute="/festiome-redesign"><FestioMePage /></RedesignGate></ProtectedRoute>} />
               <Route path="/scanner" element={<ProtectedRoute><RedesignGate redesignRoute="/scanner-redesign"><ScannerPage /></RedesignGate></ProtectedRoute>} />
               <Route path="/kitchen" element={<ProtectedRoute><RedesignGate redesignRoute="/kitchen-redesign"><KitchenPage /></RedesignGate></ProtectedRoute>} />
               <Route path="/console" element={<ProtectedRoute><RedesignGate redesignRoute="/superadmin-redesign"><ConsolePage /></RedesignGate></ProtectedRoute>} />
               <Route path="/media-library" element={<ProtectedRoute><RedesignGate redesignRoute="/media-redesign"><MediaPage /></RedesignGate></ProtectedRoute>} />
-              <Route path="/help" element={<ProtectedRoute paidOnly><RedesignGate redesignRoute="/help-redesign"><HelpPage /></RedesignGate></ProtectedRoute>} />
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="/help" element={<ProtectedRoute><RedesignGate redesignRoute="/help-redesign"><HelpPage /></RedesignGate></ProtectedRoute>} />
+              <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </AuthedLayout>
         }

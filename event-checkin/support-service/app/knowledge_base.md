@@ -1,5 +1,5 @@
 # Festio product documentation
-Revised 2026-10-19
+Revised 2026-10-21
 
 Generated from frontend/src/guideContent.mjs — do not edit by hand, run
 support-service/scripts/build_knowledge_base.mjs to regenerate.
@@ -8,21 +8,57 @@ support-service/scripts/build_knowledge_base.mjs to regenerate.
 
 Create an event, invite guests, and run check-in on the day.
 
+### Website, registration, GuestHub and publishing
+
+Each surface has a different audience and its own publication state.
+
+1. Open Guest experience → Guest experience overview to check saved and published status.
+2. Use Event website for public information. If the event uses its own website, configure that connection and check its destination before sharing.
+3. Use RSVP for registration or invitation response. Guests receive their own personal GuestHub links for passes, party, programme and enabled services.
+4. Save design keeps a draft. Publish design updates guest-facing design surfaces. The event website has its own Save draft and Publish website actions.
+5. When an event date, speaker or programme changes, review source changes in the website editor; merge only approved content, preview and republish. Do not remove demonstration warnings to make unapproved content look final.
+
+Check the result: Check the same date, venue, action and branding on the published website, registration page and guest pass.
+
+### Menus, meal headcounts and event-day service
+
+Menu configuration, meal attendance and order delivery are different tasks using shared event records.
+
+1. Configure menus and choices in Services setup before opening the event.
+2. Use Kitchen orders to progress placed orders through preparation and delivery.
+3. Use Guest Services for assigned tables, seating and assisted menu choices with guest agreement.
+4. Choose event admission, room entry/exit or meal attendance as the scan purpose. Review the meal service and guest before confirming.
+5. An attendance mark counts a guest; it does not place an order or mark a meal delivered. Review the appropriate metric in Results.
+
+Check the result: Rehearse as assigned staff as well as supervisor; a supervisor view does not demonstrate scoped staff access.
+
+### Event Pass, messaging wallet and integration subscription
+
+These purchases have separate purposes and scopes.
+
+1. Open Billing → Event access and messaging to review the selected event and its Event Pass.
+2. Read the wallet scope shown in the credit ledger before topping up; the wallet may belong to the organisation.
+3. Open Organisation settings → Integration subscription for recurring read-write API access. An Event Pass is a separate purchase.
+4. Review the currency, item, organisation/event scope and recurring or one-time terms at checkout.
+5. For add-on promotions, use the displayed fixed end date; do not assume six months from purchase.
+
+Check the result: A payment confirmation must match the intended item and scope; do not repeat a payment just because a status refresh failed.
+
 ### Get started
 
 Build a usable event first, then add the services your guests need. Prepare, create and save, then test the guest or staff result.
 
-Go to: Event Setup → Setup Guide
+Go to: Event Setup → Setup checklist
 
 Before you start: Have the event name, dates, timezone, venue, audience size, registration method and one controlled test contact ready.
 
 1. Open Festio and sign in to your organizer account. New organizers use the registration flow and complete any verification instructions shown there.
 2. Use the event selector in the header before editing. Check its name every time you move between events. Organization settings and the credit wallet can affect more than one event.
-3. Open Setup Guide. Follow Create event → Choose outcomes → Foundation → Audience & registration → Design & guest experience → Operations & giving → Conference & Live → Results & closeout.
+3. Open Setup checklist. Follow Create event → Choose outcomes → Foundation → Audience & registration → Design & guest experience → Operations & giving → Conference & Live → Results & closeout.
 4. For a simple event, finish the foundation, RSVP, a named guest, a usable pass and check-in first. Add seating, meals, sessions or engagement only when needed.
 5. For each service, follow A: prepare access and inputs; B: create and save the record; C: preview and test the guest or staff result.
 6. Keep a test log: service, record name, guest used, date, expected result, actual result and screenshot. A preview alone does not prove a delivered message or successful scan.
-7. Use “Record test or review” in the Setup Guide after the actual check. Record Partial if some conditions remain untested. Event Active is a separate lifecycle state, not proof that every service is ready.
+7. Use “Record test or review” in the Setup checklist after the actual check. Record Partial if some conditions remain untested. Event Active is a separate lifecycle state, not proof that every service is ready.
 
 Check the result: You can name the event, reach each enabled workspace and explain what its guest-facing test will prove.
 
@@ -51,11 +87,11 @@ Check the result: The new event appears in the event selector with the intended 
 
 If something is wrong: Compare the event timezone, start/end dates and currency across the website, GuestHub, Results and ticket storefront before sharing. Ticket settlement currency is configured separately; existing prices and orders retain their original currency.
 
-### Follow the Setup Guide and record proof
+### Follow the Setup checklist and record proof
 
 Use the guide as a checklist of service readiness and controlled tests.
 
-Go to: Setup Guide → numbered stages
+Go to: Setup checklist → numbered stages
 
 Before you start: Select the correct existing event; do not create another event just to revisit setup.
 
@@ -88,7 +124,7 @@ Before you start: Check the selected event, Event Pass and whether the service i
 5. Create at least one useful record: for example, a table for Seating, a category/item for Orders, a shipment for Logistics or an activity for Festio Live.
 6. Check guest presentation rules. Some pages are public; some appear in GuestHub after registration, approval, check-in or attendance.
 7. Preview with an appropriate test guest and verify the new content appears. An enabled switch with an empty workspace is not a finished service.
-8. Return to the corresponding Setup Guide stage and record the controlled test.
+8. Return to the corresponding Setup checklist stage and record the controlled test.
 
 Check the result: The service is entitled, enabled, configured and reachable by its intended audience.
 
@@ -157,7 +193,7 @@ Before you start: Decide who may register, whether approval is needed, the deadl
 7. Click Save invitation settings. Review display toggles such as countdown, capacity, sharing, calendar and confetti separately; save display settings.
 8. Choose the RSVP landing and GuestHub layout that suit the event. Inspect the form on a guest-sized view and the chosen GuestHub presentation.
 9. Submit one controlled RSVP, inspect its stored answers/role, and open the generated GuestHub/pass. Test approval separately if it is enabled.
-10. Only then send the form link broadly. Record the scoped test in the Setup Guide.
+10. Only then send the form link broadly. Record the scoped test in the Setup checklist.
 
 Check the result: The public form accepts intended data, stores the answers and routes the test guest to the right next step.
 
@@ -247,7 +283,7 @@ Before you start: Guest contacts, permissions, a saved invitation template, chan
 6. For the first test, use one controlled recipient. Read provider readiness and consent exclusions; a phone number alone is not permission to message.
 7. Use Schedule instead for a timed invitation, or Cancel to correct contacts, audience or routing. Use Send now only when the preflight is right.
 8. After sending, inspect the recipient’s channel delivery state and credit ledger. Ask the controlled recipient to confirm the actual email/SMS/WhatsApp and open the pass.
-9. Record exact recipients, channel and received message in the Setup Guide; an accepted send is not proof of inbox delivery.
+9. Record exact recipients, channel and received message in the Setup checklist; an accepted send is not proof of inbox delivery.
 
 Check the result: Preflight shows the audience, channels, exclusions, cost and wallet balance; a controlled test receipt confirms the intended message and link.
 

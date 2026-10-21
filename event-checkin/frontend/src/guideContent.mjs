@@ -1,6 +1,6 @@
 // Shared source for in-app Help, public guide and support knowledge.
 // Updated from the 48 reviewed service recipes; preserve topic IDs for links.
-export const GUIDE_REVISED_AT = '2026-10-19'
+export const GUIDE_REVISED_AT = '2026-10-21'
 
 export const CONTENT = {
   "organizer": {
@@ -8,6 +8,48 @@ export const CONTENT = {
     "icon": "🗂️",
     "blurb": "Create an event, invite guests, and run check-in on the day.",
     "topics": [
+{
+      "id": "org-surfaces",
+      "icon": "🎨",
+      "title": "Website, registration, GuestHub and publishing",
+      "intro": "Each surface has a different audience and its own publication state.",
+      "steps": [
+            "Open Guest experience → Guest experience overview to check saved and published status.",
+            "Use Event website for public information. If the event uses its own website, configure that connection and check its destination before sharing.",
+            "Use RSVP for registration or invitation response. Guests receive their own personal GuestHub links for passes, party, programme and enabled services.",
+            "Save design keeps a draft. Publish design updates guest-facing design surfaces. The event website has its own Save draft and Publish website actions.",
+            "When an event date, speaker or programme changes, review source changes in the website editor; merge only approved content, preview and republish. Do not remove demonstration warnings to make unapproved content look final."
+      ],
+      "check": "Check the same date, venue, action and branding on the published website, registration page and guest pass."
+},
+{
+      "id": "org-service-workspaces",
+      "icon": "🍽️",
+      "title": "Menus, meal headcounts and event-day service",
+      "intro": "Menu configuration, meal attendance and order delivery are different tasks using shared event records.",
+      "steps": [
+            "Configure menus and choices in Services setup before opening the event.",
+            "Use Kitchen orders to progress placed orders through preparation and delivery.",
+            "Use Guest Services for assigned tables, seating and assisted menu choices with guest agreement.",
+            "Choose event admission, room entry/exit or meal attendance as the scan purpose. Review the meal service and guest before confirming.",
+            "An attendance mark counts a guest; it does not place an order or mark a meal delivered. Review the appropriate metric in Results."
+      ],
+      "check": "Rehearse as assigned staff as well as supervisor; a supervisor view does not demonstrate scoped staff access."
+},
+{
+      "id": "org-billing-scopes",
+      "icon": "💳",
+      "title": "Event Pass, messaging wallet and integration subscription",
+      "intro": "These purchases have separate purposes and scopes.",
+      "steps": [
+            "Open Billing → Event access and messaging to review the selected event and its Event Pass.",
+            "Read the wallet scope shown in the credit ledger before topping up; the wallet may belong to the organisation.",
+            "Open Organisation settings → Integration subscription for recurring read-write API access. An Event Pass is a separate purchase.",
+            "Review the currency, item, organisation/event scope and recurring or one-time terms at checkout.",
+            "For add-on promotions, use the displayed fixed end date; do not assume six months from purchase."
+      ],
+      "check": "A payment confirmation must match the intended item and scope; do not repeat a payment just because a status refresh failed."
+},
       {
         "id": "org-start",
         "icon": "🚀",
@@ -16,13 +58,13 @@ export const CONTENT = {
         "steps": [
           "Open Festio and sign in to your organizer account. New organizers use the registration flow and complete any verification instructions shown there.",
           "Use the event selector in the header before editing. Check its name every time you move between events. Organization settings and the credit wallet can affect more than one event.",
-          "Open Setup Guide. Follow Create event → Choose outcomes → Foundation → Audience & registration → Design & guest experience → Operations & giving → Conference & Live → Results & closeout.",
+          "Open Setup checklist. Follow Create event → Choose outcomes → Foundation → Audience & registration → Design & guest experience → Operations & giving → Conference & Live → Results & closeout.",
           "For a simple event, finish the foundation, RSVP, a named guest, a usable pass and check-in first. Add seating, meals, sessions or engagement only when needed.",
           "For each service, follow A: prepare access and inputs; B: create and save the record; C: preview and test the guest or staff result.",
           "Keep a test log: service, record name, guest used, date, expected result, actual result and screenshot. A preview alone does not prove a delivered message or successful scan.",
-          "Use “Record test or review” in the Setup Guide after the actual check. Record Partial if some conditions remain untested. Event Active is a separate lifecycle state, not proof that every service is ready."
+          "Use “Record test or review” in the Setup checklist after the actual check. Record Partial if some conditions remain untested. Event Active is a separate lifecycle state, not proof that every service is ready."
         ],
-        "path": "Event Setup → Setup Guide",
+        "path": "Event Setup → Setup checklist",
         "before": "Have the event name, dates, timezone, venue, audience size, registration method and one controlled test contact ready.",
         "check": "You can name the event, reach each enabled workspace and explain what its guest-facing test will prove.",
         "troubleshoot": "If a service is marked Enable, start in Features & messaging and Billing. If the guide opens a different stage, choose the numbered stage directly."
@@ -53,9 +95,9 @@ export const CONTENT = {
       {
         "id": "org-setup-guide",
         "icon": "📖",
-        "title": "Follow the Setup Guide and record proof",
+        "title": "Follow the Setup checklist and record proof",
         "intro": "Use the guide as a checklist of service readiness and controlled tests.",
-        "path": "Setup Guide → numbered stages",
+        "path": "Setup checklist → numbered stages",
         "before": "Select the correct existing event; do not create another event just to revisit setup.",
         "steps": [
           "Choose the relevant numbered stage. Read “Stage X of 8” and the applicable-task summary.",
@@ -86,7 +128,7 @@ export const CONTENT = {
           "Create at least one useful record: for example, a table for Seating, a category/item for Orders, a shipment for Logistics or an activity for Festio Live.",
           "Check guest presentation rules. Some pages are public; some appear in GuestHub after registration, approval, check-in or attendance.",
           "Preview with an appropriate test guest and verify the new content appears. An enabled switch with an empty workspace is not a finished service.",
-          "Return to the corresponding Setup Guide stage and record the controlled test."
+          "Return to the corresponding Setup checklist stage and record the controlled test."
         ],
         "check": "The service is entitled, enabled, configured and reachable by its intended audience.",
         "troubleshoot": "If setup is unavailable, confirm the selected event, entitlement and permissions. Review Billing and Features & messaging, then open the corresponding workspace."
@@ -152,7 +194,7 @@ export const CONTENT = {
           "Click Save invitation settings. Review display toggles such as countdown, capacity, sharing, calendar and confetti separately; save display settings.",
           "Choose the RSVP landing and GuestHub layout that suit the event. Inspect the form on a guest-sized view and the chosen GuestHub presentation.",
           "Submit one controlled RSVP, inspect its stored answers/role, and open the generated GuestHub/pass. Test approval separately if it is enabled.",
-          "Only then send the form link broadly. Record the scoped test in the Setup Guide."
+          "Only then send the form link broadly. Record the scoped test in the Setup checklist."
         ],
         "path": "Invites & RSVP → With RSVP",
         "before": "Decide who may register, whether approval is needed, the deadline/capacity and the questions you truly need.",
@@ -240,7 +282,7 @@ export const CONTENT = {
           "For the first test, use one controlled recipient. Read provider readiness and consent exclusions; a phone number alone is not permission to message.",
           "Use Schedule instead for a timed invitation, or Cancel to correct contacts, audience or routing. Use Send now only when the preflight is right.",
           "After sending, inspect the recipient’s channel delivery state and credit ledger. Ask the controlled recipient to confirm the actual email/SMS/WhatsApp and open the pass.",
-          "Record exact recipients, channel and received message in the Setup Guide; an accepted send is not proof of inbox delivery."
+          "Record exact recipients, channel and received message in the Setup checklist; an accepted send is not proof of inbox delivery."
         ],
         "path": "Guests → select guests → Send invite",
         "before": "Guest contacts, permissions, a saved invitation template, channel readiness and sufficient credits.",

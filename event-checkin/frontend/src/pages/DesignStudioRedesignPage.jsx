@@ -11,6 +11,8 @@ import { validAppTheme } from '../components/guesthub/appearance.mjs'
 import { CertificatesWorkspace } from '../components/live/LiveContentWorkspace'
 
 const TABS = ['Templates', 'GuestHub', 'Flyer', 'Event Page', 'Festio Pass', 'FestioHub', 'Certificates', 'Email Preview', 'Publish']
+// Stable tab IDs preserve existing bookmarks; labels describe the actual surface.
+const TAB_LABELS = { 'Event Page': 'Registration / RSVP', 'Festio Pass': 'My Pass', FestioHub: 'GuestHub dashboard layout', 'Email Preview': 'Email branding preview' }
 
 // FestioHub layout + visual themes. Each entry combines a layout type
 // (tabbed vs stacked, mirrored in InvitePage.jsx's HUB_TABBED_STYLES) with
@@ -1325,7 +1327,7 @@ export default function DesignStudioRedesignPage() {
       </div>
 
       <div className="rr-tabs">
-        {TABS.map((t) => <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{t}</button>)}
+        {TABS.map((t) => <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{TAB_LABELS[t] || t}</button>)}
       </div>
 
       {tab === 'Templates' && (

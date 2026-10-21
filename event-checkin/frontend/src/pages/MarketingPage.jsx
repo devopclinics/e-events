@@ -8,7 +8,7 @@ import OrganizerHandoffs from './OrganizerHandoffs'
 
 const MODULE_TABS = [
   ["segments", "Segments"],
-  ["sequences", "Follow-ups"],
+  ["sequences", "Email sequences"],
   ["campaigns", "Campaigns"],
   ["content", "Content calendar"],
   ["referrals", "Referrals"],
@@ -2895,7 +2895,7 @@ export default function MarketingPage() {
   }, []);
   const tabs = useMemo(
     () => [
-      ["dashboard", "Dashboard"],
+      ["dashboard", "Client onboarding"],
       ["leads", "Leads"],
       ["handoffs", "Organizer handoffs"],
       ["tags", "Tags"],
@@ -2920,7 +2920,7 @@ export default function MarketingPage() {
   if (error)
     return (
       <div className="mx-auto mt-20 max-w-lg rounded-xl border bg-white p-8 text-center">
-        <h1 className="text-xl font-bold">Marketing workspace</h1>
+        <h1 className="text-xl font-bold">Client onboarding & growth</h1>
         <p className="mt-3 text-slate-500">{error}</p>
         <Link className="mt-5 inline-block text-teal-700" to="/">
           Return to Festio
@@ -2963,6 +2963,7 @@ export default function MarketingPage() {
           <div>
             <span>Workspace</span>
             <h1>{tabs.find(([id]) => id === tab)?.[1] || "Marketing"}</h1>
+            <p className="mk-subtitle">Authorised Festio client marketing · separate from organiser-to-guest messages. Check the onboarding runtime below for automatic sending; saving a campaign or sequence draft does not activate it.</p>
           </div>
           <div className="mk-top-actions">
             <button title="Search">⌕</button>

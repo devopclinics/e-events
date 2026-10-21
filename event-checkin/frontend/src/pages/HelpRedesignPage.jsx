@@ -96,7 +96,7 @@ export default function HelpRedesignPage() {
   const { user } = useAuth()
   const [searchParams] = useSearchParams()
   const isSuper = !!user?.is_platform_superadmin
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = ['admin','event_manager'].includes(user?.role)
 
   // Mirrors HelpPage.jsx's role derivation exactly: organizer only for
   // admin/superadmin, operator only for superadmin, everyone gets staff+guest.
@@ -162,6 +162,7 @@ export default function HelpRedesignPage() {
         </div>
       </div>
 
+      <nav className="hp-role-row" aria-label="Ways to learn"><a className="rr-btn secondary" href="/help-redesign">Feature reference</a>{['admin','event_manager'].includes(user?.role) && <a className="rr-btn secondary" href="/setup-redesign?view=guide">Setup checklist</a>}<a className="rr-btn secondary" href="/training">Academy training</a></nav>
       <div className="hp-role-row">
         {ROLES.map((r) => (
           <button key={r.key} className={`hp-role-pill ${role === r.key ? 'active' : ''}`} onClick={() => setRole(r.key)}>{r.label}</button>

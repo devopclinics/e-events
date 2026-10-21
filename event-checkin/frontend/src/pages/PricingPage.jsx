@@ -104,8 +104,7 @@ export default function PricingPage() {
             <p className="text-sm font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Pay once per event</p>
             <h1 className="mt-2 text-3xl sm:text-5xl font-black text-slate-950 dark:text-white">Pricing for event operations</h1>
             <p className="mt-3 text-base text-slate-600 dark:text-slate-300">
-              Start free for RSVP and email invites, then pay only when you activate premium tools like SMS/WhatsApp,
-              QR check-in, Design Studio, seating, access control, logistics, registry, or Experience workflows.
+              Start free with RSVP, email invitations and basic QR admission for up to 25 guests. Premium design, credit-based messaging and event services depend on your active Event Pass and enabled modules.
             </p>
           </div>
           <div className="inline-flex w-fit rounded-lg border border-slate-300 dark:border-slate-700 overflow-hidden text-sm">

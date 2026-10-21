@@ -3,12 +3,29 @@ import React, { Component, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import "./MarketingPage.css";
-import "./MarketingReadable.css";
+import { useTheme } from '../context/ThemeContext'
+import { marketingGroups, marketingTab } from './marketingNavigation.mjs'
 import OrganizerHandoffs from './OrganizerHandoffs'
 
+const TAB_DESCRIPTIONS = {
+  dashboard: 'Welcome verified clients, guide their first event and review replies.',
+  sequences: 'Review email wording, designs, timing and lifecycle steps.',
+  handoffs: 'Review client replies and assign a human follow-up.',
+  leads: 'Manage client records, consent and onboarding eligibility.',
+  tags: 'Organise client records with consistent labels.',
+  segments: 'Define the audience for a campaign.',
+  forms: 'Create and manage forms that capture client interest.',
+  campaigns: 'Plan campaigns and distinguish drafts from active activity.',
+  content: 'Plan upcoming content and publishing.',
+  analytics: 'Review delivery, responses and client progress.',
+  preferences: 'Manage this Marketing workspace’s preferences.',
+  help: 'Find instructions for onboarding and growth workflows.',
+  access: 'Manage authorised Marketing staff access.',
+  audit: 'Review changes and actions in this workspace.',
+};
 const MODULE_TABS = [
   ["segments", "Segments"],
-  ["sequences", "Follow-ups"],
+  ["sequences", "Email sequences"],
   ["campaigns", "Campaigns"],
   ["content", "Content calendar"],
   ["referrals", "Referrals"],
@@ -480,6 +497,7 @@ function Dashboard({ data, run, message, navigate }) {
   const total = data?.conversion?.registered || 0,
     created = data?.conversion?.event_created || 0,
     paid = data?.conversion?.paid || 0;
+  const runtimeState = ['running','blocked','paused','starting'].includes(data?.automation?.runtime?.state) ? data.automation.runtime.state : 'unavailable';
   const stages = [
     ["Registered", total, "#22c3ae"],
     ["Event created", created, "#f1b45b"],
@@ -487,40 +505,15 @@ function Dashboard({ data, run, message, navigate }) {
   ];
   return (
     <div className="space-y-5">
-      <section className="mk-hero">
-        <div>
-          <span className="mk-eyebrow">MARKETING COMMAND CENTER</span>
-          <h2>
-            Turn interest into
-            <br />
-            <em>events people remember.</em>
-          </h2>
-          <p>
-            Track every organizer from first visit to paid event. Build
-            campaigns, automate thoughtful follow-ups, and keep the team focused
-            on what moves next.
-          </p>
-          <div className="mk-hero-actions">
-            <button onClick={run}>
-              Run automation <b>↗</b>
-            </button>
-            <span>
-              <i /> Resend delivery active
-            </span>
-          </div>
-        </div>
-        <div className="mk-orbit">
-          <div className="mk-orbit-ring one" />
-          <div className="mk-orbit-ring two" />
-          <div className="mk-orbit-core">
-            <small>PIPELINE</small>
-            <strong>{data?.total_leads || 0}</strong>
-            <span>people</span>
-          </div>
-          <b className="mk-orbit-dot a">{created}</b>
-          <b className="mk-orbit-dot b">{paid}</b>
-        </div>
-      </section>
+      <section className="mk-dashboard-intro"><div><span className="mk-eyebrow">CLIENT ONBOARDING</span><h2>From signup to the first event.</h2><p>Review the worker, client progress and replies that need your team.</p></div><div className="mk-dashboard-actions"><button onClick={() => navigate('sequences')}>Review email journey</button><button onClick={() => navigate('handoffs')}>Replies & handoffs →</button></div></section>
+        <section role="status" className={`mk-automation-status mk-worker-status is-${runtimeState}`} aria-label="Automatic onboarding status">
+          <h3>Automatic client onboarding: {data?.automation?.runtime?.state || 'status unavailable'}</h3>
+          <p>{data?.automation?.runtime?.scheduler_running ? 'Worker running · checks every minute' : data?.automation?.runtime ? 'Automatic worker is not running' : 'Worker status is unavailable'}</p>
+          {data?.automation?.runtime?.last_run?.checked_at && <p>Last check: {new Date(data.automation.runtime.last_run.checked_at).toLocaleString()}</p>}
+          {(data?.automation?.runtime?.blockers || []).map((reason) => <p key={reason}>{reason}</p>)}
+          <p>New-client conversion: {data?.automation?.runtime?.conversion?.first_event_created || 0} first events / {data?.automation?.runtime?.conversion?.enrolled || 0} enrolled clients ({data?.automation?.runtime?.conversion?.rate || 0}%). Based on recorded event-creation milestones.</p>
+          <details><summary>Eligibility and delivery explained</summary><p>“Active” templates are available for use. Messages require an eligible client, current consent and a running worker. Sent counts mean provider accepted; delivered counts come from delivery receipts.</p></details>
+        </section>
       <div className="mk-metrics">
         <Metric
           label="Total leads"
@@ -528,15 +521,15 @@ function Dashboard({ data, run, message, navigate }) {
           detail="All captured organizers"
         />
         <Metric
-          label="Email ready"
+          label="Email opted in"
           value={data?.email_marketable}
-          detail="Explicitly opted in"
+          detail="Consent recorded; sending checks still apply"
           tone="violet"
         />
         <Metric
-          label="Actions due"
+          label="Scheduled follow-ups"
           value={data?.follow_ups_due}
-          detail="Automation queue"
+          detail="Eligibility is checked before sending"
           tone="gold"
         />
         <Metric
@@ -550,7 +543,7 @@ function Dashboard({ data, run, message, navigate }) {
         <section className="mk-panel mk-funnel">
           <div className="mk-panel-head">
             <div>
-              <span>LIVE FUNNEL</span>
+              <span>ALL LEAD STAGES</span>
               <h3>Organizer journey</h3>
             </div>
             <b>All time</b>
@@ -565,14 +558,14 @@ function Dashboard({ data, run, message, navigate }) {
                 <div className="mk-funnel-track">
                   <i
                     style={{
-                      width: `${Math.max(4, total ? (count / total) * 100 : 0)}%`,
+                      width: `${Math.min(100, total ? (count / total) * 100 : 0)}%`,
                       background: color,
                     }}
                   />
                 </div>
                 <small>
                   {i === 0
-                    ? "100"
+                    ? (total ? "100" : "0")
                     : total
                       ? Math.round((count / total) * 100)
                       : 0}
@@ -639,20 +632,12 @@ function Dashboard({ data, run, message, navigate }) {
         </aside>
       </div>
       <section className="mk-automation-panel">
-        <div role="status" className="mk-automation-status">
-          <h3>Automatic client onboarding: {data?.automation?.runtime?.state || 'status unavailable'}</h3>
-          <p>{data?.automation?.runtime?.scheduler_running ? 'Worker running · checks every minute' : 'Automatic worker is not running'}</p>
-          {data?.automation?.runtime?.last_run?.checked_at && <p>Last check: {new Date(data.automation.runtime.last_run.checked_at).toLocaleString()}</p>}
-          {(data?.automation?.runtime?.blockers || []).map((reason) => <p key={reason}>{reason}</p>)}
-          <p>New-client conversion: {data?.automation?.runtime?.conversion?.first_event_created || 0} first events / {data?.automation?.runtime?.conversion?.enrolled || 0} enrolled clients ({data?.automation?.runtime?.conversion?.rate || 0}%). Based on recorded event-creation milestones.</p>
-          <p>“Active” templates are available for use. Messages require an eligible client, current consent and a running worker. Sent counts mean provider accepted; delivered counts come from delivery receipts.</p>
-        </div>
         <div className="mk-automation-panel-head">
           <div>
             <span>SEQUENCE AUTOMATION</span>
             <h3>Where every lead stands</h3>
           </div>
-          <button onClick={run}>Run automation →</button>
+          <button onClick={run} disabled={!data}>Review due messages →</button>
         </div>
         <div className="mk-automation-summary">
           <div>
@@ -704,7 +689,7 @@ function Dashboard({ data, run, message, navigate }) {
           ))
         ) : (
           <p className="mk-automation-empty">
-            No active sequences yet — build one in Follow-ups to start automating.
+            No active sequences yet — build one in Email sequences to start automating.
           </p>
         )}
       </section>
@@ -2874,6 +2859,10 @@ function SequenceStudio() {
 }
 
 export default function MarketingPage() {
+  const theme = useTheme()
+  const menuButton = React.useRef(null)
+  const [mobileMenu, setMobileMenu] = useState(false)
+  const [expandedGroups, setExpandedGroups] = useState({ onboarding: true })
   const [pageParams, setPageParams] = useSearchParams();
   const [tab, setTabState] = useState(pageParams.get("tab") || "dashboard"),
     [me, setMe] = useState(null),
@@ -2895,7 +2884,7 @@ export default function MarketingPage() {
   }, []);
   const tabs = useMemo(
     () => [
-      ["dashboard", "Dashboard"],
+      ["dashboard", "Client onboarding"],
       ["leads", "Leads"],
       ["handoffs", "Organizer handoffs"],
       ["tags", "Tags"],
@@ -2913,43 +2902,53 @@ export default function MarketingPage() {
     ],
     [me],
   );
+  const groups = useMemo(() => marketingGroups(tabs), [tabs])
+  const currentTab = marketingTab(pageParams.get('tab') || 'dashboard', tabs)
+  useEffect(() => { setTabState(currentTab); setMobileMenu(false); const group = groups.find(group => group.ids.includes(currentTab)); if (group) setExpandedGroups(previous => ({ ...previous, [group.id]: true })) }, [currentTab, groups])
+  useEffect(() => {
+    if (!mobileMenu) return
+    const close = event => { if (event.key === 'Escape') { setMobileMenu(false); menuButton.current?.focus() } }
+    document.addEventListener('keydown', close)
+    return () => document.removeEventListener('keydown', close)
+  }, [mobileMenu])
   const setTab = (next) => {
     setTabState(next);
-    setPageParams({ tab: next });
+    setPageParams({ tab: marketingTab(next, tabs) });
+    setMobileMenu(false);
   };
   if (error)
     return (
-      <div className="mx-auto mt-20 max-w-lg rounded-xl border bg-white p-8 text-center">
-        <h1 className="text-xl font-bold">Marketing workspace</h1>
+      <main className="mk-app mk-access-error"><section className="mk-panel">
+        <h1 className="text-xl font-bold">Client onboarding & growth</h1>
         <p className="mt-3 text-slate-500">{error}</p>
         <Link className="mt-5 inline-block text-teal-700" to="/">
           Return to Festio
         </Link>
-      </div>
+      </section></main>
     );
-  if (!me) return <div className="p-10 text-center">Loading Marketing...</div>;
+  if (!me) return <main className="mk-app mk-access-error" role="status">Loading Marketing…</main>;
   return (
     <div className="mk-app">
-      <aside className="mk-sidebar">
+      {mobileMenu && <button className="mk-nav-backdrop" aria-label="Close Marketing navigation" onClick={() => setMobileMenu(false)} />}
+      <aside id="marketing-navigation" className={`mk-sidebar${mobileMenu ? ' is-open' : ''}`}>
+        <button className="mk-mobile-close" onClick={() => setMobileMenu(false)}>Close navigation</button>
         <Link className="mk-brand" to="/admin-redesign">
           <b>F</b>
           <span>
-            Festio<small>Growth studio</small>
+            Festio<small>Marketing</small>
           </span>
         </Link>
-        <nav>
-          {tabs.map(([id, label]) => (
-            <button
-              key={id}
-              onClick={() => setTab(id)}
-              className={tab === id ? "active" : ""}
-            >
-              <i>{NAV_ICONS[id] || "◫"}</i>
-              <span>{label}</span>
-              {tab === id && <b>›</b>}
-            </button>
-          ))}
+        <nav aria-label="Marketing workspace navigation">
+          {groups.map(group => {
+            const active = group.tabs.some(([id]) => id === tab)
+            const expanded = expandedGroups[group.id] ?? active
+            return <section className="mk-nav-group" key={group.id}>
+              <button className="mk-nav-group-toggle" aria-expanded={expanded} aria-controls={`marketing-group-${group.id}`} onClick={() => setExpandedGroups(previous => ({ ...previous, [group.id]: !expanded }))}>{group.label}<span aria-hidden="true">{expanded ? '−' : '+'}</span></button>
+              <div id={`marketing-group-${group.id}`} hidden={!expanded}>{group.tabs.map(([id,label]) => <button key={id} onClick={() => setTab(id)} className={tab === id ? 'active' : ''} aria-current={tab === id ? 'page' : undefined}><i aria-hidden="true">{NAV_ICONS[id] || '◫'}</i><span>{label}</span></button>)}</div>
+            </section>
+          })}
         </nav>
+        <p className="mk-scope-note">Client marketing · guest invitations and event messages belong in the event workspace.</p>
         <div className="mk-sidebar-foot">
           <span>FG</span>
           <div>
@@ -2963,10 +2962,12 @@ export default function MarketingPage() {
           <div>
             <span>Workspace</span>
             <h1>{tabs.find(([id]) => id === tab)?.[1] || "Marketing"}</h1>
+            <p className="mk-subtitle">{TAB_DESCRIPTIONS[tab] || 'Plan and review your client marketing in one workspace.'}</p>
           </div>
           <div className="mk-top-actions">
-            <button title="Search">⌕</button>
-            <button title="Notifications">◌</button>
+            <button ref={menuButton} className="mk-mobile-menu" aria-controls="marketing-navigation" aria-expanded={mobileMenu} onClick={() => setMobileMenu(value => !value)}>Menu</button>
+            {theme && <button className="mk-theme-switch" onClick={theme.toggle} aria-label={theme.dark ? 'Switch to light theme' : 'Switch to dark theme'}>{theme.dark ? 'Light theme' : 'Dark theme'}</button>}
+            <button onClick={() => setTab('help')}>Help</button>
             <span>
               {new Date().toLocaleDateString(undefined, {
                 month: "short",
@@ -2976,7 +2977,7 @@ export default function MarketingPage() {
             </span>
           </div>
         </header>
-        <div className="mk-content">
+        <div className={`mk-content mk-view-${tab}`}>
           <MarketingErrorBoundary key={tab}>
             {tab === "dashboard" ? (
               <Dashboard

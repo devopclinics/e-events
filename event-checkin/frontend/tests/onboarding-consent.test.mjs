@@ -25,3 +25,16 @@ test('automatic preview excludes historical contacts and missing eligibility pro
  assert.deepEqual(onboardingPreviewLeads(leads,{enabled:true}).map(x=>x.id),['eligible'])
  assert.equal(onboardingPreviewLeads(leads,{enabled:false}).length,3)
 })
+
+test('blocked browser storage never interrupts signup or verified sign-in', () => {
+ const descriptor=Object.getOwnPropertyDescriptor(globalThis,'localStorage')
+ try {
+  Object.defineProperty(globalThis,'localStorage',{configurable:true,get(){throw new Error('Storage disabled')}})
+  assert.doesNotThrow(()=>rememberSignupConsent('one','one@example.com',true))
+  assert.deepEqual(verifiedSignupConsent({uid:'one',email:'one@example.com',emailVerified:true}),{})
+  assert.doesNotThrow(()=>clearSignupConsent('one'))
+ } finally {
+  if(descriptor)Object.defineProperty(globalThis,'localStorage',descriptor)
+  else delete globalThis.localStorage
+ }
+})

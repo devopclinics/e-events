@@ -5,6 +5,7 @@ import { api } from "../api";
 import "./MarketingPage.css";
 import { useTheme } from '../context/ThemeContext'
 import { marketingGroups, marketingTab } from './marketingNavigation.mjs'
+import './MarketingVisual.css'
 import OrganizerHandoffs from './OrganizerHandoffs'
 
 const TAB_DESCRIPTIONS = {
@@ -505,7 +506,19 @@ function Dashboard({ data, run, message, navigate }) {
   ];
   return (
     <div className="space-y-5">
-      <section className="mk-dashboard-intro"><div><span className="mk-eyebrow">CLIENT ONBOARDING</span><h2>From signup to the first event.</h2><p>Review the worker, client progress and replies that need your team.</p></div><div className="mk-dashboard-actions"><button onClick={() => navigate('sequences')}>Review email journey</button><button onClick={() => navigate('handoffs')}>Replies & handoffs →</button></div></section>
+      <section className="mk-dashboard-intro"><div><span className="mk-eyebrow">A GOOD START BECOMES A GREAT EVENT</span><h2>More first events. Less chasing.</h2><p>Your clients’ next steps, thoughtfully connected.</p></div></section>
+      <section className="mk-journey-hero">
+        <div><span className="mk-eyebrow">THE ORGANISER JOURNEY</span><h2>From “I have an idea”<br/>to “you’re invited.”</h2><p>A warm welcome, a helpful nudge and the right support. Help new organisers take their next step.</p><button onClick={() => navigate('sequences')}>Review email journey</button><span className="mk-hero-runtime">Onboarding: {runtimeState}</span></div>
+        <div className="mk-journey-art"><div className="mk-journey-circle"><strong>{data?.automation?.runtime?.conversion?.first_event_created ?? 0}</strong><span>first events created</span><small>Automatically enrolled clients</small></div><span className="mk-journey-float welcome">✉ &nbsp; A warm welcome</span><span className="mk-journey-float event">✦ &nbsp; An event takes shape</span></div>
+      </section>
+      <section className="mk-journey-steps" aria-label="Client journey milestones">
+        {[
+          ['♧','A new beginning','Registered organisers',total,'All time'],
+          ['✉','A personal welcome','Email guidance requires recorded consent',data?.email_marketable ?? 0,'Email opted in'],
+          ['✦','A helpful next step','Messages checked for eligibility before sending',data?.follow_ups_due ?? 0,'Scheduled follow-ups'],
+          ['⚑','An event comes to life','Organisers with a recorded event',created,'All time'],
+        ].map(([icon,title,copy,count,label]) => <article key={title}><span className="mk-milestone-icon" aria-hidden="true">{icon}</span><h3>{title}</h3><p>{copy}</p><footer><strong>{count}</strong><span>{label}</span></footer></article>)}
+      </section>
         <section role="status" className={`mk-automation-status mk-worker-status is-${runtimeState}`} aria-label="Automatic onboarding status">
           <h3>Automatic client onboarding: {data?.automation?.runtime?.state || 'status unavailable'}</h3>
           <p>{data?.automation?.runtime?.scheduler_running ? 'Worker running · checks every minute' : data?.automation?.runtime ? 'Automatic worker is not running' : 'Worker status is unavailable'}</p>
@@ -514,6 +527,11 @@ function Dashboard({ data, run, message, navigate }) {
           <p>New-client conversion: {data?.automation?.runtime?.conversion?.first_event_created || 0} first events / {data?.automation?.runtime?.conversion?.enrolled || 0} enrolled clients ({data?.automation?.runtime?.conversion?.rate || 0}%). Based on recorded event-creation milestones.</p>
           <details><summary>Eligibility and delivery explained</summary><p>“Active” templates are available for use. Messages require an eligible client, current consent and a running worker. Sent counts mean provider accepted; delivered counts come from delivery receipts.</p></details>
         </section>
+      <section className="mk-overview-next">
+        <article><span className="mk-eyebrow">PEOPLE MAKING PROGRESS</span><h3>Know where each client stands.</h3><p>Review organiser details, journey status and the next useful action in one place.</p><button onClick={()=>navigate('leads')}>Explore clients →</button></article>
+        <article><span className="mk-eyebrow">A CONVERSATION TO CONTINUE</span><h3>A human touch, when it matters.</h3><p>Pick up client replies, assign an owner and help them move forward.</p><button onClick={()=>navigate('handoffs')}>Open replies & follow-up →</button></article>
+      </section>
+      <details className="mk-overview-details"><summary>Detailed reporting & sequence activity</summary>
       <div className="mk-metrics">
         <Metric
           label="Total leads"
@@ -693,6 +711,7 @@ function Dashboard({ data, run, message, navigate }) {
           </p>
         )}
       </section>
+      </details>
     </div>
   );
 }
@@ -922,7 +941,7 @@ function Leads() {
       source: searchParams.get("source") || "",
       consent: searchParams.get("consent") || "",
     }),
-    [viewMode, setViewMode] = useState(searchParams.get("view") || "table"),
+    [viewMode, setViewMode] = useState(searchParams.get("view") || "cards"),
     [selected, setSelected] = useState(null),
     [checked, setChecked] = useState([]),
     [activity, setActivity] = useState([]),
@@ -1160,7 +1179,7 @@ function Leads() {
             });
           }}
         >
-          <option value="table">Table view</option>
+          <option value="cards">Client cards</option><option value="table">Table view</option>
           <option value="kanban">Stage board</option>
           <option value="automation">Automation board</option>
         </select>
@@ -1252,6 +1271,11 @@ function Leads() {
                 ))}
             </section>
           ))}
+        </div>
+      ) : viewMode === "cards" ? (
+        <div className="mk-client-cards">
+          {!rows.length && <p className="mk-empty">No clients match these filters.</p>}
+          {rows.map(lead => <article key={lead.id}><span className="mk-client-avatar">{(lead.name || lead.email || '?').slice(0,2).toUpperCase()}</span><h3>{lead.name || lead.email}</h3><p>{lead.organization || lead.email}</p><span className="mk-client-stage">{(lead.stage || 'New client').replaceAll('_',' ')}</span><p>{leadAutomationStatus(lead)}</p><button onClick={() => open(lead)}>View client →</button></article>)}
         </div>
       ) : viewMode === "automation" ? (
         <div className="mk-kanban mk-automation-board">
@@ -2780,6 +2804,7 @@ function SequenceStudio() {
               <p>{r.payload?.stage || 'any stage'} · {stepsCount(r)} step{stepsCount(r) !== 1 ? 's' : ''} · cadence {r.payload?.cadence_days || 3}d</p>
             </div>
             <span className={`mk-status ${r.status}`}>{r.status}</span>
+            {r.payload?.steps?.[0] && <div className="mk-sequence-thumbnail"><iframe title={`${r.name} first message design`} sandbox="" tabIndex={-1} srcDoc={emailPreviewHtml({ subject:r.payload.steps[0].subject,body:r.payload.steps[0].body,cta:r.payload.steps[0].cta,ctaUrl:r.payload.steps[0].cta_url })}/><small>First step · layout preview. Use studio to review and send a test.</small></div>}
             <div className="mk-card-preview">
               {(r.payload?.steps || []).slice(0, 3).map((s, i) => (
                 <span key={i}><small>Step {i + 1}</small><b>{s.subject || '(no subject)'}</b></span>
@@ -2884,9 +2909,9 @@ export default function MarketingPage() {
   }, []);
   const tabs = useMemo(
     () => [
-      ["dashboard", "Client onboarding"],
-      ["leads", "Leads"],
-      ["handoffs", "Organizer handoffs"],
+      ["dashboard", "Overview"],
+      ["leads", "Clients"],
+      ["handoffs", "Replies & follow-up"],
       ["tags", "Tags"],
       ...MODULE_TABS,
       ["analytics", "Analytics"],

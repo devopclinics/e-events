@@ -713,6 +713,32 @@
         "title": "Authority",
         "type": "object"
       },
+      "Batch": {
+        "additionalProperties": false,
+        "properties": {
+          "request_key": {
+            "maxLength": 80,
+            "minLength": 16,
+            "title": "Request Key",
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/Row"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "request_key",
+          "rows"
+        ],
+        "title": "Batch",
+        "type": "object"
+      },
       "Body_import_contacts_csv_api_organizations_me_contact_lists__list_id__contacts_csv_post": {
         "properties": {
           "file": {
@@ -19454,6 +19480,65 @@
         "title": "RevokeRequest",
         "type": "object"
       },
+      "Row": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "default": "",
+            "maxLength": 255,
+            "title": "Email",
+            "type": "string"
+          },
+          "first_name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "First Name",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "maxLength": 36,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "last_name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Last Name",
+            "type": "string"
+          },
+          "phone": {
+            "default": "",
+            "maxLength": 40,
+            "title": "Phone",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "required": [
+          "first_name",
+          "last_name"
+        ],
+        "title": "Row",
+        "type": "object"
+      },
       "SaveForm": {
         "additionalProperties": false,
         "properties": {
@@ -21084,6 +21169,28 @@
           "reason"
         ],
         "title": "SessionEntryOverride",
+        "type": "object"
+      },
+      "Settings": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_edit": {
+            "default": false,
+            "title": "Allow Edit",
+            "type": "boolean"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "reset_pin": {
+            "default": false,
+            "title": "Reset Pin",
+            "type": "boolean"
+          }
+        },
+        "title": "Settings",
         "type": "object"
       },
       "ShipmentCreate": {
@@ -23192,6 +23299,21 @@
           "action"
         ],
         "title": "TrialResolve",
+        "type": "object"
+      },
+      "Unlock": {
+        "additionalProperties": false,
+        "properties": {
+          "pin": {
+            "pattern": "^[0-9]{6}$",
+            "title": "Pin",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pin"
+        ],
+        "title": "Unlock",
         "type": "object"
       },
       "UserOut": {
@@ -37603,6 +37725,104 @@
         ]
       }
     },
+    "/api/events/{event_id}/guest-sheet": {
+      "get": {
+        "operationId": "get_settings_api_events__event_id__guest_sheet_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Settings",
+        "tags": [
+          "shared-guest-sheet"
+        ]
+      },
+      "put": {
+        "operationId": "save_settings_api_events__event_id__guest_sheet_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Settings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Save Settings",
+        "tags": [
+          "shared-guest-sheet"
+        ]
+      }
+    },
     "/api/events/{event_id}/guests": {
       "get": {
         "operationId": "list_guests_api_events__event_id__guests_get",
@@ -49818,6 +50038,196 @@
         "summary": "Public Campaign Qr",
         "tags": [
           "donations-public"
+        ]
+      }
+    },
+    "/api/guest-sheets/{token}/rows": {
+      "get": {
+        "operationId": "list_rows_api_guest_sheets__token__rows_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-guest-sheet-session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Guest-Sheet-Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Rows",
+        "tags": [
+          "shared-guest-sheet"
+        ]
+      },
+      "post": {
+        "operationId": "save_rows_api_guest_sheets__token__rows_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-guest-sheet-session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Guest-Sheet-Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Batch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Rows",
+        "tags": [
+          "shared-guest-sheet"
+        ]
+      }
+    },
+    "/api/guest-sheets/{token}/unlock": {
+      "post": {
+        "operationId": "unlock_api_guest_sheets__token__unlock_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Unlock"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unlock",
+        "tags": [
+          "shared-guest-sheet"
         ]
       }
     },

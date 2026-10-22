@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from .database import engine
 from .config import settings
 from .engagement_config import engagement_settings
-from .routers import event_forms, prospect_webhooks
+from .routers import event_forms, prospect_webhooks, guest_sheets
 from .routers import guest_services, events, guests, scanner, dashboard, seating, menu, logistics, registry, speakers, partners, reminders, scheduled_communications, access, trials, demo, classify, messaging, meta_whatsapp, resend_webhooks, templates as templates_router, self_checkin, experience, tasks, public_sites, donations, live_content, conference_center
 from .routers import auth as auth_router
 from .routers import invite as invite_router
@@ -241,6 +241,7 @@ app.include_router(conference_center.public_router, prefix="/api/conference-call
 app.include_router(event_forms.router, prefix="/api/events", tags=["event-forms"])
 app.include_router(experience.router,  prefix="/api/events", tags=["experience"])
 app.include_router(inbound_email_automations_router.router, prefix="/api/events", tags=["inbound-email-automations"])
+app.include_router(guest_sheets.router, prefix="/api", tags=["shared-guest-sheet"])
 app.include_router(guests.router,      prefix="/api/events", tags=["guests"])
 app.include_router(guest_services.router, prefix="/api/events", tags=["guest-services"])
 app.include_router(tasks.router,       prefix="/api/events", tags=["tasks"])

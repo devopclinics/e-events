@@ -9,6 +9,7 @@ import { api } from '../api'
 import { INVITE_THEMES, RSVP_QUESTION_PRESETS } from './AdminPage'
 import { seatingTerm } from '../seatingTerm'
 import './GuestsRedesignPage.css'
+import GuestSheetControls from './GuestSheetControls'
 
 const STAT_TILES = [
   { key: 'total', label: 'Total Guests', icon: 'users', tone: 'teal' },
@@ -1422,6 +1423,7 @@ export default function GuestsRedesignPage() {
   const [dupGroups, setDupGroups] = useState(null) // null = loading, [] = none found
   const [dupKeepChoice, setDupKeepChoice] = useState({}) // normalized_name -> chosen keeper guest id
   const [dupMergingKey, setDupMergingKey] = useState('')
+  const [sheetOpen,setSheetOpen]=useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [importStep, setImportStep] = useState('upload') // upload | mapping | validating | result
   const [importProgress, setImportProgress] = useState(0)
@@ -1708,13 +1710,14 @@ export default function GuestsRedesignPage() {
           </div>
           <div className="rr-meta"><Icon name="users" size={13} /> {guests.length} guests <span className="rr-dot">·</span> <Icon name="send" size={13} /> {guests.filter((g) => g.invited !== '—').length} invited</div>
         </div>
-        <div className="rr-head-actions">
+        <div className="rr-head-actions"><button className="rr-btn secondary" onClick={()=>setSheetOpen(true)}>Shared guest sheet</button>
           <button className="rr-btn secondary" onClick={openDuplicateCheck}><Icon name="users" size={15} /> Check duplicates</button>
           <button className="rr-btn secondary" onClick={() => { setImportStep('upload'); setImportResult(null); setImportProgress(0); setImportOpen(true) }}><Icon name="upload" size={15} /> Import guests</button>
           <button className="rr-btn primary" onClick={() => setAddOpen(true)}><Icon name="plus" size={14} /> Add guest</button>
         </div>
       </div>
 
+      {sheetOpen&&<GuestSheetControls eventId={eventId} onClose={()=>setSheetOpen(false)}/>}
       <div className="rr-tabs">
         <button className={tab === 'guests' ? 'active' : ''} onClick={() => goTab('guests')}>Guests</button>
         <button className={tab === 'invite' ? 'active' : ''} onClick={() => goTab('invite')}>Invites &amp; RSVP</button>

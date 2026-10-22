@@ -3091,3 +3091,34 @@ class GuestServiceOfflineReceipt(Base):
     payload_hash: Mapped[str] = mapped_column(String(64))
     result: Mapped[dict] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime,default=datetime.utcnow)
+
+
+class SharedGuestSheet(Base):
+    __tablename__ = 'shared_guest_sheets'
+    event_id: Mapped[str] = mapped_column(ForeignKey('events.id', ondelete='CASCADE'), primary_key=True)
+    token: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    pin_hash: Mapped[str] = mapped_column(String(255))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    allow_edit: Mapped[bool] = mapped_column(Boolean, default=False)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    failed_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    attempt_window: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class GuestSheetSession(Base):
+    __tablename__ = 'guest_sheet_sessions'
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    event_id: Mapped[str] = mapped_column(ForeignKey('shared_guest_sheets.event_id', ondelete='CASCADE'), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class GuestSheetBatch(Base):
+    __tablename__ = 'guest_sheet_batches'
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(ForeignKey('events.id', ondelete='CASCADE'), index=True)
+    request_key: Mapped[str] = mapped_column(String(80))
+    payload_hash: Mapped[str] = mapped_column(String(64))
+    result: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    __table_args__ = (UniqueConstraint('event_id', 'request_key', name='uq_guest_sheet_batch_request'),)

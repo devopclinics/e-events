@@ -1142,6 +1142,8 @@ export const api = {
 
   // ── Invite page settings (admin) ──────────────────────────────────────────
   updateInviteSettings: (eventId, data) => req('PUT', `/events/${eventId}/invite-settings`, data),
+  guestSheetSettings: (eventId) => req('GET', `/events/${eventId}/guest-sheet`),
+  saveGuestSheetSettings: (eventId, body) => req('PUT', `/events/${eventId}/guest-sheet`, body),
   generateRSVPLink: (eventId, regenerate = false) => req('POST', `/events/${eventId}/rsvp-link`, { regenerate }),
   // RSVP questions CRUD (admin)
   listRSVPQuestions: (eventId) => req('GET', `/events/${eventId}/rsvp-questions`),

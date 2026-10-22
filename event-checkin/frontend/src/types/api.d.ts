@@ -149,6 +149,11 @@ export interface Authority {
   verified: boolean
 }
 
+export interface Batch {
+  request_key: string
+  rows: (Row)[]
+}
+
 export interface Body_import_contacts_csv_api_organizations_me_contact_lists__list_id__contacts_csv_post {
   file: string
 }
@@ -3014,6 +3019,15 @@ export interface RevokeRequest {
   reason: string
 }
 
+export interface Row {
+  email?: string
+  first_name: string
+  id?: (string) | null
+  last_name: string
+  phone?: string
+  revision?: (string) | null
+}
+
 export interface RSVPConfirm {
   first_name: string
   id: string
@@ -3298,6 +3312,12 @@ export interface SendConsentCopyOut {
 
 export interface SessionEntryOverride {
   reason: string
+}
+
+export interface Settings {
+  allow_edit?: boolean
+  enabled?: boolean
+  reset_pin?: boolean
 }
 
 export interface ShipmentCreate {
@@ -3616,6 +3636,10 @@ export interface TrialResolve {
   event_id?: (string) | null
   note?: (string) | null
   tier?: (string) | null
+}
+
+export interface Unlock {
+  pin: string
 }
 
 export interface UserOut {

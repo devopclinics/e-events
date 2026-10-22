@@ -9,6 +9,8 @@ import SupportWidget from './components/SupportWidget'
 import RedesignGate from './pages/redesign/RedesignGate'
 import { setUiPreference } from './pages/redesign/uiPreference'
 
+const SharedGuestSheet = lazy(() => import('./pages/SharedGuestSheet'))
+
 // Route pages are intentionally lazy: declaring both legacy and redesign routes
 // must not make users download both implementations at startup.
 const AdminPage = lazy(() => import('./pages/AdminPage'))
@@ -451,6 +453,7 @@ function AppRoutes() {
       <Suspense fallback={<RouteLoading />}>
       <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/guest-sheet/:token" element={<SharedGuestSheet />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/scan/:token" element={<ScanAutoPage />} />
       {/* Public self check-in — no auth required */}

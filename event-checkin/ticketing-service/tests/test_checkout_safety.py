@@ -109,3 +109,56 @@ def test_go_live_fails_closed_and_rotated_credentials_invalidate_confirmations(m
             assert not next(item for item in result['checks'] if item['id']=='webhook')['ready']
         await engine.dispose()
     asyncio.run(run())
+
+def test_cloudflare_client_header_requires_verified_edge_in_proxy_chain():
+    def request(peer,xff,visitor):
+        return Request({'type':'http','client':(peer,123),'headers':[(b'x-forwarded-for',xff.encode()),(b'cf-connecting-ip',visitor.encode())]})
+    assert peer_address(request('192.168.70.244','172.70.1.2, 192.168.70.203','203.0.113.123'))=='203.0.113.123'
+    # Direct-origin visitor cannot invent a Cloudflare header.
+    assert peer_address(request('192.168.70.244','203.0.113.99, 192.168.70.203','203.0.113.123'))=='203.0.113.99'
+    assert peer_address(request('203.0.113.99','172.70.1.2','203.0.113.123'))=='203.0.113.99'
+    assert peer_address(request('192.168.70.244','2606:4700::1, 192.168.70.203','2001:db8::1'))=='2001:db8::1'
+    assert peer_address(request('192.168.70.244','172.70.1.2','garbage'))=='172.70.1.2'
+
+def test_repeated_limited_requests_are_rejected_before_database_access(monkeypatch):
+    from app import safety
+    safety._denied.clear()
+    now=[100.0]
+    monkeypatch.setattr(safety,'monotonic',lambda:now[0])
+    bucket=AsyncMock(side_effect=HTTPException(429,'limited',headers={'Retry-After':'5'}))
+    monkeypatch.setattr(safety,'take_bucket',bucket)
+    async def run():
+        for _ in range(3):
+            with pytest.raises(HTTPException) as exc:await safety.checkout_limits(None,'cache-test','mail@example.com','203.0.113.8')
+            assert exc.value.status_code==429
+        assert bucket.await_count==1
+        now[0]+=6
+        with pytest.raises(HTTPException):await safety.checkout_limits(None,'cache-test','mail@example.com','203.0.113.8')
+        assert bucket.await_count==2
+    try:asyncio.run(run())
+    finally:safety._denied.clear()
+
+def test_request_protection_is_scoped_and_hop_details_are_superadmin_only():
+    from app.main import request_protection
+    from app.auth import Identity
+    request=Request({'type':'http','client':('192.168.70.244',123),'headers':[(b'x-forwarded-for',b'172.70.1.2, 192.168.70.203'),(b'cf-connecting-ip',b'203.0.113.123')]})
+    result=asyncio.run(request_protection('event',request,Identity('admin','event','org','admin')))
+    assert result['client_ip']=='203.0.113.123'
+    assert 'peer' not in result and 'forwarded_hops' not in result
+    result=asyncio.run(request_protection('event',request,Identity('admin','event','org','admin',True)))
+    assert result['peer']=='192.168.70.244'
+    for identity in [Identity('admin','other','org','admin'),Identity('member','event','org','member')]:
+        with pytest.raises(HTTPException) as exc:asyncio.run(request_protection('event',request,identity))
+        assert exc.value.status_code==403
+
+@pytest.mark.parametrize('config',[None,SimpleNamespace(enabled=False)])
+def test_unavailable_catalog_does_not_write_rate_counters_or_lock_buyer(config,monkeypatch):
+    from app import main
+    from app.schemas import OrderIn
+    limit=AsyncMock();monkeypatch.setattr(main,'checkout_limits',limit)
+    db=SimpleNamespace(get=AsyncMock(return_value=config),scalar=AsyncMock())
+    body=OrderIn(buyer_name='Fixture',buyer_email='fixture@example.com',lines=[{'product_id':'p','quantity':1,'attendees':[{'first_name':'Fixture'}]}])
+    request=Request({'type':'http','client':('203.0.113.1',123),'headers':[]})
+    with pytest.raises(HTTPException) as exc:asyncio.run(main.create_order('missing',body,db,request))
+    assert exc.value.status_code==404
+    limit.assert_not_called();db.scalar.assert_not_called()

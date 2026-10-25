@@ -22,7 +22,7 @@ from .models import AuditEvent, CancellationRequest, EventConfig, FeePolicy, Jou
 from .providers import provider, verify_paystack, verify_stripe
 from .schemas import SetupConfirmIn, BulkResendIn, CancellationDecisionIn, CancellationIn, ComplimentaryOrderIn, EventConfigIn, FeePolicyIn, OperationsSubscriptionIn, OrderIn, PaystackAccountIn, PrivacyDecisionIn, PrivacyRequestIn, ProductIn, PromoIn, ProviderBootstrapIn, RefundIn, SalesReportIn, StripeAccountIn, TransferIn, WaitlistIn, WaitlistOfferIn
 
-from .safety import order_view, payment_kind, csv_safe, checkout_limits, peer_address, clean_buckets, lock_buyer
+from .safety import order_view, payment_kind, csv_safe, checkout_limits, peer_address, client_network, clean_buckets, lock_buyer
 from .readiness import checklist, provider_fingerprint
 
 logging.basicConfig(level=logging.INFO)
@@ -525,6 +525,19 @@ async def get_config(event_id: str, ident: Identity = Depends(current_identity),
                            "can_manage": ident.is_platform_superadmin}}
 
 
+@app.get('/api/ticketing/events/{event_id}/request-protection')
+async def request_protection(event_id: str,request: Request,ident: Identity=Depends(current_identity)):
+    require_admin(ident)
+    if ident.event_id!=event_id:raise HTTPException(403,'Wrong event scope')
+    # Organizers see only their own resolved address; platform superadmins may
+    # inspect hop addresses. No credentials, buyer data or database writes.
+    details=client_network(request)
+    if ident.is_platform_superadmin:
+        details.update(peer=request.client.host if request.client else None,forwarded_hops=request.headers.get('x-forwarded-for','').split(','))
+    return {**details,'per_ip_per_minute':settings.checkout_ip_per_minute,
+            'per_email_per_hour':settings.checkout_email_per_hour,'pending_per_email':settings.checkout_pending_per_email}
+
+
 @app.get('/api/ticketing/events/{event_id}/go-live')
 async def go_live(event_id: str,ident: Identity=Depends(current_identity),db: AsyncSession=Depends(get_db)):
     require_admin(ident)
@@ -872,6 +885,9 @@ async def create_promo(event_id: str, body: PromoIn, ident: Identity = Depends(c
 
 @app.post("/api/ticketing/public/events/{event_id}/orders", status_code=201, dependencies=[Depends(require_service_enabled)])
 async def create_order(event_id: str, body: OrderIn, db: AsyncSession = Depends(get_db), request: Request = None):
+    cfg = await db.get(EventConfig, event_id)
+    if not cfg or not cfg.enabled:
+        raise HTTPException(404, "Ticketing is not available for this event")
     if request is not None:
         await checkout_limits(db,event_id,str(body.buyer_email),peer_address(request))
     await expire_abandoned_orders(db, event_id)
@@ -880,9 +896,6 @@ async def create_order(event_id: str, body: OrderIn, db: AsyncSession = Depends(
         func.lower(Order.buyer_email)==str(body.buyer_email).lower(),Order.status.in_(['pending','payment_processing'])))
     if int(held_count or 0)>=settings.checkout_pending_per_email:
         raise HTTPException(429,'Finish or wait for an existing pending order before starting another.',headers={'Retry-After':'60'})
-    cfg = await db.get(EventConfig, event_id)
-    if not cfg or not cfg.enabled:
-        raise HTTPException(404, "Ticketing is not available for this event")
     configured_fields = {field["id"]: field for field in (cfg.checkout_fields or [])}
     if set(body.custom_answers) - set(configured_fields):
         raise HTTPException(400, "Checkout contains unknown custom fields")

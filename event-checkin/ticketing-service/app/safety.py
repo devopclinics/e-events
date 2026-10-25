@@ -1,5 +1,7 @@
 """Public checkout controls and explicit organizer-only order projections."""
-import hashlib,ipaddress
+import hashlib,ipaddress,math
+from collections import OrderedDict
+from time import monotonic
 from datetime import datetime,timedelta
 from time import time
 from fastapi import HTTPException,Request
@@ -28,17 +30,60 @@ def order_view(order):
     return result
 
 
-def peer_address(request: Request):
+def client_network(request: Request):
     address=request.client.host if request.client else 'unknown'
     networks=[ipaddress.ip_network(item.strip()) for item in settings.trusted_proxy_cidrs.split(',') if item.strip()]
-    def trusted(value):
-        try:return any(ipaddress.ip_address(value) in network for network in networks)
+    cloudflare=[ipaddress.ip_network(item.strip()) for item in settings.cloudflare_proxy_cidrs.split(',') if item.strip()]
+    def belongs(value,ranges):
+        try:return any(ipaddress.ip_address(value) in network for network in ranges)
         except ValueError:return False
-    if trusted(address):
+    if belongs(address,networks):
         chain=[value.strip() for value in request.headers.get('x-forwarded-for','').split(',') if value.strip()]+[address]
         for item in reversed(chain):
-            if not trusted(item):return item
-    return address
+            if belongs(item,networks):continue
+            try:item=str(ipaddress.ip_address(item))
+            except ValueError:continue
+            if belongs(item,cloudflare):
+                try:
+                    visitor=str(ipaddress.ip_address(request.headers.get('cf-connecting-ip','')))
+                    return {'client_ip':visitor,'source':'cloudflare'}
+                except ValueError:pass
+            return {'client_ip':item,'source':'forwarded'}
+    return {'client_ip':address,'source':'direct'}
+
+
+def peer_address(request: Request):
+    return client_network(request)['client_ip']
+
+
+_denied = OrderedDict()
+
+
+def _deny_key(scope,key):
+    return hashlib.sha256((scope+'|'+key).encode()).hexdigest()
+
+
+def _cached_denial(scope,key):
+    digest=_deny_key(scope,key)
+    expires=_denied.get(digest)
+    if expires is None:return
+    remaining=math.ceil(expires-monotonic())
+    if remaining<=0:
+        _denied.pop(digest,None);return
+    _denied.move_to_end(digest)
+    raise HTTPException(429,'Too many checkout attempts. Try again shortly.',headers={'Retry-After':str(remaining)})
+
+
+async def _limited_bucket(db,scope,key,limit,seconds):
+    _cached_denial(scope,key)
+    try:await take_bucket(db,scope,key,limit,seconds)
+    except HTTPException as exc:
+        if exc.status_code==429:
+            digest=_deny_key(scope,key)
+            _denied[digest]=monotonic()+int(exc.headers['Retry-After'])
+            _denied.move_to_end(digest)
+            while len(_denied)>10000:_denied.popitem(last=False)
+        raise
 
 
 async def take_bucket(db,scope,key,limit,seconds):
@@ -52,14 +97,19 @@ async def take_bucket(db,scope,key,limit,seconds):
                 db.add(CheckoutRateBucket(id=digest,count=0,expires_at=start+timedelta(seconds=seconds*2)));await db.flush()
         except IntegrityError:pass
         row=await db.scalar(select(CheckoutRateBucket).where(CheckoutRateBucket.id==digest).with_for_update())
-    if row.count>=limit:raise HTTPException(429,'Too many checkout attempts. Try again shortly.',headers={'Retry-After':str(seconds)})
+    if row.count>=limit:raise HTTPException(429,'Too many checkout attempts. Try again shortly.',headers={'Retry-After':str(max(1,math.ceil((start+timedelta(seconds=seconds)-now).total_seconds())))})
     row.count+=1
     await db.commit()
 
 
 async def checkout_limits(db,event_id,email,peer):
-    await take_bucket(db,'checkout-ip:'+event_id,peer,settings.checkout_ip_per_minute,60)
-    await take_bucket(db,'checkout-email:'+event_id,email.strip().lower(),settings.checkout_email_per_hour,3600)
+    normalized=email.strip().lower()
+    # Cheap, bounded per-worker denial cache shields the database once a shared
+    # limit is reached; the database remains authoritative across replicas.
+    _cached_denial('checkout-ip:'+event_id,peer)
+    _cached_denial('checkout-email:'+event_id,normalized)
+    await _limited_bucket(db,'checkout-ip:'+event_id,peer,settings.checkout_ip_per_minute,60)
+    await _limited_bucket(db,'checkout-email:'+event_id,normalized,settings.checkout_email_per_hour,3600)
 
 
 async def clean_buckets(db):

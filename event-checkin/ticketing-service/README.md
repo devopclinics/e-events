@@ -44,3 +44,11 @@ Paid webhooks validate signature, amount, currency and provider reference.
 Provider event IDs are unique, so replay is safe. Fulfillment retries are safe;
 the core backend keys created guests by paid order ID. A full refund releases
 inventory and voids the corresponding Festio passes.
+
+## Pausing sales and client identity
+
+Pausing an event closes checkout while retaining organizer access to orders, refunds, reports, exports and Operations. Search and visible-tab report refresh continue while paused. Bulk resend and attendee/refund/tax columns in exports already exist; they do not depend on accepting new sales.
+
+The service uses the nearest non-cluster hop in the forwarded chain. It uses `CF-Connecting-IP` only when that hop is in Cloudflare's published edge ranges and the immediate peer is a configured trusted proxy. Direct-origin client headers are not trusted as Cloudflare evidence. The published IPv4/IPv6 ranges were checked on 2026-10-25: [IPv4 ranges](https://www.cloudflare.com/ips-v4) and [IPv6 ranges](https://www.cloudflare.com/ips-v6). Keep the ranges current when the edge topology changes. The event-scoped, authenticated `GET /events/{event_id}/request-protection` endpoint reports the caller's selected address and limits; only platform superadmins receive underlying hop diagnostics. It does not create an order or increment a limiter.
+
+Database counters remain authoritative across replicas. A bounded per-worker denial cache rejects repeat traffic after a shared limit is reached, without more counter writes until the window resets. It is not a distributed edge WAF or a replacement for inventory/checkout locks. Large-report totals still scan matching financial metadata and need a separate database-aggregation change; processor fee and bank settlement reports require actual connected-provider data.

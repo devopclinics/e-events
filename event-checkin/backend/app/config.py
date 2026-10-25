@@ -2,6 +2,8 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    meetings_sending_enabled: bool = False
+    meetings_signing_key: str = ""
     database_url: str = "postgresql+asyncpg://checkin:checkin@localhost/checkin"
     # Read-only Postgres role dashboard-service connects with (SELECT-only —
     # enforced at the DB layer, provisioned idempotently by db_migrate.py).

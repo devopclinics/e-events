@@ -325,6 +325,7 @@ const TOP_LINKS = [
     gate: ({ user }) => GUIDED_SETUP_ENABLED && ['admin', 'event_manager'].includes(user?.role),
   },
   { id: 'events', label: 'Events', to: '/events-redesign', icon: 'calendar' },
+  { id: 'meetings', label: 'Meetings', to: '/meetings', icon: 'calendar' },
   {
     id: 'design', label: 'Design Studio', to: '/design-studio-redesign', icon: 'palette',
     gate: ({ user, event }) => user?.role === 'admin' && !!event?.is_paid,

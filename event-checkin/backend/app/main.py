@@ -39,6 +39,8 @@ from services import wa_template_poller
 from . import routers
 from . import storage
 from .database import AsyncSessionLocal
+from .routers import meetings as meetings_router
+from .services import meeting_outbox
 from .models import ApiKeyRequestLog
 
 # Override with UPLOADS_DIR for local/test runs; defaults to the in-container path.
@@ -64,6 +66,7 @@ async def lifespan(app: FastAPI):
     # rate changes from a Console save on one pod from going stale on the
     # others until they happen to restart.
     cache_refresh_task = asyncio.create_task(entitlements.run_cache_refresher())
+    meetings_task = asyncio.create_task(meeting_outbox.run()) if settings.meetings_sending_enabled else None
 
     # Run the guest-list sync poller inside the web process for single-host
     # deploys (default). When scaling out, set RUN_IN_APP_POLLER=false on the
@@ -125,6 +128,12 @@ async def lifespan(app: FastAPI):
     finally:
         await routers.stop_sse_subscriber()
         cache_refresh_task.cancel()
+        if meetings_task:
+            meetings_task.cancel()
+            try:
+                await meetings_task
+            except asyncio.CancelledError:
+                pass
         try:
             await cache_refresh_task
         except asyncio.CancelledError:
@@ -290,6 +299,8 @@ app.include_router(webhooks_router.router, prefix="/api/organizations/me", tags=
 app.include_router(public_api_router.router, prefix="/api/public/v1", tags=["public-api"])
 app.include_router(org_billing_router.router, prefix="/api/organizations/me", tags=["org-billing"])
 app.include_router(wa_template_submissions_router.router, prefix="/api/organizations/me", tags=["whatsapp-templates"])
+app.include_router(meetings_router.router, prefix="/api/meetings", tags=["meetings"])
+app.include_router(meetings_router.public_router, prefix="/api/meeting-responses", tags=["meeting-responses"])
 app.include_router(calendars_router.router, prefix="/api/organizations/me", tags=["calendars"])
 app.include_router(calendars_router.public_router, prefix="/api/calendars", tags=["calendars-public"])
 app.include_router(shortlinks_router.router, prefix="/api/s", tags=["shortlinks"])

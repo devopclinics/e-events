@@ -26,6 +26,7 @@ from app.models import (
     InboundEmail,
     InboundEmailAutomation,
     InboundEmailWebhookReceipt,
+    MeetingDelivery,
 )
 
 logger = logging.getLogger(__name__)
@@ -219,6 +220,19 @@ async def receive_resend_webhook(
         payload=event,
         occurred_at=_parse_datetime(event.get("created_at") or data.get("created_at")),
     )
+    # Meeting receipts require an authenticated webhook even when the legacy
+    # event-email endpoint is configured to acknowledge unsigned traffic.
+    meeting_delivery_id = tags.get("meeting_delivery_id")
+    if settings.resend_webhook_secret and meeting_delivery_id:
+        meeting_delivery = await db.scalar(select(MeetingDelivery).where(
+            MeetingDelivery.id == meeting_delivery_id).with_for_update())
+        if (meeting_delivery and meeting_delivery.provider_id == delivery.provider_email_id
+                and meeting_delivery.status == "accepted"
+                and (meeting_delivery.delivery_status_at is None or delivery.occurred_at > meeting_delivery.delivery_status_at)):
+            receipt_status = _event_status(event_type)
+            if receipt_status in {"delivered", "bounced", "complained", "failed", "delivery_delayed", "suppressed"}:
+                meeting_delivery.delivery_status = receipt_status
+                meeting_delivery.delivery_status_at = delivery.occurred_at
     db.add(delivery)
     from ..services.marketing_client import ingest_marketing_delivery, lifecycle_event_id
     try:

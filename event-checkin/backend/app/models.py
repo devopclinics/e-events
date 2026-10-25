@@ -5,6 +5,52 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 
 
+class Meeting(Base):
+    __tablename__ = "meetings"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    organizer_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    organizer_email: Mapped[str] = mapped_column(String(320))
+    draft: Mapped[dict] = mapped_column(JSON)
+    published: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    published_revision: Mapped[int] = mapped_column(Integer, default=0)
+    sequence: Mapped[int] = mapped_column(Integer, default=-1)
+    status: Mapped[str] = mapped_column(String(20), default="draft")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class MeetingAttendee(Base):
+    __tablename__ = "meeting_attendees"
+    __table_args__ = (UniqueConstraint("meeting_id", "email"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    meeting_id: Mapped[str] = mapped_column(ForeignKey("meetings.id"), index=True)
+    email: Mapped[str] = mapped_column(String(320))
+    name: Mapped[str] = mapped_column(String(200))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    response: Mapped[str] = mapped_column(String(20), default="pending")
+    response_sequence: Mapped[int] = mapped_column(Integer, default=-1)
+
+
+class MeetingDelivery(Base):
+    __tablename__ = "meeting_deliveries"
+    __table_args__ = (UniqueConstraint("meeting_id", "attendee_id", "sequence", "method"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    meeting_id: Mapped[str] = mapped_column(ForeignKey("meetings.id"), index=True)
+    attendee_id: Mapped[str] = mapped_column(ForeignKey("meeting_attendees.id"))
+    sequence: Mapped[int] = mapped_column(Integer)
+    method: Mapped[str] = mapped_column(String(10))
+    payload: Mapped[dict] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(20), default="queued", index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    attempted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provider_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    delivery_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    delivery_status_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class Organization(Base):
     """A tenant/account. All events belong to exactly one organization; users
     access events only through a Membership in the owning org."""

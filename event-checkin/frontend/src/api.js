@@ -560,6 +560,22 @@ export const api = {
   guestServiceRequest: (eventId, body) => req('POST', `/events/${eventId}/guest-services/requests`, body),
   submitDemoRequest: (body, idempotencyKey) => req('POST', '/demo-requests', body, undefined,
     idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
+  listMeetings: () => req('GET', '/meetings'),
+  getMeeting: (id) => req('GET', `/meetings/${encodeURIComponent(id)}`),
+  createMeeting: (data) => req('POST', '/meetings', data),
+  updateMeeting: (id, data) => req('PUT', `/meetings/${encodeURIComponent(id)}`, data),
+  previewMeeting: (id) => req('GET', `/meetings/${encodeURIComponent(id)}/preview`),
+  sendMeeting: (id, revision) => req('POST', `/meetings/${encodeURIComponent(id)}/send`, { revision }),
+  cancelMeeting: (id, revision) => req('POST', `/meetings/${encodeURIComponent(id)}/cancel`, { revision }),
+  retryMeetingDelivery: (id, delivery) => req('POST', `/meetings/${encodeURIComponent(id)}/deliveries/${encodeURIComponent(delivery)}/retry`),
+  meetingResponsePreview: (token) => guestRead(`/meeting-responses/${encodeURIComponent(token)}`, 'Invitation unavailable'),
+  respondToMeeting: async (token, response) => {
+    const res = await fetch(`${BASE}/meeting-responses/${encodeURIComponent(token)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ response }) })
+    const data = await res.json()
+    if (!res.ok) { const error = new Error(typeof data.detail === 'string' ? data.detail : 'Your response could not be saved'); error.status = res.status; throw error }
+    return data
+  },
+
 
   // Events
   listEvents: (status) => req('GET', status ? `/events?status=${encodeURIComponent(status)}` : '/events'),

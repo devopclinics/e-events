@@ -753,6 +753,7 @@ def _calendar_link(event_name: str, event_date: datetime | None, venue: str) -> 
 def _ics_escape(value: str) -> str:
     return (
         str(value or "")
+        .replace("\r", "")
         .replace("\\", "\\\\")
         .replace(";", "\\;")
         .replace(",", "\\,")
@@ -770,6 +771,9 @@ def _build_ics_bytes(
     organizer_email: str,
     attendee_name: str,
     attendee_email: str,
+    method: str = "REQUEST",
+    sequence: int | None = None,
+    description: str = "",
 ) -> bytes:
     """VCALENDAR/.ics blob for an event invite. `start`/`end` are the naive-UTC
     datetimes as stored on Event (see app/timeutil.py); `end` falls back to a
@@ -785,7 +789,7 @@ def _build_ics_bytes(
         "VERSION:2.0",
         "PRODID:-//Festio//Event Invite//EN",
         "CALSCALE:GREGORIAN",
-        "METHOD:REQUEST",
+        f"METHOD:{method}",
         "BEGIN:VEVENT",
         f"UID:{uid}",
         f"DTSTAMP:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
@@ -795,13 +799,29 @@ def _build_ics_bytes(
     ]
     if venue_text:
         lines.append(f"LOCATION:{_ics_escape(venue_text)}")
+    if sequence is not None:
+        lines.append(f"SEQUENCE:{sequence}")
+    if method == "CANCEL":
+        lines.append("STATUS:CANCELLED")
+    if description:
+        lines.append(f"DESCRIPTION:{_ics_escape(description)}")
     lines.append(f"ORGANIZER;CN=Festio:mailto:{organizer_email}")
     lines.append(
-        f"ATTENDEE;CN={_ics_escape(attendee_name)};ROLE=REQ-PARTICIPANT;"
+        f'ATTENDEE;CN="{_ics_escape(attendee_name).replace(chr(34), chr(39))}";ROLE=REQ-PARTICIPANT;'
         f"PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:{attendee_email}"
     )
     lines.extend(["END:VEVENT", "END:VCALENDAR", ""])
-    return "\r\n".join(lines).encode("utf-8")
+    # RFC 5545 folds by UTF-8 octets, without splitting a code point.
+    folded = []
+    for line in lines:
+        part = ""
+        for char in line:
+            if len((part + char).encode("utf-8")) > 75:
+                folded.append(part)
+                part = " "
+            part += char
+        folded.append(part)
+    return "\r\n".join(folded).encode("utf-8")
 
 
 def build_calendar_attachment(

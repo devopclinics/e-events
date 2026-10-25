@@ -30,6 +30,8 @@ const DonationGivingPage = lazy(() => import('./pages/DonationGivingPage'))
 const SpeakersPublicPage = lazy(() => import('./pages/SpeakersPublicPage'))
 const PartnersPublicPage = lazy(() => import('./pages/PartnersPublicPage'))
 const CalendarPage = lazy(() => import('./pages/CalendarPage'))
+const MeetingsPage = lazy(() => import('./pages/MeetingsPage'))
+const MeetingResponsePage = lazy(() => import('./pages/MeetingsPage').then(m => ({ default: m.MeetingResponsePage })))
 const FloorPlanPage = lazy(() => import('./pages/FloorPlanPage'))
 const PricingPage = lazy(() => import('./pages/PricingPage'))
 const SetupWizardPage = lazy(() => import('./pages/SetupWizardPage'))
@@ -550,6 +552,8 @@ function AppRoutes() {
       <Route path="/event-results-redesign" element={<ProtectedRoute><EventResultsRedesignPage /></ProtectedRoute>} />
       <Route path="/festiome-redesign" element={<ProtectedRoute><FestioMeRedesignPage /></ProtectedRoute>} />
       <Route path="/planner-redesign" element={<ProtectedRoute><PlannerRedesignPage /></ProtectedRoute>} />
+      <Route path="/meetings" element={<ProtectedRoute><MeetingsPage /></ProtectedRoute>} />
+      <Route path="/meeting-response/:token" element={<MeetingResponsePage />} />
       <Route path="/conference-center" element={<ProtectedRoute paidOnly><ConferenceCenterPage /></ProtectedRoute>} />
       <Route path="/live-redesign" element={<ProtectedRoute><FestioLiveRedesignPage /></ProtectedRoute>} />
       <Route path="/vendor-portal/:token" element={<VendorPortalPage />} />

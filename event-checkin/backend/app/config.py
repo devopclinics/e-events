@@ -3,6 +3,8 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    meetings_sending_enabled: bool = False
+    meetings_signing_key: str = ""
     # Runtime credentials are mandatory; no repository-backed fallback.
     database_url: str = Field(..., repr=False)
     # Read-only Postgres role dashboard-service connects with (SELECT-only —

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api';
 import { normalizeMeetingUrl } from '../lib/meetingUrl.mjs';
@@ -72,13 +72,46 @@ export function MeetingsWorkspace({
   const [sendMode, setSendMode] = useState('now');
   const [sendAt, setSendAt] = useState('');
   const [sendFold, setSendFold] = useState('');
+  const [updatedAt, setUpdatedAt] = useState(null);
+  const [refreshError, setRefreshError] = useState('');
+  const refreshGeneration = useRef(0);
   async function refresh() {
-    setMeetings(await client.listMeetings());
+    const generation = ++refreshGeneration.current;
+    const rows = await client.listMeetings();
+    if (generation !== refreshGeneration.current) return;
+    setMeetings(rows);
+    // Keep the revision used by the editor: adopting a newer revision here
+    // would allow an old form to overwrite a change made in another tab.
+    setSelected(current => {
+      const latest = rows.find(m => m.id === current?.id);
+      return latest && latest.revision === current.revision ? latest : current;
+    });
+    setUpdatedAt(new Date());
+    setRefreshError('');
   }
   useEffect(() => {
-    refresh().catch(e => setError(e.message));
     client.meetingOptions?.().then(setOptions).catch(e => setError(e.message));
-  }, []);
+  }, [client]);
+  useEffect(() => {
+    let disposed = false;
+    let pending = false;
+    async function poll() {
+      if (disposed || pending || busy || document.visibilityState === 'hidden') return;
+      pending = true;
+      try { await refresh(); }
+      catch { if (!disposed) setRefreshError('Could not refresh meeting status. Try Refresh totals.'); }
+      finally { pending = false; }
+    }
+    poll();
+    const timer = setInterval(poll, 10000);
+    document.addEventListener('visibilitychange', poll);
+    return () => {
+      disposed = true;
+      ++refreshGeneration.current;
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', poll);
+    };
+  }, [client, busy]);
   function choose(m) {
     setSelected(m);
     setSendMode(m.send_schedule?.status === 'pending' ? 'later' : 'now');
@@ -102,6 +135,7 @@ export function MeetingsWorkspace({
     setNotice('');
   }
   async function act(fn) {
+    ++refreshGeneration.current;
     setBusy(true);
     setError('');
     try {
@@ -152,6 +186,10 @@ export function MeetingsWorkspace({
         setCancelConfirm(false);
       }}>＋ Create a meeting</button></header>
     <div className="mt-overview"><div><span className="mt-overview-icon">▦</span><div><strong>{meetings?.length || 0}</strong><span>Your meetings</span></div></div><div><span className="mt-overview-icon">◷</span><div><strong>{meetings?.filter(m => m.send_schedule?.status === 'pending').length || 0}</strong><span>Scheduled invitations</span></div></div><div><span className="mt-overview-icon">✓</span><div><strong>{meetings?.reduce((n,m) => n + m.attendees.filter(a => a.active && a.response === 'accepted').length,0) || 0}</strong><span>Accepted invitations</span></div></div></div>
+    <div className="mt-section-heading"><small>{updatedAt ? `Updated ${updatedAt.toLocaleTimeString()} · Refreshes every 10 seconds while this tab is visible` : 'Loading live totals…'}</small><button disabled={busy} onClick={() => act(refresh)}>Refresh totals</button></div>
+    <p className="mt-muted">Scheduled invitations are pending send schedules. Accepted invitations are attendees who replied Accept through Festio.</p>
+    {refreshError && <p role="status" className="mt-error">{refreshError}</p>}
+    {selected && meetings?.some(m => m.id === selected.id && m.revision !== selected.revision) && <p role="status" className="mt-notice">This meeting changed elsewhere. Select it again from Your meetings to load the latest version; this replaces your current edits.</p>}
     {error && <div role="alert" className="mt-error">{error} <button onClick={() => act(refresh)}>Reload meetings</button></div>}
     {notice && <p role="status" className="mt-notice">{notice}</p>}
     <div className="mt-section-heading"><h2>Your meetings</h2><span>Select a meeting to plan, invite and follow up</span></div><div className="mt-list" aria-label="Your meetings">{meetings === null ? <p>Loading meetings…</p> : meetings.length ? meetings.map(m => <button key={m.id} className={selected?.id === m.id ? 'selected' : ''} onClick={() => choose(m)}><strong>{m.draft.title}</strong><span>{m.draft.start.replace('T', ' ')} · {m.send_schedule?.status === 'pending' ? 'Invitations scheduled' : m.send_schedule?.status === 'blocked' ? 'Send needs attention' : m.status}{m.revision !== m.published_revision && m.status === 'scheduled' ? ' · unsent changes' : ''}</span></button>) : <p>No meetings yet. Bring a few people together without creating an event.</p>}</div>
@@ -214,8 +252,6 @@ export function MeetingsWorkspace({
       {preview.channel_recipients?.some(r => r.channel !== 'email') && <label className="mt-consent"><input type="checkbox" checked={paidConfirmed} onChange={e => setPaidConfirmed(e.target.checked)} />I confirm these phone recipients, their consent, and up to {(preview.credit_units || 0) / 10} message credits. Carrier segment costs may vary.</label>}
       <p className="mt-muted">SMS and WhatsApp link to Festio responses; they do not perform native calendar acceptance.</p><p className="mt-muted">Accept, Maybe and Decline responses are recorded in Festio. Google/Outlook replies are not synchronized.</p><div className="mt-actions"><button onClick={() => setPreview(null)}>Back to edit</button></div></> : <div className="mt-preview-empty"><span>✉</span><h3>A personal invitation for every attendee</h3><p>Save your details and preview the recipients, message and calendar attachment before sending.</p><small>Saving and previewing never send invitations.</small></div>}</section></div>}
     {selected && <section className="mt-card mt-responses"><div className="mt-step">03 <span>Responses via Festio</span></div><div className="mt-heading"><h2>Organizer view</h2><button disabled={busy} onClick={() => act(async () => {
-          const m = await client.getMeeting(selected.id);
-          setSelected(m);
           await refresh();
         })}>Refresh status</button></div>{!selected.attendees.length && <p>Responses and delivery status will appear after invitations are sent.</p>}{selected.attendees.map(a => {
         const rows = selected.deliveries.filter(d => d.attendee_id === a.id);

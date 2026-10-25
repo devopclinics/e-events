@@ -35,6 +35,8 @@ let meeting = {
 };
 window.meetingCalls = [];
 window.preferenceCalls = [];
+window.updateMeetingFixture = patch => { meeting = { ...meeting, ...patch }; };
+window.meetingListRequests = 0;
 const recipientRows = (cancel = false) => meeting.draft.attendees.flatMap(a => (a.channels || ['email']).map(channel => ({
   name: a.name,
   channel,
@@ -52,7 +54,7 @@ const client = {
       name: 'Approved meeting notification'
     }]
   }),
-  listMeetings: async () => [meeting],
+  listMeetings: async () => { window.meetingListRequests++; return [structuredClone(meeting)]; },
   getMeeting: async () => meeting,
   createMeeting: async data => {
     window.meetingCalls.push('save');

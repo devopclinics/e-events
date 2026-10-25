@@ -359,3 +359,11 @@
     font-size: 22px
   }
 }
+.mt-person { border: 1px solid #dce7ea; border-radius: 9px; padding: 12px; margin: 12px 0; }
+.mt-channel-choices { display: flex; gap: 16px; flex-wrap: wrap; }
+.mt-channel-choices label, .mt-consent { display: flex !important; align-items: flex-start; gap: 9px; font-weight: 400 !important; }
+.mt-card input[type=checkbox] { width: 17px !important; height: 17px; flex: 0 0 17px; accent-color: #007e89; margin: 0; padding: 0; }
+.mt-channel-preview { border: 1px solid #dce7ea; padding: 12px; margin: 12px 0; border-radius: 8px; overflow-wrap: anywhere; font-size: 13px; }
+.mt-delivery { padding: 8px 0; font-size: 12px; overflow-wrap: anywhere; }
+.mt-preferences { margin-top: 24px; border-top: 1px solid #dce7ea; }
+.mt-preferences button { display: block; width: 100%; margin-top: 10px; }

@@ -107,6 +107,15 @@ try {
   await page.getByRole('status').filter({
     hasText: 'Your response: Accepted'
   }).waitFor();
+  await page.getByRole('button', {
+    name: 'Stop SMS notifications',
+    exact: true
+  }).click();
+  assert(await page.getByRole('button', {
+    name: 'SMS stopped',
+    exact: true
+  }).isDisabled());
+  assert.deepEqual(await page.evaluate(() => window.preferenceCalls), ['sms']);
   await page.screenshot({
     path: 'test-results/meetings/mobile-response.png',
     fullPage: true
@@ -118,6 +127,49 @@ try {
   await page.getByRole('alert').filter({
     hasText: 'expired'
   }).waitFor();
+  await page.goto(base + '/e2e/meetings-harness.html');
+  await page.getByRole('button', {
+    name: /Project catch-up/
+  }).click();
+  await page.getByLabel('Attendee 1 phone', {
+    exact: true
+  }).fill('+14155550123');
+  await page.getByLabel('Attendee 1 SMS', {
+    exact: true
+  }).check();
+  await page.getByLabel('This attendee agreed to receive SMS meeting notifications.', {
+    exact: true
+  }).check();
+  await page.getByLabel('Attendee 1 WhatsApp', {
+    exact: true
+  }).check();
+  await page.getByLabel('This attendee agreed to receive WhatsApp meeting notifications.', {
+    exact: true
+  }).check();
+  await page.getByLabel('Approved WhatsApp template', {
+    exact: true
+  }).selectOption('approved-meeting');
+  await page.getByRole('button', {
+    name: 'Preview invitation',
+    exact: true
+  }).click();
+  assert(await page.getByRole('button', {
+    name: 'Send invitations',
+    exact: true
+  }).isDisabled());
+  await page.getByLabel(/I confirm these phone recipients/).check();
+  await page.screenshot({
+    path: 'test-results/meetings/mobile-channels.png',
+    fullPage: true
+  });
+  await page.getByRole('button', {
+    name: 'Send invitations',
+    exact: true
+  }).click();
+  await page.getByText('Mock provider rejection', {
+    exact: true
+  }).first().waitFor();
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
   assert.deepEqual(errors, []);
   console.log('PASS: mocked draft/preview/send/retry/cancel, safe GET response, explicit RSVP, expired link, desktop/mobile layout; no external requests');
 } finally {

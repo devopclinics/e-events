@@ -24,6 +24,7 @@ def draft(**changes):
 def setup_meetings(monkeypatch):
     monkeypatch.setattr(settings, "meetings_sending_enabled", True)
     monkeypatch.setattr(settings, "meetings_signing_key", "test-only-meeting-key-never-use-outside-tests")
+    monkeypatch.setattr(settings, "smtp_host", "mock-smtp.invalid")
 
 
 async def create(ctx, **changes):
@@ -146,7 +147,8 @@ async def test_delivery_failure_retry_duplicate_and_cancel_suppression(ctx):
     calls = []
     async def failure(row, meeting, attendee):
         calls.append(row.id)
-        raise ValueError('Mock provider rejected recipient')
+        from app.services.meeting_channels import DefiniteRejection
+        raise DefiniteRejection('Mock provider rejected recipient')
     async def success(row, meeting, attendee):
         calls.append(row.id)
         return 'mock-provider-id'
@@ -220,6 +222,7 @@ async def test_transport_uses_one_recipient_scoped_link_and_idempotency(ctx, mon
             requests.append(kwargs)
             return httpx.Response(200, json={'id':'mock-provider'}, request=httpx.Request('POST', url))
     monkeypatch.setattr(settings, 'resend_api_key', 'mock-only')
+    monkeypatch.setattr(settings, 'meetings_email_transport', 'resend_attachment')
     monkeypatch.setattr('app.services.meeting_outbox.httpx.AsyncClient', MockClient)
     async with _Session() as db:
         row = await db.get(MeetingDelivery, m['deliveries'][0]['id'])
@@ -228,7 +231,9 @@ async def test_transport_uses_one_recipient_scoped_link_and_idempotency(ctx, mon
         await transport(row, meeting, a)
         await transport(row, meeting, a)
         other = 'jamie@example.com' if a.email == 'alex@example.com' else 'alex@example.com'
-        payload = requests[0]['json']
+        import json
+        payload = json.loads(requests[0]['content'])
+        assert requests[0]['content'] == requests[1]['content']
         assert payload['to'] == [a.email]
         assert other not in str(payload)
         assert '/meeting-response/' in payload['html']
@@ -309,3 +314,264 @@ async def test_delivered_removal_not_repeated_and_pending_removal_is_previewed(c
     assert p['cancellations']==[]
     m=await publish(ctx,edit.json())
     assert [d['method'] for d in m['deliveries'] if d['sequence']==2]==['REQUEST']
+
+
+def mobile_attendee(channels=None, **changes):
+    return {'name':'Alex','email':'alex@example.com','phone':'+14155550123',
+        'channels':channels or ['email','sms','whatsapp'],'sms_consent':True,'whatsapp_consent':True,**changes}
+
+
+async def paid_org(ctx,monkeypatch):
+    from app.models import Organization, WhatsAppTemplateSubmission
+    monkeypatch.setattr(settings,'meetings_paid_sending_enabled',True)
+    monkeypatch.setattr(settings,'organization_entitlements_v2',True)
+    monkeypatch.setattr(settings,'whatsapp_provider','bird')
+    monkeypatch.setattr('services.messaging._channel_ready',lambda channel,phone:True)
+    async with _Session() as db:
+        org=await db.get(Organization,ctx.ids['org_a'])
+        org.event_pass_status='active';org.event_pass_tier='tier50';org.event_pass_expires_at=datetime(2099,1,1)
+        org.message_credit_units=1000
+        template=WhatsAppTemplateSubmission(org_id=org.id,name='Meeting notification',platform_name='meeting_test',
+            category='UTILITY',body='Hi {{firstName}}, {{eventName}}: {{message}} {{ticketLink}}',
+            variables=['firstName','eventName','message','ticketLink'],status='approved',bird_project_id='mock-project')
+        db.add(template);await db.commit()
+        return template.id
+
+
+async def publish_paid(ctx,m,cancel=False):
+    base=f'/api/meetings/{m["id"]}'
+    preview=(await ctx.client.get(base+'/preview'+('?cancel=true' if cancel else ''))).json()
+    r=await ctx.client.post(base+('/cancel' if cancel else '/send'),json={'revision':m['revision'],
+        'confirm_paid_channels':True,'quoted_credit_units':preview['credit_units']})
+    assert r.status_code==200,r.text
+    return r.json()
+
+
+@pytest.mark.parametrize('attendee',[
+    mobile_attendee(['sms'],phone='4155550123'),mobile_attendee(['sms'],phone='+0123456789'),
+    mobile_attendee(['sms'],sms_consent=False),mobile_attendee(['whatsapp'],whatsapp_consent=False),
+    mobile_attendee(['email'],email=None),mobile_attendee(['sms','sms']),mobile_attendee(['fax'])])
+async def test_phone_and_channel_validation(ctx,attendee):
+    ctx.login(ctx.ids['user_a'])
+    assert (await ctx.client.post('/api/meetings',json=draft(attendees=[attendee]))).status_code==422
+
+
+async def test_phone_only_individual_channels_and_paid_confirmation(ctx,monkeypatch):
+    await paid_org(ctx,monkeypatch)
+    m=await create(ctx,attendees=[mobile_attendee(['sms'],email=None,phone='+1 (415) 555-0123')])
+    assert m['draft']['attendees'][0]['phone']=='+14155550123'
+    p=(await ctx.client.get(f'/api/meetings/{m["id"]}/preview')).json()
+    assert p['channel_recipients'][0]['channel']=='sms'
+    assert p['channel_recipients'][0]['recipient']=='+14155550123'
+    assert 'Project catch-up' in p['channel_recipients'][0]['message']
+    assert p['credit_units']>0
+    assert (await ctx.client.post(f'/api/meetings/{m["id"]}/send',json={'revision':1})).status_code==422
+    assert (await ctx.client.post(f'/api/meetings/{m["id"]}/send',json={'revision':1,'confirm_paid_channels':True,'quoted_credit_units':0})).status_code==409
+    m=await publish_paid(ctx,m)
+    assert len(m['deliveries'])==1 and m['deliveries'][0]['channel']=='sms'
+
+
+async def test_disabled_paid_channel_and_missing_template_do_not_charge(ctx,monkeypatch):
+    from app.models import Organization
+    m=await create(ctx,attendees=[mobile_attendee(['sms'])])
+    m=await publish_paid(ctx,m)
+    await deliver(m['deliveries'][0]['id'],_Session,lambda *args:None)
+    async with _Session() as db:
+        row=await db.get(MeetingDelivery,m['deliveries'][0]['id'])
+        assert row.status=='setup_required' and row.charged_at is None
+        assert (await db.get(Organization,ctx.ids['org_a'])).message_credit_units==100
+    await paid_org(ctx,monkeypatch)
+    m=await create(ctx,attendees=[mobile_attendee(['whatsapp'])])
+    m=await publish_paid(ctx,m)
+    await deliver(m['deliveries'][0]['id'],_Session,lambda *args:None)
+    async with _Session() as db:
+        row=await db.get(MeetingDelivery,m['deliveries'][0]['id'])
+        assert row.status=='setup_required' and 'approved' in row.error and row.charged_at is None
+
+
+async def test_channel_lifecycle_repeat_retry_and_wallet_idempotency(ctx,monkeypatch):
+    from app.models import Organization
+    template=await paid_org(ctx,monkeypatch)
+    m=await publish_paid(ctx,await create(ctx,attendees=[mobile_attendee()],whatsapp_template_id=template))
+    again=await publish_paid(ctx,m)
+    assert len(again['deliveries'])==3
+    calls=[]
+    async def success(row,meeting,attendee):calls.append((row.id,row.channel));return 'mock-'+row.id
+    for d in m['deliveries']:
+        await deliver(d['id'],_Session,success);await deliver(d['id'],_Session,success)
+    assert len(calls)==3
+    async with _Session() as db:
+        expected=1000-sum(d['credit_units'] for d in m['deliveries'])
+        assert (await db.get(Organization,ctx.ids['org_a'])).message_credit_units==expected
+        wa=await db.get(MeetingDelivery,next(d['id'] for d in m['deliveries'] if d['channel']=='whatsapp'))
+        assert wa.wire_payload['template_ref']=='mock-project'
+    changed={**m['draft'],'start':'2026-10-29T10:00','end':'2026-10-29T11:00','revision':m['revision']}
+    m=(await ctx.client.put(f'/api/meetings/{m["id"]}',json=changed)).json()
+    m=await publish_paid(ctx,m)
+    assert sorted(d['channel'] for d in m['deliveries'] if d['sequence']==1)==['email','sms','whatsapp']
+    m=await publish_paid(ctx,m,cancel=True)
+    assert all(d['method']=='CANCEL' for d in m['deliveries'] if d['sequence']==2)
+
+
+async def test_safe_setup_retry_and_phone_transport_reuses_services(ctx,monkeypatch):
+    await paid_org(ctx,monkeypatch)
+    monkeypatch.setattr('services.messaging._channel_ready',lambda *args:False)
+    m=await publish_paid(ctx,await create(ctx,attendees=[mobile_attendee(['sms'])]))
+    d=m['deliveries'][0]
+    await deliver(d['id'],_Session)
+    assert (await ctx.client.get(f'/api/meetings/{m["id"]}')).json()['deliveries'][0]['status']=='setup_required'
+    monkeypatch.setattr('services.messaging._channel_ready',lambda *args:True)
+    calls=[]
+    async def sms(**kwargs):calls.append(kwargs);return {'provider':'mock','provider_message_id':'mock-id','status':'queued'}
+    monkeypatch.setattr('services.messaging.send_custom_sms',sms)
+    await ctx.client.post(f'/api/meetings/{m["id"]}/deliveries/{d["id"]}/retry')
+    await deliver(d['id'],_Session);await deliver(d['id'],_Session)
+    assert len(calls)==1 and calls[0]['phone']=='+14155550123'
+    assert '/meeting-response/' in calls[0]['body'] and 'America/Chicago' in calls[0]['body']
+
+
+async def test_optout_safe_get_duplicate_and_existing_consent(ctx,monkeypatch):
+    from app.models import Guest, MeetingSuppression
+    await paid_org(ctx,monkeypatch)
+    m=await publish_paid(ctx,await create(ctx,attendees=[mobile_attendee(['sms'])]))
+    async with _Session() as db:
+        meeting=await db.get(Meeting,m['id']);a=await db.scalar(select(MeetingAttendee))
+        token=response_token(meeting,a)
+    url='/api/meeting-responses/preferences/'+token
+    assert (await ctx.client.get(url)).json()['stopped']==[]
+    async with _Session() as db:assert not (await db.scalars(select(MeetingSuppression))).all()
+    for _ in range(2):assert (await ctx.client.post(url,json={'channel':'sms'})).status_code==200
+    await deliver(m['deliveries'][0]['id'],_Session)
+    async with _Session() as db:
+        row=await db.get(MeetingDelivery,m['deliveries'][0]['id'])
+        assert row.status=='blocked' and row.charged_at is None
+        assert len((await db.scalars(select(MeetingSuppression))).all())==1
+    assert (await ctx.client.post('/api/meeting-responses/preferences/invalid',json={'channel':'sms'})).status_code==410
+    # A separate phone with an existing event consent withdrawal also blocks.
+    async with _Session() as db:
+        guest=await db.scalar(select(Guest));guest.phone='+14155550199';guest.sms_consent=False;await db.commit()
+    other=await publish_paid(ctx,await create(ctx,attendees=[mobile_attendee(['sms'],phone='+14155550199')]))
+    await deliver(other['deliveries'][0]['id'],_Session)
+    assert (await ctx.client.get(f'/api/meetings/{other["id"]}')).json()['deliveries'][0]['status']=='blocked'
+
+
+async def test_smtp_preserves_request_update_cancel_mime_and_frozen_bytes(ctx,monkeypatch):
+    from app.services.meeting_outbox import transport, freeze_payload
+    from email.parser import BytesParser
+    from email import policy
+    sent=[]
+    class SMTP:
+        def __init__(self,**kwargs):pass
+        async def __aenter__(self):return self
+        async def __aexit__(self,*args):pass
+        async def sendmail(self,from_addr,to,raw):sent.append((to,raw))
+    monkeypatch.setattr('app.services.meeting_outbox.aiosmtplib.SMTP',SMTP)
+    m=await publish(ctx,await create(ctx))
+    async with _Session() as db:
+        meeting=await db.get(Meeting,m['id']);a=await db.scalar(select(MeetingAttendee))
+        row=await db.get(MeetingDelivery,m['deliveries'][0]['id'])
+        freeze_payload(row,meeting,a)
+        first=row.wire_payload.copy()
+        await transport(row,meeting,a);await transport(row,meeting,a)
+        assert sent[0][1]==sent[1][1] and row.wire_payload==first
+        for method,sequence in [('REQUEST',1),('CANCEL',2)]:
+            row=MeetingDelivery(id=f'mock-{method}',meeting_id=meeting.id,attendee_id=a.id,channel='email',recipient=a.email,
+                method=method,sequence=sequence,payload=meeting.published,created_at=datetime(2026,10,25))
+            freeze_payload(row,meeting,a);await transport(row,meeting,a)
+    for index,(to,raw) in enumerate(sent):
+        msg=BytesParser(policy=policy.default).parsebytes(raw)
+        calendar=next(p for p in msg.walk() if p.get_content_type()=='text/calendar')
+        method='CANCEL' if index==3 else 'REQUEST'
+        assert calendar.get_param('method')==method
+        content=calendar.get_payload(decode=True).decode()
+        assert 'METHOD:'+method in content
+        assert len(to)==1 and content.count('ATTENDEE;')==1
+        if index>=2:assert f'SEQUENCE:{index-1}' in content
+
+
+async def test_409_conflict_is_uncertain_and_resend_payload_survives_retry(ctx,monkeypatch):
+    import httpx
+    monkeypatch.setattr(settings,'meetings_email_transport','resend_attachment')
+    monkeypatch.setattr(settings,'resend_api_key','mock-only')
+    m=await publish(ctx,await create(ctx));d=m['deliveries'][0]
+    bodies=[]
+    class Client:
+        def __init__(self,**kwargs):pass
+        async def __aenter__(self):return self
+        async def __aexit__(self,*args):pass
+        async def post(self,url,**kwargs):
+            bodies.append(kwargs['content'])
+            return httpx.Response(409,json={'name':'invalid_idempotent_request'},request=httpx.Request('POST',url))
+    monkeypatch.setattr('app.services.meeting_outbox.httpx.AsyncClient',Client)
+    await deliver(d['id'],_Session)
+    async with _Session() as db:
+        row=await db.get(MeetingDelivery,d['id'])
+        assert row.status=='uncertain' and row.wire_payload is not None
+    assert (await ctx.client.post(f'/api/meetings/{m["id"]}/deliveries/{d["id"]}/retry')).status_code==409
+
+
+async def test_whatsapp_requires_eligible_approved_template_and_never_free_text(ctx,monkeypatch):
+    from app.models import WhatsAppTemplateSubmission
+    template=await paid_org(ctx,monkeypatch)
+    m=await publish_paid(ctx,await create(ctx,attendees=[mobile_attendee(['whatsapp'])],whatsapp_template_id=template))
+    calls=[]
+    async def approved(**kwargs):calls.append(kwargs);return {'provider':'bird','provider_message_id':'mock-wa','status':'queued'}
+    async def forbidden(**kwargs):raise AssertionError('Free-text fallback must never execute')
+    monkeypatch.setattr('services.messaging.send_custom_template_whatsapp',approved)
+    monkeypatch.setattr('services.messaging.send_custom_whatsapp',forbidden)
+    monkeypatch.setattr('services.messaging._send_sms_as_whatsapp',forbidden)
+    await deliver(m['deliveries'][0]['id'],_Session)
+    assert len(calls)==1 and calls[0]['template_ref']=='mock-project'
+    assert calls[0]['var_keys']==['firstName','eventName','message','ticketLink']
+    assert '/meeting-response/' in calls[0]['params'][3]
+    async with _Session() as db:
+        row=await db.get(WhatsAppTemplateSubmission,template);row.status='rejected';await db.commit()
+    m2=await publish_paid(ctx,await create(ctx,attendees=[mobile_attendee(['whatsapp'])],whatsapp_template_id=template))
+    await deliver(m2['deliveries'][0]['id'],_Session)
+    assert len(calls)==1
+    assert (await ctx.client.get(f'/api/meetings/{m2["id"]}')).json()['deliveries'][0]['status']=='setup_required'
+
+
+async def test_phone_change_and_channel_removal_notify_exact_previous_target(ctx,monkeypatch):
+    await paid_org(ctx,monkeypatch)
+    m=await publish_paid(ctx,await create(ctx,attendees=[mobile_attendee(['email','sms'])]))
+    next_data={**m['draft'],'attendees':[mobile_attendee(['sms'],phone='+14155550199')],'revision':m['revision']}
+    m=(await ctx.client.put(f'/api/meetings/{m["id"]}',json=next_data)).json()
+    preview=(await ctx.client.get(f'/api/meetings/{m["id"]}/preview')).json()
+    assert {(r['channel'],r['recipient'],r['method']) for r in preview['channel_recipients']}=={
+        ('email','alex@example.com','CANCEL'),('sms','+14155550123','CANCEL'),('sms','+14155550199','REQUEST')}
+    m=await publish_paid(ctx,m)
+    assert len([d for d in m['deliveries'] if d['sequence']==1])==3
+
+
+async def test_legacy_provider_failure_is_uncertain_and_charge_not_repeated(ctx,monkeypatch):
+    from app.models import Organization
+    await paid_org(ctx,monkeypatch)
+    calls=[]
+    async def ambiguous(**kwargs):calls.append(kwargs);return {'provider':'bird','status':'failed'}
+    monkeypatch.setattr('services.messaging.send_custom_sms',ambiguous)
+    m=await publish_paid(ctx,await create(ctx,attendees=[mobile_attendee(['sms'])]));d=m['deliveries'][0]
+    await deliver(d['id'],_Session);await deliver(d['id'],_Session)
+    assert len(calls)==1
+    async with _Session() as db:
+        row=await db.get(MeetingDelivery,d['id'])
+        assert row.status=='uncertain' and row.charged_at and not row.charge_refunded
+        assert (await db.get(Organization,ctx.ids['org_a'])).message_credit_units==1000-d['credit_units']
+    assert (await ctx.client.post(f'/api/meetings/{m["id"]}/deliveries/{d["id"]}/retry')).status_code==409
+
+
+async def test_cancelled_phone_preferences_work_but_cannot_accept(ctx,monkeypatch):
+    from urllib.parse import urlparse
+    await paid_org(ctx,monkeypatch)
+    m=await publish_paid(ctx,await create(ctx,attendees=[mobile_attendee(['sms'])]))
+    m=await publish_paid(ctx,m,cancel=True)
+    row_id=next(d['id'] for d in m['deliveries'] if d['sequence']==1)
+    async def success(*args):return 'mock-cancel'
+    await deliver(row_id,_Session,success)
+    async with _Session() as db:
+        row=await db.get(MeetingDelivery,row_id)
+        assert 'Cancelled:' in row.wire_payload['body']
+        token=urlparse(row.wire_payload['params'][3]).path.rsplit('/',1)[1]
+    assert (await ctx.client.get('/api/meeting-responses/preferences/'+token)).status_code==200
+    assert (await ctx.client.post('/api/meeting-responses/'+token,json={'response':'accepted'})).status_code==410
+    assert (await ctx.client.post('/api/meeting-responses/preferences/'+token,json={'channel':'sms'})).status_code==200

@@ -25,7 +25,11 @@ class MeetingAttendee(Base):
     __table_args__ = (UniqueConstraint("meeting_id", "email"),)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     meeting_id: Mapped[str] = mapped_column(ForeignKey("meetings.id"), index=True)
-    email: Mapped[str] = mapped_column(String(320))
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    channels: Mapped[list] = mapped_column(JSON, default=lambda: ["email"], server_default='["email"]')
+    sms_consent: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    whatsapp_consent: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     name: Mapped[str] = mapped_column(String(200))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     response: Mapped[str] = mapped_column(String(20), default="pending")
@@ -34,13 +38,19 @@ class MeetingAttendee(Base):
 
 class MeetingDelivery(Base):
     __tablename__ = "meeting_deliveries"
-    __table_args__ = (UniqueConstraint("meeting_id", "attendee_id", "sequence", "method"),)
+    __table_args__ = (UniqueConstraint("meeting_id", "attendee_id", "sequence", "method", "channel", "recipient", name="uq_meeting_channel_delivery"),)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     meeting_id: Mapped[str] = mapped_column(ForeignKey("meetings.id"), index=True)
     attendee_id: Mapped[str] = mapped_column(ForeignKey("meeting_attendees.id"))
     sequence: Mapped[int] = mapped_column(Integer)
     method: Mapped[str] = mapped_column(String(10))
+    channel: Mapped[str] = mapped_column(String(10), default="email", server_default="email")
+    recipient: Mapped[str] = mapped_column(String(320), default="", server_default="")
+    credit_units: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    charged_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    charge_refunded: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     payload: Mapped[dict] = mapped_column(JSON)
+    wire_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="queued", index=True)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     attempted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -48,6 +58,16 @@ class MeetingDelivery(Base):
     provider_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     delivery_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
     delivery_status_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class MeetingSuppression(Base):
+    __tablename__ = "meeting_suppressions"
+    __table_args__ = (UniqueConstraint("org_id", "phone", "channel"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    phone: Mapped[str] = mapped_column(String(16))
+    channel: Mapped[str] = mapped_column(String(10))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

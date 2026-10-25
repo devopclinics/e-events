@@ -3,6 +3,9 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     meetings_sending_enabled: bool = False
+    meetings_paid_sending_enabled: bool = False
+    # SMTP preserves scheduling MIME. Resend JSON supports attachment/manual import only.
+    meetings_email_transport: str = "smtp"
     meetings_signing_key: str = ""
     database_url: str = "postgresql+asyncpg://checkin:checkin@localhost/checkin"
     # Read-only Postgres role dashboard-service connects with (SELECT-only —

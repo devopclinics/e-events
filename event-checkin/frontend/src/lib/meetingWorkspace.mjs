@@ -4,8 +4,8 @@ export function meetingStatus(meeting) {
   if (meeting.send_schedule?.status === 'pending') return 'Send scheduled';
   if (meeting.send_schedule?.status === 'blocked') return 'Send needs attention';
   if (meeting.status === 'scheduled') {
-    const counts=meeting.delivery_counts;
-    if(counts && (counts.failed||counts.uncertain||counts.setup_required||counts.blocked))return 'Delivery needs attention';
+    const counts=meeting.delivery_counts || (meeting.deliveries || []).filter(d=>d.purpose==='invitation'&&d.sequence===meeting.sequence).reduce((all,d)=>{const key=d.delivery_status||d.status;return {...all,[key]:(all[key]||0)+1}},{});
+    if(counts && (counts.failed||counts.uncertain||counts.setup_required||counts.blocked||counts.bounced||counts.complained||counts.suppressed))return 'Delivery needs attention';
     if(counts && (counts.queued||counts.sending))return 'Sending invitations';
     return 'Invitations sent';
   }

@@ -36,7 +36,8 @@ organizations do not gain access. Only the organizer can change sharing.
 
 Use **Duplicate** to prepare a new draft with copied details and attendees. It
 clears the dates and never sends. **Archive** hides a meeting from the default
-list; it does not cancel published invitations or previously reviewed reminders.
+list and stops scheduled reminders and queued follow-ups. It does not cancel published invitations.
+Restoring does not replay stopped reminders: review and publish an updated invitation to establish a new schedule.
 Restore before editing or sending. Pending invitation sends must first be
 cancelled before archiving. **Delete draft** permanently deletes only unpublished
 unscheduled drafts. Published/cancelled meetings retain their delivery records;
@@ -65,7 +66,7 @@ an active attendee, a non-declined response, current authorizing organizer/admin
 active organization. Nudges additionally require a pending response. Attendees can
 stop reminder/follow-up emails from the invitation; ordinary updates and
 cancellations are unaffected. Eligibility is rechecked immediately before sending.
-Old publications and cancellation supersede pending follow-ups. No unknown SMTP
+Archiving, old publications and cancellation stop pending follow-ups. No unknown SMTP
 outcome is retried automatically. Disabled sending gates all scheduler activity.
 
 Email **Accepted by provider** means SMTP/API submission was accepted, not that
@@ -73,7 +74,7 @@ mail reached the inbox or that someone accepted the meeting. Existing authentica
 Resend receipts can report delivered/bounced/complained/failed/delayed status when
 that transport and its signed webhook are configured. SMTP has no receipt webhook
 in this implementation; phone adapters expose submission state, not verified final
-delivery. Do not switch providers or infer delivered status from SMTP acceptance.
+delivery. Frozen delivery payloads keep their original transport; old SMTP sends remain untracked. Never infer delivered status from SMTP acceptance.
 Real inbox arrival, spam placement and Gmail/Outlook calendar rendering require an
 actual mailbox check. They cannot be proved by mocked delivery tests.
 
@@ -117,7 +118,7 @@ before any backend rollback. Do not delete delivery history to force a rollback.
 Runtime defaults remain `MEETINGS_SENDING_ENABLED=false`, empty dedicated signing
 key, `MEETINGS_PAID_SENDING_ENABLED=false`, and SMTP transport. Production email
 sending was explicitly enabled during the reviewed October 24 rollout after
-controlled staging checks; default configuration is not current deployment state.
+controlled staging checks. The October 25 follow-up correction uses the existing Resend API transport for new meeting emails and signed delivery receipts. Calendar files remain attached for import, with attendee replies recorded through Festio. Existing frozen SMTP payloads retain their transport; default configuration is not current deployment state.
 Secrets are managed through the deployment's secret source, not direct pod edits.
 Public API success and handled errors apply no-store, no-referrer and noindex.
 

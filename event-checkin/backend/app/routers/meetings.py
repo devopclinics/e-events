@@ -52,7 +52,7 @@ def delivery_view():
     return select(MeetingDelivery).options(load_only(MeetingDelivery.id, MeetingDelivery.meeting_id,
         MeetingDelivery.attendee_id, MeetingDelivery.sequence, MeetingDelivery.method, MeetingDelivery.channel,
         MeetingDelivery.recipient, MeetingDelivery.credit_units, MeetingDelivery.status, MeetingDelivery.delivery_status,
-        MeetingDelivery.attempts, MeetingDelivery.error, MeetingDelivery.purpose))
+        MeetingDelivery.attempts, MeetingDelivery.error, MeetingDelivery.purpose, MeetingDelivery.provider_id))
 
 
 async def output(m, db, *, attendees=None, deliveries=None):
@@ -62,7 +62,7 @@ async def output(m, db, *, attendees=None, deliveries=None):
         deliveries = (await db.scalars(delivery_view().where(MeetingDelivery.meeting_id == m.id)
             .order_by(MeetingDelivery.sequence, MeetingDelivery.created_at))).all()
     return {"id": m.id, "draft": m.draft, "status": m.status, "revision": m.revision,
-        "published_revision": m.published_revision, "sequence": m.sequence,
+        "published_revision": m.published_revision, "sequence": m.sequence if m.published else None,
         "sending_enabled": settings.meetings_sending_enabled, "send_schedule": m.send_schedule,
         "org_id": m.org_id, "organizer_id": m.organizer_id, "archived": m.archived, "has_published_invitation": bool(m.published),
         "followup_schedule": m.followup_schedule or [],
@@ -70,7 +70,7 @@ async def output(m, db, *, attendees=None, deliveries=None):
             "response": a.response, "response_sequence": a.response_sequence, "reminders_stopped": a.reminders_stopped} for a in attendees],
         "deliveries": [{"id": d.id, "attendee_id": d.attendee_id, "sequence": d.sequence,
             "method": d.method, "channel": d.channel, "recipient": d.recipient, "credit_units": d.credit_units,
-            "status": d.status, "delivery_status": d.delivery_status,
+            "status": d.status, "delivery_status": d.delivery_status, "receipt_tracking": "unavailable" if d.channel != "email" or (d.provider_id or "").startswith("smtp:") else "tracked" if d.provider_id else "pending",
             "attempts": d.attempts, "error": d.error, "purpose": d.purpose} for d in deliveries]}
 
 
@@ -173,14 +173,15 @@ async def overview(user: User = Depends(get_current_user), db: AsyncSession = De
             .group_by(MeetingAttendee.meeting_id, MeetingAttendee.response))).all():
             reply_counts.setdefault(mid, {})[response] = count
     delivery_counts = {}
+    delivery_state = case((MeetingDelivery.delivery_status.in_(["bounced", "complained", "failed", "suppressed"]), MeetingDelivery.delivery_status), else_=MeetingDelivery.status)
     if ids:
-        for mid, status, count in (await db.execute(select(MeetingDelivery.meeting_id, MeetingDelivery.status, func.count())
+        for mid, status, count in (await db.execute(select(MeetingDelivery.meeting_id, delivery_state, func.count())
             .join(Meeting, Meeting.id == MeetingDelivery.meeting_id).where(MeetingDelivery.meeting_id.in_(ids),
                 MeetingDelivery.sequence == Meeting.sequence, MeetingDelivery.purpose == "invitation", MeetingDelivery.method == "REQUEST")
-            .group_by(MeetingDelivery.meeting_id, MeetingDelivery.status))).all():
+            .group_by(MeetingDelivery.meeting_id, delivery_state))).all():
             delivery_counts.setdefault(mid, {})[status] = count
     items = [{"id": m.id, "org_id": m.org_id, "draft": {k: m.draft.get(k) for k in ("title", "start", "end", "timezone")},
-        "status": m.status, "revision": m.revision, "published_revision": m.published_revision, "sequence": m.sequence,
+        "status": m.status, "revision": m.revision, "published_revision": m.published_revision, "sequence": m.sequence if m.published else None,
         "send_schedule": m.send_schedule, "archived": m.archived, "response_counts": reply_counts.get(m.id, {}),
         "attendee_count": len(m.draft.get("attendees", [])), "delivery_counts": delivery_counts.get(m.id, {})} for m in rows]
     return {"items": items, "total": matching, "offset": offset, "limit": limit, "org_id": org.id,
@@ -198,7 +199,16 @@ async def archive(mid: str, data: ArchiveRequest, user: User = Depends(get_curre
     check_revision(m, data.revision)
     if m.send_at and data.archived:
         raise HTTPException(409, "Cancel the pending invitation send before archiving")
+    was_archived = m.archived
     m.archived = data.archived
+    if data.archived or was_archived:
+        m.followup_schedule = [{**item, **({"status": "stopped", "reason": "Meeting archived"} if item.get("status") == "pending" else {})}
+            for item in m.followup_schedule or []]
+        m.next_followup_at = None
+        followups = (await db.scalars(select(MeetingDelivery).where(MeetingDelivery.meeting_id == m.id,
+            MeetingDelivery.purpose != "invitation", MeetingDelivery.status == "queued"))).all()
+        for delivery in followups:
+            delivery.status, delivery.error = "blocked", "Meeting archived; automatic follow-ups stopped"
     await db.commit()
     return await output(m, db)
 

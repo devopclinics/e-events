@@ -264,3 +264,84 @@ async def test_unsharing_blocks_previously_queued_comanager_followup(ctx):
     await deliver(row['id'],_Session,sender)
     assert not calls
     async with _Session() as db:assert (await db.get(MeetingDelivery,row['id'])).status=='blocked'
+
+async def test_archiving_stops_due_and_queued_followups_and_restore_does_not_replay(ctx):
+    m=await publish(ctx,await create(ctx,reminder_minutes=[60],nudge_hours_before=24))
+    await accept_initial(m)
+    from app.services.meeting_followups import queue_email
+    async with _Session() as db:
+        model=await db.get(Meeting,m['id']);a=await db.get(MeetingAttendee,m['attendees'][0]['id'])
+        await queue_email(model,db,a,'nudge:archive-fixture')
+        model.next_followup_at=datetime.utcnow()-timedelta(seconds=1)
+        model.followup_schedule=[{**entry,'due_at':model.next_followup_at.isoformat()} for entry in model.followup_schedule]
+        await db.commit()
+    response=await ctx.client.post(f'/api/meetings/{m["id"]}/archive',json={'revision':1,'archived':True})
+    assert response.status_code==200,response.text
+    assert all(item['status']=='stopped' for item in response.json()['followup_schedule'])
+    await release_followups(_Session)
+    called=[]
+    async def sender(*args):called.append(True);return 'never'
+    async with _Session() as db:
+        row=await db.scalar(select(MeetingDelivery).where(MeetingDelivery.meeting_id==m['id'],MeetingDelivery.purpose=='nudge:archive-fixture'))
+        assert row.status=='blocked'
+        did=row.id
+        assert (await db.get(Meeting,m['id'])).next_followup_at is None
+    await deliver(did,_Session,sender)
+    await ctx.client.post(f'/api/meetings/{m["id"]}/archive',json={'revision':1,'archived':False})
+    await release_followups(_Session)
+    assert not called
+    async with _Session() as db:
+        assert await db.scalar(select(func.count()).select_from(MeetingDelivery).where(MeetingDelivery.meeting_id==m['id'],MeetingDelivery.purpose!='invitation'))==1
+
+async def test_legacy_archived_meeting_cannot_release_or_send_followups(ctx):
+    m=await publish(ctx,await create(ctx,reminder_minutes=[60]));await accept_initial(m)
+    from app.services.meeting_followups import queue_email
+    async with _Session() as db:
+        model=await db.get(Meeting,m['id']);a=await db.get(MeetingAttendee,m['attendees'][0]['id'])
+        await queue_email(model,db,a,'reminder:legacy-archive')
+        model.archived=True;model.next_followup_at=datetime.utcnow()-timedelta(seconds=1)
+        model.followup_schedule=[{**entry,'due_at':model.next_followup_at.isoformat()} for entry in model.followup_schedule]
+        await db.commit()
+        did=await db.scalar(select(MeetingDelivery.id).where(MeetingDelivery.meeting_id==m['id'],MeetingDelivery.purpose=='reminder:legacy-archive'))
+    await release_followups(_Session)
+    async def sender(*args):raise AssertionError('Archived follow-up must never contact provider')
+    await deliver(did,_Session,sender)
+    async with _Session() as db:
+        assert (await db.get(MeetingDelivery,did)).status=='blocked'
+        assert await db.scalar(select(func.count()).select_from(MeetingDelivery).where(MeetingDelivery.meeting_id==m['id'],MeetingDelivery.purpose!='invitation'))==1
+
+async def test_restoring_legacy_archive_does_not_release_missed_reminders(ctx):
+    m=await publish(ctx,await create(ctx,reminder_minutes=[60]));await accept_initial(m)
+    async with _Session() as db:
+        model=await db.get(Meeting,m['id']);model.archived=True;model.next_followup_at=datetime.utcnow()-timedelta(seconds=1)
+        model.followup_schedule=[{**entry,'due_at':model.next_followup_at.isoformat()} for entry in model.followup_schedule]
+        await db.commit()
+    restored=await ctx.client.post(f'/api/meetings/{m["id"]}/archive',json={'revision':1,'archived':False})
+    assert restored.status_code==200
+    assert all(item['status']=='stopped' for item in restored.json()['followup_schedule'])
+    await release_followups(_Session)
+    async with _Session() as db:
+        assert not await db.scalar(select(MeetingDelivery.id).where(MeetingDelivery.meeting_id==m['id'],MeetingDelivery.purpose!='invitation'))
+
+async def test_everyone_replied_nudge_message_and_nullable_draft_sequence(ctx):
+    m=await create(ctx)
+    assert m['sequence'] is None
+    overview=(await ctx.client.get('/api/meetings/overview')).json()
+    assert overview['items'][0]['sequence'] is None
+    m=await publish(ctx,m);await accept_initial(m)
+    async with _Session() as db:
+        for a in (await db.scalars(select(MeetingAttendee).where(MeetingAttendee.meeting_id==m['id']))).all():a.response='accepted'
+        await db.commit()
+    response=await ctx.client.post(f'/api/meetings/{m["id"]}/nudge',json={'revision':1,'key':'all-replied-fixture'})
+    assert response.status_code==422 and 'Everyone has replied' in response.json()['detail']
+
+async def test_smtp_history_is_explicitly_untracked_and_bounces_surface_in_overview(ctx):
+    m=await publish(ctx,await create(ctx))
+    async def smtp(*args):return 'smtp:fixture'
+    for delivery in m['deliveries']:await deliver(delivery['id'],_Session,smtp)
+    result=(await ctx.client.get('/api/meetings/'+m['id'])).json()
+    assert all(row['receipt_tracking']=='unavailable' for row in result['deliveries'])
+    async with _Session() as db:
+        row=await db.get(MeetingDelivery,m['deliveries'][0]['id']);row.delivery_status='bounced';await db.commit()
+    report=(await ctx.client.get('/api/meetings/overview')).json()
+    assert report['items'][0]['delivery_counts']['bounced']==1

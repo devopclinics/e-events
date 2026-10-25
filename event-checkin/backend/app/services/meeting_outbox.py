@@ -58,6 +58,9 @@ def freeze_payload(row, meeting, attendee, template=None):
     msg.attach(part)
     payload = _resend_payload(msg)
     payload["tags"] = [{"name": "meeting_delivery_id", "value": row.id}]
+    for attachment in payload.get("attachments", []):
+        if attachment.get("filename") == "meeting.ics":
+            attachment["content_type"] = "text/calendar"
     # Persist exact bytes, including DTSTAMP, boundary, sender and signed URL.
     row.wire_payload = {"mode": settings.meetings_email_transport,
         "mime": msg.as_bytes(policy=policy.SMTP).decode("utf-8"),

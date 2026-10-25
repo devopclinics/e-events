@@ -238,6 +238,7 @@ async def test_transport_uses_one_recipient_scoped_link_and_idempotency(ctx, mon
         assert other not in str(payload)
         assert '/meeting-response/' in payload['html']
         assert payload['attachments'][0]['filename'] == 'meeting.ics'
+        assert payload['attachments'][0]['content_type'] == 'text/calendar'
         assert requests[0]['headers']['Idempotency-Key'] == requests[1]['headers']['Idempotency-Key']
 
 
@@ -638,7 +639,7 @@ async def test_scheduled_send_does_not_publish_early_and_releases_once(ctx):
     from app.services.meeting_outbox import release_scheduled
     m = await schedule_fixture(ctx)
     assert m['send_schedule']['status']=='pending'
-    assert m['status']=='draft' and m['sequence']==-1 and not m['attendees'] and not m['deliveries']
+    assert m['status']=='draft' and m['sequence'] is None and not m['attendees'] and not m['deliveries']
     await release_scheduled(_Session)
     async with _Session() as db:assert not (await db.scalars(select(MeetingDelivery))).all()
     await make_schedule_due(m['id'])

@@ -34,7 +34,7 @@ def schedule_followups(m, *, cancel=False, authorized_by=None):
 def allowed(m, a, row):
     if row.purpose == "invitation" or row.method == "CANCEL":
         return True
-    return (not a.reminders_stopped and a.response != "declined" and a.active and m.status == "scheduled"
+    return (not m.archived and not a.reminders_stopped and a.response != "declined" and a.active and m.status == "scheduled"
         and utc_time(m.published["start"], m.published["timezone"], m.published.get("start_fold")) > datetime.now(timezone.utc)
         and (not row.purpose.startswith("nudge:") or a.response == "pending"))
 
@@ -94,7 +94,9 @@ async def manual_followup(m, db, revision, key, *, aid=None, authorized_by=None)
         raise HTTPException(404, "Attendee not found")
     eligible = [a for a in attendees if a.email and "email" in a.channels and not a.reminders_stopped and a.response != "declined"]
     if not eligible:
-        raise HTTPException(422, "No eligible email recipients; reminder opt-outs and declined responses are respected")
+        if not aid and not attendees:
+            raise HTTPException(422, "Everyone has replied. There are no pending replies to nudge.")
+        raise HTTPException(422, "No pending attendees can receive this email. Check their email channel and reminder preferences.")
     unresolved = await db.scalar(select(MeetingDelivery.id).where(MeetingDelivery.meeting_id == m.id,
         MeetingDelivery.sequence == m.sequence, MeetingDelivery.channel == "email",
         MeetingDelivery.attendee_id.in_([a.id for a in eligible]),
@@ -120,7 +122,7 @@ async def release_followups(sessions, *, meeting_id=None):
     if not settings.meetings_sending_enabled:
         return
     async with sessions() as db:
-        stmt = select(Meeting.id).where(Meeting.next_followup_at <= datetime.utcnow())
+        stmt = select(Meeting.id).where(Meeting.next_followup_at <= datetime.utcnow(), Meeting.archived.is_(False))
         if meeting_id:
             stmt = stmt.where(Meeting.id == meeting_id)
         ids = (await db.scalars(stmt.limit(20))).all()
@@ -131,7 +133,7 @@ async def release_followups(sessions, *, meeting_id=None):
                 continue
             org = await db.get(Organization, m.org_id)
             entries = [dict(item) for item in m.followup_schedule or []]
-            valid = bool(org and org.is_active and m.status == "scheduled")
+            valid = bool(org and org.is_active and m.status == "scheduled" and not m.archived)
             if valid:
                 valid = utc_time(m.published["start"], m.published["timezone"], m.published.get("start_fold")) > datetime.now(timezone.utc)
             attendees = (await db.scalars(select(MeetingAttendee).where(MeetingAttendee.meeting_id == mid, MeetingAttendee.active.is_(True)))).all()

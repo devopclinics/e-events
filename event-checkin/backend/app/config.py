@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     meetings_paid_sending_enabled: bool = False
     # SMTP preserves scheduling MIME. Resend JSON supports attachment/manual import only.
     meetings_email_transport: str = "smtp"
-    meetings_signing_key: str = ""
+    meetings_signing_key: str = Field(default="", repr=False)
     # Runtime credentials are mandatory; no repository-backed fallback.
     database_url: str = Field(..., repr=False)
     # Read-only Postgres role dashboard-service connects with (SELECT-only —

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 const base = 'http://127.0.0.1:5175';
 const browser = await chromium.launch({
-  channel: 'msedge',
+  channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || undefined,
   headless: true
 });
 const page = await browser.newPage({

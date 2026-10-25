@@ -2,7 +2,7 @@ const SALES_ROUTES = new Set(['/', '/pricing', '/pricing-legacy', '/landing-lega
 const SUPPORT_ROUTES = new Set([
   '/admin', '/setup', '/setup/guided', '/design-studio', '/dashboard', '/results',
   '/my-tasks', '/org-settings', '/api-explorer', '/festiome', '/scanner', '/kitchen',
-  '/console', '/media-library', '/help',
+  '/console', '/media-library', '/help', '/meetings',
   '/live', '/finance', '/admin-redesign', '/events-redesign', '/guests-redesign',
   '/communications-redesign', '/billing-redesign', '/addons-redesign', '/team-redesign',
   '/experience-redesign', '/checkin-redesign', '/superadmin-redesign', '/media-redesign',

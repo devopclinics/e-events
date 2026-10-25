@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy import select
 
 from app.config import settings
-from app.models import Meeting, MeetingAttendee, MeetingDelivery
+from app.models import Meeting, MeetingAttendee, MeetingDelivery, Organization
 from app.services.meeting_service import MeetingInput, utc_time, response_token, calendar_bytes
 from app.services.meeting_outbox import deliver, tick
 from conftest import _Session
@@ -575,3 +575,32 @@ async def test_cancelled_phone_preferences_work_but_cannot_accept(ctx,monkeypatc
     assert (await ctx.client.get('/api/meeting-responses/preferences/'+token)).status_code==200
     assert (await ctx.client.post('/api/meeting-responses/'+token,json={'response':'accepted'})).status_code==410
     assert (await ctx.client.post('/api/meeting-responses/preferences/'+token,json={'channel':'sms'})).status_code==200
+
+
+from contextlib import asynccontextmanager
+async def test_email_change_must_not_cancel_the_unchanged_sms_destination(ctx,monkeypatch):
+    await paid_org(ctx,monkeypatch)
+    m=await publish_paid(ctx,await create(ctx,attendees=[mobile_attendee(['sms'])]))
+    changed={**m['draft'],'attendees':[mobile_attendee(['sms'],email='new@example.com')],'revision':m['revision']}
+    r=await ctx.client.put(f'/api/meetings/{m["id"]}',json=changed);assert r.status_code==200
+    preview=(await ctx.client.get(f'/api/meetings/{m["id"]}/preview')).json()
+    sms=[(r['method'],r['recipient']) for r in preview['channel_recipients'] if r['channel']=='sms']
+    assert sms==[('REQUEST','+14155550123')],sms
+
+async def test_cancel_between_claim_and_send_refunds_a_proven_unsent_reservation(ctx,monkeypatch):
+    await paid_org(ctx,monkeypatch)
+    m=await publish_paid(ctx,await create(ctx,attendees=[mobile_attendee(['sms'])]))
+    called=[];opens=0
+    @asynccontextmanager
+    async def sessions():
+        nonlocal opens
+        opens+=1;stage=opens
+        async with _Session() as db:yield db
+        if stage==1:await publish_paid(ctx,m,cancel=True)
+    async def sender(*args):called.append(True);return 'must-not-send'
+    await deliver(m['deliveries'][0]['id'],sessions,sender)
+    assert not called
+    async with _Session() as db:
+        row=await db.get(MeetingDelivery,m['deliveries'][0]['id']);org=await db.get(Organization,ctx.ids['org_a'])
+        assert row.status=='superseded'
+        assert org.message_credit_units==1000 and row.charge_refunded,{'balance':org.message_credit_units,'reserved':row.credit_units,'refunded':row.charge_refunded}

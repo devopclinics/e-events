@@ -153,6 +153,15 @@ async def deliver(delivery_id, sessions=None, sender=None):
         m = await db.scalar(select(Meeting).where(Meeting.id == row.meeting_id).with_for_update())
         row = await db.get(MeetingDelivery, delivery_id)
         if row.status != "sending" or row.sequence != m.sequence:
+            # This invocation committed the claim but has not called a provider.
+            # A concurrent publish/cancel can supersede that claim between our
+            # transactions. Release its reservation here, never by blindly
+            # refunding historic uncertain sends from enqueue().
+            if row.status == "superseded" and row.charged_at and not row.charge_refunded:
+                org = await db.scalar(select(Organization).where(Organization.id == m.org_id).with_for_update())
+                org.message_credit_units += row.credit_units
+                row.charge_refunded = True
+                await db.commit()
             return
         attendee = await db.get(MeetingAttendee, row.attendee_id)
         org = await db.get(Organization, m.org_id)

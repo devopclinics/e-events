@@ -141,6 +141,15 @@ export interface AssistedMenuIn {
   single?: Record<string, string>
 }
 
+export interface AttendeeInput {
+  channels?: ('email' | 'sms' | 'whatsapp')[]
+  email?: (string) | null
+  name: string
+  phone?: (string) | null
+  sms_consent?: boolean
+  whatsapp_consent?: boolean
+}
+
 export interface Authority {
   active?: boolean
   guest_id: string
@@ -792,6 +801,22 @@ export interface DonationTransitionIn {
 
 export interface DueDateRequest {
   due_at?: (string) | null
+}
+
+export interface Edit {
+  agenda?: string
+  attendees: (AttendeeInput)[]
+  end: string
+  end_fold?: (0 | 1) | null
+  location?: string
+  location_type?: 'online' | 'physical'
+  revision: number
+  start: string
+  start_fold?: (0 | 1) | null
+  timezone: string
+  title: string
+  video_url?: string
+  whatsapp_template_id?: (string) | null
 }
 
 export interface EventBrief {
@@ -2114,6 +2139,21 @@ export interface MealTrackingIn {
   tracking_mode: 'headcount' | 'orders' | 'both'
 }
 
+export interface MeetingInput {
+  agenda?: string
+  attendees: (AttendeeInput)[]
+  end: string
+  end_fold?: (0 | 1) | null
+  location?: string
+  location_type?: 'online' | 'physical'
+  start: string
+  start_fold?: (0 | 1) | null
+  timezone: string
+  title: string
+  video_url?: string
+  whatsapp_template_id?: (string) | null
+}
+
 export interface MemberRole {
   role: 'owner' | 'admin' | 'staff'
 }
@@ -3004,6 +3044,10 @@ export interface ReminderTestSendRequest {
   whatsapp_template_vars?: (Record<string, string>) | null
 }
 
+export interface Reply {
+  response: 'accepted' | 'maybe' | 'declined'
+}
+
 export interface RequestIn {
   assignee_user_id?: (string) | null
   assignment_id?: (string) | null
@@ -3387,6 +3431,10 @@ export interface SpeakerSettingsOut {
   speaker_token?: (string) | null
 }
 
+export interface StopNotifications {
+  channel: 'sms' | 'whatsapp'
+}
+
 export interface SubGroupCreate {
   description?: string
   join_policy?: 'closed' | 'request' | 'open'
@@ -3669,6 +3717,12 @@ export interface VendorPageOut {
   phase: string
   shipment_name: string
   vendor_name?: (string) | null
+}
+
+export interface Version {
+  confirm_paid_channels?: boolean
+  quoted_credit_units?: (number) | null
+  revision: number
 }
 
 export interface WaitlistOfferDelivery {

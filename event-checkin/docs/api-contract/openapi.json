@@ -676,6 +676,69 @@
         "title": "AssistedMenuIn",
         "type": "object"
       },
+      "AttendeeInput": {
+        "properties": {
+          "channels": {
+            "items": {
+              "enum": [
+                "email",
+                "sms",
+                "whatsapp"
+              ],
+              "type": "string"
+            },
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Channels",
+            "type": "array"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "sms_consent": {
+            "default": false,
+            "title": "Sms Consent",
+            "type": "boolean"
+          },
+          "whatsapp_consent": {
+            "default": false,
+            "title": "Whatsapp Consent",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "AttendeeInput",
+        "type": "object"
+      },
       "Authority": {
         "properties": {
           "active": {
@@ -4627,6 +4690,121 @@
           }
         },
         "title": "DueDateRequest",
+        "type": "object"
+      },
+      "Edit": {
+        "properties": {
+          "agenda": {
+            "default": "",
+            "maxLength": 10000,
+            "title": "Agenda",
+            "type": "string"
+          },
+          "attendees": {
+            "items": {
+              "$ref": "#/components/schemas/AttendeeInput"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Attendees",
+            "type": "array"
+          },
+          "end": {
+            "title": "End",
+            "type": "string"
+          },
+          "end_fold": {
+            "anyOf": [
+              {
+                "enum": [
+                  0,
+                  1
+                ],
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Fold"
+          },
+          "location": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Location",
+            "type": "string"
+          },
+          "location_type": {
+            "default": "online",
+            "enum": [
+              "online",
+              "physical"
+            ],
+            "title": "Location Type",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "start": {
+            "title": "Start",
+            "type": "string"
+          },
+          "start_fold": {
+            "anyOf": [
+              {
+                "enum": [
+                  0,
+                  1
+                ],
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Fold"
+          },
+          "timezone": {
+            "maxLength": 100,
+            "title": "Timezone",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "video_url": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Video Url",
+            "type": "string"
+          },
+          "whatsapp_template_id": {
+            "anyOf": [
+              {
+                "maxLength": 36,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Whatsapp Template Id"
+          }
+        },
+        "required": [
+          "title",
+          "start",
+          "end",
+          "timezone",
+          "attendees",
+          "revision"
+        ],
+        "title": "Edit",
         "type": "object"
       },
       "EventBrief": {
@@ -13556,6 +13734,116 @@
         "title": "MealTrackingIn",
         "type": "object"
       },
+      "MeetingInput": {
+        "properties": {
+          "agenda": {
+            "default": "",
+            "maxLength": 10000,
+            "title": "Agenda",
+            "type": "string"
+          },
+          "attendees": {
+            "items": {
+              "$ref": "#/components/schemas/AttendeeInput"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Attendees",
+            "type": "array"
+          },
+          "end": {
+            "title": "End",
+            "type": "string"
+          },
+          "end_fold": {
+            "anyOf": [
+              {
+                "enum": [
+                  0,
+                  1
+                ],
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Fold"
+          },
+          "location": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Location",
+            "type": "string"
+          },
+          "location_type": {
+            "default": "online",
+            "enum": [
+              "online",
+              "physical"
+            ],
+            "title": "Location Type",
+            "type": "string"
+          },
+          "start": {
+            "title": "Start",
+            "type": "string"
+          },
+          "start_fold": {
+            "anyOf": [
+              {
+                "enum": [
+                  0,
+                  1
+                ],
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Fold"
+          },
+          "timezone": {
+            "maxLength": 100,
+            "title": "Timezone",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "video_url": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Video Url",
+            "type": "string"
+          },
+          "whatsapp_template_id": {
+            "anyOf": [
+              {
+                "maxLength": 36,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Whatsapp Template Id"
+          }
+        },
+        "required": [
+          "title",
+          "start",
+          "end",
+          "timezone",
+          "attendees"
+        ],
+        "title": "MeetingInput",
+        "type": "object"
+      },
       "MemberRole": {
         "properties": {
           "role": {
@@ -19383,6 +19671,24 @@
         "title": "ReminderTestSendRequest",
         "type": "object"
       },
+      "Reply": {
+        "properties": {
+          "response": {
+            "enum": [
+              "accepted",
+              "maybe",
+              "declined"
+            ],
+            "title": "Response",
+            "type": "string"
+          }
+        },
+        "required": [
+          "response"
+        ],
+        "title": "Reply",
+        "type": "object"
+      },
       "RequestIn": {
         "properties": {
           "assignee_user_id": {
@@ -21678,6 +21984,23 @@
         "title": "SpeakerSettingsOut",
         "type": "object"
       },
+      "StopNotifications": {
+        "properties": {
+          "channel": {
+            "enum": [
+              "sms",
+              "whatsapp"
+            ],
+            "title": "Channel",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel"
+        ],
+        "title": "StopNotifications",
+        "type": "object"
+      },
       "SubGroupCreate": {
         "properties": {
           "description": {
@@ -23461,6 +23784,35 @@
           "event_name"
         ],
         "title": "VendorPageOut",
+        "type": "object"
+      },
+      "Version": {
+        "properties": {
+          "confirm_paid_channels": {
+            "default": false,
+            "title": "Confirm Paid Channels",
+            "type": "boolean"
+          },
+          "quoted_credit_units": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quoted Credit Units"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "title": "Version",
         "type": "object"
       },
       "WaitlistOfferDelivery": {
@@ -51599,6 +51951,589 @@
         "summary": "Submit Rsvp",
         "tags": [
           "invite"
+        ]
+      }
+    },
+    "/api/meeting-responses/preferences/{token}": {
+      "get": {
+        "operationId": "preference_preview_api_meeting_responses_preferences__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preference Preview",
+        "tags": [
+          "meeting-responses"
+        ]
+      },
+      "post": {
+        "operationId": "stop_notifications_api_meeting_responses_preferences__token__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StopNotifications"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stop Notifications",
+        "tags": [
+          "meeting-responses"
+        ]
+      }
+    },
+    "/api/meeting-responses/{token}": {
+      "get": {
+        "operationId": "response_preview_api_meeting_responses__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Response Preview",
+        "tags": [
+          "meeting-responses"
+        ]
+      },
+      "post": {
+        "operationId": "respond_api_meeting_responses__token__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Reply"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Respond",
+        "tags": [
+          "meeting-responses"
+        ]
+      }
+    },
+    "/api/meetings": {
+      "get": {
+        "operationId": "listing_api_meetings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Listing",
+        "tags": [
+          "meetings"
+        ]
+      },
+      "post": {
+        "operationId": "create_api_meetings_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeetingInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create",
+        "tags": [
+          "meetings"
+        ]
+      }
+    },
+    "/api/meetings/options": {
+      "get": {
+        "operationId": "options_api_meetings_options_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Options",
+        "tags": [
+          "meetings"
+        ]
+      }
+    },
+    "/api/meetings/{mid}": {
+      "get": {
+        "operationId": "detail_api_meetings__mid__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mid",
+            "required": true,
+            "schema": {
+              "title": "Mid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Detail",
+        "tags": [
+          "meetings"
+        ]
+      },
+      "put": {
+        "operationId": "edit_api_meetings__mid__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mid",
+            "required": true,
+            "schema": {
+              "title": "Mid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Edit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Edit",
+        "tags": [
+          "meetings"
+        ]
+      }
+    },
+    "/api/meetings/{mid}/cancel": {
+      "post": {
+        "operationId": "cancel_api_meetings__mid__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mid",
+            "required": true,
+            "schema": {
+              "title": "Mid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Version"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Cancel",
+        "tags": [
+          "meetings"
+        ]
+      }
+    },
+    "/api/meetings/{mid}/deliveries/{delivery_id}/retry": {
+      "post": {
+        "operationId": "retry_api_meetings__mid__deliveries__delivery_id__retry_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mid",
+            "required": true,
+            "schema": {
+              "title": "Mid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "delivery_id",
+            "required": true,
+            "schema": {
+              "title": "Delivery Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Retry",
+        "tags": [
+          "meetings"
+        ]
+      }
+    },
+    "/api/meetings/{mid}/preview": {
+      "get": {
+        "operationId": "preview_api_meetings__mid__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mid",
+            "required": true,
+            "schema": {
+              "title": "Mid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cancel",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Cancel",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview",
+        "tags": [
+          "meetings"
+        ]
+      }
+    },
+    "/api/meetings/{mid}/send": {
+      "post": {
+        "operationId": "send_api_meetings__mid__send_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mid",
+            "required": true,
+            "schema": {
+              "title": "Mid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Version"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Send",
+        "tags": [
+          "meetings"
         ]
       }
     },

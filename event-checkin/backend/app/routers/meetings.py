@@ -110,10 +110,10 @@ async def edit(mid: str, data: Edit, user: User = Depends(get_current_user), db:
 
 async def plan(m, db, cancel=False):
     current = [] if cancel else targets(m.draft)
-    current_ids = {(contact_key(a), ch, recipient) for a, ch, recipient in current}
+    current_ids = {(ch, recipient) for a, ch, recipient in current}
     result = [(a, ch, recipient, "REQUEST", m.draft) for a, ch, recipient in current]
     for a, ch, recipient in targets(m.published or {}):
-        if (contact_key(a), ch, recipient) not in current_ids:
+        if (ch, recipient) not in current_ids:
             result.append((a, ch, recipient, "CANCEL", m.published))
     unfinished = (await db.scalars(select(MeetingDelivery).where(MeetingDelivery.meeting_id == m.id,
         MeetingDelivery.method == "CANCEL", MeetingDelivery.status.in_(["queued", "sending", "failed", "uncertain", "setup_required"])))).all()
@@ -121,11 +121,11 @@ async def plan(m, db, cancel=False):
         a = await db.get(MeetingAttendee, d.attendee_id)
         item = {"name": a.name, "email": a.email, "phone": a.phone,
                 "sms_consent": a.sms_consent, "whatsapp_consent": a.whatsapp_consent}
-        if (contact_key(item), d.channel, d.recipient) not in current_ids:
+        if (d.channel, d.recipient) not in current_ids:
             result.append((item, d.channel, d.recipient, "CANCEL", d.payload))
     unique = {}
     for a, ch, recipient, method, snapshot in result:
-        unique[(contact_key(a), ch, recipient, method)] = (a, ch, recipient, method, snapshot)
+        unique[(ch, recipient, method)] = (a, ch, recipient, method, snapshot)
     return list(unique.values())
 
 

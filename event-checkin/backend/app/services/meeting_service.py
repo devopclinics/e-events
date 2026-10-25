@@ -89,6 +89,18 @@ class MeetingInput(BaseModel):
     attendees: list[AttendeeInput] = Field(min_length=1, max_length=50)
     whatsapp_template_id: str | None = Field(default=None, max_length=36)
 
+    @field_validator("video_url", mode="before")
+    @classmethod
+    def normalize_meeting_url(cls, value):
+        if not isinstance(value, str):
+            return value
+        value = value.strip()
+        # Accept pasted host/path links without treating arbitrary schemes or
+        # whitespace as a valid web address.
+        if re.fullmatch(r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,}(?::[0-9]{1,5})?(?:[/?#][^\s]*)?", value):
+            return "https://" + value
+        return value
+
     @model_validator(mode="after")
     def valid(self):
         self.title = self.title.strip()

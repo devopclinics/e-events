@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api';
+import { normalizeMeetingUrl } from '../lib/meetingUrl.mjs';
 import RedesignShell from './redesign/RedesignShell';
 import './MeetingsPage.css';
 const newAttendee = () => ({
@@ -106,10 +107,11 @@ export function MeetingsWorkspace({
   }
   async function save(showPreview = false) {
     await act(async () => {
+      const data = { ...form, video_url: normalizeMeetingUrl(form.video_url) };
       const m = selected ? await client.updateMeeting(selected.id, {
-        ...form,
+        ...data,
         revision: selected.revision
-      }) : await client.createMeeting(form);
+      }) : await client.createMeeting(data);
       setSelected(m);
       setForm(m.draft);
       await refresh();
@@ -185,7 +187,7 @@ export function MeetingsWorkspace({
           {form.attendees.some(a => a.channels?.includes('whatsapp')) && <><label>Approved WhatsApp template<select aria-label="Approved WhatsApp template" value={form.whatsapp_template_id || ''} onChange={e => change('whatsapp_template_id', e.target.value || null)}><option value="">Select an eligible approved template</option>{options.whatsapp_templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>{!options.whatsapp_templates.length && <p className="mt-notice">Setup required: no eligible approved WhatsApp template is available. No free-text fallback will be used.</p>}</>}
           <label>Meeting type</label><div className="mt-two mt-type">{[['online', 'Online'], ['physical', 'In person']].map(([value, label]) => <label key={value}><input type="radio" checked={form.location_type === value} onChange={() => change('location_type', value)} />{label}</label>)}</div>
           {form.location_type === 'physical' && <label>Location<input required value={form.location} onChange={e => change('location', e.target.value)} placeholder="Room or street address" /></label>}
-          <label>Meeting link{form.location_type === 'physical' ? ' (optional)' : ''}<input type="url" required={form.location_type === 'online'} value={form.video_url} onChange={e => change('video_url', e.target.value)} placeholder="https://example.com/meeting" /></label>
+          <label>Meeting link{form.location_type === 'physical' ? ' (optional)' : ''}<input type="text" inputMode="url" autoCapitalize="none" autoCorrect="off" required={form.location_type === 'online'} value={form.video_url} onChange={e => change('video_url', e.target.value)} onBlur={e => change('video_url', normalizeMeetingUrl(e.target.value))} placeholder="meet.google.com/abc-defg-hij" /></label>
           <label>Agenda (optional)<textarea rows={3} value={form.agenda} onChange={e => change('agenda', e.target.value)} placeholder="Review progress and agree next steps." /></label>
           <div className="mt-actions"><button type="button" onClick={() => save(false)}>Save draft</button><button className="mt-primary" type="submit">{busy ? 'Saving…' : 'Preview invitation'}</button></div>
         </fieldset>

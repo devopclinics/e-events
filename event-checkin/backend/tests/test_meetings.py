@@ -604,3 +604,17 @@ async def test_cancel_between_claim_and_send_refunds_a_proven_unsent_reservation
         row=await db.get(MeetingDelivery,m['deliveries'][0]['id']);org=await db.get(Organization,ctx.ids['org_a'])
         assert row.status=='superseded'
         assert org.message_credit_units==1000 and row.charge_refunded,{'balance':org.message_credit_units,'reserved':row.credit_units,'refunded':row.charge_refunded}
+
+
+@pytest.mark.parametrize("url", ["meet.google.com/uxc-vqko-mih", "  meet.google.com/uxc-vqko-mih  ", "https://meet.google.com/uxc-vqko-mih"])
+async def test_meeting_pasted_link_normalized_before_save(ctx, url):
+    ctx.login(ctx.ids['user_a'])
+    response = await ctx.client.post('/api/meetings', json=draft(video_url=url))
+    assert response.status_code == 201
+    assert response.json()['draft']['video_url'] == 'https://meet.google.com/uxc-vqko-mih'
+
+
+@pytest.mark.parametrize("url", ["javascript:alert(1)", "not a link", "", "meet.google.com/bad link"])
+async def test_invalid_meeting_link_still_rejected(ctx, url):
+    ctx.login(ctx.ids['user_a'])
+    assert (await ctx.client.post('/api/meetings', json=draft(video_url=url))).status_code == 422

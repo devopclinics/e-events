@@ -460,3 +460,5 @@
 .mt-public .mt-details{border:0;border-radius:14px;background:var(--mt-public-soft);padding:14px 18px;margin:22px 0}
 .mt-public .mt-details a{color:var(--mt-public-ink);font-weight:650}
 .mt-public .mt-reply button:first-child,.mt-public .mt-primary{background:var(--mt-public-ink);border-color:var(--mt-public-ink);color:#fff}
+
+.mt-details a.mt-join-button,.mt-public .mt-details a.mt-join-button{display:inline-flex;align-items:center;justify-content:center;width:fit-content;padding:13px 22px;border-radius:12px;background:var(--mt-public-ink,#183e3a);color:#fff;text-decoration:none;font-size:13px;font-weight:750;letter-spacing:.3px}

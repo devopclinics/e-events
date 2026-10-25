@@ -712,6 +712,7 @@ async def test_style_email_preview_and_delivery_are_coloured_and_escaped(ctx):
         assert colour in r.json()['html']
         assert '<script>' not in r.json()['html'] and '&lt;script&gt;' in r.json()['html']
         assert 'View invitation &amp; respond' in r.json()['html']
+        assert 'href="https://example.com/meeting"' in r.json()['html'] and '>JOIN ONLINE</a>' in r.json()['html']
 
 
 async def test_reviewing_unchanged_schedule_preserves_it_and_send_now_overrides_once(ctx):
@@ -757,3 +758,4 @@ async def test_actual_mime_uses_selected_design_and_utf8(ctx):
         assert '#202d68' in body and 'Discuss ideas — agree next steps.' in body
         assert 'View invitation &amp; respond →' in body
         assert '/meeting-response/' in body and f'Hello {a.name},' in body
+        assert '>JOIN ONLINE</a>' in body and 'href="https://example.com/meeting"' in body

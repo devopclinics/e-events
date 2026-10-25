@@ -50,7 +50,7 @@ export function MeetingDetails({
     hour: 'numeric',
     minute: '2-digit'
   });
-  return <><h2>{data.title}</h2>{data.agenda && <p className="mt-agenda">{data.agenda}</p>}<div className="mt-details"><p>▦ {date(data.start)}{data.start.slice(0, 10) !== data.end.slice(0, 10) ? ` – ${date(data.end)}` : ''}</p><p>◷ {time(data.start)} – {time(data.end)}</p><p>◎ {data.timezone}</p>{data.start_fold !== null && data.start_fold !== undefined && <small>Start: {data.start_fold ? 'second' : 'first'} clock occurrence</small>}<p>{data.location_type === 'online' ? 'Online meeting' : data.location}</p>{data.video_url && <a href={data.video_url} target="_blank" rel="noreferrer">Open meeting link ↗</a>}</div></>;
+  return <><h2>{data.title}</h2>{data.agenda && <p className="mt-agenda">{data.agenda}</p>}<div className="mt-details"><p>▦ {date(data.start)}{data.start.slice(0, 10) !== data.end.slice(0, 10) ? ` – ${date(data.end)}` : ''}</p><p>◷ {time(data.start)} – {time(data.end)}</p><p>◎ {data.timezone}</p>{data.start_fold !== null && data.start_fold !== undefined && <small>Start: {data.start_fold ? 'second' : 'first'} clock occurrence</small>}<p>{data.location_type === 'online' ? 'Online meeting' : data.location}</p>{data.video_url && <a className="mt-join-button" href={data.video_url} target="_blank" rel="noopener noreferrer">JOIN ONLINE</a>}</div></>;
 }
 export function MeetingsWorkspace({
   client = api

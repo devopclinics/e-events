@@ -154,6 +154,12 @@ def invitation(data, *, method="REQUEST", response_url=None, recipient_name=None
     if start.date() != end.date():
         hours += " · ends " + end.strftime("%d %B")
     place = data["video_url"] if data["location_type"] == "online" else data["location"]
+    join_button = (f'<a href="{escape(data["video_url"], quote=True)}" target="_blank" rel="noopener noreferrer" '
+        f'style="display:inline-block;background:{ink};color:#ffffff;padding:14px 24px;border-radius:12px;'
+        'font-size:14px;font-weight:700;text-decoration:none">JOIN ONLINE</a>') if data.get("video_url") and method != "CANCEL" else ""
+    access = join_button if data["location_type"] == "online" and join_button else escape(place)
+    if data["location_type"] == "physical" and join_button:
+        access += '<br><br>' + join_button
     greeting = "Hello " + escape(recipient_name) + "," if recipient_name else "A little time. A meaningful connection."
     agenda = escape(data.get("agenda", "")).replace("\n", "<br>")
     state = "MEETING CANCELLED" if method == "CANCEL" else "YOU’RE INVITED"
@@ -172,7 +178,7 @@ def invitation(data, *, method="REQUEST", response_url=None, recipient_name=None
 <p style="margin:30px 0 12px;color:{accent};font-size:11px;font-weight:700;letter-spacing:2px">{state}</p>
 <h1 style="font-size:32px;line-height:1.2;margin:0 0 18px;color:#ffffff;overflow-wrap:anywhere">{escape(data["title"])}</h1><p style="margin:0;color:#ffffff">{greeting}</p></td></tr>
 <tr><td style="padding:26px 30px;background:{soft}"><p style="font-size:11px;letter-spacing:2px;font-weight:700;margin:0;color:{ink}">SAVE THE DATE</p><p style="font-size:21px;font-weight:700;margin:7px 0;color:{ink}">{day}</p><p style="margin:0;color:{ink}">{hours}</p><p style="font-size:12px;margin:5px 0 0;color:{ink}">{escape(data["timezone"])}</p></td></tr>
-<tr><td style="padding:28px 30px"><p style="font-size:11px;letter-spacing:2px;font-weight:700;color:{ink};margin:0 0 8px">{'JOIN ONLINE' if data["location_type"] == 'online' else 'MEET US HERE'}</p><p style="margin:0 0 24px;overflow-wrap:anywhere">{escape(place)}</p>
+<tr><td style="padding:28px 30px"><p style="font-size:11px;letter-spacing:2px;font-weight:700;color:{ink};margin:0 0 8px">{'MEETING ACCESS' if data["location_type"] == 'online' else 'MEET US HERE'}</p><p style="margin:0 0 24px;overflow-wrap:anywhere">{access}</p>
 {('<p style="font-size:11px;letter-spacing:2px;font-weight:700;color:'+ink+';margin:0 0 8px">ON THE AGENDA</p><p style="margin:0 0 24px;overflow-wrap:anywhere">'+agenda+'</p>') if agenda else ''}
 {action}<p style="font-size:12px;color:#596e68;margin:18px 0 0">{'Your personal invitation includes a calendar attachment and a link to accept, decline or reply maybe. Responses are recorded in Festio.' if method != 'CANCEL' else 'The attached calendar cancellation updates the original invitation.'}</p></td></tr>
 <tr><td style="padding:20px 30px;border-top:1px solid #e3eae5;color:#596e68;font-size:11px">A meeting made simple. Powered by <strong>Festio</strong>.<br>You received this personal invitation from the meeting organizer. Google/Outlook replies are not synchronized.</td></tr>

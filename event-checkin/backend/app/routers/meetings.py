@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import select, case
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Literal
 import jwt
 import re
@@ -49,7 +49,7 @@ async def output(m, db):
         .order_by(MeetingDelivery.sequence, MeetingDelivery.created_at))).all()
     return {"id": m.id, "draft": m.draft, "status": m.status, "revision": m.revision,
         "published_revision": m.published_revision, "sequence": m.sequence,
-        "sending_enabled": settings.meetings_sending_enabled,
+        "sending_enabled": settings.meetings_sending_enabled, "send_schedule": m.send_schedule,
         "attendees": [{"id": a.id, "name": a.name, "email": a.email, "phone": a.phone, "channels": a.channels, "active": a.active,
             "response": a.response, "response_sequence": a.response_sequence} for a in attendees],
         "deliveries": [{"id": d.id, "attendee_id": d.attendee_id, "sequence": d.sequence,
@@ -78,7 +78,7 @@ async def create(data: MeetingInput, user: User = Depends(get_current_user), db:
 @router.get("/options")
 async def options(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     org = await org_for(user, db)
-    return {"paid_sending_enabled": settings.meetings_paid_sending_enabled,
+    return {"sending_enabled": settings.meetings_sending_enabled, "paid_sending_enabled": settings.meetings_paid_sending_enabled,
         "whatsapp_templates": [{"id": r.id, "name": r.name, "body": r.body} for r in await approved_templates(db, org.id)]}
 
 
@@ -102,8 +102,12 @@ async def edit(mid: str, data: Edit, user: User = Depends(get_current_user), db:
     check_revision(m, data.revision)
     if m.status == "cancelled":
         raise HTTPException(409, "Cancelled meetings cannot be edited")
-    m.draft = data.model_dump(mode="json", exclude={"revision"})
+    updated = data.model_dump(mode="json", exclude={"revision"})
+    if updated == m.draft:
+        return await output(m, db)
+    m.draft = updated
     m.revision += 1
+    clear_schedule(m, "cancelled", "Meeting details changed. Preview and schedule the updated invitation.")
     await db.commit()
     return await output(m, db)
 
@@ -164,6 +168,16 @@ class Version(BaseModel):
     revision: int
     confirm_paid_channels: bool = False
     quoted_credit_units: int | None = None
+    send_at: str | None = None
+    send_fold: Literal[0, 1] | None = None
+
+    @field_validator("send_at")
+    @classmethod
+    def nonempty_send_time(cls, value):
+        if value is not None and not value.strip():
+            raise ValueError("Choose an invitation send time")
+        return value
+
 
 
 async def enqueue(m, db, cancel=False):
@@ -201,6 +215,28 @@ async def enqueue(m, db, cancel=False):
     m.status = "cancelled" if cancel else "scheduled"
 
 
+def clear_schedule(m, status, message=None):
+    m.send_at = None
+    if m.send_schedule and (m.send_schedule.get("status") in {"pending", "blocked"} or status == "queued"):
+        m.send_schedule = {**m.send_schedule, "status": status, "error": message}
+
+
+async def validate_publish(m, data, db):
+    check_revision(m, data.revision)
+    if m.status == "cancelled":
+        raise HTTPException(409, "Meeting is cancelled")
+    if not settings.meetings_sending_enabled or len(settings.meetings_signing_key) < 32:
+        raise HTTPException(503, "Invitation sending is disabled until Meetings is configured")
+    if utc_time(m.draft["end"], m.draft["timezone"], m.draft.get("end_fold")) <= datetime.now(timezone.utc):
+        raise HTTPException(422, "Choose a future meeting time before sending invitations")
+    rows = await plan(m, db)
+    if any(ch != "email" for a, ch, recipient, method, snapshot in rows) and not data.confirm_paid_channels:
+        raise HTTPException(422, "Review paid channel recipients and explicitly confirm messaging charges")
+    quote = sum(cost(ch, m.org_id) for a, ch, recipient, method, snapshot in rows)
+    if quote and data.quoted_credit_units != quote:
+        raise HTTPException(409, "Messaging price changed or was not reviewed. Preview again before sending.")
+
+
 @router.post("/{mid}/send")
 async def send(mid: str, data: Version, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     m = await owned(mid, user, db)
@@ -208,17 +244,39 @@ async def send(mid: str, data: Version, user: User = Depends(get_current_user), 
     if m.status == "cancelled":
         raise HTTPException(409, "Meeting is cancelled")
     if m.published_revision == m.revision:
-        return await output(m, db)  # duplicate explicit click: no new version/deliveries
-    if not settings.meetings_sending_enabled or len(settings.meetings_signing_key) < 32:
-        raise HTTPException(503, "Invitation sending is disabled until Meetings is configured")
-    if utc_time(m.draft["end"], m.draft["timezone"], m.draft.get("end_fold")) <= datetime.now(timezone.utc):
-        raise HTTPException(422, "Choose a future meeting time before sending invitations")
-    if any(ch != "email" for a, ch, recipient, method, snapshot in await plan(m, db)) and not data.confirm_paid_channels:
-        raise HTTPException(422, "Review paid channel recipients and explicitly confirm messaging charges")
-    quote = sum(cost(ch, m.org_id) for a, ch, recipient, method, snapshot in await plan(m, db))
-    if quote and data.quoted_credit_units != quote:
-        raise HTTPException(409, "Messaging price changed or was not reviewed. Preview again before sending.")
-    await enqueue(m, db)
+        if data.send_at:
+            raise HTTPException(409, "This version was already sent. Edit and preview a new version before scheduling.")
+        return await output(m, db)
+    await validate_publish(m, data, db)
+    if data.send_at:
+        try:
+            when = utc_time(data.send_at, m.draft["timezone"], data.send_fold)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc))
+        if when <= datetime.now(timezone.utc):
+            raise HTTPException(422, "Choose a future invitation send time")
+        if when >= utc_time(m.draft["start"], m.draft["timezone"], m.draft.get("start_fold")):
+            raise HTTPException(422, "Schedule invitations before the meeting starts")
+        # Store only the explicit, reviewed send instruction. Attendees, live
+        # response links, calendar sequence and wallet stay unchanged until due.
+        m.send_at = when.replace(tzinfo=None)
+        m.send_schedule = {"status": "pending", "send_at": when.isoformat(), "timezone": m.draft["timezone"],
+            "local_time": data.send_at, "revision": m.revision, "send_fold": data.send_fold,
+            "confirm_paid_channels": data.confirm_paid_channels, "quoted_credit_units": data.quoted_credit_units, "error": None}
+    else:
+        await enqueue(m, db)
+        clear_schedule(m, "queued")
+    await db.commit()
+    return await output(m, db)
+
+
+@router.delete("/{mid}/schedule")
+async def unschedule(mid: str, data: Version, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    m = await owned(mid, user, db)
+    check_revision(m, data.revision)
+    if not m.send_at:
+        raise HTTPException(409, "There is no pending invitation send to cancel")
+    clear_schedule(m, "cancelled")
     await db.commit()
     return await output(m, db)
 
@@ -235,6 +293,7 @@ async def cancel(mid: str, data: Version, user: User = Depends(get_current_user)
     if quote and data.quoted_credit_units != quote:
         raise HTTPException(409, "Review cancellation notification charges before confirming")
     if m.status != "cancelled":
+        clear_schedule(m, "cancelled")
         m.revision += 1
         await enqueue(m, db, cancel=True)
         await db.commit()

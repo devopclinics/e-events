@@ -808,6 +808,7 @@ export interface Edit {
   attendees: (AttendeeInput)[]
   end: string
   end_fold?: (0 | 1) | null
+  invitation_style?: 'aurora' | 'cobalt' | 'terracotta'
   location?: string
   location_type?: 'online' | 'physical'
   revision: number
@@ -2144,6 +2145,7 @@ export interface MeetingInput {
   attendees: (AttendeeInput)[]
   end: string
   end_fold?: (0 | 1) | null
+  invitation_style?: 'aurora' | 'cobalt' | 'terracotta'
   location?: string
   location_type?: 'online' | 'physical'
   start: string
@@ -3723,6 +3725,8 @@ export interface Version {
   confirm_paid_channels?: boolean
   quoted_credit_units?: (number) | null
   revision: number
+  send_at?: (string) | null
+  send_fold?: (0 | 1) | null
 }
 
 export interface WaitlistOfferDelivery {

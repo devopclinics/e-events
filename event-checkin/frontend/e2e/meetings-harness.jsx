@@ -46,6 +46,7 @@ const recipientRows = (cancel = false) => meeting.draft.attendees.flatMap(a => (
 })));
 const client = {
   meetingOptions: async () => ({
+    sending_enabled: true,
     whatsapp_templates: [{
       id: 'approved-meeting',
       name: 'Approved meeting notification'
@@ -72,6 +73,7 @@ const client = {
     window.meetingCalls.push('preview');
     return {
       revision: meeting.revision,
+      html: window.meetingEmailFixtures?.[meeting.draft.invitation_style || 'aurora'] || '<html><body><h1>Project catch-up</h1><p>Meeting invitation fixture</p></body></html>',
       subject: `You're invited: ${meeting.draft.title}`,
       recipients: meeting.draft.attendees,
       cancellations: [],
@@ -81,7 +83,11 @@ const client = {
       credit_units: recipientRows(cancel).reduce((n, r) => n + r.credit_units, 0)
     };
   },
-  sendMeeting: async (id, revision, confirmed, quote) => {
+  sendMeeting: async (id, revision, confirmed, quote, schedule = {}) => {
+    if (schedule.send_at) {
+      window.meetingCalls.push('schedule');
+      return meeting = { ...meeting, send_schedule: { status: 'pending', local_time: schedule.send_at, timezone: meeting.draft.timezone, send_at: schedule.send_at + 'Z' } };
+    }
     const total = recipientRows().reduce((n, r) => n + r.credit_units, 0);
     if (total && (!confirmed || quote !== total)) throw new Error('Paid channel confirmation required');
     window.meetingCalls.push('send');
@@ -106,6 +112,10 @@ const client = {
         error: i ? 'Mock provider rejection' : null
       }))
     };
+  },
+  cancelMeetingSchedule: async () => {
+    window.meetingCalls.push('unschedule');
+    return meeting = { ...meeting, send_schedule: { ...meeting.send_schedule, status: 'cancelled' } };
   },
   retryMeetingDelivery: async () => {
     window.meetingCalls.push('retry');

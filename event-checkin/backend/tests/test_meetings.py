@@ -618,3 +618,142 @@ async def test_meeting_pasted_link_normalized_before_save(ctx, url):
 async def test_invalid_meeting_link_still_rejected(ctx, url):
     ctx.login(ctx.ids['user_a'])
     assert (await ctx.client.post('/api/meetings', json=draft(video_url=url))).status_code == 422
+
+
+async def schedule_fixture(ctx):
+    m = await create(ctx, start='2030-06-20T10:00', end='2030-06-20T11:00')
+    r = await ctx.client.post(f'/api/meetings/{m["id"]}/send', json={'revision':m['revision'],'send_at':'2030-06-19T09:00'})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+async def make_schedule_due(mid):
+    async with _Session() as db:
+        m = await db.get(Meeting,mid)
+        m.send_at = datetime.utcnow() - timedelta(seconds=1)
+        await db.commit()
+
+
+async def test_scheduled_send_does_not_publish_early_and_releases_once(ctx):
+    from app.services.meeting_outbox import release_scheduled
+    m = await schedule_fixture(ctx)
+    assert m['send_schedule']['status']=='pending'
+    assert m['status']=='draft' and m['sequence']==-1 and not m['attendees'] and not m['deliveries']
+    await release_scheduled(_Session)
+    async with _Session() as db:assert not (await db.scalars(select(MeetingDelivery))).all()
+    await make_schedule_due(m['id'])
+    await release_scheduled(_Session)
+    await release_scheduled(_Session)
+    m=(await ctx.client.get(f'/api/meetings/{m["id"]}')).json()
+    assert m['sequence']==0 and len(m['deliveries'])==2
+    assert m['send_schedule']['status']=='queued'
+    assert all(d['status']=='queued' for d in m['deliveries'])
+
+
+async def test_schedule_cancel_and_edit_never_send(ctx):
+    from app.services.meeting_outbox import release_scheduled
+    m=await schedule_fixture(ctx)
+    r=await ctx.client.request('DELETE',f'/api/meetings/{m["id"]}/schedule',json={'revision':m['revision']})
+    assert r.status_code==200 and r.json()['send_schedule']['status']=='cancelled'
+    assert r.json()['status']=='draft'
+    await release_scheduled(_Session)
+    async with _Session() as db:assert not (await db.scalars(select(MeetingDelivery))).all()
+    m=await schedule_fixture(ctx)
+    r=await ctx.client.put(f'/api/meetings/{m["id"]}',json={**m['draft'],'title':'Changed title','revision':m['revision']})
+    assert r.status_code==200 and r.json()['send_schedule']['status']=='cancelled'
+
+
+async def test_cancelling_unpublished_scheduled_meeting_sends_no_cancellations(ctx):
+    m=await schedule_fixture(ctx)
+    r=await ctx.client.post(f'/api/meetings/{m["id"]}/cancel',json={'revision':m['revision']})
+    assert r.status_code==200
+    assert r.json()['status']=='cancelled' and not r.json()['deliveries']
+    assert r.json()['send_schedule']['status']=='cancelled'
+
+
+@pytest.mark.parametrize('when',['',' ','not a date','2020-01-01T10:00','2030-06-20T10:00','2030-06-20T10:30'])
+async def test_schedule_rejects_missing_invalid_past_or_after_meeting_time(ctx,when):
+    m=await create(ctx,start='2030-06-20T10:00',end='2030-06-20T11:00')
+    r=await ctx.client.post(f'/api/meetings/{m["id"]}/send',json={'revision':m['revision'],'send_at':when})
+    assert r.status_code==422,r.text
+    async with _Session() as db:assert not (await db.scalars(select(MeetingDelivery))).all()
+
+
+async def test_schedule_preserves_published_response_until_release(ctx):
+    from app.services.meeting_outbox import release_scheduled
+    m=await publish(ctx,await create(ctx,start='2030-06-20T10:00',end='2030-06-20T11:00'))
+    async with _Session() as db:
+        model=await db.get(Meeting,m['id']);a=await db.scalar(select(MeetingAttendee).where(MeetingAttendee.meeting_id==m['id']));token=response_token(model,a)
+    m=(await ctx.client.put(f'/api/meetings/{m["id"]}',json={**m['draft'],'title':'Updated meeting','revision':m['revision']})).json()
+    r=await ctx.client.post(f'/api/meetings/{m["id"]}/send',json={'revision':m['revision'],'send_at':'2030-06-19T09:00'})
+    assert r.status_code==200 and r.json()['sequence']==0
+    assert (await ctx.client.get('/api/meeting-responses/'+token)).status_code==200
+    await make_schedule_due(m['id']);await release_scheduled(_Session)
+    assert (await ctx.client.get('/api/meeting-responses/'+token)).status_code==410
+
+
+async def test_due_schedule_rechecks_organizer_permission(ctx):
+    from app.services.meeting_outbox import release_scheduled
+    from app.models import Membership
+    m=await schedule_fixture(ctx);await make_schedule_due(m['id'])
+    async with _Session() as db:
+        model=await db.get(Meeting,m['id'])
+        member=await db.scalar(select(Membership).where(Membership.user_id==model.organizer_id,Membership.org_id==model.org_id));member.role='staff';await db.commit()
+    await release_scheduled(_Session)
+    async with _Session() as db:
+        row=await db.get(Meeting,m['id']);assert row.send_schedule['status']=='blocked';assert row.send_at is None
+        assert not (await db.scalars(select(MeetingDelivery))).all()
+
+
+async def test_style_email_preview_and_delivery_are_coloured_and_escaped(ctx):
+    for style,colour in [('aurora','#183e3a'),('cobalt','#202d68'),('terracotta','#663728')]:
+        m=await create(ctx,invitation_style=style,title='<script>Title</script>')
+        r=await ctx.client.get(f'/api/meetings/{m["id"]}/preview')
+        assert colour in r.json()['html']
+        assert '<script>' not in r.json()['html'] and '&lt;script&gt;' in r.json()['html']
+        assert 'View invitation &amp; respond' in r.json()['html']
+
+
+async def test_reviewing_unchanged_schedule_preserves_it_and_send_now_overrides_once(ctx):
+    from app.services.meeting_outbox import release_scheduled
+    m=await schedule_fixture(ctx)
+    r=await ctx.client.put(f'/api/meetings/{m["id"]}',json={**m['draft'],'revision':m['revision']})
+    assert r.status_code==200 and r.json()['send_schedule']['status']=='pending'
+    assert r.json()['revision']==m['revision']
+    m=await publish(ctx,r.json())
+    assert m['send_schedule']['status']=='queued' and len(m['deliveries'])==2
+    await release_scheduled(_Session)
+    m=await publish(ctx,m)
+    assert m['sequence']==0 and len(m['deliveries'])==2
+    edited=await ctx.client.put(f'/api/meetings/{m["id"]}',json={**m['draft'],'title':'A new revision','revision':m['revision']})
+    assert edited.json()['send_schedule']['status']=='queued'  # never describe a past send as cancelled
+
+
+async def test_schedule_timezone_dst_and_access(ctx):
+    m=await schedule_fixture(ctx)
+    assert m['send_schedule']['send_at']=='2030-06-19T14:00:00+00:00'
+    ctx.login(ctx.ids['user_b'])
+    r=await ctx.client.request('DELETE',f'/api/meetings/{m["id"]}/schedule',json={'revision':m['revision']})
+    assert r.status_code==404
+    m=await create(ctx,start='2030-11-05T10:00',end='2030-11-05T11:00')
+    body={'revision':m['revision'],'send_at':'2030-11-03T01:30'}
+    r=await ctx.client.post(f'/api/meetings/{m["id"]}/send',json=body)
+    assert r.status_code==422
+    r=await ctx.client.post(f'/api/meetings/{m["id"]}/send',json={**body,'send_fold':1})
+    assert r.status_code==200
+    assert r.json()['send_schedule']['send_at']=='2030-11-03T07:30:00+00:00'
+
+
+async def test_actual_mime_uses_selected_design_and_utf8(ctx):
+    from app.services.meeting_outbox import freeze_payload
+    from email import policy
+    from email.parser import Parser
+    m=await publish(ctx,await create(ctx,invitation_style='cobalt',agenda='Discuss ideas — agree next steps.'))
+    async with _Session() as db:
+        model=await db.get(Meeting,m['id']);row=await db.scalar(select(MeetingDelivery).where(MeetingDelivery.meeting_id==m['id']))
+        a=await db.get(MeetingAttendee,row.attendee_id)
+        freeze_payload(row,model,a)
+        body=Parser(policy=policy.default).parsestr(row.wire_payload['mime']).get_body(preferencelist=('html',)).get_content()
+        assert '#202d68' in body and 'Discuss ideas — agree next steps.' in body
+        assert 'View invitation &amp; respond →' in body
+        assert '/meeting-response/' in body and f'Hello {a.name},' in body

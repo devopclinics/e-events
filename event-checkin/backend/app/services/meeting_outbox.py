@@ -18,11 +18,11 @@ import aiosmtplib
 
 from ..database import AsyncSessionLocal
 from ..config import settings
-from ..models import Meeting, MeetingAttendee, MeetingDelivery, Organization
-from .meeting_service import calendar_bytes, invitation, response_token, phone_message
+from ..models import Meeting, MeetingAttendee, MeetingDelivery, Organization, Membership
+from .meeting_service import calendar_bytes, invitation, response_token, phone_message, utc_time
 from .meeting_channels import preflight, SetupRequired, Suppressed, DefiniteRejection
 from services import messaging
-from services.email_service import _resend_payload, _festio_email_shell
+from services.email_service import _resend_payload
 from services.outbound_safety import recipient_allowed
 
 
@@ -41,18 +41,15 @@ def freeze_payload(row, meeting, attendee, template=None):
             "params": [attendee.name, row.payload["title"], body, url],
             "var_keys": ["firstName", "eventName", "message", "ticketLink"]}
         return
-    subject, body = invitation(row.payload, method=row.method)
-    if row.method == "REQUEST":
-        body += f'<p><a href="{escape(url, quote=True)}">View invitation and respond</a></p>'
-        body += '<p>' + ' · '.join(f'<a href="{escape(url, quote=True)}?choice={choice}">{label}</a>' for choice, label in
-            [("accepted", "Accept"), ("maybe", "Maybe"), ("declined", "Decline")]) + '</p><p>Opening a link previews the invitation. Confirm your response on the page.</p>'
+    subject, body = invitation(row.payload, method=row.method, recipient_name=attendee.name,
+        response_url=url if row.method == "REQUEST" else None)
     msg = MIMEMultipart("mixed", boundary="meeting-" + row.id)
     msg["To"] = row.recipient or attendee.email
     msg["From"] = settings.email_from
     msg["Subject"] = subject
     msg["Message-ID"] = f"<meeting-{row.id}@festio.events>"
     msg["Date"] = format_datetime(row.created_at.replace(tzinfo=timezone.utc))
-    msg.attach(MIMEText(_festio_email_shell(body, title=subject), "html", "utf-8"))
+    msg.attach(MIMEText(body, "html", "utf-8"))
     recipient = type("Recipient", (), {"name": attendee.name, "email": row.recipient or attendee.email})()
     part = MIMEText(calendar_bytes(meeting, row.payload, recipient, row.method, row.sequence, dtstamp=row.created_at).decode(), "calendar", "utf-8")
     part.set_param("method", row.method)
@@ -193,10 +190,40 @@ async def deliver(delivery_id, sessions=None, sender=None):
         await db.commit()
 
 
+async def release_scheduled(sessions):
+    from fastapi import HTTPException
+    from ..routers.meetings import Version, validate_publish, enqueue, clear_schedule
+    async with sessions() as db:
+        ids = (await db.scalars(select(Meeting.id).where(Meeting.send_at <= datetime.utcnow()).limit(20))).all()
+    for mid in ids:
+        async with sessions() as db:
+            m = await db.scalar(select(Meeting).where(Meeting.id == mid).with_for_update(skip_locked=True))
+            if not m or not m.send_at or m.send_at > datetime.utcnow():
+                continue
+            instruction = m.send_schedule or {}
+            try:
+                org = await db.get(Organization, m.org_id)
+                member = await db.scalar(select(Membership.id).where(Membership.org_id == m.org_id,
+                    Membership.user_id == m.organizer_id, Membership.role.in_(["owner", "admin"])))
+                if not org or not org.is_active or not member:
+                    raise HTTPException(403, "Organizer access changed. Review invitation sending.")
+                data = Version(revision=instruction["revision"], confirm_paid_channels=instruction.get("confirm_paid_channels", False),
+                    quoted_credit_units=instruction.get("quoted_credit_units"))
+                await validate_publish(m, data, db)
+                if utc_time(m.draft["start"], m.draft["timezone"], m.draft.get("start_fold")) <= datetime.now(timezone.utc):
+                    raise HTTPException(422, "The meeting has already started. Review invitation sending.")
+                await enqueue(m, db)
+                clear_schedule(m, "queued")
+            except HTTPException as exc:
+                clear_schedule(m, "blocked", str(exc.detail))
+            await db.commit()
+
+
 async def tick(sessions=None):
     sessions = sessions or AsyncSessionLocal
     if not settings.meetings_sending_enabled:
         return
+    await release_scheduled(sessions)
     async with sessions() as db:
         abandoned = (await db.scalars(select(MeetingDelivery).where(MeetingDelivery.status == "sending",
             MeetingDelivery.attempted_at < datetime.utcnow() - timedelta(minutes=5)).with_for_update(skip_locked=True))).all()

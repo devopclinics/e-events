@@ -4728,6 +4728,16 @@
             ],
             "title": "End Fold"
           },
+          "invitation_style": {
+            "default": "aurora",
+            "enum": [
+              "aurora",
+              "cobalt",
+              "terracotta"
+            ],
+            "title": "Invitation Style",
+            "type": "string"
+          },
           "location": {
             "default": "",
             "maxLength": 1000,
@@ -13769,6 +13779,16 @@
               }
             ],
             "title": "End Fold"
+          },
+          "invitation_style": {
+            "default": "aurora",
+            "enum": [
+              "aurora",
+              "cobalt",
+              "terracotta"
+            ],
+            "title": "Invitation Style",
+            "type": "string"
           },
           "location": {
             "default": "",
@@ -23807,6 +23827,32 @@
           "revision": {
             "title": "Revision",
             "type": "integer"
+          },
+          "send_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Send At"
+          },
+          "send_fold": {
+            "anyOf": [
+              {
+                "enum": [
+                  0,
+                  1
+                ],
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Send Fold"
           }
         },
         "required": [
@@ -52477,6 +52523,61 @@
           }
         ],
         "summary": "Preview",
+        "tags": [
+          "meetings"
+        ]
+      }
+    },
+    "/api/meetings/{mid}/schedule": {
+      "delete": {
+        "operationId": "unschedule_api_meetings__mid__schedule_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mid",
+            "required": true,
+            "schema": {
+              "title": "Mid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Version"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Unschedule",
         "tags": [
           "meetings"
         ]

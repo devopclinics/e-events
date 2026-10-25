@@ -88,6 +88,7 @@ class MeetingInput(BaseModel):
     video_url: str = Field(default="", max_length=2000)
     attendees: list[AttendeeInput] = Field(min_length=1, max_length=50)
     whatsapp_template_id: str | None = Field(default=None, max_length=36)
+    invitation_style: Literal["aurora", "cobalt", "terracotta"] = "aurora"
 
     @field_validator("video_url", mode="before")
     @classmethod
@@ -137,11 +138,45 @@ def response_token(meeting, attendee, *, scope="meeting-response", phone=None):
                       settings.meetings_signing_key, algorithm="HS256")
 
 
-def invitation(data, *, method="REQUEST"):
+INVITATION_STYLES = {
+    "aurora": ("#183e3a", "#bbf17a", "#eef8eb"),
+    "cobalt": ("#202d68", "#c4c2ff", "#eff0ff"),
+    "terracotta": ("#663728", "#ffda9a", "#fff3e8"),
+}
+
+
+def invitation(data, *, method="REQUEST", response_url=None, recipient_name=None):
     subject = ("Cancelled: " if method == "CANCEL" else "You're invited: ") + data["title"]
+    ink, accent, soft = INVITATION_STYLES.get(data.get("invitation_style"), INVITATION_STYLES["aurora"])
+    start, end = datetime.fromisoformat(data["start"]), datetime.fromisoformat(data["end"])
+    day = start.strftime("%A, %d %B %Y")
+    hours = start.strftime("%I:%M %p").lstrip("0") + " – " + end.strftime("%I:%M %p").lstrip("0")
+    if start.date() != end.date():
+        hours += " · ends " + end.strftime("%d %B")
     place = data["video_url"] if data["location_type"] == "online" else data["location"]
-    body = f'<h2>{escape(data["title"])}</h2><p>{escape(data["agenda"])}</p><p>{escape(data["start"])} – {escape(data["end"])}<br>{escape(data["timezone"])}</p><p>{escape(place)}</p>'
-    body += "<p>This meeting has been cancelled.</p>" if method == "CANCEL" else "<p>Please respond using your personal Festio link. Responses are recorded in Festio; Google/Outlook replies are not synchronized.</p>"
+    greeting = "Hello " + escape(recipient_name) + "," if recipient_name else "A little time. A meaningful connection."
+    agenda = escape(data.get("agenda", "")).replace("\n", "<br>")
+    state = "MEETING CANCELLED" if method == "CANCEL" else "YOU’RE INVITED"
+    action = ""
+    if method != "CANCEL":
+        style = f"display:inline-block;background:{ink};color:#ffffff;padding:15px 23px;border-radius:12px;font-weight:700;text-decoration:none"
+        action = (f'<a href="{escape(response_url, quote=True)}" style="{style}">View invitation &amp; respond →</a>' if response_url
+                  else f'<span style="{style}">View invitation &amp; respond →</span>')
+    else:
+        action = '<p style="font-weight:700;color:#9a312d">This meeting has been cancelled.</p>'
+    body = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{escape(subject)}</title></head>
+<body style="margin:0;background:#f1f3ef;font-family:Arial,Helvetica,sans-serif;color:#19302e;line-height:1.6">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:24px 12px">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;border-radius:24px;overflow:hidden;border:1px solid #dbe4df">
+<tr><td style="background:{ink};padding:30px;color:#ffffff"><table role="presentation" width="100%"><tr><td style="color:#ffffff;font-size:23px;font-weight:800">festio<span style="color:{accent}">.</span></td><td align="right" style="color:{accent};font-size:11px;letter-spacing:2px">LET’S CONNECT</td></tr></table>
+<p style="margin:30px 0 12px;color:{accent};font-size:11px;font-weight:700;letter-spacing:2px">{state}</p>
+<h1 style="font-size:32px;line-height:1.2;margin:0 0 18px;color:#ffffff;overflow-wrap:anywhere">{escape(data["title"])}</h1><p style="margin:0;color:#ffffff">{greeting}</p></td></tr>
+<tr><td style="padding:26px 30px;background:{soft}"><p style="font-size:11px;letter-spacing:2px;font-weight:700;margin:0;color:{ink}">SAVE THE DATE</p><p style="font-size:21px;font-weight:700;margin:7px 0;color:{ink}">{day}</p><p style="margin:0;color:{ink}">{hours}</p><p style="font-size:12px;margin:5px 0 0;color:{ink}">{escape(data["timezone"])}</p></td></tr>
+<tr><td style="padding:28px 30px"><p style="font-size:11px;letter-spacing:2px;font-weight:700;color:{ink};margin:0 0 8px">{'JOIN ONLINE' if data["location_type"] == 'online' else 'MEET US HERE'}</p><p style="margin:0 0 24px;overflow-wrap:anywhere">{escape(place)}</p>
+{('<p style="font-size:11px;letter-spacing:2px;font-weight:700;color:'+ink+';margin:0 0 8px">ON THE AGENDA</p><p style="margin:0 0 24px;overflow-wrap:anywhere">'+agenda+'</p>') if agenda else ''}
+{action}<p style="font-size:12px;color:#596e68;margin:18px 0 0">{'Your personal invitation includes a calendar attachment and a link to accept, decline or reply maybe. Responses are recorded in Festio.' if method != 'CANCEL' else 'The attached calendar cancellation updates the original invitation.'}</p></td></tr>
+<tr><td style="padding:20px 30px;border-top:1px solid #e3eae5;color:#596e68;font-size:11px">A meeting made simple. Powered by <strong>Festio</strong>.<br>You received this personal invitation from the meeting organizer. Google/Outlook replies are not synchronized.</td></tr>
+</table></td></tr></table></body></html>'''
     return subject, body
 
 

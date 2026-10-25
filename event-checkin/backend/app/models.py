@@ -15,6 +15,8 @@ class Meeting(Base):
     published: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     revision: Mapped[int] = mapped_column(Integer, default=1)
     published_revision: Mapped[int] = mapped_column(Integer, default=0)
+    send_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    send_schedule: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     sequence: Mapped[int] = mapped_column(Integer, default=-1)
     status: Mapped[str] = mapped_column(String(20), default="draft")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

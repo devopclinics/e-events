@@ -220,3 +220,15 @@ class OperationsSubscriptionIn(BaseModel):
     frequency: str = Field(default="daily", pattern="^(daily|weekly)$")
     enabled: bool = True
     include_alerts: bool = True
+
+
+class SetupConfirmIn(BaseModel):
+    currency: str = Field(pattern="^[A-Z]{3}$")
+    confirm_currency: bool = False
+    confirm_payout: bool = False
+    confirm_webhook_dashboard: bool = False
+    confirm_alert_destination: bool = False
+
+
+class BulkResendIn(BaseModel):
+    order_ids: list[str] = Field(min_length=1,max_length=20)

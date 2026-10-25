@@ -23,6 +23,7 @@ class EventConfig(Base):
     tax_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     tax_bps: Mapped[int] = mapped_column(Integer, default=0)
     tax_paid_by: Mapped[str] = mapped_column(String(20), default="buyer")
+    setup_checks: Mapped[dict] = mapped_column(JSON, default=dict)
     checkout_fields: Mapped[list] = mapped_column(JSON, default=list)
     delivery_settings: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -129,6 +130,9 @@ class Order(Base):
     delivery_status: Mapped[str] = mapped_column(String(30), default="pending")
     delivery_attempts: Mapped[int] = mapped_column(Integer, default=0)
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    delivery_queued_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    email_delivery_status: Mapped[str] = mapped_column(String(30), default="unknown")
+    email_delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     pre_dispute_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
     promo_code: Mapped[str | None] = mapped_column(String(40), nullable=True)
     waitlist_entry_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
@@ -300,3 +304,10 @@ class OperationsSubscription(Base):
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class CheckoutRateBucket(Base):
+    __tablename__ = "checkout_rate_buckets"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, default=0)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)

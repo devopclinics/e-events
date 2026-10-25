@@ -1932,7 +1932,7 @@ export const api = {
   liveControlAssignWorkflowDisplays: (token, runId, body) => liveGuestReq(token, 'PUT', `/v1/runs/${runId}/displays`, body),
   liveControlCommandWorkflowRun: (token, runId, body) => liveGuestReq(token, 'POST', `/v1/runs/${runId}/commands`, body),
 
-  // Paid admission (standalone staging-only ticketing-service).
+  // Admission and payments through the scoped ticketing service.
   ticketingConfig: (eventId) => ticketingReq(eventId, 'GET', `/events/${eventId}/config`),
   saveTicketingConfig: (eventId, body) => ticketingReq(eventId, 'PUT', `/events/${eventId}/config`, body),
   ticketingPayoutAccounts: (eventId) => ticketingReq(eventId, 'GET', `/events/${eventId}/payout-accounts`),
@@ -1949,7 +1949,11 @@ export const api = {
   deleteTicketingProduct: (eventId, id) => ticketingReq(eventId, 'DELETE', `/events/${eventId}/products/${id}`),
   ticketingPromos: (eventId) => ticketingReq(eventId, 'GET', `/events/${eventId}/promos`),
   createTicketingPromo: (eventId, body) => ticketingReq(eventId, 'POST', `/events/${eventId}/promos`, body),
-  ticketingSales: (eventId) => ticketingReq(eventId, 'GET', `/events/${eventId}/sales`),
+  ticketingSales: (eventId, filters={}) => ticketingReq(eventId, 'GET', `/events/${eventId}/sales?${new URLSearchParams(filters)}`),
+  ticketingGoLive: (eventId) => ticketingReq(eventId, 'GET', `/events/${eventId}/go-live`),
+  confirmTicketingSetup: (eventId,body) => ticketingReq(eventId, 'POST', `/events/${eventId}/setup-confirmation`,body),
+  exportTicketingSales: (eventId,filters={}) => ticketingReq(eventId,'GET',`/events/${eventId}/sales-export?${new URLSearchParams(filters)}`),
+  bulkResendTicketOrders: (eventId,order_ids) => ticketingReq(eventId,'POST',`/events/${eventId}/orders/bulk-resend`,{order_ids}),
   retryTicketFulfillment: (eventId, orderId) => ticketingReq(eventId, 'POST', `/events/${eventId}/orders/${orderId}/fulfill`),
   resendTicketOrder: (eventId, orderId) => ticketingReq(eventId, 'POST', `/events/${eventId}/orders/${orderId}/resend`),
   refundTicketOrder: (eventId, orderId, body) => ticketingReq(eventId, 'POST', `/events/${eventId}/orders/${orderId}/refunds`, body),

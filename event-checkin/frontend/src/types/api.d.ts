@@ -3620,6 +3620,18 @@ export interface TemplateTestSendRequest {
   whatsapp_template_vars?: (Record<string, string>) | null
 }
 
+export interface TicketDeliveryStatusLookup {
+  event_id: string
+  orders: (TicketDeliveryStatusOrder)[]
+}
+
+export interface TicketDeliveryStatusOrder {
+  buyer_email: string
+  email_enabled?: boolean
+  id: string
+  queued_after?: (string) | null
+}
+
 export interface TicketSalesReportDelivery {
   csv_content: string
   filename?: string

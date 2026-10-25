@@ -1,6 +1,6 @@
-# Festio Ticketing API — staging contract
+# Festio Ticketing API
 
-The ticketing service is isolated at `/api/ticketing` and is enabled only on staging. Currency amounts are integer minor units: cents for USD and kobo for NGN.
+The ticketing service is isolated at `/api/ticketing` and is deployed in staging and production, with environment-specific credentials and service/event switches. Currency amounts are integer minor units: cents for USD and kobo for NGN.
 
 ## Public buyer endpoints
 
@@ -50,4 +50,14 @@ Errors use FastAPI's JSON form: `{ "detail": "…" }`. Expected statuses include
 
 ## Production enablement checklist
 
-Production remains intentionally blocked until live keys, webhook endpoints, settlement validation, legal/tax ownership, security review, alert destinations and recovery drills are approved. Never place provider secret keys in browser code or documentation.
+Paid production checkout is blocked until ticket currency, matching live credentials, organizer payout routing, dashboard webhook configuration and an enabled alert destination are confirmed in the go-live checklist. Confirmation does not prove settlement or complete legal/tax review and recovery drills. Free registration remains available without payment setup. Never place provider secret keys in browser code or documentation.
+
+## Organizer reporting and setup endpoints
+
+- `GET /events/{event_id}/go-live` — current prerequisites; does not expose credentials.
+- `POST /events/{event_id}/setup-confirmation` — explicitly confirm saved currency, selected payout account, dashboard webhook or alert destination.
+- `GET /events/{event_id}/sales?q=&status=&from_date=&to_date=&limit=50&offset=0` — filtered, paginated safe order projections plus filtered totals and seven UTC days of activity. No checkout access tokens or QR payloads.
+- `GET /events/{event_id}/sales-export?kind=orders|attendees|refunds|provider` — bounded CSV export with the same filters; formula-like cells are escaped.
+- `POST /events/{event_id}/orders/bulk-resend` — at most 20 explicit order IDs; returns queued and skipped outcomes. Individual resends have a five-minute cooldown.
+
+Public order creation can return 429 for checkout velocity or pending-order limits, and 409 when paid sales are not ready. Promo limits include pending reservations. Queue timestamps do not prove email delivery: authenticated, correlated provider receipts establish Delivered; legacy uncorrelated mail stays unknown.

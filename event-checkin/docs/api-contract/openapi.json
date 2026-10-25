@@ -23141,6 +23141,67 @@
         "title": "TemplateTestSendRequest",
         "type": "object"
       },
+      "TicketDeliveryStatusLookup": {
+        "properties": {
+          "event_id": {
+            "maxLength": 36,
+            "title": "Event Id",
+            "type": "string"
+          },
+          "orders": {
+            "items": {
+              "$ref": "#/components/schemas/TicketDeliveryStatusOrder"
+            },
+            "maxItems": 50,
+            "title": "Orders",
+            "type": "array"
+          }
+        },
+        "required": [
+          "event_id",
+          "orders"
+        ],
+        "title": "TicketDeliveryStatusLookup",
+        "type": "object"
+      },
+      "TicketDeliveryStatusOrder": {
+        "properties": {
+          "buyer_email": {
+            "maxLength": 320,
+            "title": "Buyer Email",
+            "type": "string"
+          },
+          "email_enabled": {
+            "default": true,
+            "title": "Email Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "queued_after": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queued After"
+          }
+        },
+        "required": [
+          "id",
+          "buyer_email"
+        ],
+        "title": "TicketDeliveryStatusOrder",
+        "type": "object"
+      },
       "TicketSalesReportDelivery": {
         "properties": {
           "csv_content": {
@@ -51030,6 +51091,63 @@
           }
         },
         "summary": "Anonymize Paid Order",
+        "tags": [
+          "ticketing-internal"
+        ]
+      }
+    },
+    "/api/internal/ticketing/delivery-status": {
+      "post": {
+        "operationId": "ticket_delivery_status_api_internal_ticketing_delivery_status_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-internal-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TicketDeliveryStatusLookup"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ticket Delivery Status",
         "tags": [
           "ticketing-internal"
         ]

@@ -126,11 +126,12 @@ def _queue_ticket_delivery(background_tasks: BackgroundTasks, event: Event, orde
     if settings_row.get("email_enabled", True):
         background_tasks.add_task(send_simple_email, buyer_email,
                                   render(settings_row.get("email_subject") or "Your tickets for {{event_name}}"),
-                                  buyer_body, event.id, None, None, "paid_ticket_order", inline_images)
+                                  buyer_body, event.id, None, None, "ticket_order_"+order_id, inline_images)
     queued = 1 if settings_row.get("email_enabled", True) else 0
     buyer_lower = buyer_email.strip().lower()
     sent = {buyer_lower}
     for guest in guests:
+        if not settings_row.get("email_enabled", True):continue
         recipient = (guest.email or "").strip().lower()
         if not recipient or recipient in sent:
             continue
@@ -142,7 +143,7 @@ def _queue_ticket_delivery(background_tasks: BackgroundTasks, event: Event, orde
                 '<p>This QR pass belongs only to you and can be admitted once.</p>')
         background_tasks.add_task(send_simple_email, recipient,
                                   f"Your pass for {event.name}", body, event.id,
-                                  None, guest.id, "paid_ticket_pass")
+                                  None, guest.id, "ticket_pass_"+order_id)
         queued += 1
     for guest in guests:
         if not guest.phone: continue
@@ -390,3 +391,58 @@ async def anonymize_paid_order(event_id: str, order_id: str,
         guest.admitted, guest.admitted_at = False, None
     await db.commit()
     return {"order_id": order_id, "anonymized": len(guests)}
+
+class TicketDeliveryStatusOrder(BaseModel):
+    id: str = Field(min_length=1,max_length=80)
+    buyer_email: str = Field(max_length=320)
+    email_enabled: bool = True
+    queued_after: datetime | None = None
+
+
+class TicketDeliveryStatusLookup(BaseModel):
+    event_id: str = Field(max_length=36)
+    orders: list[TicketDeliveryStatusOrder] = Field(max_length=50)
+
+
+def _ticket_email_state(events,recipients,queued_after=None):
+    """Only local send attempts and signed provider receipts establish status."""
+    from datetime import timedelta,timezone
+    if not recipients:return {'status':'not_requested','delivered_at':None}
+    if queued_after and queued_after.tzinfo:queued_after=queued_after.astimezone(timezone.utc).replace(tzinfo=None)
+    results=[];times=[]
+    for recipient in recipients:
+        attempts=[row for row in events if (row.recipient or '').lower()==recipient and not row.provider_event_id
+            and (row.payload or {}).get('source') in {'send_attempt','staging_recipient_guard','credit_gate'}
+            and (not queued_after or row.created_at>=queued_after-timedelta(seconds=5))]
+        if not attempts:results.append('unknown');continue
+        attempt=max(attempts,key=lambda row:row.created_at)
+        receipts=[row for row in events if attempt.provider_email_id and row.provider_email_id==attempt.provider_email_id
+            and (row.payload or {}).get('_signature_verified') is True and row.status in {'delivered','bounced','complained','failed','suppressed','delivery_delayed'}]
+        receipt=max(receipts,key=lambda row:row.occurred_at) if receipts else None
+        state=receipt.status if receipt else attempt.status
+        if state=='sent':state='sent'
+        elif state in {'blocked_recipient_safety','blocked_no_credits','suppressed'}:state='blocked'
+        elif state=='delivery_delayed':state='queued'
+        results.append(state)
+        if state=='delivered':times.append(receipt.occurred_at)
+    if all(state=='delivered' for state in results):return {'status':'delivered','delivered_at':max(times).isoformat()}
+    for failure in ['complained','bounced','failed','blocked']:
+        if failure in results:return {'status':failure,'delivered_at':None}
+    return {'status':'sent' if all(state in {'sent','delivered'} for state in results) else 'unknown','delivered_at':None}
+
+
+@router.post('/delivery-status')
+async def ticket_delivery_status(body: TicketDeliveryStatusLookup,x_internal_token: str | None=Header(default=None),db: AsyncSession=Depends(get_db)):
+    from ..models import EmailDeliveryEvent
+    _authorized(x_internal_token)
+    ids=[order.id for order in body.orders]
+    kinds=[kind+order_id for order_id in ids for kind in ('ticket_order_','ticket_pass_')]
+    guests=(await db.scalars(select(Guest).where(Guest.event_id==body.event_id,Guest.paid_ticket_order_id.in_(ids)))).all() if ids else []
+    events=(await db.scalars(select(EmailDeliveryEvent).where(EmailDeliveryEvent.event_id==body.event_id,EmailDeliveryEvent.message_kind.in_(kinds)).order_by(EmailDeliveryEvent.created_at.desc()).limit(10000))).all() if kinds else []
+    output={}
+    for order in body.orders:
+        recipients={order.buyer_email.strip().lower()} if order.email_enabled and order.buyer_email else set()
+        if order.email_enabled:recipients.update(g.email.strip().lower() for g in guests if g.paid_ticket_order_id==order.id and g.email)
+        related=[row for row in events if row.message_kind in {'ticket_order_'+order.id,'ticket_pass_'+order.id}]
+        output[order.id]=_ticket_email_state(related,recipients,order.queued_after)
+    return {'orders':output}

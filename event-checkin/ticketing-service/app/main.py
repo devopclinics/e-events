@@ -5,20 +5,25 @@ import io
 import json
 import logging
 import secrets
+import hashlib
 import httpx
 from datetime import datetime, timedelta
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import func, select
+from sqlalchemy import func, select, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
 from .auth import Identity, current_identity, require_admin, require_service_enabled
 from .config import settings
 from .database import SessionLocal, get_db
 from .models import AuditEvent, CancellationRequest, EventConfig, FeePolicy, JournalLine, LedgerEntry, OperationsSubscription, Order, OrderItem, PaymentEvent, PaymentRefund, PrivacyRequest, PromoCode, PayoutAccount, TicketProduct, TicketTransfer, WaitlistEntry, uid
 from .providers import provider, verify_paystack, verify_stripe
-from .schemas import CancellationDecisionIn, CancellationIn, ComplimentaryOrderIn, EventConfigIn, FeePolicyIn, OperationsSubscriptionIn, OrderIn, PaystackAccountIn, PrivacyDecisionIn, PrivacyRequestIn, ProductIn, PromoIn, ProviderBootstrapIn, RefundIn, SalesReportIn, StripeAccountIn, TransferIn, WaitlistIn, WaitlistOfferIn
+from .schemas import SetupConfirmIn, BulkResendIn, CancellationDecisionIn, CancellationIn, ComplimentaryOrderIn, EventConfigIn, FeePolicyIn, OperationsSubscriptionIn, OrderIn, PaystackAccountIn, PrivacyDecisionIn, PrivacyRequestIn, ProductIn, PromoIn, ProviderBootstrapIn, RefundIn, SalesReportIn, StripeAccountIn, TransferIn, WaitlistIn, WaitlistOfferIn
+
+from .safety import order_view, payment_kind, csv_safe, checkout_limits, peer_address, clean_buckets, lock_buyer
+from .readiness import checklist, provider_fingerprint
 
 logging.basicConfig(level=logging.INFO)
 app = FastAPI(title="Festio Ticketing Service", version="0.1.0")
@@ -55,7 +60,10 @@ def public_status():
 
 
 def product_out(p):
-    return {c.name: getattr(p, c.name) for c in p.__table__.columns}
+    value = {c.name: getattr(p, c.name) for c in p.__table__.columns}
+    if isinstance(p,EventConfig):
+        value['setup_checks']={key:item for key,item in (p.setup_checks or {}).items() if key not in {'webhook_fingerprint','payout_fingerprint'}}
+    return value
 
 
 def provider_ready(name: str) -> bool:
@@ -94,7 +102,8 @@ async def provider_readiness(name: str) -> dict:
                 account = await client.get("https://api.paystack.co/transaction/totals", headers=headers)
                 result["account_verified"] = account.status_code == 200 and account.json().get("status") is True
                 # Paystack does not expose integration webhook settings through its public API.
-                result["webhook_configured"] = bool(settings.paystack_webhook_secret)
+                result["webhook_configured"] = False
+                result["webhook_status"] = "dashboard_confirmation_required"
     except httpx.HTTPError:
         result["action_required"].append("Provider API could not be reached; retry the readiness check")
         return result
@@ -335,13 +344,14 @@ async def deliver_scheduled_operations_report(db: AsyncSession, sub: OperationsS
         "processing_refunds": sum(1 for r in refunds if r.status == "processing"),
         "disputed_orders": sum(1 for o in orders if o.status == "disputed"),
         "failed_provider_events": failed_events,
+        "unconfirmed_ticket_email":sum(1 for order in orders if order.status=='fulfilled' and order.delivery_queued_at and order.delivery_queued_at<datetime.utcnow()-timedelta(minutes=15) and order.email_delivery_status not in {'sent','delivered','not_requested'}),
     }
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["order_id", "created_at", "buyer_email", "provider", "status", "currency", "total"])
     for order in orders:
-        writer.writerow([order.id, order.created_at.isoformat(), order.buyer_email,
-                         order.provider, order.status, order.currency, order.total])
+        writer.writerow([csv_safe(v) for v in [order.id, order.created_at.isoformat(), order.buyer_email,
+                         order.provider, order.status, order.currency, order.total]])
     currency = orders[0].currency if orders else ""
     alert_html = ""
     if sub.include_alerts:
@@ -388,6 +398,7 @@ async def operations_loop():
     while True:
         try:
             async with SessionLocal() as db:
+                await clean_buckets(db)
                 await expire_abandoned_orders(db)
                 await maintain_waitlist(db)
                 await process_scheduled_reports(db)
@@ -508,10 +519,44 @@ async def get_config(event_id: str, ident: Identity = Depends(current_identity),
         config.update({"fee_bps": fee["fee_bps"]})
     return {"service_enabled": settings.service_enabled, "config": config,
             "test_mode": settings.environment.lower() != "production",
-            "default_currency": ident.currency,
+            "default_currency": ident.currency, "go_live": await checklist(db,cfg,ident.currency),
             "providers": {"stripe": provider_ready("stripe"), "paystack": provider_ready("paystack")},
             "fee_policy": {**fee, "fees_paid_by": cfg.fees_paid_by if cfg else fee["fees_paid_by"],
                            "can_manage": ident.is_platform_superadmin}}
+
+
+@app.get('/api/ticketing/events/{event_id}/go-live')
+async def go_live(event_id: str,ident: Identity=Depends(current_identity),db: AsyncSession=Depends(get_db)):
+    require_admin(ident)
+    if ident.event_id!=event_id:raise HTTPException(403,'Wrong event scope')
+    return await checklist(db,await db.get(EventConfig,event_id),ident.currency)
+
+
+@app.post('/api/ticketing/events/{event_id}/setup-confirmation')
+async def confirm_setup(event_id: str,body: SetupConfirmIn,ident: Identity=Depends(current_identity),db: AsyncSession=Depends(get_db)):
+    require_admin(ident)
+    if ident.event_id!=event_id:raise HTTPException(403,'Wrong event scope')
+    cfg=await db.get(EventConfig,event_id,with_for_update=True)
+    if not cfg or cfg.currency!=body.currency:raise HTTPException(409,'Save and review the selected ticket currency first')
+    checks=dict(cfg.setup_checks or {})
+    if body.confirm_currency:checks.update(currency=cfg.currency,currency_confirmed=True)
+    if body.confirm_payout:
+        account=await db.scalar(select(PayoutAccount).where(PayoutAccount.org_id==ident.org_id,PayoutAccount.provider==cfg.provider,PayoutAccount.provider_account_id==cfg.provider_account_id))
+        valid=bool(account and account.currency==cfg.currency and account.charges_enabled and account.payouts_enabled and ((account.provider=='paystack' and account.account_name and account.status in {'created','verified'}) or account.status=='verified'))
+        if not valid:raise HTTPException(409,'Connect and select the active organizer payout account first')
+        checks.update(payout_confirmed_account_id=cfg.provider_account_id,payout_fingerprint=provider_fingerprint(cfg.provider))
+    if body.confirm_webhook_dashboard:
+        if not provider_ready(cfg.provider):raise HTTPException(409,'Configure provider credentials before confirming its dashboard webhook')
+        checks.update(webhook_confirmed=True,webhook_provider=cfg.provider,webhook_fingerprint=provider_fingerprint(cfg.provider))
+    if body.confirm_alert_destination:
+        sub=await db.scalar(select(OperationsSubscription).where(OperationsSubscription.event_id==event_id,OperationsSubscription.enabled.is_(True),OperationsSubscription.include_alerts.is_(True)))
+        if not sub or not sub.recipient:raise HTTPException(409,'Enable a scheduled operations report with an alert destination first')
+        checks['alert_confirmed']=True
+    checks.update(confirmed_at=datetime.utcnow().isoformat(),confirmed_by=ident.subject)
+    cfg.setup_checks=checks
+    db.add(AuditEvent(id=uid(),event_id=event_id,actor=ident.subject,action='setup.confirmed',details={'currency':cfg.currency,'provider':cfg.provider,'currency_confirmed':body.confirm_currency,'payout_confirmed':body.confirm_payout,'webhook_dashboard_confirmed':body.confirm_webhook_dashboard,'alert_destination_confirmed':body.confirm_alert_destination}))
+    await db.commit()
+    return await checklist(db,cfg,ident.currency)
 
 
 @app.get("/api/ticketing/events/{event_id}/provider-readiness")
@@ -550,6 +595,7 @@ async def put_config(event_id: str, body: EventConfigIn, ident: Identity = Depen
     if body.enabled and not provider_ready(body.provider):
         raise HTTPException(503, f"{body.provider.title()} credentials are not configured")
     cfg = await db.get(EventConfig, event_id) or EventConfig(event_id=event_id, org_id=ident.org_id)
+    was_enabled=bool(getattr(cfg,"enabled",False))
     if cfg.currency != body.currency:
         existing = await db.scalar(select(func.count(TicketProduct.id)).where(TicketProduct.event_id == event_id))
         if existing:
@@ -558,6 +604,10 @@ async def put_config(event_id: str, body: EventConfigIn, ident: Identity = Depen
         if key in ("checkout_fields", "delivery_settings") and value is None:
             continue
         setattr(cfg, key, value)
+    if body.enabled and not was_enabled and settings.environment=='production':
+        paid_products=await db.scalar(select(func.count(TicketProduct.id)).where(TicketProduct.event_id==event_id,TicketProduct.price>0,TicketProduct.active.is_(True)))
+        if paid_products and not (await checklist(db,cfg,ident.currency))['ready']:
+            raise HTTPException(409,'Complete the paid-sales checklist before enabling this event')
     fee = await effective_fee(db, ident.org_id, event_id)
     cfg.fee_bps = fee["fee_bps"]
     db.add(cfg)
@@ -764,6 +814,8 @@ async def create_product(event_id: str, body: ProductIn, ident: Identity = Depen
     cfg = await db.get(EventConfig, event_id)
     if not cfg or body.currency != cfg.currency:
         raise HTTPException(400, "Product currency must match event ticketing currency")
+    if settings.environment=='production' and not ((getattr(cfg,'setup_checks',None) or {}).get('currency_confirmed') and (cfg.setup_checks or {}).get('currency')==cfg.currency):
+        raise HTTPException(409,'Confirm the ticket settlement currency in Payments before creating products')
     row = TicketProduct(id=uid(), event_id=event_id, **body.model_dump())
     db.add(row); await db.commit(); await db.refresh(row)
     return product_out(row)
@@ -819,8 +871,15 @@ async def create_promo(event_id: str, body: PromoIn, ident: Identity = Depends(c
 
 
 @app.post("/api/ticketing/public/events/{event_id}/orders", status_code=201, dependencies=[Depends(require_service_enabled)])
-async def create_order(event_id: str, body: OrderIn, db: AsyncSession = Depends(get_db)):
+async def create_order(event_id: str, body: OrderIn, db: AsyncSession = Depends(get_db), request: Request = None):
+    if request is not None:
+        await checkout_limits(db,event_id,str(body.buyer_email),peer_address(request))
     await expire_abandoned_orders(db, event_id)
+    await lock_buyer(db,event_id,str(body.buyer_email))
+    held_count=await db.scalar(select(func.count(Order.id)).where(Order.event_id==event_id,
+        func.lower(Order.buyer_email)==str(body.buyer_email).lower(),Order.status.in_(['pending','payment_processing'])))
+    if int(held_count or 0)>=settings.checkout_pending_per_email:
+        raise HTTPException(429,'Finish or wait for an existing pending order before starting another.',headers={'Retry-After':'60'})
     cfg = await db.get(EventConfig, event_id)
     if not cfg or not cfg.enabled:
         raise HTTPException(404, "Ticketing is not available for this event")
@@ -883,7 +942,9 @@ async def create_order(event_id: str, body: OrderIn, db: AsyncSession = Depends(
     if body.promo_code:
         promo = await db.scalar(select(PromoCode).where(PromoCode.event_id == event_id,
             PromoCode.code == body.promo_code.strip().upper(), PromoCode.active.is_(True)).with_for_update())
-        if not promo or (promo.max_uses is not None and promo.uses >= promo.max_uses):
+        reserved=await db.scalar(select(func.count(Order.id)).where(Order.event_id==event_id,
+            Order.promo_code==promo.code,Order.status.in_(['pending','payment_processing']))) if promo else 0
+        if not promo or (promo.max_uses is not None and promo.uses + int(reserved or 0) >= promo.max_uses):
             raise HTTPException(400, "Promo code is invalid or exhausted")
         discount = min(subtotal, subtotal * promo.amount // 100 if promo.kind == "percent" else promo.amount)
     fee_policy = await effective_fee(db, cfg.org_id, event_id)
@@ -891,6 +952,8 @@ async def create_order(event_id: str, body: OrderIn, db: AsyncSession = Depends(
     tax = max(0, (subtotal - discount) * cfg.tax_bps // 10000) if cfg.tax_enabled else 0
     total = subtotal - discount + (fee if cfg.fees_paid_by == "buyer" else 0) + \
         (tax if cfg.tax_paid_by == "buyer" else 0)
+    if total>0 and settings.environment=='production' and not (await checklist(db,cfg))['ready']:
+        raise HTTPException(409,'Paid ticket sales are not ready yet. Please contact the organizer.')
     order = Order(id=uid(), event_id=event_id, org_id=cfg.org_id, buyer_name=body.buyer_name,
         buyer_email=str(body.buyer_email), buyer_phone=body.buyer_phone, currency=cfg.currency,
         subtotal=subtotal, discount=discount, platform_fee=fee, tax_amount=tax, total=total, provider=cfg.provider,
@@ -1104,7 +1167,7 @@ async def fulfill(db: AsyncSession, order: Order) -> bool:
     order.fulfillment_result = response.json()
     order.delivery_attempts += 1
     if response.json().get("delivery_queued"):
-        order.delivery_status, order.delivered_at = "queued", datetime.utcnow()
+        order.delivery_status, order.delivery_queued_at = "queued", datetime.utcnow()
     elif response.json().get("delivery_blocked"):
         order.delivery_status = "blocked_by_staging_safety"
     await db.commit()
@@ -1272,22 +1335,60 @@ async def paystack_webhook(request: Request, db: AsyncSession = Depends(get_db))
     return {"received": True}
 
 
+def filtered_orders(event_id,q='',status='',from_date='',to_date=''):
+    query=select(Order).where(Order.event_id==event_id)
+    if q:query=query.where(or_(func.lower(Order.buyer_name).contains(q.lower(),autoescape=True),func.lower(Order.buyer_email).contains(q.lower(),autoescape=True),Order.id.contains(q,autoescape=True)))
+    if status:
+        if status not in {'pending','paid','fulfilled','expired','refunded','partially_refunded','refund_processing','disputed','payment_processing','cancelled'}:raise HTTPException(422,'Unknown order status')
+        query=query.where(Order.status==status)
+    try:
+        if from_date:query=query.where(Order.created_at>=datetime.fromisoformat(from_date+'T00:00:00'))
+        if to_date:query=query.where(Order.created_at<datetime.fromisoformat(to_date+'T00:00:00')+timedelta(days=1))
+        if from_date and to_date and from_date>to_date:raise ValueError()
+    except ValueError:raise HTTPException(422,'Choose a valid UTC date range')
+    return query
+
+
+async def sync_email_delivery(db,event_id,orders):
+    eligible=[order for order in orders if order.status=='fulfilled'][:50]
+    if not eligible:return
+    cfg=await db.get(EventConfig,event_id)
+    try:
+        async with httpx.AsyncClient(timeout=3) as client:
+            response=await client.post(settings.core_backend_url+'/api/internal/ticketing/delivery-status',headers={'X-Internal-Token':settings.internal_service_token},json={'event_id':event_id,'orders':[{'id':o.id,'buyer_email':o.buyer_email,'email_enabled':bool((cfg.delivery_settings or {}).get('email_enabled',True)),'queued_after':o.delivery_queued_at.isoformat() if o.delivery_queued_at else None} for o in eligible]})
+        response.raise_for_status();states=response.json().get('orders',{})
+    except (httpx.HTTPError,ValueError):return
+    for order in sorted(eligible,key=lambda row:row.id):
+        state=states.get(order.id)
+        if not state or state.get('status') not in {'unknown','queued','sent','delivered','failed','bounced','complained','blocked','not_requested'}:continue
+        latest=await db.scalar(select(Order).where(Order.id==order.id).with_for_update().execution_options(populate_existing=True))
+        if latest.status!='fulfilled':continue
+        latest.email_delivery_status=state['status']
+        if state['status']=='delivered' and state.get('delivered_at'):
+            latest.email_delivered_at=datetime.fromisoformat(state['delivered_at']).replace(tzinfo=None)
+    await db.commit()
+
+
 @app.get("/api/ticketing/events/{event_id}/sales")
-async def sales(event_id: str, ident: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+async def sales(event_id: str, ident: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db),
+                q: str = '', status: str = '', from_date: str = '', to_date: str = '', limit: int = 50, offset: int = 0):
     require_admin(ident)
     if ident.event_id != event_id: raise HTTPException(403, "Wrong event scope")
     await expire_abandoned_orders(db, event_id)
-    rows = (await db.execute(select(Order).where(Order.event_id == event_id).order_by(Order.created_at.desc()))).scalars().all()
+    if limit<1 or limit>100 or offset<0 or len(q)>200:raise HTTPException(422,'Invalid report page or search')
+    base=filtered_orders(event_id,q,status,from_date,to_date)
+    # Totals read financial metadata, never checkout credentials or QR payloads.
+    metrics=[Order.id,Order.total,Order.status,Order.platform_fee,Order.tax_amount,Order.provider,Order.created_at,
+        Order.delivery_queued_at,Order.email_delivery_status,Order.currency]
+    rows=(await db.execute(base.options(load_only(*metrics)))).scalars().all()
+    page_columns=[getattr(Order,key) for key in ('id','event_id','buyer_name','buyer_email','currency','subtotal','discount','platform_fee','tax_amount','total','status','provider','created_at','paid_at','fulfilled_at','delivery_status','delivery_attempts','delivery_queued_at','email_delivery_status','email_delivered_at')]
+    page_rows=(await db.execute(base.options(load_only(*page_columns)).order_by(Order.created_at.desc(),Order.id).offset(offset).limit(limit))).scalars().all()
+    await sync_email_delivery(db,event_id,page_rows)
+
     order_ids = [o.id for o in rows]
-    items = (await db.execute(select(OrderItem).where(OrderItem.order_id.in_(order_ids)))).scalars().all() if order_ids else []
-    ledger = (await db.execute(select(LedgerEntry).where(LedgerEntry.order_id.in_(order_ids))
-                               .order_by(LedgerEntry.created_at))).scalars().all() if order_ids else []
-    quantity_by_order, refunds_by_order = {}, {}
-    for item in items:
-        quantity_by_order[item.order_id] = quantity_by_order.get(item.order_id, 0) + item.quantity
-    for entry in ledger:
-        if entry.kind == "refund":
-            refunds_by_order[entry.order_id] = refunds_by_order.get(entry.order_id, 0) + abs(entry.amount)
+    quantities=(await db.execute(select(OrderItem.order_id,func.sum(OrderItem.quantity)).join(TicketProduct,TicketProduct.id==OrderItem.product_id).where(OrderItem.order_id.in_(order_ids),TicketProduct.product_type=='ticket').group_by(OrderItem.order_id))).all() if order_ids else []
+    returned=(await db.execute(select(LedgerEntry.order_id,func.sum(func.abs(LedgerEntry.amount))).where(LedgerEntry.order_id.in_(order_ids),LedgerEntry.kind=='refund').group_by(LedgerEntry.order_id))).all() if order_ids else []
+    quantity_by_order,refunds_by_order=dict(quantities),dict(returned)
     paid_statuses = ("paid", "fulfilled", "partially_refunded", "refunded", "refund_processing", "disputed")
     gross = sum(o.total for o in rows if o.status in paid_statuses)
     refunds = sum(refunds_by_order.values())
@@ -1304,20 +1405,34 @@ async def sales(event_id: str, ident: Identity = Depends(current_identity), db: 
         PaymentRefund.event_id == event_id).order_by(PaymentRefund.created_at.desc()))).scalars().all()
     request_by_order = {row.order_id: product_out(row) for row in requests}
     order_output = []
-    for o in rows:
+    for o in page_rows:
         refunded = refunds_by_order.get(o.id, 0)
         fee = round(o.platform_fee * max(0, o.total - refunded) / o.total) if o.total else 0
         order_tax = round(o.tax_amount * max(0, o.total - refunded) / o.total) if o.total else 0
-        order_output.append({**product_out(o), "cancellation": request_by_order.get(o.id),
+        order_output.append({**order_view(o), "cancellation": request_by_order.get(o.id),
                              "ticket_count": quantity_by_order.get(o.id, 0), "refunded_amount": refunded,
                              "net_collected": max(0, o.total - refunded), "effective_platform_fee": fee,
                              "effective_tax": order_tax,
                              "organizer_proceeds": max(0, o.total - refunded - fee - order_tax)})
-    return {"orders": order_output, "waitlist": [product_out(row) for row in waitlist],
+    tax_config=await db.get(EventConfig,event_id)
+    day_start=datetime.utcnow().replace(hour=0,minute=0,second=0,microsecond=0)-timedelta(days=6)
+    daily=[{'day':(day_start+timedelta(days=i)).date().isoformat(),'revenue':0,'orders':0} for i in range(7)]
+    for order in rows:
+        index=(order.created_at.date()-day_start.date()).days
+        if 0<=index<7 and order.status in paid_statuses:
+            daily[index]['orders']+=1;daily[index]['revenue']+=max(0,order.total-refunds_by_order.get(order.id,0))
+    return {"orders": order_output, "pagination":{'total':len(rows),'offset':offset,'limit':limit},'daily_sales':daily,
+            "waitlist": [{key:value for key,value in product_out(row).items() if key!='offer_token'} for row in waitlist],
             "refunds": [product_out(row) for row in refund_rows], "summary": {
+        "orders_total":len(rows),"tickets_issued":sum(quantity_by_order.get(o.id,0) for o in rows if o.status in active_statuses),
+        "paid_tickets":sum(quantity_by_order.get(o.id,0) for o in rows if o.status in active_statuses and payment_kind(o)=='paid'),
+        "free_tickets":sum(quantity_by_order.get(o.id,0) for o in rows if o.status in active_statuses and payment_kind(o)=='free'),
+        "paid_orders":sum(1 for o in rows if o.status in active_statuses and payment_kind(o)=='paid'),
+        "free_orders":sum(1 for o in rows if o.status in active_statuses and payment_kind(o)=='free'),
+        "delivery_attention":sum(1 for o in rows if o.status=='fulfilled' and ((o.email_delivery_status or 'unknown') in {'failed','bounced','complained','blocked'} or (o.delivery_queued_at and o.delivery_queued_at<datetime.utcnow()-timedelta(minutes=15) and o.email_delivery_status not in {'sent','delivered','not_requested'}))),
         "gross": gross, "refunds": refunds, "net_collected": max(0, gross - refunds),
         "platform_fees": commission, "organizer_proceeds": max(0, gross - refunds - commission - tax),
-        "tax_collected": tax, "tax_status": "enabled" if any(o.tax_amount for o in rows) else "not_configured",
+        "tax_collected": tax, "tax_status": "enabled" if tax_config and tax_config.tax_enabled else "not_configured",
         "processor_fees": None, "processor_fee_status": "provider_reporting_unavailable",
         "sold_orders": sum(1 for o in rows if o.status in active_statuses and o.provider != "manual"),
         "complimentary_orders": sum(1 for o in rows if o.status in active_statuses and o.provider == "manual"),
@@ -1584,8 +1699,8 @@ async def email_sales_report(event_id: str, body: SalesReportIn,
         gross = order.total if order.status in reportable else 0
         proceeds = max(0, gross - returned - fee - tax)
         count = quantities.get(order.id, 0)
-        writer.writerow([order.id, order.created_at.isoformat(), order.buyer_name, order.buyer_email,
-                         order.provider, order.status, order.currency, count, gross, returned, fee, tax, proceeds])
+        writer.writerow([csv_safe(v) for v in [order.id, order.created_at.isoformat(), order.buyer_name, order.buyer_email,
+                         order.provider, order.status, order.currency, count, gross, returned, fee, tax, proceeds]])
         totals["gross"] += gross; totals["refunds"] += returned; totals["fees"] += fee
         totals["tax"] += tax
         totals["tickets"] += count if order.status in reportable else 0
@@ -1757,6 +1872,8 @@ async def refund_order(db: AsyncSession, order: Order, body: RefundIn, requested
                 raise HTTPException(409, "Idempotency key was already used for another order")
             return {"status": order.status, "refund_status": existing.status,
                     "refund_id": existing.id, "amount": existing.amount, "idempotent_replay": True}
+    if order.total<=0:
+        raise HTTPException(409,"Free and complimentary orders have no payment to refund")
     item_quantities = {}
     if body.guest_ids:
         amount, item_quantities = await ticket_refund_selection(db, order, body.guest_ids)
@@ -1854,12 +1971,30 @@ async def retry_refund(event_id: str, refund_id: str, ident: Identity = Depends(
 async def decide_cancellation(event_id: str, request_id: str, body: CancellationDecisionIn,
                               ident: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
     require_admin(ident)
-    row = await db.get(CancellationRequest, request_id)
+    row = await db.get(CancellationRequest, request_id, with_for_update=True)
     if ident.event_id != event_id or not row or row.event_id != event_id or row.status != "pending":
         raise HTTPException(404, "Pending cancellation request not found")
-    order = await db.get(Order, row.order_id)
+    order = await db.get(Order, row.order_id, with_for_update=True)
     if body.action == "approve":
-        await refund_order(db, order, RefundIn(reason="approved_customer_cancellation"), ident.subject)
+        if order.total == 0:
+            if order.status not in ("paid", "fulfilled"):
+                raise HTTPException(409, "Order is not eligible for cancellation")
+            async with httpx.AsyncClient(timeout=20) as client:
+                response = await client.post(
+                    f"{settings.core_backend_url}/api/internal/ticketing/void/{event_id}/{order.id}",
+                    headers={"X-Internal-Token": settings.internal_service_token}, json={"guest_ids": []})
+                response.raise_for_status()
+            items = (await db.execute(select(OrderItem).where(OrderItem.order_id == order.id))).scalars().all()
+            for item in items:
+                product = await db.get(TicketProduct, item.product_id, with_for_update=True)
+                if product:
+                    product.sold = max(0, product.sold - item.quantity)
+            order.status, order.delivery_status = "cancelled", "cancelled"
+            db.add(AuditEvent(id=uid(), event_id=event_id, actor=ident.subject,
+                action="order.cancelled", subject_id=order.id, details={"payment_kind": payment_kind(order)}))
+        else:
+            await refund_order(db, order, RefundIn(reason="approved_customer_cancellation"), ident.subject,
+                               request_key="cancellation-" + row.id)
         row.status = "approved"
     else:
         row.status = "rejected"
@@ -1888,6 +2023,8 @@ async def resend_order_delivery(event_id: str, order_id: str, ident: Identity = 
     order = await db.get(Order, order_id)
     if ident.event_id != event_id or not order or order.event_id != event_id or order.status != "fulfilled":
         raise HTTPException(404, "Fulfilled order not found")
+    if order.delivery_queued_at and order.delivery_queued_at>datetime.utcnow()-timedelta(minutes=5):
+        raise HTTPException(429,"Wait five minutes before resending this order again")
     cfg = await db.get(EventConfig, event_id)
     try:
         async with httpx.AsyncClient(timeout=20) as client:
@@ -1899,6 +2036,62 @@ async def resend_order_delivery(event_id: str, order_id: str, ident: Identity = 
     except httpx.HTTPError as exc:
         order.delivery_status = "failed"; order.delivery_attempts += 1; await db.commit()
         raise HTTPException(503, "Ticket delivery could not be queued") from exc
-    order.delivery_status, order.delivered_at = "queued", datetime.utcnow()
+    order.delivery_status, order.delivery_queued_at = "queued", datetime.utcnow()
     order.delivery_attempts += 1; await db.commit()
     return {"status": order.delivery_status, "attempts": order.delivery_attempts}
+
+@app.get('/api/ticketing/events/{event_id}/sales-export')
+async def export_sales(event_id: str,kind: str='orders',q: str='',status: str='',from_date: str='',to_date: str='',ident: Identity=Depends(current_identity),db: AsyncSession=Depends(get_db)):
+    require_admin(ident)
+    if ident.event_id!=event_id:raise HTTPException(403,'Wrong event scope')
+    if kind not in {'orders','attendees','refunds','provider'}:raise HTTPException(422,'Unknown export type')
+    stream=io.StringIO(newline='');writer=csv.writer(stream)
+    def write(values):writer.writerow([csv_safe(value) for value in values])
+    if kind=='provider':
+        report=await reconciliation(event_id,ident,db)
+        if report['status']!='available':raise HTTPException(409,'Connect the organizer payout account and check provider reporting first')
+        write(['provider','entry_id','status','currency','gross_minor','processor_fees_minor','net_minor','provider_reported_date'])
+        for row in report['settlements']:write([report['provider'],row['id'],row['status'],row['currency'],row['gross'],row['processor_fees'],row['net'],row.get('settled_at') or row.get('available_at') or ''])
+    else:
+        orders=(await db.scalars(filtered_orders(event_id,q,status,from_date,to_date).order_by(Order.created_at,Order.id).limit(5001))).all()
+        if len(orders)>5000:raise HTTPException(413,'Narrow the date/search filter to export at most 5000 orders')
+        ids=[o.id for o in orders];by_id={o.id:o for o in orders}
+        if kind=='attendees':
+            write(['order_id','order_created_utc','status','payment_kind','ticket_product','attendee_name','attendee_email','currency','ticket_face_value_minor'])
+            items=(await db.scalars(select(OrderItem).join(TicketProduct,TicketProduct.id==OrderItem.product_id).where(OrderItem.order_id.in_(ids),TicketProduct.product_type=='ticket').order_by(OrderItem.order_id,OrderItem.id))).all() if ids else []
+            count=0
+            for item in items:
+                order=by_id[item.order_id]
+                for attendee in item.attendee_data:
+                    count+=1
+                    if count>20000:raise HTTPException(413,'Narrow the export to at most 20000 attendee rows')
+                    write([order.id,order.created_at.isoformat(),order.status,payment_kind(order),item.product_name,' '.join(filter(None,[attendee.get('first_name'),attendee.get('last_name')])),attendee.get('email') or order.buyer_email,order.currency,item.unit_price])
+        elif kind=='refunds':
+            write(['order_id','refund_id','requested_utc','completed_utc','status','currency','amount_minor','reason','provider'])
+            rows=(await db.scalars(select(PaymentRefund).where(PaymentRefund.order_id.in_(ids)).order_by(PaymentRefund.created_at))).all() if ids else []
+            for row in rows:write([row.order_id,row.id,row.created_at.isoformat(),row.completed_at.isoformat() if row.completed_at else '',row.status,by_id[row.order_id].currency,row.amount,row.reason,row.provider])
+        else:
+            write(['order_id','created_utc','buyer_name','buyer_email','provider','payment_kind','status','currency','gross_minor','refund_minor','festio_fee_minor','tax_minor','expected_organizer_proceeds_minor','organizer_account_last4'])
+            returned=dict((await db.execute(select(LedgerEntry.order_id,func.sum(func.abs(LedgerEntry.amount))).where(LedgerEntry.order_id.in_(ids),LedgerEntry.kind=='refund').group_by(LedgerEntry.order_id))).all()) if ids else {}
+            cfg=await db.get(EventConfig,event_id)
+            account=await db.scalar(select(PayoutAccount).where(PayoutAccount.org_id==ident.org_id,PayoutAccount.provider==cfg.provider,PayoutAccount.provider_account_id==cfg.provider_account_id)) if cfg and cfg.provider_account_id else None
+            for order in orders:
+                refund=returned.get(order.id,0);net=max(0,order.total-refund)
+                fee=round(order.platform_fee*net/order.total) if order.total else 0
+                tax=round(order.tax_amount*net/order.total) if order.total else 0
+                gross=order.total if order.status in {'paid','fulfilled','partially_refunded','refunded','refund_processing','disputed'} else 0
+                write([order.id,order.created_at.isoformat(),order.buyer_name,order.buyer_email,order.provider,payment_kind(order),order.status,order.currency,gross,refund,fee,tax,max(0,gross-refund-fee-tax),account.account_last4 if account else ''])
+    return {'filename':'ticket-'+kind+'.csv','content':stream.getvalue()}
+
+
+@app.post('/api/ticketing/events/{event_id}/orders/bulk-resend')
+async def bulk_resend(event_id: str,body: BulkResendIn,ident: Identity=Depends(current_identity),db: AsyncSession=Depends(get_db)):
+    require_admin(ident)
+    if ident.event_id!=event_id:raise HTTPException(403,'Wrong event scope')
+    queued=[];skipped=[]
+    for order_id in dict.fromkeys(body.order_ids):
+        try:
+            await resend_order_delivery(event_id,order_id,ident,db);queued.append(order_id)
+        except HTTPException as exc:
+            await db.rollback();skipped.append({'id':order_id,'status':exc.status_code,'detail':exc.detail})
+    return {'queued':queued,'skipped':skipped}

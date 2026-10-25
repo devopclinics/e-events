@@ -217,7 +217,7 @@ async def receive_resend_webhook(
         status=_event_status(event_type),
         error_message=data.get("error") or data.get("reason"),
         tags=tags or None,
-        payload=event,
+        payload={**event, "_signature_verified": bool(settings.resend_webhook_secret)},
         occurred_at=_parse_datetime(event.get("created_at") or data.get("created_at")),
     )
     # Meeting receipts require an authenticated webhook even when the legacy

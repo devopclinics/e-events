@@ -43,7 +43,7 @@ export default function TicketingOperationsPanel({eventId, sales, checkoutFields
       <input required type="email" placeholder="finance@example.com" value={schedule.recipient} onChange={e=>setSchedule({...schedule,recipient:e.target.value})}/>
       <select value={schedule.frequency} onChange={e=>setSchedule({...schedule,frequency:e.target.value})}><option value="daily">Daily</option><option value="weekly">Weekly</option></select>
       <label><input type="checkbox" checked={schedule.enabled} onChange={e=>setSchedule({...schedule,enabled:e.target.checked})}/> Enabled</label>
-      <button disabled={!!busy}>Save schedule</button>
+      <label><input type="checkbox" checked={schedule.include_alerts} onChange={e=>setSchedule({...schedule,include_alerts:e.target.checked})}/> Include operations alerts</label><button disabled={!!busy}>Save schedule</button>
     </form>
     {subscription&&<p className="tk-journal-result good"><strong>{subscription.enabled?'Reports enabled':'Reports paused'}</strong><span>Next run: {subscription.next_run_at?new Date(subscription.next_run_at).toLocaleString():'after enabling'}</span></p>}
 

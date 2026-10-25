@@ -1,34 +1,31 @@
 # Festio ticketing-service
 
-Standalone paid-admission service for the Compose **staging** environment.
+Standalone admission service for staging and production.
 It owns ticket products, inventory holds, orders, provider events, refunds and
 the financial ledger. The core backend owns guests, access types, QR passes and
 check-in; fulfillment crosses an authenticated, idempotent internal endpoint.
 
-## Safety gates
+## Safety gates and go-live setup
 
-- `ENVIRONMENT` must equal `staging` or the process refuses to start.
-- `PUBLIC_BASE_URL` must be staging or localhost.
-- Stripe and Paystack keys must be test keys; Stripe `sk_live_*` and Paystack
-  `sk_live_*` cause startup failure.
-- `SERVICE_ENABLED=false` is the master kill switch. It hides the staging nav,
-  hides checkout on guest pages, and returns 404 from public catalog/order APIs.
-- Each event has a second `enabled` switch, off by default.
-- Kubernetes production has no Deployment, Service, route, secret or database
-  for ticketing. `https://festio.events/api/ticketing/status` must remain 404.
+- `SERVICE_ENABLED=false` disables public catalog and checkout APIs. Each event also has an `enabled` switch.
+- Staging requires test credentials and a staging/local public URL. Production requires production credentials; deployment is managed through the event-checkin GitOps chart.
+- Paid production checkouts require the event's go-live checklist: explicit ticket currency confirmation, matching payment credentials, a connected and explicitly confirmed organizer payout account, provider-dashboard webhook confirmation, and an enabled operations alert destination.
+- Confirmations do not convert prices, create bank details, verify a settlement, or replace dashboard setup. Currency is confirmed before creating production products.
+- Free orders retain their original test/provider provenance but display as Free. Complimentary admissions display separately. Neither can trigger a payment refund.
+- Public checkout has shared database rate limits (120 attempts/IP/event/minute, 10/email/event/hour), a three-pending-order cap per email/event, and promo reservations across pending orders. These are configurable controls, not proof against every form of abuse.
+- Trusted forwarded addresses are accepted only through configured proxy CIDRs. Restrict `TRUSTED_PROXY_CIDRS` to the deployment's actual proxy network.
 
 ## Provider configuration
 
-- Stripe: set `TICKETING_STRIPE_TEST_SECRET_KEY` and
-  `TICKETING_STRIPE_TEST_WEBHOOK_SECRET` in the root staging `.env`.
-- Paystack: the current staging Compose injects the existing Paystack test key
-  from `backend/.env`; no live key is accepted.
-- Webhook URLs:
-  - `https://staging.festio.events/api/ticketing/webhooks/stripe`
-  - `https://staging.festio.events/api/ticketing/webhooks/paystack`
+Production settings are supplied by the deployment secret store; never copy credentials into source or reports. Stripe uses USD and Paystack uses NGN. Select and review the intended organizer account in Payments before confirming payout routing.
 
-The organizer selects Stripe/USD or Paystack/NGN and can optionally supply a
-Stripe connected-account ID or Paystack subaccount code for split settlement.
+Webhook endpoints are `/api/ticketing/webhooks/stripe` and `/api/ticketing/webhooks/paystack` on the environment's public base URL. Paystack signs requests with the secret key; the presence of that key does not prove that the dashboard webhook URL was configured. See the [Paystack webhook documentation](https://paystack.com/docs/payments/webhooks/) and [split-payment documentation](https://paystack.com/docs/payments/split-payments/).
+
+## Sales and delivery
+
+The sales list has search, status/date filters, 50-row pages and bounded bulk resend. Orders, attendees, refunds and provider reconciliation can be exported as formula-safe CSV. Export values use minor currency units and do not expose buyer access tokens or QR credentials. Provider reports do not establish bank settlement.
+
+Queued means queued for sending. Sent means provider acceptance. Delivered requires a correlated, authenticated email receipt for every expected recipient. Historical uncorrelated sends remain unknown. Resends have a five-minute cooldown.
 
 ## Operations
 

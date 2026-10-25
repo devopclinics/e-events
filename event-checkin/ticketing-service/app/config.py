@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = ""
     paystack_secret_key: str = ""
     paystack_webhook_secret: str = ""
+    checkout_ip_per_minute: int = 120
+    checkout_email_per_hour: int = 10
+    checkout_pending_per_email: int = 3
+    trusted_proxy_cidrs: str = "127.0.0.1/32,::1/128,192.168.0.0/16"
     platform_fee_bps: int = 500
     inventory_hold_minutes: int = 10
     waitlist_offer_minutes: int = 30

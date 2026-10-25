@@ -34,7 +34,23 @@ let meeting = {
   deliveries: []
 };
 window.meetingCalls = [];
+window.preferenceCalls = [];
+const recipientRows = (cancel = false) => meeting.draft.attendees.flatMap(a => (a.channels || ['email']).map(channel => ({
+  name: a.name,
+  channel,
+  recipient: channel === 'email' ? a.email : a.phone,
+  method: cancel ? 'CANCEL' : 'REQUEST',
+  credit_units: channel === 'sms' ? 20 : channel === 'whatsapp' ? 15 : 0,
+  readiness: 'ready',
+  message: 'Meeting invitation / update: ' + meeting.draft.title + ' · ' + meeting.draft.timezone
+})));
 const client = {
+  meetingOptions: async () => ({
+    whatsapp_templates: [{
+      id: 'approved-meeting',
+      name: 'Approved meeting notification'
+    }]
+  }),
   listMeetings: async () => [meeting],
   getMeeting: async () => meeting,
   createMeeting: async data => {
@@ -52,32 +68,38 @@ const client = {
       revision: meeting.revision + 1
     };
   },
-  previewMeeting: async () => {
+  previewMeeting: async (id, cancel = false) => {
     window.meetingCalls.push('preview');
     return {
       revision: meeting.revision,
       subject: `You're invited: ${meeting.draft.title}`,
       recipients: meeting.draft.attendees,
       cancellations: [],
-      sending_enabled: true
+      sending_enabled: true,
+      calendar_mode: 'smtp',
+      channel_recipients: recipientRows(cancel),
+      credit_units: recipientRows(cancel).reduce((n, r) => n + r.credit_units, 0)
     };
   },
-  sendMeeting: async () => {
+  sendMeeting: async (id, revision, confirmed, quote) => {
+    const total = recipientRows().reduce((n, r) => n + r.credit_units, 0);
+    if (total && (!confirmed || quote !== total)) throw new Error('Paid channel confirmation required');
     window.meetingCalls.push('send');
     return meeting = {
       ...meeting,
       status: 'scheduled',
       published_revision: meeting.revision,
       sequence: 0,
-      attendees: draft.attendees.map((a, i) => ({
+      attendees: meeting.draft.attendees.map((a, i) => ({
         ...a,
         id: String(i),
         active: true,
         response: i ? 'pending' : 'accepted'
       })),
-      deliveries: draft.attendees.map((a, i) => ({
+      deliveries: recipientRows().map((r, i) => ({
+        ...r,
         id: String(i),
-        attendee_id: String(i),
+        attendee_id: String(meeting.draft.attendees.findIndex(a => a.name === r.name)),
         sequence: 0,
         method: 'REQUEST',
         status: i ? 'failed' : 'accepted',
@@ -116,6 +138,19 @@ const client = {
     window.meetingCalls.push(response);
     return {
       response
+    };
+  },
+  meetingNotificationPreferences: async token => {
+    if (token === 'expired') throw new Error('Invitation expired');
+    return {
+      phone: '+14155550123',
+      stopped: []
+    };
+  },
+  stopMeetingNotifications: async (token, channel) => {
+    window.preferenceCalls.push(channel);
+    return {
+      stopped: channel
     };
   }
 };

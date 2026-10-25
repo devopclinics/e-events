@@ -9,15 +9,16 @@ preferred over the legacy shared default organization.
 ## Organizer and attendee flow
 
 1. Schedule a meeting: title, local start/end, IANA timezone, up to 50 named
-   email attendees, online link or physical location, optional agenda/video link.
+   attendees with email and/or international phone, explicit email/SMS/WhatsApp channel selection, online link or physical location, optional agenda/video link. Email remains the only default channel; phone consents default false.
 2. Save draft. Saving never queues mail, including edits to an invited meeting.
 3. Preview invitation. Review recipient names/emails, message, calendar
    attachment, and cancellation recipients removed since the last publication.
    Preview does not create response tokens, mutate responses, or queue mail.
 4. Explicitly **Send invitations**. The reviewed revision is required. A stale
    revision fails with 409; repeating the same send is idempotent.
-5. Each recipient receives an individual email with one ATTENDEE in its calendar
-   attachment and personal scoped response links. Opening any link is a safe
+5. Each selected recipient/channel receives an individual notification. Email has
+   one ATTENDEE in its calendar attachment; phone channels carry the meeting
+   details and personal scoped response link. Opening any link is a safe
    preview; an explicit POST from Accept/Maybe/Decline records the response.
 6. Organizer view shows Festio responses and delivery state. Refresh retrieves
    current status. Definite submission failures can be retried explicitly.
@@ -44,10 +45,10 @@ attendee, sequence and purpose. New publication invalidates previous links.
 
 ## Persistence and sending safety
 
-Three additive ORM tables (`meetings`, `meeting_attendees`,
-`meeting_deliveries`) follow the existing `app.db_migrate` convention: its
+Four additive ORM tables (`meetings`, `meeting_attendees`,
+`meeting_deliveries`, `meeting_suppressions`) follow the existing `app.db_migrate` convention: its
 `Base.metadata.create_all` creates new tables, including unique constraints and
-indexes. There is no data backfill or event-table alteration. Do not run the
+indexes. There is no event-table alteration. The channel delta includes guarded migration of the initial email-only Meetings uniqueness constraint and recipient backfill, plus nullable email for phone-only attendees. Do not run the
 migration against a live database as part of local validation.
 
 Publication and outbox rows commit in one transaction. Unique
@@ -58,29 +59,86 @@ version under the same parent lock before sending. Publication supersedes older
 queued/claimed/failed deliveries. The bounded provider request holds the meeting
 lock, serializing cancellation with an in-flight send.
 
-The initial supported Meetings transport is Resend. It reuses Festio's existing
-email shell, provider payload builder, recipient safety guard and shared ICS
-builder. It does not use the legacy `_send` wrapper because that wrapper swallows
-provider errors and cannot supply a reliable outbox result. SMTP/Bird fallback
-is deliberately unavailable for Meetings until an idempotent outcome contract is
-implemented. Existing event-email behavior remains on its original path.
+### Calendar transport and byte-identical delivery
 
-Each delivery has a stable Message-ID and Resend idempotency key. Workers never
-automatically retry ambiguous timeouts/5xx or interrupted claims. They mark those
-`uncertain`; the organizer cannot retry them until an operator reconciles the
-provider result. Definite pre-send/4xx failures can be corrected and retried using
-the same logical delivery. Provider acceptance is `accepted`, not proof of inbox
-delivery. Existing authenticated Resend webhooks record delivered/bounced/failed/
-suppressed/delayed/complained receipt status for that exact delivery version.
-Out-of-order receipts cannot replace a newer receipt. Unsigned webhooks never
-change Meetings receipt state. Bounces are displayed separately from submission
-failures; correct the attendee and explicitly publish an update rather than
-blindly resending an accepted message.
+SMTP is the default email transport (`MEETINGS_EMAIL_TRANSPORT=smtp`). It uses
+the existing SMTP configuration and transmits the exact persisted MIME bytes,
+including `text/calendar; method=REQUEST` or `method=CANCEL`. The shared ICS
+builder supports a fixed DTSTAMP; delivery Date, boundary, sender, recipient,
+links and attachment are frozen before I/O. Mocked SMTP tests parse actual
+serialized REQUEST/update/CANCEL messages and verify single-recipient metadata,
+UID/SEQUENCE and repeat-byte equality. Real client/calendar behavior has not been
+verified by sending mail.
+
+`MEETINGS_EMAIL_TRANSPORT=resend_attachment` is an explicit alternative for
+downloadable `.ics` files that require manual import. The documented Resend JSON
+[send contract](https://resend.com/docs/api-reference/emails/send-email) does not
+provide a calendar scheduling MIME-method parameter. This path does not claim
+native calendar scheduling or automatic cancellation/update processing. Its
+preview states the limitation. No undocumented API fields are sent. Existing
+event email behavior is unchanged.
+
+Exact provider JSON bytes or SMTP MIME bytes are persisted in `wire_payload`
+before dispatch and reused on retries. SMTP and shared messaging adapters have
+no assumed provider idempotency support; durable claim/uncertain-state handling
+prevents blind replays. Resend additionally uses a stable delivery idempotency
+key. Conflict/408/5xx, malformed success results, timeout, interrupted claims and
+legacy messaging adapters' generic failures are uncertain, not retryable.
+Only explicit known provider rejection statuses or proven pre-dispatch setup
+failures are eligible for retry. Unknown outcomes require operator reconciliation.
+
+Existing authenticated Resend webhooks retain versioned, monotonic email receipt
+status. SMTP/SMS/WhatsApp presently expose provider submission acceptance,
+setup-required, blocked or uncertain state, not unverified final delivery.
+The existing phone callbacks do not provide sufficiently consistent authentication
+to extend them to Meetings safely in this change; they are not used to assert
+final phone delivery. An accepted message cannot be blindly retried.
+
+### Phone notifications, consent and charges
+
+Phone addresses must explicitly use E.164 format with `+` and country code; no
+country is inferred. A phone-only attendee is supported. Channels and affirmative
+consent are selected independently for each attendee. Preview lists every
+recipient/channel/action, message details, readiness and credit quote, including
+removed channels and previous phone destinations that need cancellation.
+Sending and cancellation require a separate paid-channel acknowledgement and
+matching quote; changed rates require a fresh preview. Saving and previewing
+never send or charge.
+
+The existing organization-wallet rollout, active organization pass and configured
+channel credit weights are reused. Each delivery reserves its quoted integer
+credit units under the organization lock exactly once; charge/refund state is
+audited on that standalone delivery. No fake Event/Guest or event credit ledger
+is created. Proven pre-send failure refunds safely; unknown outcomes hold the
+reservation for reconciliation rather than allowing a duplicate charge/send.
+
+SMS uses the existing `messaging.send_custom_sms` dispatcher, country routing,
+branding, STOP/HELP footer and recipient guard, without event-specific overrides.
+WhatsApp uses only `send_custom_template_whatsapp`, with an existing approved
+Bird template owned by the tenant or marked shared. It must have exactly
+`firstName`, `eventName`, `message`, `ticketLink` variables. The server lists only
+eligible templates, rechecks approval/provider/consent at dispatch, and refuses
+missing, rejected, foreign or changed templates. There is no free-text/session/
+sandbox or SMS fallback. No template is created or submitted by Meetings.
+
+An attendee can explicitly stop SMS or WhatsApp from a signed preference link.
+GET only previews; POST writes a tenant/phone/channel suppression. Duplicate
+opt-outs are idempotent. Suppressions apply across that tenant's meetings and
+cannot be overridden by organizer edits. Existing event consent withdrawals for
+the same tenant and normalized phone are also honored conservatively. Cancellation
+preference links remain usable without permitting RSVP on cancelled meetings.
+SMS/WhatsApp carry meeting details and the secure Festio link; they do not mean
+native calendar acceptance. Provider-managed carrier opt-outs remain enforced by
+the existing providers; Meetings does not add an unauthenticated STOP webhook.
 
 ## Configuration and publication prerequisites
 
 **Sending defaults off**: `MEETINGS_SENDING_ENABLED=false`.
 `MEETINGS_SIGNING_KEY` defaults empty; no key is generated by this feature.
+`MEETINGS_PAID_SENDING_ENABLED=false` independently defaults off, so enabling
+email Meetings cannot silently activate paid phone sends. Paid channels also
+require the existing `ORGANIZATION_ENTITLEMENTS_V2` wallet rollout and active
+organization pass. `MEETINGS_EMAIL_TRANSPORT` defaults to `smtp`.
 Draft/save/preview work with these defaults. The worker starts only when sending
 is enabled, and also checks the switch before each delivery.
 
@@ -92,7 +150,7 @@ Before a separately authorized publication:
   isolated PostgreSQL database. SQLite tests do not prove PostgreSQL locking.
 - Provision a dedicated high-entropy signing secret through the normal secrets
   process, configure a trusted HTTPS `FRONTEND_URL`, and review the existing
-  Resend sender, API access, signed webhook secret and receipt event subscription.
+  SMTP sender/host/auth/TLS settings for scheduling MIME, or explicitly select Resend attachment/manual-import mode with existing API access and signed receipt webhook settings. Reuse existing SMS provider settings and approved Bird templates only after review. Do not reuse provider/Firebase/webhook credentials as the dedicated Meetings signing key.
   No credentials or live settings were created/changed during implementation.
 - Enable sending only after a controlled, explicitly authorized staging test.
   Key rotation invalidates outstanding response links. Redact response tokens
@@ -111,7 +169,7 @@ Fixtures clear all existing outbound provider credentials. Tests cover tenant
 and suspension checks, draft/preview isolation, stale revisions, duplicate sends
 and clicks, invalid/expired/wrong-scope links, DST gaps/folds, UTC calendar output,
 reschedule/add/remove/cancel, safe failure retry, interrupted/uncertain delivery,
-individual payloads/idempotency, signed receipts and shared ICS regressions.
+individual payloads/idempotency, signed receipts and shared ICS regressions. The channel delta also covers E.164/contact/channel validation, phone-only attendees, quoted charge confirmation, channel/version idempotency, approved-template eligibility/no fallback, suppression/legacy consent, per-channel lifecycle, wallet holds and exact frozen provider payloads.
 
 Frontend: `npm ci --ignore-scripts`, `npm run build`,
 `node --test tests/*.test.mjs`. For the standalone local UI fixture, serve Vite
@@ -146,3 +204,29 @@ The fixture is not a production entry point or authentication bypass.
   engine was available; SQLite metadata/lifecycle checks passed.
 - Server checkout was read only. No push, PR, merge, deployment, live data/config
   change, real email, or credential creation occurred.
+
+### Additive channel/review-fix validation
+
+The channel delta is based on original feature commit `4772d6e`; repository base
+remains `9141504b7fb66c1b633ad0f906fb958e42710e35`, including `954b64c` and existing
+GuestHub/NCNMO changes. Held onboarding work is excluded.
+
+Saved executor-local review logs live beside the checkout:
+`meetings-delta-tests.log`, `meetings-delta-frontend-tests.log`,
+`meetings-delta-build.log`, `meetings-delta-ui.log`,
+`meetings-delta-final-smoke.log`, `meetings-postgresql-ddl.log`.
+The final focused backend run passed **69 tests**, including **38 Meetings cases**;
+all **51 frontend unit tests** passed, the production build passed, and the
+mocked desktop/mobile channel/consent/charge-confirmation/opt-out browser flow
+passed. PostgreSQL schema compilation and additive-default checks passed as
+static checks only; the compiled DDL is saved beside the logs.
+The final handoff records their final counts and SHA.
+
+PostgreSQL migration and multi-worker/cancellation locking remain **not run**.
+Read-only local inspection found no Windows/WSL PostgreSQL binaries. Windows
+Docker's endpoint is absent; WSL has a running local Docker engine, but only
+cached application images, with no cached PostgreSQL image or server binary in
+the checked backend image. The prerequisite is an already available disposable
+PostgreSQL runtime/image, or separately authorized installation/image pull. No
+software was installed, no existing database/container data was used, and no
+database credentials or persistent access were created for this follow-up.

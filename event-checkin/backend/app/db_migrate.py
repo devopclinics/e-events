@@ -69,6 +69,21 @@ SCHEMA_PATCHES: list[str] = [
     "ALTER TABLE guests ADD COLUMN IF NOT EXISTS is_junior BOOLEAN NOT NULL DEFAULT false",
     "ALTER TABLE events ADD COLUMN IF NOT EXISTS setup_preferences JSON",
     "ALTER TABLE events ADD COLUMN IF NOT EXISTS menu_selection_timing VARCHAR(30) NOT NULL DEFAULT 'after_admission'",
+    _guarded_drop_not_null("meeting_attendees", "email"),
+    "UPDATE meeting_deliveries d SET recipient = a.email FROM meeting_attendees a "
+    "WHERE d.attendee_id = a.id AND d.recipient = '' AND a.email IS NOT NULL",
+    # Upgrade the unpublished email-only Meetings schema without guessing the
+    # database-generated name of its original four-column unique constraint.
+    "DO $$ DECLARE r record; BEGIN FOR r IN SELECT c.conname FROM pg_constraint c "
+    "WHERE c.conrelid = 'meeting_deliveries'::regclass AND c.contype = 'u' AND "
+    "(SELECT array_agg(a.attname::text ORDER BY a.attname) FROM pg_attribute a "
+    "WHERE a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)) = "
+    "ARRAY['attendee_id','meeting_id','method','sequence'] LOOP "
+    "EXECUTE format('ALTER TABLE meeting_deliveries DROP CONSTRAINT %I', r.conname); END LOOP; "
+    "IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'meeting_deliveries'::regclass "
+    "AND conname = 'uq_meeting_channel_delivery') THEN ALTER TABLE meeting_deliveries "
+    "ADD CONSTRAINT uq_meeting_channel_delivery UNIQUE (meeting_id, attendee_id, sequence, method, channel, recipient); "
+    "END IF; END $$",
     "ALTER TABLE events ADD COLUMN IF NOT EXISTS attendance_mode VARCHAR(20) NOT NULL DEFAULT 'rsvp'",
     "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS addon_overrides JSONB",
     "ALTER TABLE events ADD COLUMN IF NOT EXISTS addon_overrides JSONB",

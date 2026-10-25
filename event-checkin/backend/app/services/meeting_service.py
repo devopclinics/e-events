@@ -3,6 +3,7 @@ from datetime import datetime, timezone, timedelta
 from html import escape
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from typing import Literal
+import re
 from urllib.parse import urlparse
 
 import jwt
@@ -13,7 +14,36 @@ from services.email_service import _build_ics_bytes
 
 class AttendeeInput(BaseModel):
     name: str = Field(min_length=1, max_length=200)
-    email: EmailStr
+    email: EmailStr | None = None
+    phone: str | None = Field(default=None, max_length=32)
+    channels: list[Literal["email", "sms", "whatsapp"]] = Field(default_factory=lambda: ["email"], min_length=1, max_length=3)
+    sms_consent: bool = False
+    whatsapp_consent: bool = False
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def empty_email(cls, value):
+        return value or None
+
+    @model_validator(mode="after")
+    def contacts(self):
+        if len(self.channels) != len(set(self.channels)):
+            raise ValueError("Select each channel only once")
+        if self.phone:
+            self.phone = re.sub(r"[ ()-]", "", self.phone.strip())
+            if not re.fullmatch(r"\+[1-9][0-9]{7,14}", self.phone):
+                raise ValueError("Use an international phone number with + and country code")
+        if "email" in self.channels and not self.email:
+            raise ValueError("Email channel requires an email address")
+        if any(c in self.channels for c in ("sms", "whatsapp")) and not self.phone:
+            raise ValueError("SMS and WhatsApp require an international phone number")
+        if "sms" in self.channels and not self.sms_consent:
+            raise ValueError("Confirm SMS consent before selecting SMS")
+        if "whatsapp" in self.channels and not self.whatsapp_consent:
+            raise ValueError("Confirm WhatsApp consent before selecting WhatsApp")
+        if self.email:
+            self.email = str(self.email).lower()
+        return self
 
     @field_validator("name")
     @classmethod
@@ -57,6 +87,7 @@ class MeetingInput(BaseModel):
     location: str = Field(default="", max_length=1000)
     video_url: str = Field(default="", max_length=2000)
     attendees: list[AttendeeInput] = Field(min_length=1, max_length=50)
+    whatsapp_template_id: str | None = Field(default=None, max_length=36)
 
     @model_validator(mode="after")
     def valid(self):
@@ -67,11 +98,12 @@ class MeetingInput(BaseModel):
         end = utc_time(self.end, self.timezone, self.end_fold)
         if end <= start:
             raise ValueError("End must be after start")
-        emails = [str(a.email).lower() for a in self.attendees]
+        emails = [str(a.email).lower() for a in self.attendees if a.email]
         if len(emails) != len(set(emails)):
             raise ValueError("Each email address may appear only once")
-        for attendee in self.attendees:
-            attendee.email = str(attendee.email).lower()
+        phones = [a.phone for a in self.attendees if a.phone]
+        if len(phones) != len(set(phones)):
+            raise ValueError("Each phone number may appear only once")
         if self.video_url:
             parsed = urlparse(self.video_url)
             if parsed.scheme not in ("https", "http") or not parsed.hostname or parsed.username or any(ord(c) < 32 for c in self.video_url):
@@ -83,11 +115,12 @@ class MeetingInput(BaseModel):
         return self
 
 
-def response_token(meeting, attendee):
+def response_token(meeting, attendee, *, scope="meeting-response", phone=None):
     if len(settings.meetings_signing_key) < 32:
         raise ValueError("Meeting response signing is not configured")
     end = utc_time(meeting.published["end"], meeting.published["timezone"], meeting.published.get("end_fold"))
-    return jwt.encode({"scope": "meeting-response", "mid": meeting.id, "aid": attendee.id,
+    return jwt.encode({"scope": scope, "mid": meeting.id, "aid": attendee.id,
+                       "phone": phone or getattr(attendee, "phone", None),
                        "seq": meeting.sequence, "exp": end + timedelta(days=30)},
                       settings.meetings_signing_key, algorithm="HS256")
 
@@ -100,10 +133,25 @@ def invitation(data, *, method="REQUEST"):
     return subject, body
 
 
-def calendar_bytes(meeting, data, attendee, method, sequence):
+def contact_key(data):
+    return data.get("email") or data.get("phone")
+
+
+def targets(data):
+    return [(a, channel, a.get("email") if channel == "email" else a.get("phone"))
+            for a in data.get("attendees", []) for channel in a.get("channels", ["email"])]
+
+
+def phone_message(data, *, method="REQUEST"):
+    action = "Cancelled" if method == "CANCEL" else "Meeting invitation / update"
+    place = data["video_url"] if data["location_type"] == "online" else data["location"]
+    return f'{action}: {data["title"]}. {data["start"]} - {data["end"]} ({data["timezone"]}). {place}'
+
+
+def calendar_bytes(meeting, data, attendee, method, sequence, *, dtstamp=None):
     return _build_ics_bytes(event_name=data["title"], start=utc_time(data["start"], data["timezone"], data.get("start_fold")),
         end=utc_time(data["end"], data["timezone"], data.get("end_fold")),
         venue_text=data["video_url"] if data["location_type"] == "online" else data["location"],
         uid=f"meeting-{meeting.id}@festio.events", organizer_email=meeting.organizer_email,
         attendee_name=attendee.name, attendee_email=attendee.email, method=method, sequence=sequence,
-        description=data["agenda"])
+        description=data["agenda"], dtstamp=dtstamp)

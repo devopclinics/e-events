@@ -4,6 +4,9 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     meetings_sending_enabled: bool = False
+    meetings_paid_sending_enabled: bool = False
+    # SMTP preserves scheduling MIME. Resend JSON supports attachment/manual import only.
+    meetings_email_transport: str = "smtp"
     meetings_signing_key: str = ""
     # Runtime credentials are mandatory; no repository-backed fallback.
     database_url: str = Field(..., repr=False)

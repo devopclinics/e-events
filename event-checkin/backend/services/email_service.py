@@ -774,6 +774,7 @@ def _build_ics_bytes(
     method: str = "REQUEST",
     sequence: int | None = None,
     description: str = "",
+    dtstamp: datetime | None = None,
 ) -> bytes:
     """VCALENDAR/.ics blob for an event invite. `start`/`end` are the naive-UTC
     datetimes as stored on Event (see app/timeutil.py); `end` falls back to a
@@ -792,7 +793,7 @@ def _build_ics_bytes(
         f"METHOD:{method}",
         "BEGIN:VEVENT",
         f"UID:{uid}",
-        f"DTSTAMP:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
+        f"DTSTAMP:{(dtstamp or datetime.now(timezone.utc)).strftime('%Y%m%dT%H%M%SZ')}",
         f"DTSTART:{start.astimezone(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
         f"DTEND:{end.astimezone(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
         f"SUMMARY:{_ics_escape(event_name)}",

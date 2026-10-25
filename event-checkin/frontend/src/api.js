@@ -564,11 +564,19 @@ export const api = {
   getMeeting: (id) => req('GET', `/meetings/${encodeURIComponent(id)}`),
   createMeeting: (data) => req('POST', '/meetings', data),
   updateMeeting: (id, data) => req('PUT', `/meetings/${encodeURIComponent(id)}`, data),
-  previewMeeting: (id) => req('GET', `/meetings/${encodeURIComponent(id)}/preview`),
-  sendMeeting: (id, revision) => req('POST', `/meetings/${encodeURIComponent(id)}/send`, { revision }),
-  cancelMeeting: (id, revision) => req('POST', `/meetings/${encodeURIComponent(id)}/cancel`, { revision }),
+  meetingOptions: () => req('GET', '/meetings/options'),
+  previewMeeting: (id, cancel = false) => req('GET', `/meetings/${encodeURIComponent(id)}/preview${cancel ? '?cancel=true' : ''}`),
+  sendMeeting: (id, revision, confirm_paid_channels = false, quoted_credit_units = null) => req('POST', `/meetings/${encodeURIComponent(id)}/send`, { revision, confirm_paid_channels, quoted_credit_units }),
+  cancelMeeting: (id, revision, confirm_paid_channels = false, quoted_credit_units = null) => req('POST', `/meetings/${encodeURIComponent(id)}/cancel`, { revision, confirm_paid_channels, quoted_credit_units }),
   retryMeetingDelivery: (id, delivery) => req('POST', `/meetings/${encodeURIComponent(id)}/deliveries/${encodeURIComponent(delivery)}/retry`),
   meetingResponsePreview: (token) => guestRead(`/meeting-responses/${encodeURIComponent(token)}`, 'Invitation unavailable'),
+  meetingNotificationPreferences: (token) => guestRead(`/meeting-responses/preferences/${encodeURIComponent(token)}`, 'Notification preferences unavailable'),
+  stopMeetingNotifications: async (token, channel) => {
+    const response = await fetch(`${BASE}/meeting-responses/preferences/${encodeURIComponent(token)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channel }) })
+    const data = await response.json()
+    if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Preference could not be saved')
+    return data
+  },
   respondToMeeting: async (token, response) => {
     const res = await fetch(`${BASE}/meeting-responses/${encodeURIComponent(token)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ response }) })
     const data = await res.json()

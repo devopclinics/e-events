@@ -20,6 +20,7 @@ from ..database import AsyncSessionLocal
 from ..config import settings
 from ..models import Meeting, MeetingAttendee, MeetingDelivery, Organization, Membership
 from .meeting_service import calendar_bytes, invitation, response_token, phone_message, utc_time
+from .meeting_followups import followup_guard, release_followups, authorized
 from .meeting_channels import preflight, SetupRequired, Suppressed, DefiniteRejection
 from services import messaging
 from services.email_service import _resend_payload
@@ -42,7 +43,7 @@ def freeze_payload(row, meeting, attendee, template=None):
             "var_keys": ["firstName", "eventName", "message", "ticketLink"]}
         return
     subject, body = invitation(row.payload, method=row.method, recipient_name=attendee.name,
-        response_url=url if row.method == "REQUEST" else None)
+        response_url=url if row.method == "REQUEST" else None, purpose=row.purpose)
     msg = MIMEMultipart("mixed", boundary="meeting-" + row.id)
     msg["To"] = row.recipient or attendee.email
     msg["From"] = settings.email_from
@@ -128,6 +129,7 @@ async def deliver(delivery_id, sessions=None, sender=None):
             attendee = await db.get(MeetingAttendee, row.attendee_id)
             org = await db.scalar(select(Organization).where(Organization.id == m.org_id).with_for_update())
             try:
+                await followup_guard(db, m, attendee, row)
                 template = await preflight(db, m, attendee, row.channel, row.recipient or attendee.email, row.payload, org)
                 if row.channel == "whatsapp" and row.wire_payload and row.wire_payload.get("template_ref") != template.bird_project_id:
                     raise SetupRequired("Approved template changed; publish a reviewed new revision")
@@ -166,6 +168,7 @@ async def deliver(delivery_id, sessions=None, sender=None):
             row.status = "superseded"
         else:
             try:
+                await followup_guard(db, m, attendee, row)
                 await preflight(db, m, attendee, row.channel, row.recipient or attendee.email, row.payload, org)
                 row.provider_id = await sender(row, m, attendee)
                 row.status = "accepted"
@@ -203,8 +206,8 @@ async def release_scheduled(sessions):
             instruction = m.send_schedule or {}
             try:
                 org = await db.get(Organization, m.org_id)
-                member = await db.scalar(select(Membership.id).where(Membership.org_id == m.org_id,
-                    Membership.user_id == m.organizer_id, Membership.role.in_(["owner", "admin"])))
+                authorizer = instruction.get("authorized_by", m.organizer_id)
+                member = await authorized(db, m, authorizer)
                 if not org or not org.is_active or not member:
                     raise HTTPException(403, "Organizer access changed. Review invitation sending.")
                 data = Version(revision=instruction["revision"], confirm_paid_channels=instruction.get("confirm_paid_channels", False),
@@ -212,7 +215,7 @@ async def release_scheduled(sessions):
                 await validate_publish(m, data, db)
                 if utc_time(m.draft["start"], m.draft["timezone"], m.draft.get("start_fold")) <= datetime.now(timezone.utc):
                     raise HTTPException(422, "The meeting has already started. Review invitation sending.")
-                await enqueue(m, db)
+                await enqueue(m, db, authorized_by=authorizer)
                 clear_schedule(m, "queued")
             except HTTPException as exc:
                 clear_schedule(m, "blocked", str(exc.detail))
@@ -224,6 +227,7 @@ async def tick(sessions=None):
     if not settings.meetings_sending_enabled:
         return
     await release_scheduled(sessions)
+    await release_followups(sessions)
     async with sessions() as db:
         abandoned = (await db.scalars(select(MeetingDelivery).where(MeetingDelivery.status == "sending",
             MeetingDelivery.attempted_at < datetime.utcnow() - timedelta(minutes=5)).with_for_update(skip_locked=True))).all()

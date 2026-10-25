@@ -29,6 +29,8 @@ let meeting = {
   published_revision: 0,
   sequence: -1,
   status: 'draft',
+  organizer_id: 'fixture-owner',
+  org_id: 'fixture-org',
   sending_enabled: true,
   attendees: [],
   deliveries: []
@@ -49,13 +51,34 @@ const recipientRows = (cancel = false) => meeting.draft.attendees.flatMap(a => (
 const client = {
   meetingOptions: async () => ({
     sending_enabled: true,
+    user_id:'fixture-owner', default_org_id:'fixture-org', organizations:[{id:'fixture-org',name:'Fixture organization'},{id:'other-org',name:'Other organization'}],
     whatsapp_templates: [{
       id: 'approved-meeting',
       name: 'Approved meeting notification'
     }]
   }),
   listMeetings: async () => { window.meetingListRequests++; return [structuredClone(meeting)]; },
-  getMeeting: async () => meeting,
+  listMeetingSummaries: async (params={}) => {
+    window.meetingListRequests++;
+    let rows=[meeting,...(window.additionalMeetings||[])];
+    const org=params.org_id||'fixture-org';rows=rows.filter(m=>(m.org_id||'fixture-org')===org);
+    const active=rows.filter(m=>!m.archived);
+    const totals={meetings:active.length,pending_sends:active.filter(m=>m.send_schedule?.status==='pending').length,accepted:active.reduce((n,m)=>n+(m.attendees||[]).filter(a=>a.active&&a.response==='accepted').length,0)};
+    rows=rows.filter(m=>Boolean(m.archived)===(params.view==='archived'));
+    if(params.q)rows=rows.filter(m=>m.draft.title.toLowerCase().includes(params.q.toLowerCase()));
+    if(params.view==='draft'||params.view==='cancelled')rows=rows.filter(m=>m.status===params.view);
+    const total=rows.length,offset=Number(params.offset||0),limit=Number(params.limit||20);
+    return {items:rows.slice(offset,offset+limit).map(m=>({id:m.id,draft:{title:m.draft.title,start:m.draft.start,end:m.draft.end,timezone:m.draft.timezone},revision:m.revision,published_revision:m.published_revision,sequence:m.sequence,status:m.status,archived:!!m.archived,send_schedule:m.send_schedule,response_counts:(m.attendees||[]).filter(a=>a.active).reduce((out,a)=>({...out,[a.response]:(out[a.response]||0)+1}),{})})),total,offset,limit,org_id:org,totals};
+  },
+  archiveMeeting: async (id,revision,archived)=>meeting={...meeting,archived},
+  deleteMeetingDraft: async ()=>{window.meetingCalls.push('delete');return {deleted:true}},
+  meetingDirectory:async()=>[{name:'Casey Guest',email:'casey@example.com'}],
+  meetingCalendar:async()=>({filename:'meeting.ics',content:'BEGIN:VCALENDAR\r\nEND:VCALENDAR'}),
+  exportMeetingResponses:async()=>({filename:'meeting-responses.csv',content:'Name,Response\nAlex,accepted'}),
+  meetingAttendeeLink:async()=>({url:'https://example.invalid/personal-fixture-link'}),
+  nudgeMeetingPending:async()=>{window.meetingCalls.push('nudge');return {queued:1}},
+  resendMeetingAttendee:async()=>{window.meetingCalls.push('resend');return meeting},
+  getMeeting: async (id) => structuredClone([meeting,...(window.additionalMeetings||[])].find(m=>m.id===id)||meeting),
   createMeeting: async data => {
     window.meetingCalls.push('save');
     return meeting = {
@@ -155,6 +178,7 @@ const client = {
   meetingNotificationPreferences: async token => {
     if (token === 'expired') throw new Error('Invitation expired');
     return {
+      email:true,reminders_stopped:false,
       phone: '+14155550123',
       stopped: []
     };

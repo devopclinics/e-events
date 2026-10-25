@@ -89,6 +89,14 @@ class MeetingInput(BaseModel):
     attendees: list[AttendeeInput] = Field(min_length=1, max_length=50)
     whatsapp_template_id: str | None = Field(default=None, max_length=36)
     invitation_style: Literal["aurora", "cobalt", "terracotta"] = "aurora"
+    reminder_minutes: list[Literal[10, 30, 60, 1440]] = Field(default_factory=list, max_length=4)
+    nudge_hours_before: Literal[0, 24, 48] = 0
+    shared_with_org_admins: bool = False
+
+    @field_validator("reminder_minutes")
+    @classmethod
+    def unique_reminders(cls, values):
+        return sorted(set(values), reverse=True)
 
     @field_validator("video_url", mode="before")
     @classmethod
@@ -134,7 +142,7 @@ def response_token(meeting, attendee, *, scope="meeting-response", phone=None):
     end = utc_time(meeting.published["end"], meeting.published["timezone"], meeting.published.get("end_fold"))
     return jwt.encode({"scope": scope, "mid": meeting.id, "aid": attendee.id,
                        "phone": phone or getattr(attendee, "phone", None),
-                       "seq": meeting.sequence, "exp": end + timedelta(days=30)},
+                       "seq": meeting.sequence, "exp": end + timedelta(days=30 if scope == "meeting-preferences" else 1)},
                       settings.meetings_signing_key, algorithm="HS256")
 
 
@@ -145,7 +153,7 @@ INVITATION_STYLES = {
 }
 
 
-def invitation(data, *, method="REQUEST", response_url=None, recipient_name=None):
+def invitation(data, *, method="REQUEST", response_url=None, recipient_name=None, purpose="invitation"):
     subject = ("Cancelled: " if method == "CANCEL" else "You're invited: ") + data["title"]
     ink, accent, soft = INVITATION_STYLES.get(data.get("invitation_style"), INVITATION_STYLES["aurora"])
     start, end = datetime.fromisoformat(data["start"]), datetime.fromisoformat(data["end"])
@@ -163,6 +171,12 @@ def invitation(data, *, method="REQUEST", response_url=None, recipient_name=None
     greeting = "Hello " + escape(recipient_name) + "," if recipient_name else "A little time. A meaningful connection."
     agenda = escape(data.get("agenda", "")).replace("\n", "<br>")
     state = "MEETING CANCELLED" if method == "CANCEL" else "YOU’RE INVITED"
+    if purpose and purpose.startswith("reminder:"):
+        subject, state = "Reminder: " + data["title"], "YOUR MEETING IS COMING UP"
+    elif purpose and purpose.startswith("nudge:"):
+        subject, state = "Please reply: " + data["title"], "LET YOUR ORGANIZER KNOW"
+    elif purpose and purpose.startswith("resend:"):
+        subject, state = "Your invitation: " + data["title"], "YOUR PERSONAL INVITATION"
     action = ""
     if method != "CANCEL":
         style = f"display:inline-block;background:{ink};color:#ffffff;padding:15px 23px;border-radius:12px;font-weight:700;text-decoration:none"
@@ -181,7 +195,7 @@ def invitation(data, *, method="REQUEST", response_url=None, recipient_name=None
 <tr><td style="padding:28px 30px"><p style="font-size:11px;letter-spacing:2px;font-weight:700;color:{ink};margin:0 0 8px">{'MEETING ACCESS' if data["location_type"] == 'online' else 'MEET US HERE'}</p><p style="margin:0 0 24px;overflow-wrap:anywhere">{access}</p>
 {('<p style="font-size:11px;letter-spacing:2px;font-weight:700;color:'+ink+';margin:0 0 8px">ON THE AGENDA</p><p style="margin:0 0 24px;overflow-wrap:anywhere">'+agenda+'</p>') if agenda else ''}
 {action}<p style="font-size:12px;color:#596e68;margin:18px 0 0">{'Your personal invitation includes a calendar attachment and a link to accept, decline or reply maybe. Responses are recorded in Festio.' if method != 'CANCEL' else 'The attached calendar cancellation updates the original invitation.'}</p></td></tr>
-<tr><td style="padding:20px 30px;border-top:1px solid #e3eae5;color:#596e68;font-size:11px">A meeting made simple. Powered by <strong>Festio</strong>.<br>You received this personal invitation from the meeting organizer. Google/Outlook replies are not synchronized.</td></tr>
+<tr><td style="padding:20px 30px;border-top:1px solid #e3eae5;color:#596e68;font-size:11px">A meeting made simple. Powered by <strong>Festio</strong>.<br>You received this personal invitation from the meeting organizer. Google/Outlook replies are not synchronized. This personal response link is intended for its named recipient. Responses close 24 hours after the meeting ends.</td></tr>
 </table></td></tr></table></body></html>'''
     return subject, body
 

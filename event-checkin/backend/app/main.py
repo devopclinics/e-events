@@ -229,6 +229,10 @@ async def _audit_public_api_requests(request, call_next):
     request.state.api_key_id is already set by the time we get here; skipped
     entirely for the unauthenticated /docs endpoint (no key id to log against)."""
     response = await call_next(request)
+    if request.url.path.startswith("/api/meeting-responses/"):
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["X-Robots-Tag"] = "noindex, nofollow"
     if request.url.path.startswith("/api/public/v1"):
         api_key_id = getattr(request.state, "api_key_id", None)
         if api_key_id:

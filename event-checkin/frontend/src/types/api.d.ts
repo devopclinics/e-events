@@ -105,6 +105,11 @@ export interface ApprovedWhatsAppTemplateOut {
   variables: (string)[]
 }
 
+export interface ArchiveRequest {
+  archived: boolean
+  revision: number
+}
+
 export interface AssignmentIn {
   can_checkin?: boolean
   can_manage_meals?: boolean
@@ -811,7 +816,10 @@ export interface Edit {
   invitation_style?: 'aurora' | 'cobalt' | 'terracotta'
   location?: string
   location_type?: 'online' | 'physical'
+  nudge_hours_before?: 0 | 24 | 48
+  reminder_minutes?: (10 | 30 | 60 | 1440)[]
   revision: number
+  shared_with_org_admins?: boolean
   start: string
   start_fold?: (0 | 1) | null
   timezone: string
@@ -1359,6 +1367,11 @@ export interface FlowEdge {
   count: number
   from_zone?: (string) | null
   to_zone: string
+}
+
+export interface FollowupRequest {
+  key: string
+  revision: number
 }
 
 export interface GateIn {
@@ -2148,6 +2161,9 @@ export interface MeetingInput {
   invitation_style?: 'aurora' | 'cobalt' | 'terracotta'
   location?: string
   location_type?: 'online' | 'physical'
+  nudge_hours_before?: 0 | 24 | 48
+  reminder_minutes?: (10 | 30 | 60 | 1440)[]
+  shared_with_org_admins?: boolean
   start: string
   start_fold?: (0 | 1) | null
   timezone: string
@@ -3434,7 +3450,7 @@ export interface SpeakerSettingsOut {
 }
 
 export interface StopNotifications {
-  channel: 'sms' | 'whatsapp'
+  channel: 'sms' | 'whatsapp' | 'reminders'
 }
 
 export interface SubGroupCreate {

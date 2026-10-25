@@ -63,6 +63,10 @@ def _guarded_drop_column(table: str, column: str) -> str:
 
 SCHEMA_PATCHES: list[str] = [
     "CREATE INDEX IF NOT EXISTS ix_meetings_send_at ON meetings (send_at)",
+    "CREATE INDEX IF NOT EXISTS ix_meetings_start_utc ON meetings (start_utc)",
+    "CREATE INDEX IF NOT EXISTS ix_meetings_end_utc ON meetings (end_utc)",
+    "CREATE INDEX IF NOT EXISTS ix_meetings_next_followup_at ON meetings (next_followup_at)",
+    "CREATE INDEX IF NOT EXISTS ix_meetings_workspace ON meetings (org_id, organizer_id, archived, created_at)",
     "CREATE INDEX IF NOT EXISTS ix_guest_menu_choice_guest_category ON guest_menu_choices (guest_id, category_id)",
     # Supervisor requests target locations without inventing an assignment.
     # Existing assignment references stay intact; reruns avoid unnecessary locks.
@@ -76,14 +80,14 @@ SCHEMA_PATCHES: list[str] = [
     # Upgrade the unpublished email-only Meetings schema without guessing the
     # database-generated name of its original four-column unique constraint.
     "DO $$ DECLARE r record; BEGIN FOR r IN SELECT c.conname FROM pg_constraint c "
-    "WHERE c.conrelid = 'meeting_deliveries'::regclass AND c.contype = 'u' AND "
+    "WHERE c.conrelid = 'meeting_deliveries'::regclass AND c.contype = 'u' AND ( "
     "(SELECT array_agg(a.attname::text ORDER BY a.attname) FROM pg_attribute a "
     "WHERE a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)) = "
-    "ARRAY['attendee_id','meeting_id','method','sequence'] LOOP "
+    "ARRAY['attendee_id','meeting_id','method','sequence'] OR c.conname = 'uq_meeting_channel_delivery') LOOP "
     "EXECUTE format('ALTER TABLE meeting_deliveries DROP CONSTRAINT %I', r.conname); END LOOP; "
     "IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'meeting_deliveries'::regclass "
-    "AND conname = 'uq_meeting_channel_delivery') THEN ALTER TABLE meeting_deliveries "
-    "ADD CONSTRAINT uq_meeting_channel_delivery UNIQUE (meeting_id, attendee_id, sequence, method, channel, recipient); "
+    "AND conname = 'uq_meeting_delivery_purpose') THEN ALTER TABLE meeting_deliveries "
+    "ADD CONSTRAINT uq_meeting_delivery_purpose UNIQUE (meeting_id, attendee_id, sequence, method, channel, recipient, purpose); "
     "END IF; END $$",
     "ALTER TABLE events ADD COLUMN IF NOT EXISTS attendance_mode VARCHAR(20) NOT NULL DEFAULT 'rsvp'",
     "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS addon_overrides JSONB",
@@ -470,6 +474,18 @@ async def provision_dashboard_ro(eng: AsyncEngine) -> None:
     logger.info("dashboard_ro role provisioned/refreshed (db=%s)", db_name)
 
 
+async def backfill_meeting_times(eng):
+    import json
+    from .services.meeting_service import utc_time
+    async with eng.begin() as conn:
+        rows = (await conn.execute(text("SELECT id, draft FROM meetings WHERE start_utc IS NULL OR end_utc IS NULL"))).all()
+        for mid, draft in rows:
+            draft = json.loads(draft) if isinstance(draft, str) else draft
+            start = utc_time(draft["start"], draft["timezone"], draft.get("start_fold")).replace(tzinfo=None)
+            end = utc_time(draft["end"], draft["timezone"], draft.get("end_fold")).replace(tzinfo=None)
+            await conn.execute(text("UPDATE meetings SET start_utc=:start, end_utc=:end WHERE id=:id"), {"start": start, "end": end, "id": mid})
+
+
 async def apply(eng: AsyncEngine) -> None:
     """Create missing tables, auto-generate + run column ALTERs, then run any
     manual SCHEMA_PATCHES. Idempotent."""
@@ -504,6 +520,7 @@ async def apply(eng: AsyncEngine) -> None:
             )
             await asyncio.sleep(DDL_RETRY_WAIT_SECONDS)
 
+    await backfill_meeting_times(eng)
     logger.info(
         "Applied %d auto + %d manual schema patches",
         len(auto), len(SCHEMA_PATCHES),

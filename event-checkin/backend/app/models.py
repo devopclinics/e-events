@@ -19,6 +19,12 @@ class Meeting(Base):
     send_schedule: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     sequence: Mapped[int] = mapped_column(Integer, default=-1)
     status: Mapped[str] = mapped_column(String(20), default="draft")
+    archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    shared_with_org_admins: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    start_utc: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    end_utc: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    next_followup_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    followup_schedule: Mapped[list | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -36,11 +42,12 @@ class MeetingAttendee(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     response: Mapped[str] = mapped_column(String(20), default="pending")
     response_sequence: Mapped[int] = mapped_column(Integer, default=-1)
+    reminders_stopped: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
 
 class MeetingDelivery(Base):
     __tablename__ = "meeting_deliveries"
-    __table_args__ = (UniqueConstraint("meeting_id", "attendee_id", "sequence", "method", "channel", "recipient", name="uq_meeting_channel_delivery"),)
+    __table_args__ = (UniqueConstraint("meeting_id", "attendee_id", "sequence", "method", "channel", "recipient", "purpose", name="uq_meeting_delivery_purpose"),)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     meeting_id: Mapped[str] = mapped_column(ForeignKey("meetings.id"), index=True)
     attendee_id: Mapped[str] = mapped_column(ForeignKey("meeting_attendees.id"))
@@ -52,6 +59,7 @@ class MeetingDelivery(Base):
     charged_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     charge_refunded: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     payload: Mapped[dict] = mapped_column(JSON)
+    purpose: Mapped[str] = mapped_column(String(100), default="invitation", server_default="invitation")
     wire_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="queued", index=True)
     attempts: Mapped[int] = mapped_column(Integer, default=0)

@@ -38,6 +38,12 @@ def client_network(request: Request):
         try:return any(ipaddress.ip_address(value) in network for network in ranges)
         except ValueError:return False
     if belongs(address,networks):
+        # Only the private tunnel-origin listener may supply this header. The
+        # public proxy path strips it, using the physical peer rather than XFF.
+        tunnel=request.headers.get('x-festio-tunnel-client-ip','')
+        if tunnel:
+            try:return {'client_ip':str(ipaddress.ip_address(tunnel)),'source':'cloudflare_tunnel'}
+            except ValueError:pass
         chain=[value.strip() for value in request.headers.get('x-forwarded-for','').split(',') if value.strip()]+[address]
         for item in reversed(chain):
             if belongs(item,networks):continue

@@ -162,3 +162,10 @@ def test_unavailable_catalog_does_not_write_rate_counters_or_lock_buyer(config,m
     with pytest.raises(HTTPException) as exc:asyncio.run(main.create_order('missing',body,db,request))
     assert exc.value.status_code==404
     limit.assert_not_called();db.scalar.assert_not_called()
+
+
+def test_tunnel_client_marker_requires_trusted_proxy_and_valid_address():
+    def request(peer,value):return Request({'type':'http','client':(peer,123),'headers':[(b'x-festio-tunnel-client-ip',value.encode())]})
+    assert peer_address(request('192.168.70.244','203.0.113.17'))=='203.0.113.17'
+    assert peer_address(request('203.0.113.9','203.0.113.17'))=='203.0.113.9'
+    assert peer_address(request('192.168.70.244','invalid'))=='192.168.70.244'

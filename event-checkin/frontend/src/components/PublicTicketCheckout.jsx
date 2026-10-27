@@ -112,7 +112,7 @@ export default function PublicTicketCheckout({ eventId, tone, onAvailabilityChan
         return {
           product_id: ticket.id, quantity,
           attendees: Array.from({length:quantity},(_,index) => ticketAttendees[index] || {first_name:'',last_name:'',email:''}).map((attendee) => ({
-            first_name: attendee.first_name.trim() || buyer.firstName, last_name: attendee.last_name.trim() || buyer.lastName,
+            first_name: attendee.first_name.trim() || buyer.firstName, last_name: requireAttendeeNames && ticket.product_type !== 'donation' ? attendee.last_name.trim() : attendee.last_name.trim() || buyer.lastName,
             email: attendee.email.trim() || buyer.email, phone: buyer.phone || null,
           })),
           ...(isCustomDonation ? { custom_amount: Math.round(Number(donationAmounts[ticket.id]) * 100) } : {}),

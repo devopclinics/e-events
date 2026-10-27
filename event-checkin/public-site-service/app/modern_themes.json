@@ -141,5 +141,44 @@
     "desc": "An interlocking community quilt: each audience has a place, while the event identity ties the whole experience together.",
     "layout": "Split hero \u00b7 community quilt \u00b7 connected programme cards",
     "title": "Many stories.<br><em>One community.</em>"
+  },
+  {
+    "id": "noor-future",
+    "name": "Noor Future",
+    "label": "Luminous, architectural, refined",
+    "color": "#123f36",
+    "bg": "#f4f5ef",
+    "ink": "#162a28",
+    "accent": "#b9f7a8",
+    "muted": "#5e716a",
+    "desc": "A luminous geometric portal, mint light and quiet ivory. A refined architectural direction.",
+    "layout": "Luminous portal \u00b7 editorial story \u00b7 soft content surfaces",
+    "title": "A brighter future begins with us."
+  },
+  {
+    "id": "mosaic-future",
+    "name": "Mosaic Future",
+    "label": "Vibrant, creative, contemporary",
+    "color": "#4a32b3",
+    "bg": "#f8f4eb",
+    "ink": "#26243d",
+    "accent": "#cbf96c",
+    "muted": "#656275",
+    "desc": "Violet, coral, lime and architectural tiles create a colourful contemporary event website.",
+    "layout": "Colourful tiles \u00b7 bold type \u00b7 warm editorial sections",
+    "title": "Big dreams. Bright minds. One community."
+  },
+  {
+    "id": "orbit-future",
+    "name": "Orbit Future",
+    "label": "Immersive, iridescent, futuristic",
+    "color": "#ab9df5",
+    "bg": "#080c17",
+    "ink": "#e9f1f5",
+    "accent": "#b3ffdc",
+    "muted": "#9ca9b9",
+    "desc": "Midnight surfaces, holographic light and luminous orbital geometry. An immersive futuristic statement.",
+    "layout": "Iridescent sphere \u00b7 orbital detail \u00b7 dramatic dark surfaces",
+    "title": "Their future. Our infinite possibility."
   }
 ]

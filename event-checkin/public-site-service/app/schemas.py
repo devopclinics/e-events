@@ -270,6 +270,7 @@ class SiteUpsert(BaseModel):
         "programme-showcase", "elegant-countdown",
         "premium-convention", "atrium", "orbit", "editorial", "spectrum", "horizon",
         "pathway", "atlas", "assembly", "halo", "mosaic",
+        "noor-future", "mosaic-future", "orbit-future",
     ] = "community"
     content: SiteContent
 

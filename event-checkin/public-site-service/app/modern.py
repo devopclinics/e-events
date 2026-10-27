@@ -13,7 +13,7 @@ from .templates import MODERN_TEMPLATES
 from .community import safe_url, safe_destination, navigation_markup, facts_markup, event_datetime, date_label, featured_sessions, programme_heading, programme_handoff
 
 ROOT = Path(__file__).parent
-CSS = (ROOT / "modern.css").read_text() + "\n" + (ROOT / "premium.css").read_text()
+CSS = (ROOT / "modern.css").read_text() + "\n" + (ROOT / "premium.css").read_text() + "\n" + (ROOT / "future.css").read_text()
 JS = (ROOT / "modern.js").read_text()
 ART = json.loads((ROOT / "modern_art.json").read_text())
 SCRIPT_HASH = base64.b64encode(hashlib.sha256(JS.encode()).digest()).decode()
@@ -62,6 +62,10 @@ def artwork(family, content):
     art = art.replace('>NCNMO<', '>TOGETHER<').replace('20<br>26<span>', f'{year[:2]}<br>{year[2:]}<span>' if year else '↗<span>')
     art = art.replace('FAITH. FAMILY.<br>LEARNING. COMMUNITY.', 'DISCOVER.<br>CONNECT. BELONG.')
     art = art.replace('24—28 <small>December 2026</small>', f'{start.day} <small>{e(start.strftime("%B %Y"))}</small>' if start else 'Welcome <small>Your event starts here</small>')
+    if family.endswith('-future'):
+        art = art.replace('__FUTURE_DAY__', str(start.day) if start else '✦')
+        art = art.replace('__FUTURE_MONTH_YEAR__', e(start.strftime('%B %Y').upper()) if start else 'DATE TO FOLLOW')
+        art = art.replace('__FUTURE_EVENT__', e(content.get('event_name') or 'YOUR EVENT'))
     return art
 
 
@@ -106,8 +110,8 @@ def render_modern(content, family, *, preview=False):
     use_style = content.get('use_template_style', True) and not content.get('use_event_branding')
     primary = t['color'] if use_style else color(content.get('primary_color'),t['color'])
     accent = t['accent'] if use_style else color(content.get('accent_color'),t['accent'])
-    dark = family in ('orbit','horizon','assembly')
-    surface = {'orbit':'#11192a','horizon':'#183b38','assembly':'#202820'}.get(family,'#ffffff')
+    dark = family in ('orbit','horizon','assembly','orbit-future')
+    surface = {'orbit':'#11192a','horizon':'#183b38','assembly':'#202820','orbit-future':'#101624'}.get(family,'#ffffff')
     colors = f"--bg:{t['bg']};--ink:{t['ink']};--color:{primary};--accent:{accent};--muted:{t['muted']};--surface:{surface};--line:{'#ffffff25' if dark else '#233b3026'};--tint:{'#ffffff0d' if dark else '#253b3008'};--button-ink:{contrast(primary)};--primary:{primary};--accent-ink:{contrast(accent)}"
     hero_highlight = accent if contrast(accent) != "#ffffff" else "#ffffff"
     colors += f";--hero-highlight:{hero_highlight}"

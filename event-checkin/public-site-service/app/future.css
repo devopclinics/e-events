@@ -1,0 +1,89 @@
+/* Future collection: scoped, additive designs. Existing template IDs stay unchanged. */
+:is(.noor-future,.mosaic-future,.orbit-future){font-family:"Segoe UI",Arial,sans-serif;--heading-font:"Segoe UI",Arial,sans-serif}
+:is(.noor-future,.mosaic-future,.orbit-future) .wrap{max-width:1440px;padding:0 6%}
+:is(.noor-future,.mosaic-future,.orbit-future) h1,:is(.noor-future,.mosaic-future,.orbit-future) h2,:is(.noor-future,.mosaic-future,.orbit-future) h3{font-family:var(--heading-font);font-weight:500}
+:is(.noor-future,.mosaic-future,.orbit-future) .hero{min-height:700px;grid-template-columns:1.1fr 1fr;gap:30px;padding:65px 0 45px;isolation:isolate}
+:is(.noor-future,.mosaic-future,.orbit-future) .hero h1{font-size:clamp(52px,6.4vw,92px);line-height:1.04;letter-spacing:-.055em;max-width:720px}
+:is(.noor-future,.mosaic-future,.orbit-future) .hero-summary{font-size:15px;line-height:1.85;max-width:450px}
+:is(.noor-future,.mosaic-future,.orbit-future) .eyebrow{font-size:10px;letter-spacing:.18em}
+:is(.noor-future,.mosaic-future,.orbit-future) .hero-meta{font-size:12px;line-height:1.6}
+:is(.noor-future,.mosaic-future,.orbit-future) .btn{border-radius:5px;background:var(--color);color:var(--button-ink)}
+:is(.noor-future,.mosaic-future,.orbit-future) .btn.secondary{background:transparent;color:inherit;border-color:var(--line)}
+:is(.noor-future,.mosaic-future,.orbit-future) .nav{min-height:100px;gap:25px}
+:is(.noor-future,.mosaic-future,.orbit-future) .brand{max-width:330px;min-width:0;font-size:15px;line-height:1.3}
+:is(.noor-future,.mosaic-future,.orbit-future) .brand span{overflow-wrap:anywhere}
+:is(.noor-future,.mosaic-future,.orbit-future) .nav-links{font-size:12px;justify-content:center}
+:is(.noor-future,.mosaic-future,.orbit-future) .event-intro{padding:85px 0;gap:80px}
+:is(.noor-future,.mosaic-future,.orbit-future) h2{font-size:clamp(34px,3.8vw,56px);line-height:1.12;letter-spacing:-.045em}
+:is(.noor-future,.mosaic-future,.orbit-future) .event-intro p{font-size:16px;line-height:1.85}
+:is(.noor-future,.mosaic-future,.orbit-future) .programme{padding:55px 0}
+:is(.noor-future,.mosaic-future,.orbit-future) .content-section{padding:55px 0}
+:is(.noor-future,.mosaic-future,.orbit-future) .feature{padding:60px 0;gap:65px}
+:is(.noor-future,.mosaic-future,.orbit-future) .feature img{border-radius:12px}
+:is(.noor-future,.mosaic-future,.orbit-future) .registration-close{margin:55px 0;padding:48px;border-radius:12px;background:var(--color);color:var(--button-ink)}
+:is(.noor-future,.mosaic-future,.orbit-future) .registration-close .btn{background:var(--accent);color:var(--accent-ink)}
+:is(.noor-future,.mosaic-future,.orbit-future) .registration-close p{color:inherit;opacity:.85}
+:is(.noor-future,.mosaic-future,.orbit-future) footer{gap:30px}
+/* Artwork remains vector at every screen size. It never includes fixed event identities. */
+.future-art{position:relative;width:100%;min-width:0}
+.future-art>svg{width:100%;height:auto;display:block;max-width:none}
+.future-art .floating-note{position:absolute;backdrop-filter:blur(10px);background:#142e2bde;border:1px solid #c0e5d64d;box-shadow:0 12px 40px #0002;padding:14px 17px;border-radius:8px;font-size:9px;letter-spacing:1px;color:#c6dacd}
+.future-art .note-one{top:31%;left:0}.future-art .note-two{bottom:19%;right:-2%;transform:rotate(-5deg)}
+/* Noor: a luminous portal above quiet ivory editorial sections. */
+.noor-future .nav{color:var(--ink)}
+.noor-future .hero{color:#eff4eb;margin-left:calc(-6vw);margin-right:calc(-6vw);padding-left:6vw;padding-right:6vw;background:radial-gradient(ellipse at 90% 35%,#36505b88,transparent 60%),color-mix(in srgb,var(--color) 50%,#071412);overflow:hidden}
+.noor-future .hero .eyebrow{color:var(--accent)}
+.noor-future .hero h1 em{background:linear-gradient(90deg,var(--accent),#b9d8ee);background-clip:text;color:transparent}
+.noor-future .hero-summary{color:#c2d3cc}.noor-future .hero-meta{color:#b9cfc4}
+.noor-future .hero .btn{background:var(--accent);color:var(--accent-ink)}
+.noor-future .hero .secondary{background:transparent;color:#eff4eb;border-color:#b9cfc455}
+.noor-future .hero-visual{overflow:visible}.noor-future .hero-visual .uploaded-hero{border-radius:180px 180px 10px 10px}
+.noor-future .event-intro h2{color:var(--color)}
+.noor-future .featured-grid .highlight-card.no-image{background:color-mix(in srgb,var(--color) 8%,var(--bg));border-radius:12px}
+.noor-future .speaker-card{border-radius:12px}.noor-future .micro-facts{background:color-mix(in srgb,var(--accent) 15%,var(--bg));padding:24px}
+.noor-future .registration-close{background:radial-gradient(ellipse at 50% 150%,#427c5955,transparent 70%),var(--color)}
+/* Mosaic: playful modular architecture, violet, lime, coral and warm paper. */
+.mosaic-future .hero h1{font-weight:600}.mosaic-future .hero h1 em{color:var(--color)}
+.mosaic-future .mosaic-art{display:grid;grid-template-columns:1fr 1fr;gap:12px;transform:rotate(-3deg);padding-bottom:32px}
+.mosaic-future .tile{aspect-ratio:1;position:relative;overflow:hidden;padding:25px;border-radius:8px}
+.mosaic-future .tile.violet{background:var(--color);color:var(--button-ink)}
+.mosaic-future .violet>span{position:relative;z-index:1;font-size:clamp(20px,2.5vw,35px);line-height:1.1;letter-spacing:-1px;display:block}
+.mosaic-future .violet>span i{font-style:normal;color:var(--accent)}
+.mosaic-future .violet svg{position:absolute;width:190px;height:190px;right:-75px;bottom:-60px;opacity:.7;transform:rotate(20deg)}
+.mosaic-future .tile.lime{background:#d0ef91;color:#29492b;border-radius:100px 8px 8px 8px}
+.mosaic-future .lime>span{position:absolute;left:22px;bottom:20px;font-size:10px;line-height:1.3}
+.mosaic-future .stairs{position:absolute;inset:25px 22px 45px;transform:skewY(-24deg);background:repeating-linear-gradient(0deg,#426d44 0px,#426d44 13px,#9abd72 14px,#9abd72 30px);clip-path:polygon(0 100%,0 72%,25% 72%,25% 48%,50% 48%,50% 24%,75% 24%,75% 0,100% 0,100% 100%)}
+.mosaic-future .tile.coral{background:#ed806a;color:#40282d;border-radius:8px 8px 8px 90px}
+.mosaic-future .date-giant{font-size:clamp(60px,7vw,110px);font-weight:500;line-height:1;letter-spacing:-6px;display:block}
+.mosaic-future .date-giant small{font-size:9px;letter-spacing:1px;display:block;margin:15px 0 0 5px;color:inherit}
+.mosaic-future .tiny-star{position:absolute;right:15px;bottom:0;font-size:70px}
+.mosaic-future .tile.cream{background:#e3dbf2;color:#5c4395}
+.mosaic-future .arch-lines{position:absolute;inset:23px 30px 67px}
+.mosaic-future .arch-lines i{position:absolute;inset:0;border:1px solid #795db3;border-radius:100px 100px 0 0}
+.mosaic-future .arch-lines i:nth-child(2){inset:12px}.mosaic-future .arch-lines i:nth-child(3){inset:24px}.mosaic-future .arch-lines i:nth-child(4){inset:36px}
+.mosaic-future .cream>span{position:absolute;bottom:15px;left:25px;font-size:10px;line-height:1.4;letter-spacing:1px}
+.mosaic-future .mosaic-label{position:absolute;bottom:3px;left:5px;right:0;font-size:8px;letter-spacing:1px;text-align:center;overflow-wrap:anywhere;line-height:1.2}
+.mosaic-future .hero-visual .uploaded-hero{border-radius:6px;transform:rotate(-2deg)}
+.mosaic-future .audience-card:nth-child(3n+1){background:#e9e2f5;color:#26243d}.mosaic-future .audience-card:nth-child(3n+2){background:#e6edce;color:#26243d}.mosaic-future .audience-card:nth-child(3n){background:#f4d8cb;color:#26243d}
+.mosaic-future .audience-card p{color:#656275}
+.mosaic-future .micro-facts{background:#d0ef91;color:#29492b;border:0;padding:25px}
+.mosaic-future .micro-facts span{color:#29492b}.mosaic-future .registration-close{border-radius:8px}
+/* Orbit: luminous geometry and readable midnight surfaces. */
+.orbit-future .hero{background:radial-gradient(ellipse at 78% 55%,#332a5844,transparent 65%)}
+.orbit-future .hero h1 em{background:linear-gradient(90deg,var(--accent),#b5a3ed,#f7bce7);color:transparent;background-clip:text}
+.orbit-future .hero .eyebrow{color:var(--accent)}
+.orbit-future .btn{background:var(--accent);color:var(--accent-ink);border-radius:0}
+.orbit-future .hero .secondary{background:transparent;color:var(--ink);border-color:var(--line)}
+.orbit-future .brand-symbol{border-color:var(--accent);color:var(--accent)}
+.orbit-future .orbit-label{position:absolute;font-size:9px;letter-spacing:1.3px;border-bottom:1px solid #93c7ba77;padding:8px 2px;color:#bccdc9}
+.orbit-future .ol-one{top:15%;left:3%}.orbit-future .ol-two{top:35%;right:0}.orbit-future .ol-three{bottom:16%;left:11%}
+.orbit-future .feature-art{background:radial-gradient(circle,#344c58,#101624);color:var(--accent);border:1px solid var(--line)}
+.orbit-future .featured-grid .highlight-card.no-image{background:color-mix(in srgb,var(--session-color) 15%,#101624)}
+.orbit-future .featured-grid .highlight-card .highlight-ornament{opacity:.4}
+.orbit-future .speaker-card,.orbit-future .tool-card,.orbit-future .facts .fact{background:var(--surface);border-color:var(--line)}
+.orbit-future .speaker-initial{background:#253543;color:var(--accent)}
+.orbit-future .venue{background:#142325}.orbit-future .micro-facts{border-color:var(--line)}
+.orbit-future .registration-close{background:radial-gradient(ellipse at 0 100%,#30274c,transparent 60%),radial-gradient(ellipse at 100% 0,#21443a,transparent 70%),#101a23;color:var(--ink);border:1px solid var(--line);border-radius:0}
+@media(min-width:1600px){.noor-future .hero{margin-left:calc((1440px - 100vw)/2 - 6vw);margin-right:calc((1440px - 100vw)/2 - 6vw);padding-left:calc((100vw - 1440px)/2 + 6vw);padding-right:calc((100vw - 1440px)/2 + 6vw)}}
+@media(max-width:1050px){:is(.noor-future,.mosaic-future,.orbit-future) .hero{gap:20px;min-height:620px}:is(.noor-future,.mosaic-future,.orbit-future) .hero h1{font-size:64px}:is(.noor-future,.mosaic-future,.orbit-future) .brand{max-width:230px}.future-art .floating-note{font-size:7px;padding:10px}.mosaic-future .tile{padding:18px}.mosaic-future .arch-lines{inset:18px 20px 57px}.orbit-future .orbit-label{font-size:7px}}
+@media(max-width:700px){:is(.noor-future,.mosaic-future,.orbit-future) .wrap{padding:0 7%}:is(.noor-future,.mosaic-future,.orbit-future) .nav{min-height:85px;gap:12px}:is(.noor-future,.mosaic-future,.orbit-future) .brand{max-width:calc(100% - 110px);font-size:12px}:is(.noor-future,.mosaic-future,.orbit-future) .hero{grid-template-columns:1fr;min-height:0;padding:40px 0 25px;gap:30px}:is(.noor-future,.mosaic-future,.orbit-future) .hero h1{font-size:53px!important;letter-spacing:-.055em}:is(.noor-future,.mosaic-future,.orbit-future) .hero-summary{font-size:14px}:is(.noor-future,.mosaic-future,.orbit-future) .hero-visual{width:100%;max-width:480px;justify-self:center}:is(.noor-future,.mosaic-future,.orbit-future) .hero-actions .btn{font-size:12px;padding:12px 17px}:is(.noor-future,.mosaic-future,.orbit-future) .event-intro{display:block;padding:50px 0}:is(.noor-future,.mosaic-future,.orbit-future) .event-intro p{font-size:15px;margin-top:25px}:is(.noor-future,.mosaic-future,.orbit-future) h2{font-size:36px}:is(.noor-future,.mosaic-future,.orbit-future) .feature{gap:30px}:is(.noor-future,.mosaic-future,.orbit-future) .registration-close{padding:28px}:is(.noor-future,.mosaic-future,.orbit-future) footer{gap:18px;flex-wrap:wrap}.noor-future .hero{margin:0 -7vw;padding:40px 7vw 25px}.future-art .floating-note{font-size:7px;padding:11px}.mosaic-future .mosaic-art{gap:10px}.mosaic-future .tile{padding:20px}.mosaic-future .violet>span{font-size:26px}.mosaic-future .date-giant{font-size:80px}.mosaic-future .date-giant small{font-size:7px}.mosaic-future .tiny-star{font-size:55px}.mosaic-future .cream>span{font-size:8px;left:20px}.mosaic-future .mosaic-label{font-size:6px}.orbit-future .orbit-label{font-size:6px}.orbit-future .hero-visual .uploaded-hero{height:320px}}

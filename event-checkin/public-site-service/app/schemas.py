@@ -178,6 +178,7 @@ class SiteContent(BaseModel):
     timezone: str = "UTC"
     use_event_branding: bool = False
     use_template_style: bool = True
+    use_template_artwork: bool = False
     font_pairing: Literal["modern-sans", "classic-serif", "elegant-serif", "display-rounded", "bold-sans"] = "modern-sans"
     image_fit: Literal["cover", "contain"] = "cover"
     image_position: Literal["center", "top", "bottom", "left", "right"] = "center"

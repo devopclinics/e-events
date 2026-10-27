@@ -140,7 +140,8 @@ def render_modern(content, family, *, preview=False):
     if not use_style:
         font = {'modern-sans':'Arial,sans-serif', 'classic-serif':'Georgia,serif', 'elegant-serif':'Georgia,serif', 'display-rounded':'Trebuchet MS,sans-serif', 'bold-sans':'Arial Black,Arial,sans-serif'}.get(content.get('font_pairing'), 'Arial,sans-serif')
         colors += f';--heading-font:{font}'
-    hero_url = safe_url(content.get('feature_image_url') or content.get('hero_image_url'))
+    template_artwork = family in ('noor-future', 'mosaic-future', 'orbit-future') and content.get('use_template_artwork', False)
+    hero_url = '' if template_artwork else safe_url(content.get('feature_image_url') or content.get('hero_image_url'))
     media = f'<img class="uploaded-hero" src="{hero_url}" alt="{e(content.get("image_alt") or "")}">' if hero_url else f'<div aria-hidden="true">{artwork(family,content)}</div>'
     hero = f'<section class="hero {"with-photo" if hero_url else "without-photo"}" id="home"><div class="hero-copy"><div class="eyebrow">{e(content.get("eyebrow") or content.get("event_name") or "Welcome")}</div><h1>{headline}</h1><p class="hero-summary">{e(content.get("summary") or "")}</p><div class="hero-actions">{action_primary}{secondary}</div><div class="hero-meta"><span>{e(dates)}</span><span>{e(content.get("venue") or "")}</span></div></div><div class="hero-visual">{media}</div></section>'
     intro = ''

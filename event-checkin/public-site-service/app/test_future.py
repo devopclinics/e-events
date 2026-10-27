@@ -28,6 +28,17 @@ class FutureTemplatesTests(unittest.TestCase):
         mosaic=render_site(c,'mosaic-future')
         self.assertIn('9<small>MARCH 2027</small>',mosaic)
 
+    def test_template_artwork_overrides_saved_hero_reversibly(self):
+        c=self.content();c.update(use_template_artwork=True,feature_image_url='https://example.com/old-book.png')
+        for family in FAMILIES:
+            page=render_site(c,family)
+            self.assertIn('class="future-art',page)
+            self.assertNotIn('class="uploaded-hero"',page)
+            self.assertEqual(c['feature_image_url'],'https://example.com/old-book.png')
+            custom=render_site({**c,'use_template_artwork':False},family)
+            self.assertIn('class="uploaded-hero"',custom)
+        self.assertIn('class="uploaded-hero"',render_site(c,'mosaic'))
+
     def test_missing_date_and_escaping_do_not_invent_facts(self):
         c=SiteContent(event_name='<img src=x onerror=alert(1)>',headline='Hello').model_dump(mode='json')
         for family in FAMILIES:

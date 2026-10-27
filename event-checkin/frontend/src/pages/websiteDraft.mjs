@@ -19,3 +19,12 @@ export function applyRefresh(existing,incoming,kind,changes,selected){
  return rows.map(row=>{const source=incoming.find(r=>r.source_id===row.source_id);return source?{...row,source_missing:false,source_baseline:Object.fromEntries(sourceFields[kind].map(f=>[f,source[f]??'']))}:row})
 }
 export function friendlyWebsiteError(error){const msg=error?.message||'The request failed. Please try again.';return msg.replace(/content\.([a-z_]+)\.(\d+)\.([a-z_]+)/g,(_,key,i,f)=>`${requiredRows[key]?.[0]||key.replaceAll('_',' ')} ${Number(i)+1} — ${f.replaceAll('_',' ')}`).replaceAll('String should have at least 1 character','Please complete this field')}
+
+// Selecting a designed collection opts into its complete visual treatment.
+// Keep uploaded media and editorial content so organizers can restore their hero.
+export const futureWebsiteIds = new Set(['noor-future', 'mosaic-future', 'orbit-future']);
+export function applyWebsiteTemplate(site, templateFamily) {
+ return {...site, template_family: templateFamily, content: futureWebsiteIds.has(templateFamily)
+  ? {...site.content, use_event_branding:false, use_template_style:true, use_template_artwork:true}
+  : site.content};
+}

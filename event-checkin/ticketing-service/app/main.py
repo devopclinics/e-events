@@ -409,10 +409,12 @@ async def operations_loop():
 
 @app.get("/api/ticketing/public/events/{event_id}/tickets", dependencies=[Depends(require_service_enabled)])
 async def public_tickets(event_id: str, db: AsyncSession = Depends(get_db)):
-    await expire_abandoned_orders(db, event_id)
     cfg = await db.get(EventConfig, event_id)
-    if not cfg or not cfg.enabled:
+    preview_mode = bool(cfg and not cfg.enabled and (cfg.delivery_settings or {}).get("public_checkout_preview"))
+    if not cfg or (not cfg.enabled and not preview_mode):
         raise HTTPException(404, "Ticketing is not available for this event")
+    if not preview_mode:
+        await expire_abandoned_orders(db, event_id)
     now = datetime.utcnow()
     rows = (await db.execute(select(TicketProduct).where(
         TicketProduct.event_id == event_id, TicketProduct.active.is_(True),
@@ -420,7 +422,7 @@ async def public_tickets(event_id: str, db: AsyncSession = Depends(get_db)):
         (TicketProduct.sale_ends_at.is_(None) | (TicketProduct.sale_ends_at >= now)),
     ).order_by(TicketProduct.sort_order, TicketProduct.name))).scalars().all()
     fee_policy = await effective_fee(db, cfg.org_id, event_id)
-    return {"enabled": True, "currency": cfg.currency,
+    return {"enabled": True, "preview_mode": preview_mode, "currency": cfg.currency,
             "require_attendee_names": bool((cfg.delivery_settings or {}).get("require_attendee_names")),
             "show_availability": not bool((cfg.delivery_settings or {}).get("hide_availability")),
             "fee": {"bps": fee_policy["fee_bps"], "paid_by": cfg.fees_paid_by},

@@ -419,7 +419,11 @@ async def public_tickets(event_id: str, db: AsyncSession = Depends(get_db)):
         (TicketProduct.sale_starts_at.is_(None) | (TicketProduct.sale_starts_at <= now)),
         (TicketProduct.sale_ends_at.is_(None) | (TicketProduct.sale_ends_at >= now)),
     ).order_by(TicketProduct.sort_order, TicketProduct.name))).scalars().all()
+    fee_policy = await effective_fee(db, cfg.org_id, event_id)
     return {"enabled": True, "currency": cfg.currency,
+            "require_attendee_names": bool((cfg.delivery_settings or {}).get("require_attendee_names")),
+            "show_availability": not bool((cfg.delivery_settings or {}).get("hide_availability")),
+            "fee": {"bps": fee_policy["fee_bps"], "paid_by": cfg.fees_paid_by},
             "test_mode": settings.environment.lower() != "production",
             "tax": {"enabled": cfg.tax_enabled, "bps": cfg.tax_bps, "paid_by": cfg.tax_paid_by},
             "checkout_fields": cfg.checkout_fields or [],
@@ -922,6 +926,9 @@ async def create_order(event_id: str, body: OrderIn, db: AsyncSession = Depends(
         p = products.get(line.product_id)
         if not p or not p.active or p.currency != cfg.currency:
             raise HTTPException(400, "A selected ticket is unavailable")
+        if p.product_type == "ticket" and (cfg.delivery_settings or {}).get("require_attendee_names"):
+            if any(not attendee.first_name.strip() for attendee in line.attendees):
+                raise HTTPException(400, "Enter a first name for every attendee")
         # external products are informational-only (see ProductIn docstring) --
         # never sold through Festio checkout, regardless of what the frontend
         # does or doesn't render. This is the actual enforcement point; the

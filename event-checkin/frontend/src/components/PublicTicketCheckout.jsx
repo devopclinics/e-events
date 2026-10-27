@@ -1,3 +1,4 @@
+import {ticketQuantity, checkoutSummary} from './ticketCheckout.mjs'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 const ticketingAvailable = typeof window !== 'undefined' && ['festio.events', 'staging.festio.events', 'localhost'].includes(window.location.hostname)
@@ -41,6 +42,8 @@ export default function PublicTicketCheckout({ eventId, tone, onAvailabilityChan
   // what's currently selected (the copy renders before any selection).
   const sellableTickets = catalog.tickets.filter(t => t.product_type !== 'external')
   const allFree = sellableTickets.length > 0 && sellableTickets.every(t => !t.price)
+  const requireAttendeeNames = !!catalog.require_attendee_names
+  const summary = checkoutSummary(catalog, lines, donationAmounts)
 
   // Optional multi-step checkout: fields carry an optional `step` label (set
   // in the checkout-form builder). Fields sharing a step page together,
@@ -67,7 +70,7 @@ export default function PublicTicketCheckout({ eventId, tone, onAvailabilityChan
   }
 
   function changeQuantity(ticketId, raw) {
-    const quantity = Math.max(0, Number(raw) || 0)
+    const quantity = ticketQuantity(raw, catalog.tickets.find(t => t.id === ticketId))
     setLines({...lines, [ticketId]: quantity})
     const current = Array.isArray(names[ticketId]) ? names[ticketId] : []
     setNames({...names, [ticketId]: Array.from({length: quantity}, (_, i) => current[i] || {first_name:'',last_name:'',email:''})})
@@ -105,6 +108,7 @@ export default function PublicTicketCheckout({ eventId, tone, onAvailabilityChan
         // issued, so there's no individual identity to collect) — every
         // attendee slot is just filled from the buyer's own details.
         const ticketAttendees = ticket.product_type === 'donation' ? [] : (names[ticket.id] || [])
+        if (requireAttendeeNames && ticket.product_type !== 'donation' && ticketAttendees.some(a => !a.first_name.trim())) throw new Error('Enter a first name for every attendee.')
         return {
           product_id: ticket.id, quantity,
           attendees: Array.from({length:quantity},(_,index) => ticketAttendees[index] || {first_name:'',last_name:'',email:''}).map((attendee) => ({
@@ -149,7 +153,7 @@ export default function PublicTicketCheckout({ eventId, tone, onAvailabilityChan
             {t.allow_custom_amount
               ? <input aria-label={`${t.name} amount`} type="number" min={t.price/100} step="0.01" placeholder={(t.price/100).toFixed(2)} value={donationAmounts[t.id]||''} onChange={e=>changeDonationAmount(t,e.target.value)} className="rounded-xl border bg-transparent px-3 py-2" style={{ borderColor:tone.border }}/>
               : (t.available>0?<input aria-label={`${t.name} quantity`} type="number" min="0" max={Math.min(t.available,t.max_per_order)} value={lines[t.id] || 0} onChange={e => changeQuantity(t.id,e.target.value)} className="rounded-xl border bg-transparent px-3 py-2" style={{ borderColor:tone.border }}/>:<span className="rounded-xl px-3 py-2 font-bold text-center" style={{color:tone.muted}}>Sold out</span>)}
-          </div> : <div key={t.id} className="grid gap-3 rounded-2xl border p-4 sm:grid-cols-[1fr_100px]" style={{ borderColor: tone.border }}><div><strong className="text-lg">{t.name}</strong><p style={{ color: tone.muted }}>{t.description}</p><b style={{ color: tone.accent }}>{cash(t.price,t.currency)}</b> · {t.available} available</div>{t.available>0?<input aria-label={`${t.name} quantity`} type="number" min="0" max={Math.min(t.available,t.max_per_order)} value={lines[t.id] || 0} onChange={e => changeQuantity(t.id,e.target.value)} className="rounded-xl border bg-transparent px-3 py-2" style={{ borderColor:tone.border }}/>:<button type="button" onClick={()=>joinWaitlist(t)} disabled={waitlisted[t.id]} className="rounded-xl px-3 py-2 font-bold" style={{background:tone.accent,color:'#07111f'}}>{waitlisted[t.id]?'Joined':'Waitlist'}</button>}{Number(lines[t.id]||0)>0 && <div className="space-y-2 sm:col-span-2"><p className="text-xs font-bold uppercase tracking-wider" style={{color:tone.muted}}>Attendee details are optional · every ticket still gets a unique QR</p>{(names[t.id]||[]).map((attendee,index)=><div key={index} className="grid gap-2 sm:grid-cols-3"><input className="rounded-xl border bg-transparent px-4 py-3" style={{borderColor:tone.border}} placeholder={`Ticket ${index+1} first name`} value={attendee.first_name} onChange={e=>changeAttendee(t.id,index,'first_name',e.target.value)}/><input className="rounded-xl border bg-transparent px-4 py-3" style={{borderColor:tone.border}} placeholder="Last name" value={attendee.last_name} onChange={e=>changeAttendee(t.id,index,'last_name',e.target.value)}/><input type="email" className="rounded-xl border bg-transparent px-4 py-3" style={{borderColor:tone.border}} placeholder="Individual email (optional)" value={attendee.email} onChange={e=>changeAttendee(t.id,index,'email',e.target.value)}/></div>)}</div>}</div>)}
+          </div> : <div key={t.id} className="grid gap-3 rounded-2xl border p-4 sm:grid-cols-[1fr_100px]" style={{ borderColor: tone.border }}><div><strong className="text-lg">{t.name}</strong><p style={{ color: tone.muted }}>{t.description}</p><b style={{ color: tone.accent }}>{cash(t.price,t.currency)}</b>{catalog.show_availability!==false && <> · {t.available} available</>}</div>{t.available>0?<input aria-label={`${t.name} quantity`} type="number" min="0" max={Math.min(t.available,t.max_per_order)} value={lines[t.id] || 0} onChange={e => changeQuantity(t.id,e.target.value)} className="rounded-xl border bg-transparent px-3 py-2" style={{ borderColor:tone.border }}/>:<button type="button" onClick={()=>joinWaitlist(t)} disabled={waitlisted[t.id]} className="rounded-xl px-3 py-2 font-bold" style={{background:tone.accent,color:'#07111f'}}>{waitlisted[t.id]?'Joined':'Waitlist'}</button>}{Number(lines[t.id]||0)>0 && <div className="space-y-2 sm:col-span-2"><p className="text-xs font-bold uppercase tracking-wider" style={{color:tone.muted}}>{requireAttendeeNames ? 'Enter a name for each attendee · every ticket gets a unique QR' : 'Attendee details are optional · every ticket still gets a unique QR'}</p>{(names[t.id]||[]).map((attendee,index)=><div key={index} className="grid gap-2 sm:grid-cols-3"><input className="rounded-xl border bg-transparent px-4 py-3" style={{borderColor:tone.border}} required={requireAttendeeNames} placeholder={`Ticket ${index+1} first name`} value={attendee.first_name} onChange={e=>changeAttendee(t.id,index,'first_name',e.target.value)}/><input className="rounded-xl border bg-transparent px-4 py-3" style={{borderColor:tone.border}} placeholder="Last name (optional)" value={attendee.last_name} onChange={e=>changeAttendee(t.id,index,'last_name',e.target.value)}/><input type="email" className="rounded-xl border bg-transparent px-4 py-3" style={{borderColor:tone.border}} placeholder="Individual email (optional)" value={attendee.email} onChange={e=>changeAttendee(t.id,index,'email',e.target.value)}/></div>)}</div>}</div>)}
           {hasSellableTickets && fieldsForPage(null).map(renderField)}
         </>}
         {pages && stepNames.includes(currentPage) && hasSellableTickets && <div className="space-y-4">{fieldsForPage(currentPage).map(renderField)}</div>}
@@ -157,6 +161,7 @@ export default function PublicTicketCheckout({ eventId, tone, onAvailabilityChan
           {hasSellableTickets && catalog.tax?.enabled&&<p className="rounded-xl border p-3 text-sm" style={{borderColor:tone.border,color:tone.muted}}>{(catalog.tax.bps/100).toFixed(2)}% event tax {catalog.tax.paid_by==='buyer'?'will be added to the customer total at checkout.':'is included in the listed price and paid by the organizer.'}</p>}
           {hasSellableTickets && <label className="block max-w-md"><span className="mb-1 block text-sm font-bold">Promo code <small style={{color:tone.muted}}>(optional)</small></span><input className="w-full rounded-xl border bg-transparent px-4 py-3 uppercase" style={{borderColor:tone.border}} maxLength="40" autoComplete="off" placeholder="Enter discount code" value={promoCode} onChange={e=>setPromoCode(e.target.value)}/></label>}
         </>}
+        {hasSellableTickets && selected.length>0 && <div className="rounded-xl border p-4" style={{borderColor:tone.border}} aria-label="Order summary" aria-live="polite"><div className="flex justify-between gap-4"><span>Subtotal</span><b>{cash(summary.subtotal,catalog.currency)}</b></div>{summary.fee>0&&<div className="flex justify-between gap-4"><span>Service fee</span><b>{cash(summary.fee,catalog.currency)}</b></div>}{summary.tax>0&&<div className="flex justify-between gap-4"><span>Tax</span><b>{cash(summary.tax,catalog.currency)}</b></div>}<div className="mt-3 flex justify-between gap-4 border-t pt-3" style={{borderColor:tone.border}}><strong>{promoCode.trim()?'Estimated total before discounts':'Estimated total'}</strong><strong>{cash(summary.total,catalog.currency)}</strong></div><small style={{color:tone.muted}}>Final total and any valid discounts are confirmed at secure checkout.</small></div>}
         {error && <p id="checkout-error" role="alert" className="rounded-xl bg-red-500/15 p-3 font-semibold text-red-300">{error}</p>}
         {hasSellableTickets && <div className="flex items-center gap-3">
           {pages && pageIndex > 0 && <button type="button" onClick={goBack} className="rounded-2xl border px-6 py-3 font-bold" style={{ borderColor: tone.border, color: tone.text }}>Back</button>}

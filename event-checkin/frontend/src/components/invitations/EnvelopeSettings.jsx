@@ -4,7 +4,7 @@ import { api } from '../../api'
 import { ENVELOPE_COLLECTION } from './envelopeCollection.mjs'
 import './EnvelopeCollectionStudio.css'
 import { GUEST_NAME_TOKENS } from './envelopePersonalization.mjs'
-import InvitationOpening, { ENVELOPE_DEFAULTS, ENVELOPE_PALETTES, ENVELOPE_STYLES } from './InvitationOpening'
+import InvitationOpening, { ENVELOPE_DEFAULTS, ENVELOPE_PALETTES, ENVELOPE_STYLES, envelopeContinueMode } from './InvitationOpening'
 
 // Independent partial saves cannot publish or overwrite another editor's template draft.
 export default function EnvelopeSettings({ eventId, event, mode = 'design', onSaved }) {
@@ -12,6 +12,7 @@ export default function EnvelopeSettings({ eventId, event, mode = 'design', onSa
   const [appearance, setAppearance] = useState(ENVELOPE_DEFAULTS)
   const [enabled, setEnabled] = useState(false)
   const [frequency, setFrequency] = useState('once')
+  const [continueMode, setContinueMode] = useState('auto')
   const [useDefault, setUseDefault] = useState(true)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -47,7 +48,7 @@ export default function EnvelopeSettings({ eventId, event, mode = 'design', onSa
     load(eventId).then(design => {
       if (cancelled) return
       const next = design.envelope_config || {}
-      setConfig(next); setAppearance({ ...ENVELOPE_DEFAULTS, ...next.appearance }); setEnabled(next.enabled === true); setFrequency(next.frequency || 'once'); setUseDefault(next.use_default === true || !next.appearance); setPreview(mode === 'design')
+      setContinueMode(envelopeContinueMode(next)); setConfig(next); setAppearance({ ...ENVELOPE_DEFAULTS, ...next.appearance }); setEnabled(next.enabled === true); setFrequency(next.frequency || 'once'); setUseDefault(next.use_default === true || !next.appearance); setPreview(mode === 'design')
     }).catch(e => { if (!cancelled) setError(e.message || 'Envelope settings could not be loaded.') }).finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [eventId, mode, retry])
@@ -57,7 +58,7 @@ export default function EnvelopeSettings({ eventId, event, mode = 'design', onSa
     setBusy(true); setError('')
     try {
       const patch = mode === 'design' ? { appearance: { ...appearance, initials: appearance.initials.trim() || ENVELOPE_DEFAULTS.initials }, use_default: false } : { enabled, frequency }
-      const saved = mode === 'design' ? await api.saveEventDesign(eventId, { envelope_config: patch }) : await api.saveInvitationOpening(eventId, { enabled, frequency, use_default: useDefault })
+      const saved = mode === 'design' ? await api.saveEventDesign(eventId, { envelope_config: patch }) : await api.saveInvitationOpening(eventId, { enabled, frequency, use_default: useDefault, continue_mode: continueMode })
       if (!saved.envelope_config || (mode === 'design' && !saved.envelope_config.appearance)) throw new Error('Envelope settings were not saved. The design service may need an update.')
       setConfig(saved.envelope_config); if (mode === 'design') setAppearance({ ...ENVELOPE_DEFAULTS, ...saved.envelope_config.appearance }); onSaved?.(saved.envelope_config || {}); setStatus(mode === 'design' ? (saved.envelope_config.enabled && !saved.envelope_config.use_default ? 'Saved. Your custom envelope is applied to invitation links.' : 'Saved. Your custom design is selected. Enable envelope opening in Guests → Invite to show it.') : 'Saved. Opening settings are applied to invitation links.')
     } catch (e) { setError(e.message || 'Envelope settings could not be saved. Try again.') }
@@ -66,7 +67,7 @@ export default function EnvelopeSettings({ eventId, event, mode = 'design', onSa
   if (!eventId) return <p>Select an event to configure its invitation opening.</p>
   if (loading) return <p role="status">Loading envelope settings…</p>
   if (!config) return <div role="alert"><p>{error || 'Envelope settings are unavailable.'}</p>{mode === 'design' && <p>Custom designs require Design Studio access. You can use the default envelope in Guests → Invite.</p>}<button type="button" className="rr-btn secondary" onClick={() => setRetry(n => n + 1)}>Retry</button></div>
-  const unsaved = mode === 'design' ? JSON.stringify(appearance) !== JSON.stringify({ ...ENVELOPE_DEFAULTS, ...config.appearance }) || !config.appearance || config.use_default !== false : enabled !== (config.enabled === true) || frequency !== (config.frequency || 'once') || useDefault !== (config.use_default === true || !config.appearance)
+  const unsaved = mode === 'design' ? JSON.stringify(appearance) !== JSON.stringify({ ...ENVELOPE_DEFAULTS, ...config.appearance }) || !config.appearance || config.use_default !== false : enabled !== (config.enabled === true) || frequency !== (config.frequency || 'once') || useDefault !== (config.use_default === true || !config.appearance) || continueMode !== envelopeContinueMode(config)
   const meta = ENVELOPE_COLLECTION[appearance.style]
   const canSave = !busy && !(appearance.show_initials !== false && !appearance.initials.trim()) && unsaved
   function chooseStyle(style) {
@@ -128,9 +129,10 @@ export default function EnvelopeSettings({ eventId, event, mode = 'design', onSa
       {enabled && <label>Envelope design<select aria-label="Envelope design" className="rr-select" value={useDefault ? 'default' : 'custom'} onChange={e => { setUseDefault(e.target.value === 'default'); setStatus('Unsaved changes') }}><option value="default">Default — ivory envelope with gold seal</option>{config.appearance && <option value="custom">Saved custom design — {ENVELOPE_STYLES[config.appearance.style]}</option>}</select></label>}
       <p>The default envelope is ready to use. No Design Studio access is needed. <Link className="rr-btn secondary" to="/design-studio-redesign?tab=Envelope">Customize in Design Studio ↗</Link></p>
       <label>Show opening<select className="rr-select" disabled={!enabled} value={frequency} onChange={e => { setFrequency(e.target.value); setStatus('Unsaved changes') }}><option value="once">First visit on this device</option><option value="always">Every visit</option></select></label>
+      <label>After opening<select aria-label="After opening" className="rr-select" disabled={!enabled} value={continueMode} onChange={e => { setContinueMode(e.target.value); setStatus('Unsaved changes') }}><option value="auto">Continue automatically after 3 seconds</option><option value="manual">Wait for guest to continue</option></select></label>
       <small>Guests can skip. The envelope opens on the invitation web page after following an email or WhatsApp link. Existing RSVP forms stay the same.</small>
       <div><button type="button" className="rr-btn primary" disabled={busy || !unsaved} onClick={save}>{busy ? 'Saving…' : 'Save opening options'}</button>{enabled && <button type="button" className="rr-btn secondary" onClick={() => setPreview(true)}>Preview opening</button>}</div>
-      {preview && <InvitationOpening holdOpen appearance={useDefault ? { ...ENVELOPE_DEFAULTS, initials: '✧' } : config.appearance} event={event} onDone={() => setPreview(false)} />}
+      {preview && <InvitationOpening continueMode={continueMode} appearance={useDefault ? { ...ENVELOPE_DEFAULTS, initials: '✧' } : config.appearance} event={event} onDone={() => setPreview(false)} />}
     </div>
     <p className="inv-envelope-status" role="status">{status || (unsaved ? 'Unsaved changes' : 'Saved settings')}</p>
     {error && <p role="alert" className="inv-envelope-error">{error}</p>}

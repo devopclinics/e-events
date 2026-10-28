@@ -3475,7 +3475,7 @@ export default function InvitePage() {
   // Ordinary returning invitation links still go straight to their pass/hub.
   const ticketOpening = tokenMode && guest?.rsvp_status === 'confirmed' && new URLSearchParams(window.location.search).get('ticket-opening') === '1'
   if ((ticketOpening || (!confirmed && !prior && !tokenMeta.already_responded)) && completedEnvelope !== openingKey && shouldShowEnvelope(event?.id, openingConfig, openingPreview, envelopeScope)) {
-    return <InvitationOpening key={openingKey} appearance={openingConfig.appearance} event={event} guest={tokenMode ? guest : null} onDone={() => {
+    return <InvitationOpening key={openingKey} appearance={openingConfig.appearance} continueMode={openingConfig.continue_mode} event={event} guest={tokenMode ? guest : null} onDone={() => {
       if (!openingPreview) rememberEnvelope(event.id, openingConfig, envelopeScope)
       setCompletedEnvelope(openingKey)
       window.requestAnimationFrame(() => {

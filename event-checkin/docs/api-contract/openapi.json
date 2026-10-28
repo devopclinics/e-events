@@ -12059,6 +12059,21 @@
       "InvitationOpeningUpdate": {
         "additionalProperties": false,
         "properties": {
+          "continue_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "auto",
+                  "manual"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Continue Mode"
+          },
           "enabled": {
             "title": "Enabled",
             "type": "boolean"

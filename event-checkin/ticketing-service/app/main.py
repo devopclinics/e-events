@@ -1043,6 +1043,7 @@ async def public_order(order_id: str, token: str, db: AsyncSession = Depends(get
             if qr_token:
                 passes.append({"guest_id": item.get("guest_id"), "name": item.get("name"), "ticket_id": qr_token.split("-")[0].upper(),
                                "pass_url": f"{settings.public_base_url}/scan/{qr_token}",
+                               "invitation_url": item.get("invitation_url"),
                                "qr_url": f"{settings.public_base_url}/api/scan/{qr_token}/qr.png",
                                "card_url": f"{settings.public_base_url}/api/scan/{qr_token}/card.jpg"})
     cancellation = await db.scalar(select(CancellationRequest).where(CancellationRequest.order_id == order.id))
@@ -1099,7 +1100,7 @@ async def accept_transfer(token: str, db: AsyncSession = Depends(get_db)):
     order = await db.get(Order, row.order_id)
     updated_result = dict(order.fulfillment_result or {})
     updated_result["passes"] = [{**item, **({"qr_token": response.json()["qr_token"],
-        "name": response.json()["name"]} if item.get("guest_id") == row.guest_id else {})}
+        "name": response.json()["name"], "invitation_url": response.json().get("invitation_url")} if item.get("guest_id") == row.guest_id else {})}
         for item in updated_result.get("passes", [])]
     order.fulfillment_result = updated_result
     db.add(AuditEvent(id=uid(), event_id=row.event_id, actor=row.recipient_email,

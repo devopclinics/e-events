@@ -83,6 +83,21 @@ def _pass_url(event: Event, guest: Guest) -> str:
     return f"{base}/scan/{guest.qr_token}"
 
 
+def _ticket_delivery_url(event: Event, guest: Guest, delivery_settings: dict | None = None) -> str:
+    if (delivery_settings or {}).get("invitation_opening_enabled") is True and guest.invite_token:
+        base = (event.checkin_base_url or "https://staging.festio.events").rstrip("/")
+        return f"{base}/r/{guest.invite_token}?ticket-opening=1#guest-hub"
+    return _pass_url(event, guest)
+
+
+def _fulfilled_pass(event: Event, guest: Guest, delivery_settings: dict) -> dict:
+    result = {"guest_id": guest.id, "qr_token": guest.qr_token,
+              "name": f"{guest.first_name} {guest.last_name}".strip()}
+    if delivery_settings.get("invitation_opening_enabled") is True and guest.invite_token:
+        result["invitation_url"] = _ticket_delivery_url(event, guest, delivery_settings)
+    return result
+
+
 def _queue_ticket_delivery(background_tasks: BackgroundTasks, event: Event, order_id: str,
                            buyer_email: str, guests: list[Guest], delivery_settings: dict | None = None,
                            donation_count: int = 0) -> int:
@@ -99,8 +114,8 @@ def _queue_ticket_delivery(background_tasks: BackgroundTasks, event: Event, orde
         f'<li style="margin:12px 0"><strong>{html.escape((g.first_name + " " + g.last_name).strip())}</strong>'
         f'<br><img src="cid:ticketqr{index}" alt="QR code for {(html.escape(g.first_name))}" width="220" height="220" '
         f'style="display:block;width:220px;height:220px;margin:12px 0;border:8px solid #fff" />'
-        f'<div style="color:#64748b;font-size:13px;margin:4px 0 10px">{html.escape(render(settings_row.get("email_qr_caption") or "Show this QR code at the entrance.", g, _pass_url(event, g)))}</div>'
-        f'<a href="{html.escape(_pass_url(event, g), quote=True)}">Open mobile pass</a></li>'
+        f'<div style="color:#64748b;font-size:13px;margin:4px 0 10px">{html.escape(render(settings_row.get("email_qr_caption") or "Show this QR code at the entrance.", g, _ticket_delivery_url(event, g, settings_row)))}</div>'
+        f'<a href="{html.escape(_ticket_delivery_url(event, g, settings_row), quote=True)}">{"Open your invitation" if settings_row.get("invitation_opening_enabled") is True else "Open mobile pass"}</a></li>'
         for index, g in enumerate(guests)
     )
     for index, guest in enumerate(guests):
@@ -136,10 +151,10 @@ def _queue_ticket_delivery(background_tasks: BackgroundTasks, event: Event, orde
         if not recipient or recipient in sent:
             continue
         sent.add(recipient)
-        link = _pass_url(event, guest)
+        link = _ticket_delivery_url(event, guest, settings_row)
         body = (f'<p>Hi {html.escape(guest.first_name)},</p><p>Your admission to '
                 f'<strong>{html.escape(event.name)}</strong> is confirmed.</p>'
-                f'<p><a href="{html.escape(link, quote=True)}">Open your unique Festio pass</a></p>'
+                f'<p><a href="{html.escape(link, quote=True)}">{"Open your invitation" if settings_row.get("invitation_opening_enabled") is True else "Open your unique Festio pass"}</a></p>'
                 '<p>This QR pass belongs only to you and can be admitted once.</p>')
         background_tasks.add_task(send_simple_email, recipient,
                                   f"Your pass for {event.name}", body, event.id,
@@ -147,7 +162,7 @@ def _queue_ticket_delivery(background_tasks: BackgroundTasks, event: Event, orde
         queued += 1
     for guest in guests:
         if not guest.phone: continue
-        link = _pass_url(event, guest)
+        link = _ticket_delivery_url(event, guest, settings_row)
         if settings_row.get("sms_enabled"):
             text = render(settings_row.get("sms_body") or "Hi {{first_name}}, your ticket for {{event_name}}: {{ticket_link}}", guest, link)
             background_tasks.add_task(messaging.send_custom_sms, phone=guest.phone, body=text); queued += 1
@@ -209,14 +224,17 @@ async def transfer_paid_ticket(event_id: str, body: PaidTicketTransfer, backgrou
     parts = body.recipient_name.strip().split(maxsplit=1)
     guest.first_name, guest.last_name = parts[0], parts[1] if len(parts) > 1 else ""
     guest.email, guest.qr_token, guest.qr_generated_at = body.recipient_email, str(uuid.uuid4()), datetime.utcnow()
+    if guest.invite_token:
+        guest.invite_token = str(uuid.uuid4())
     await db.commit(); await db.refresh(guest)
-    link = _pass_url(event, guest)
+    link = _ticket_delivery_url(event, guest, {"invitation_opening_enabled": bool(guest.invite_token)})
     background_tasks.add_task(send_simple_email, body.recipient_email,
         f"A ticket for {event.name} was transferred to you",
         f'<p>Your ticket transfer is complete.</p><p><a href="{html.escape(link, quote=True)}">Open your new unique Festio pass</a></p><p>The previous QR is no longer valid.</p>',
         event.id, None, guest.id, "paid_ticket_transfer")
     return {"guest_id": guest.id, "qr_token": guest.qr_token,
-            "name": f"{guest.first_name} {guest.last_name}".strip(), "pass_url": link}
+            "name": f"{guest.first_name} {guest.last_name}".strip(), "pass_url": _pass_url(event, guest),
+            "invitation_url": link if guest.invite_token else None}
 
 
 @router.post("/waitlist-offer/{event_id}")
@@ -269,9 +287,13 @@ async def fulfill_paid_order(body: PaidOrderFulfillment, background_tasks: Backg
         or_(Guest.paid_ticket_order_id == body.order_id, Guest.rsvp_notes.like(f"{marker}%"))
     ).order_by(Guest.id))).scalars().all()
     if existing:
+        if body.delivery_settings.get("invitation_opening_enabled") is True:
+            for guest in existing:
+                if not guest.invite_token:
+                    guest.invite_token = str(uuid.uuid4())
+            await db.commit()
         return {"order_id": body.order_id, "already_fulfilled": True,
-                "passes": [{"guest_id": g.id, "qr_token": g.qr_token,
-                            "name": f"{g.first_name} {g.last_name}".strip()} for g in existing],
+                "passes": [_fulfilled_pass(event, g, body.delivery_settings) for g in existing],
                 "delivery_queued": False}
     valid_types = set((await db.execute(select(TicketType.id).where(
         TicketType.event_id == body.event_id, TicketType.is_active.is_(True)
@@ -292,6 +314,7 @@ async def fulfill_paid_order(body: PaidOrderFulfillment, background_tasks: Backg
             rsvp_status="confirmed", rsvp_responded_at=now, qr_generated_at=now,
             invite_sent_at=now, rsvp_guest_type=attendee.product_name,
             paid_ticket_order_id=body.order_id,
+            invite_token=str(uuid.uuid4()) if body.delivery_settings.get("invitation_opening_enabled") is True else None,
             paid_ticket_pass_design=(body.delivery_settings or {}).get("pass_design") or {},
         )
         db.add(guest); created.append(guest)
@@ -318,8 +341,7 @@ async def fulfill_paid_order(body: PaidOrderFulfillment, background_tasks: Backg
     queued = _queue_ticket_delivery(background_tasks, event, body.order_id, body.buyer_email, created,
                                     body.delivery_settings, donation_count) if delivery_allowed else 0
     return {"order_id": body.order_id, "already_fulfilled": False,
-            "passes": [{"guest_id": g.id, "qr_token": g.qr_token,
-                        "name": f"{g.first_name} {g.last_name}".strip()} for g in created],
+            "passes": [_fulfilled_pass(event, g, body.delivery_settings) for g in created],
             "delivery_queued": delivery_allowed, "delivery_blocked": not delivery_allowed,
             "delivery_block_reason": None if delivery_allowed else "Recipient is not on the staging email allowlist",
             "delivery_messages": queued}
@@ -343,6 +365,8 @@ async def resend_paid_order(event_id: str, order_id: str, body: PaidOrderDeliver
     if not guests:
         raise HTTPException(404, "No active passes found for this order")
     for guest in guests:
+        if body.delivery_settings.get("invitation_opening_enabled") is True and not guest.invite_token:
+            guest.invite_token = str(uuid.uuid4())
         guest.paid_ticket_pass_design = body.delivery_settings.get("pass_design") or guest.paid_ticket_pass_design or {}
     await db.commit()
     queued = _queue_ticket_delivery(background_tasks, event, order_id, body.buyer_email, guests, body.delivery_settings)

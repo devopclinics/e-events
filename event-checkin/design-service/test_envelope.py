@@ -92,3 +92,16 @@ def test_wording_validation_and_legacy_appearance_defaults():
     with pytest.raises(ValidationError):
         EnvelopeWording.model_validate({'unknown_field': 'unsupported'})
     assert EnvelopeWording.model_validate({'intro_label': '  You are invited  '}).intro_label == 'You are invited'
+
+@pytest.mark.parametrize('style', ['folio','velvet','drawer','story','lattice'])
+def test_collection_style_saved_and_public(style):
+    put({'envelope_config': {'appearance': {'style': style, 'palette': 'signature', 'initials': 'AB'}}})
+    put({'envelope_config': {'enabled': True, 'use_default': False}})
+    assert get_event_design('event-envelope').envelope_config.appearance.style == style
+    public = public_theme('event-envelope').envelope_config
+    assert public.appearance.style == style
+    assert public.appearance.palette == 'signature'
+    assert public.appearance.initials == 'AB'
+    put({'envelope_config': {'use_default': True}})
+    assert public_theme('event-envelope').envelope_config.appearance.style == 'wax'
+    assert get_event_design('event-envelope').envelope_config.appearance.style == style

@@ -1330,7 +1330,7 @@ export default function DesignStudioRedesignPage() {
         {TABS.map((t) => <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{t}</button>)}
       </div>
 
-      {tab === 'Envelope' && <div className="rr-panel" style={{ padding: 24 }}><h2>Invitation envelope</h2><p>Choose the opening style and colours for any invitation design.</p><EnvelopeSettings key={eventId} eventId={eventId} event={event} onSaved={envelope_config => setDesign(current => ({ ...current, envelope_config }))} /></div>}
+      {tab === 'Envelope' && <div className="ds-envelope-collection"><EnvelopeSettings key={eventId} eventId={eventId} event={event} onSaved={envelope_config => setDesign(current => ({ ...current, envelope_config }))} /></div>}
 
       {tab === 'Templates' && (
         <>

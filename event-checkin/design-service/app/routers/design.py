@@ -211,13 +211,6 @@ def put_event_design(event_id: str, body: EventDesignIn, x_org_id: str | None = 
         raise HTTPException(422, "Unknown Event App appearance")
     if isinstance(theme, dict) and "hubLayout" in theme:
         theme["hubLayout"] = validate_hub_layout(theme.get("hubLayout"))
-    if "envelope_config" in data:
-        # A dedicated partial update leaves template drafts and publication untouched.
-        current = (load_design(event_id) or {}).get("envelope_config") or {}
-        merged = {**current, **data["envelope_config"]}
-        if merged.get("enabled") and not merged.get("appearance"):
-            raise HTTPException(400, "Save an envelope design before enabling the opening")
-        data["envelope_config"] = EnvelopeConfig.model_validate(merged).model_dump()
     if x_org_id:
         data["organization_id"] = x_org_id
     expected = data.pop("expected_revision", None)
@@ -225,6 +218,8 @@ def put_event_design(event_id: str, body: EventDesignIn, x_org_id: str | None = 
         saved = save_design(event_id, data, expected)
     except RevisionConflict as e:
         raise HTTPException(409, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     return get_event_design(event_id)
 
 

@@ -91,6 +91,12 @@ def save_design(event_id: str, data: dict, expected_revision=None) -> dict:
         # Existing events are not visually migrated merely by deploying this code.
         if not d.get("is_published") and "public_baseline" not in d:
             d["public_baseline"] = snapshot(d)
+        if "envelope_config" in data:
+            from .schemas import EnvelopeConfig
+            merged = {**(d.get("envelope_config") or {}), **data["envelope_config"]}
+            if merged.get("enabled") and not merged.get("appearance"):
+                raise ValueError("Save an envelope design before enabling the opening")
+            data = {**data, "envelope_config": EnvelopeConfig.model_validate(merged).model_dump()}
         d.update(data)
         return _write(event_id, d)
 

@@ -1892,6 +1892,12 @@ export interface InboundSenderRule {
   value: string
 }
 
+export interface InvitationOpeningUpdate {
+  enabled: boolean
+  frequency?: 'once' | 'always'
+  use_default?: boolean
+}
+
 export interface InviteGuestPrefill {
   email?: (string) | null
   email_locked?: boolean

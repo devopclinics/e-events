@@ -12056,6 +12056,34 @@
         "title": "InboundSenderRule",
         "type": "object"
       },
+      "InvitationOpeningUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "frequency": {
+            "default": "once",
+            "enum": [
+              "once",
+              "always"
+            ],
+            "title": "Frequency",
+            "type": "string"
+          },
+          "use_default": {
+            "default": true,
+            "title": "Use Default",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "InvitationOpeningUpdate",
+        "type": "object"
+      },
       "InviteGuestPrefill": {
         "description": "The invited guest's known details, used to pre-fill the RSVP form.\n`email_locked` / `phone_locked` flag which identifiers came from the\nplanner's list and must not be edited (they're the identity key).",
         "properties": {
@@ -40751,6 +40779,104 @@
         "summary": "Update Household",
         "tags": [
           "guests"
+        ]
+      }
+    },
+    "/api/events/{event_id}/invitation-opening": {
+      "get": {
+        "operationId": "get_invitation_opening_api_events__event_id__invitation_opening_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Invitation Opening",
+        "tags": [
+          "design"
+        ]
+      },
+      "put": {
+        "operationId": "put_invitation_opening_api_events__event_id__invitation_opening_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvitationOpeningUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Put Invitation Opening",
+        "tags": [
+          "design"
         ]
       }
     },

@@ -24,7 +24,7 @@ from ..store import load_design, save_design, publish_design
 from ..assets import save_upload, asset_path, UploadError
 from ..render import render_flyer, PNG_SIZES, PDF_SIZES
 from ..schemas import (
-    EnvelopeConfig, EventDesignIn, EventDesignOut, PublicTheme, EmailTheme, PublishResult, RenderRequest,
+    EnvelopeAppearance, EnvelopeConfig, EventDesignIn, EventDesignOut, PublicTheme, EmailTheme, PublishResult, RenderRequest,
 )
 
 router = APIRouter(prefix="/api/v1/design")
@@ -300,6 +300,13 @@ def _intersect_hub_layout(layout: dict, capabilities: dict) -> dict:
     return {**layout, "modules": modules}
 
 
+def _public_envelope_config(event_id: str) -> dict:
+    config = dict((load_design(event_id) or {}).get("envelope_config") or {})
+    if config.get("use_default"):
+        config["appearance"] = EnvelopeAppearance(initials="✧").model_dump()
+    return config
+
+
 @router.get("/events/{event_id}/public-theme", response_model=PublicTheme)
 def public_theme(
     event_id: str,
@@ -321,7 +328,7 @@ def public_theme(
         template_id=tpl["id"],
         is_default=is_default,
         # Envelope saves take effect independently of template publication.
-        envelope_config=(load_design(event_id) or {}).get("envelope_config") or {},
+        envelope_config=_public_envelope_config(event_id),
         colors=colors,
         font_pairing=design.get("theme_config", {}).get("fontPairing", tpl["fontPairing"]),
         button_style=design.get("theme_config", {}).get("buttonStyle", tpl["buttonStyle"]),

@@ -12,6 +12,8 @@ Template gallery + public-theme are read directly from the design-service by the
 browser (they need no auth), so they're not proxied here.
 """
 import os
+from typing import Literal
+from pydantic import BaseModel, ConfigDict
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Body
@@ -20,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
 from ..models import Event, User
-from ..auth import require_paid_event_admin
+from ..auth import require_paid_event_admin, require_event_admin
 from ..entitlements import assert_feature_allowed
 
 router = APIRouter()
@@ -46,6 +48,38 @@ def _headers(org_id: str | None = None) -> dict:
 def _passthrough(r: httpx.Response) -> Response:
     return Response(content=r.content, status_code=r.status_code,
                     media_type=r.headers.get("content-type", "application/json"))
+
+
+class InvitationOpeningUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool
+    frequency: Literal["once", "always"] = "once"
+    use_default: bool = True
+
+
+async def _opening_request(event_id: str, payload: dict | None = None, org_id: str | None = None) -> dict | Response:
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            url = f"{DESIGN_URL}/api/v1/design/events/{event_id}"
+            response = await client.get(url, headers=_headers()) if payload is None else await client.put(
+                url, json={"envelope_config": payload}, headers=_headers(org_id))
+        if response.status_code != 200:
+            return _passthrough(response)
+        # Invitation administrators receive only opening settings, never Studio drafts.
+        return {"envelope_config": response.json().get("envelope_config") or {}}
+    except httpx.RequestError:
+        raise HTTPException(503, "Invitation opening settings are temporarily unavailable. Try again.")
+
+
+@router.get("/{event_id}/invitation-opening")
+async def get_invitation_opening(event_id: str, _: User = Depends(require_event_admin)):
+    return await _opening_request(event_id)
+
+
+@router.put("/{event_id}/invitation-opening")
+async def put_invitation_opening(event_id: str, body: InvitationOpeningUpdate,
+                                 db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+    return await _opening_request(event_id, body.model_dump(), await _org_id(event_id, db))
 
 
 @router.get("/{event_id}/design")

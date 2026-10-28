@@ -94,7 +94,7 @@ def save_design(event_id: str, data: dict, expected_revision=None) -> dict:
         if "envelope_config" in data:
             from .schemas import EnvelopeConfig
             merged = {**(d.get("envelope_config") or {}), **data["envelope_config"]}
-            if merged.get("enabled") and not merged.get("appearance"):
+            if merged.get("enabled") and not merged.get("appearance") and not merged.get("use_default"):
                 raise ValueError("Save an envelope design before enabling the opening")
             data = {**data, "envelope_config": EnvelopeConfig.model_validate(merged).model_dump()}
         d.update(data)

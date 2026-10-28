@@ -655,6 +655,8 @@ export const api = {
   // core-backend proxy which enforces auth + event ownership).
   designTemplates: (query = '') => req('GET', `/v1/design/templates${query}`),
   getEventDesign: (eventId) => req('GET', `/events/${eventId}/design`),
+  getInvitationOpening: (eventId) => req('GET', `/events/${eventId}/invitation-opening`),
+  saveInvitationOpening: (eventId, data) => req('PUT', `/events/${eventId}/invitation-opening`, data),
   saveEventDesign: (eventId, data) => req('PUT', `/events/${eventId}/design`, data),
   publishEventDesign: (eventId, data = {}) => req('POST', `/events/${eventId}/design/publish`, data),
   designVersions: (eventId) => req('GET', `/events/${eventId}/design/versions`),

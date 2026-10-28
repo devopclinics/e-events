@@ -81,6 +81,13 @@ async def test_paid_invitation_transfer_and_rsvp_guard(ctx, monkeypatch):
     new_token=transfer.json()['invitation_url'].split('/r/')[1].split('?')[0]
     denied=await ctx.client.post('/api/invite/token/'+new_token+'/rsvp',json={'status':'confirmed'})
     assert denied.status_code==409
+    # Older fulfilled orders used the notes marker before the stable linkage.
+    async with _Session() as db:
+        guest=await db.get(Guest,item['guest_id'])
+        guest.paid_ticket_order_id=None;guest.rsvp_notes='Paid ticket order: invitation-order'
+        await db.commit()
+    denied=await ctx.client.post('/api/invite/token/'+new_token+'/rsvp',json={'status':'confirmed'})
+    assert denied.status_code==409
 
 
 def test_ticket_delivery_opt_in_preserves_qr_and_legacy_links(monkeypatch):

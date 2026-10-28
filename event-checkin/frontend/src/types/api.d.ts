@@ -1893,6 +1893,7 @@ export interface InboundSenderRule {
 }
 
 export interface InvitationOpeningUpdate {
+  continue_mode?: ('auto' | 'manual') | null
   enabled: boolean
   frequency?: 'once' | 'always'
   use_default?: boolean

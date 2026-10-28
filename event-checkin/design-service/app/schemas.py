@@ -39,6 +39,7 @@ class EnvelopeConfig(BaseModel):
     enabled: bool = False
     frequency: Literal["once", "always"] = "once"
     use_default: bool = False
+    continue_mode: Literal["auto", "manual"] | None = None
 
 
 class EnvelopePatch(BaseModel):
@@ -47,6 +48,7 @@ class EnvelopePatch(BaseModel):
     enabled: bool | None = None
     frequency: Literal["once", "always"] | None = None
     use_default: bool | None = None
+    continue_mode: Literal["auto", "manual"] | None = None
 
 
 class EventDesignIn(BaseModel):

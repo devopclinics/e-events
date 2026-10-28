@@ -31,7 +31,7 @@ with tempfile.TemporaryDirectory(prefix='envelope-admin-') as temp:
         if r.request.method == 'PUT':
             if fail_save: return r.fulfill(status=503, json={'detail': 'Opening service unavailable'})
             payload = r.request.post_data_json
-            check('options cannot edit appearance', set(payload) == {'enabled', 'frequency', 'use_default'})
+            check('options cannot edit appearance', set(payload) == {'enabled', 'frequency', 'use_default', 'continue_mode'})
             config = {**config, **payload}
         r.fulfill(json={'envelope_config': copy.deepcopy(config)})
     with sync_playwright() as pw:
@@ -64,6 +64,15 @@ with tempfile.TemporaryDirectory(prefix='envelope-admin-') as temp:
         page.get_by_role('button', name='Save opening options').click()
         expect(page.get_by_role('status')).to_contain_text('Saved.')
         check('default selection retains custom design', config['use_default'] and config['appearance']['initials'] == 'AB')
+        page.get_by_label('After opening',exact=True).select_option('manual')
+        page.get_by_role('button',name='Save opening options').click()
+        expect(page.get_by_role('status')).to_contain_text('Saved.')
+        page.reload();expect(page.get_by_label('After opening',exact=True)).to_have_value('manual')
+        check('manual continuation saved and restored',config['continue_mode']=='manual')
+        page.get_by_label('After opening',exact=True).select_option('auto')
+        page.get_by_role('button',name='Save opening options').click()
+        expect(page.get_by_role('status')).to_contain_text('Saved.')
+        check('automatic continuation saved',config['continue_mode']=='auto')
         fail_save = True; page.get_by_role('radio').first.check()
         page.get_by_role('button', name='Save opening options').click()
         expect(page.get_by_role('alert')).to_contain_text('Opening service unavailable')

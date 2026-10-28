@@ -58,3 +58,13 @@ async def test_opening_endpoint_cannot_write_design_fields(ctx, upstream):
         response = await ctx.client.put(path, json={'enabled': True, field: {}})
         assert response.status_code == 422
     assert not upstream
+
+@pytest.mark.asyncio
+async def test_continuation_mode_is_scoped_and_validated(ctx,upstream):
+    ctx.login(ctx.ids['user_a'])
+    path=f"/api/events/{ctx.ids['event_a']}/invitation-opening"
+    for mode in ['auto','manual']:
+        response=await ctx.client.put(path,json={'enabled':True,'continue_mode':mode})
+        assert response.status_code==200
+        assert upstream[-1][1]['json']['envelope_config']['continue_mode']==mode
+    assert (await ctx.client.put(path,json={'enabled':True,'continue_mode':'invalid'})).status_code==422

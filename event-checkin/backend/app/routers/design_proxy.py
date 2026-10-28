@@ -55,6 +55,7 @@ class InvitationOpeningUpdate(BaseModel):
     enabled: bool
     frequency: Literal["once", "always"] = "once"
     use_default: bool = True
+    continue_mode: Literal["auto", "manual"] | None = None
 
 
 async def _opening_request(event_id: str, payload: dict | None = None, org_id: str | None = None) -> dict | Response:
@@ -79,7 +80,7 @@ async def get_invitation_opening(event_id: str, _: User = Depends(require_event_
 @router.put("/{event_id}/invitation-opening")
 async def put_invitation_opening(event_id: str, body: InvitationOpeningUpdate,
                                  db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
-    return await _opening_request(event_id, body.model_dump(), await _org_id(event_id, db))
+    return await _opening_request(event_id, body.model_dump(exclude_none=True), await _org_id(event_id, db))
 
 
 @router.get("/{event_id}/design")

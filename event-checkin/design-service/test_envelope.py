@@ -105,3 +105,18 @@ def test_collection_style_saved_and_public(style):
     put({'envelope_config': {'use_default': True}})
     assert public_theme('event-envelope').envelope_config.appearance.style == 'wax'
     assert get_event_design('event-envelope').envelope_config.appearance.style == style
+
+@pytest.mark.parametrize('mode',['auto','manual'])
+def test_continuation_mode_preserves_appearance_and_opening(mode):
+    put({'envelope_config':{'appearance':{'style':'story','initials':'AB'},'enabled':True,'frequency':'always'}})
+    put({'envelope_config':{'continue_mode':mode}})
+    config=public_theme('event-envelope').envelope_config
+    assert config.continue_mode==mode
+    assert config.appearance.style=='story'
+    assert config.enabled is True and config.frequency=='always'
+    put({'envelope_config':{'appearance':{'style':'folio'}}})
+    assert public_theme('event-envelope').envelope_config.continue_mode==mode
+
+def test_continuation_rejects_unknown_mode():
+    with pytest.raises(ValidationError):
+        EventDesignIn.model_validate({'envelope_config':{'continue_mode':'invalid'}})

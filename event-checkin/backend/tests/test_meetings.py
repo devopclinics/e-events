@@ -14,8 +14,8 @@ pytestmark = pytest.mark.asyncio
 
 
 def draft(**changes):
-    return {"title": "Project catch-up", "agenda": "Review progress", "start": "2026-10-28T10:00",
-        "end": "2026-10-28T10:30", "timezone": "America/Chicago", "location_type": "online",
+    return {"title": "Project catch-up", "agenda": "Review progress", "start": (datetime.utcnow() + timedelta(days=7)).strftime("%Y-%m-%dT10:00"),
+        "end": (datetime.utcnow() + timedelta(days=7)).strftime("%Y-%m-%dT10:30"), "timezone": "America/Chicago", "location_type": "online",
         "video_url": "https://example.com/meeting", "attendees": [{"name": "Alex", "email": "alex@example.com"},
         {"name": "Jamie", "email": "jamie@example.com"}], **changes}
 

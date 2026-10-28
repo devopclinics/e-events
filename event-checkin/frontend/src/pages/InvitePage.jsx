@@ -3420,7 +3420,7 @@ export default function InvitePage() {
     const fallback = window.setTimeout(() => { cancelled = true; setDesignTheme(null); setDesignLoading(false) }, 4000)
     if (isStudioPreview) {
       const scoped = readDraftPreview(new URLSearchParams(window.location.search).get('studio-key'), event.id)
-      if (scoped) { setDesignTheme(scoped); return () => { cancelled = true } }
+      if (scoped) { setDesignTheme(scoped); setDesignLoading(false); clearTimeout(fallback); return () => { cancelled = true } }
       try {
         const raw = sessionStorage.getItem(`festio:design-preview:${event.id}`)
         const preview = raw ? JSON.parse(raw) : null

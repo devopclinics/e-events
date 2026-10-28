@@ -5,7 +5,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from playwright.sync_api import sync_playwright, expect
 
 ROOT = Path(__file__).resolve().parents[1]
-config = {'enabled': True, 'frequency': 'once', 'appearance': {'style':'wax','palette':'ivory','paper':'','seal':'gold','initials':'M'}, 'use_default': False}
+config = {'enabled': True, 'frequency': 'once', 'appearance': {'style':'wax','palette':'ivory','paper':'','seal':'gold','initials':'M'}, 'use_default': True}
 requests = []
 fail_save = False
 checks = []
@@ -35,6 +35,20 @@ with tempfile.TemporaryDirectory(prefix='envelope-admin-') as temp:
         errors=[];page.on('pageerror', lambda e:errors.append(str(e)))
         page.route('**/api/**', route)
         page.goto(f'http://127.0.0.1:{server.server_port}')
+        # A saved look must remain applicable while the default is selected.
+        save_button=page.get_by_role('button',name='Save envelope design',exact=True).first
+        expect(save_button).to_be_enabled()
+        save_button.click()
+        expect(page.get_by_role('status')).to_contain_text('custom envelope is applied')
+        check('unchanged saved design can be applied',config['use_default'] is False and config['enabled'] is True and config['frequency']=='once')
+        expect(save_button).to_be_disabled()
+        config.update(enabled=False,frequency='always',use_default=True)
+        page.reload()
+        save_button.click()
+        expect(page.get_by_role('status')).to_contain_text('Enable envelope opening')
+        check('applying design preserves opening settings',config['use_default'] is False and config['enabled'] is False and config['frequency']=='always')
+        config.update(enabled=True,frequency='once')
+        page.reload()
         page.get_by_text('Wording & guest names',exact=True).click()
         page.get_by_label('Initials (up to 3)',exact=True).fill('MA')
         values={'Top label':'MUMINEEN ACADEMY','Opening headline':'Together,\nwe light the way.','Envelope inscription':'For our children, with love','Card label':'Our next chapter','Card title':'Annual Fundraising Event','Card message':'Invest in Their Future. Strengthen Our Ummah.','Tap instruction':'Tap the seal to join us','Skip button text':'Explore the event','Opening status text':'Your invitation is opening…'}

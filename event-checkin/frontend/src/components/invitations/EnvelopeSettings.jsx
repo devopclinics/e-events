@@ -56,17 +56,17 @@ export default function EnvelopeSettings({ eventId, event, mode = 'design', onSa
     if (!eventId || busy) return
     setBusy(true); setError('')
     try {
-      const patch = mode === 'design' ? { appearance: { ...appearance, initials: appearance.initials.trim() || ENVELOPE_DEFAULTS.initials } } : { enabled, frequency }
+      const patch = mode === 'design' ? { appearance: { ...appearance, initials: appearance.initials.trim() || ENVELOPE_DEFAULTS.initials }, use_default: false } : { enabled, frequency }
       const saved = mode === 'design' ? await api.saveEventDesign(eventId, { envelope_config: patch }) : await api.saveInvitationOpening(eventId, { enabled, frequency, use_default: useDefault })
       if (!saved.envelope_config || (mode === 'design' && !saved.envelope_config.appearance)) throw new Error('Envelope settings were not saved. The design service may need an update.')
-      setConfig(saved.envelope_config); if (mode === 'design') setAppearance({ ...ENVELOPE_DEFAULTS, ...saved.envelope_config.appearance }); onSaved?.(saved.envelope_config || {}); setStatus(mode === 'design' ? (saved.envelope_config.enabled && !saved.envelope_config.use_default ? 'Saved. Your custom envelope is applied to invitation links.' : 'Saved. Select Saved custom design in RSVP → Invite to use this envelope.') : 'Saved. Opening settings are applied to invitation links.')
+      setConfig(saved.envelope_config); if (mode === 'design') setAppearance({ ...ENVELOPE_DEFAULTS, ...saved.envelope_config.appearance }); onSaved?.(saved.envelope_config || {}); setStatus(mode === 'design' ? (saved.envelope_config.enabled && !saved.envelope_config.use_default ? 'Saved. Your custom envelope is applied to invitation links.' : 'Saved. Your custom design is selected. Enable envelope opening in Guests → Invite to show it.') : 'Saved. Opening settings are applied to invitation links.')
     } catch (e) { setError(e.message || 'Envelope settings could not be saved. Try again.') }
     finally { setBusy(false) }
   }
   if (!eventId) return <p>Select an event to configure its invitation opening.</p>
   if (loading) return <p role="status">Loading envelope settings…</p>
   if (!config) return <div role="alert"><p>{error || 'Envelope settings are unavailable.'}</p>{mode === 'design' && <p>Custom designs require Design Studio access. You can use the default envelope in Guests → Invite.</p>}<button type="button" className="rr-btn secondary" onClick={() => setRetry(n => n + 1)}>Retry</button></div>
-  const unsaved = mode === 'design' ? JSON.stringify(appearance) !== JSON.stringify({ ...ENVELOPE_DEFAULTS, ...config.appearance }) || !config.appearance : enabled !== (config.enabled === true) || frequency !== (config.frequency || 'once') || useDefault !== (config.use_default === true || !config.appearance)
+  const unsaved = mode === 'design' ? JSON.stringify(appearance) !== JSON.stringify({ ...ENVELOPE_DEFAULTS, ...config.appearance }) || !config.appearance || config.use_default !== false : enabled !== (config.enabled === true) || frequency !== (config.frequency || 'once') || useDefault !== (config.use_default === true || !config.appearance)
   const meta = ENVELOPE_COLLECTION[appearance.style]
   const canSave = !busy && !(appearance.show_initials !== false && !appearance.initials.trim()) && unsaved
   function chooseStyle(style) {
@@ -116,7 +116,7 @@ export default function EnvelopeSettings({ eventId, event, mode = 'design', onSa
 </div></details>
           <details open><summary>Preview recipient</summary><div className="ec-control-body"><div className="inv-name-preview"><label>Preview recipient<select aria-label="Preview recipient" className="rr-select" value={previewRecipient} onChange={e => { setPreviewRecipient(e.target.value); setPreview(true) }}><option value="personal">Personal invitation — sample guest</option><option value="shared">Shared link — generic greeting</option></select></label>{previewRecipient === 'personal' && <div className="inv-name-samples"><label>Sample first name<input className="rd-field" maxLength={100} value={sampleFirstName} onChange={e => setSampleFirstName(e.target.value)} /></label><label>Sample last name<input className="rd-field" maxLength={100} value={sampleLastName} onChange={e => setSampleLastName(e.target.value)} /></label></div>}<small>Preview names are examples only and are never saved to the invitation.</small></div></div></details>
         </div>
-        <p className="ec-use-note">Save your custom envelope, then select Saved custom design in <Link to="/guests-redesign?tab=invite">Guests → Invite ↗</Link>. The built-in default stays available without Studio access.</p>
+        <p className="ec-use-note">Saving selects this custom envelope for your invitation links. Turn the opening on or off in <Link to="/guests-redesign?tab=invite">Guests → Invite ↗</Link>. The built-in default stays available without Studio access.</p>
         <button type="button" className="rr-btn primary ec-save-bottom" disabled={!canSave} onClick={save}>{busy?'Saving…':'Save envelope design'}</button>
         {error&&<p role="alert" className="inv-envelope-error">{error}</p>}
       </aside>

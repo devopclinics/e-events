@@ -69,3 +69,26 @@ def test_selecting_default_preserves_saved_custom_appearance():
     assert get_event_design('event-envelope').envelope_config.appearance.palette == 'navy'
     put({'envelope_config': {'use_default': False}})
     assert public_theme('event-envelope').envelope_config.appearance.initials == 'AB'
+
+def test_wording_and_seal_visibility_round_trip_without_changing_activation():
+    put({'envelope_config': {'appearance': {'initials': 'MA', 'show_initials': False, 'wording': {'intro_label': 'A personal invitation', 'headline': 'Faith lights the way\nTogether we build tomorrow', 'inscription': 'For our community', 'card_title': 'Our next chapter', 'skip_label': 'View event', 'show_card_message': False}}}})
+    put({'envelope_config': {'enabled': True}})
+    public = public_theme('event-envelope').envelope_config
+    assert public.appearance.initials == 'MA' and not public.appearance.show_initials
+    assert public.appearance.wording.headline == 'Faith lights the way\nTogether we build tomorrow'
+    assert public.appearance.wording.skip_label == 'View event'
+    assert not public.appearance.wording.show_card_message
+    assert public.enabled
+    put({'envelope_config': {'use_default': True}})
+    assert public_theme('event-envelope').envelope_config.appearance.wording.headline == ''
+    assert get_event_design('event-envelope').envelope_config.appearance.wording.card_title == 'Our next chapter'
+
+
+def test_wording_validation_and_legacy_appearance_defaults():
+    from app.schemas import EnvelopeWording
+    assert EnvelopeAppearance.model_validate({'style': 'wax'}).wording == EnvelopeWording()
+    with pytest.raises(ValidationError):
+        EnvelopeWording.model_validate({'headline': 'x' * 121})
+    with pytest.raises(ValidationError):
+        EnvelopeWording.model_validate({'unknown_field': 'unsupported'})
+    assert EnvelopeWording.model_validate({'intro_label': '  You are invited  '}).intro_label == 'You are invited'

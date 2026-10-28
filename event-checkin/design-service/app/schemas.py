@@ -1,11 +1,36 @@
 """Request/response models for the design-service API."""
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
+from typing import Literal
+
+
+class EnvelopeAppearance(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    style: Literal["wax", "classic", "pocket"] = "wax"
+    palette: Literal["ivory", "emerald", "burgundy", "navy", "blush", "charcoal"] = "ivory"
+    paper: str = Field(default="", pattern=r"^(|#[0-9a-fA-F]{6})$")
+    seal: Literal["gold", "silver", "rose"] = "gold"
+    initials: str = Field(default="M", min_length=1, max_length=3)
+
+
+class EnvelopeConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    appearance: EnvelopeAppearance | None = None
+    enabled: bool = False
+    frequency: Literal["once", "always"] = "once"
+
+
+class EnvelopePatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    appearance: EnvelopeAppearance | None = None
+    enabled: bool | None = None
+    frequency: Literal["once", "always"] | None = None
 
 
 class EventDesignIn(BaseModel):
     """What the admin UI saves. All optional so partial updates are cheap."""
     expected_revision: int | None = Field(default=None, ge=0)
+    envelope_config: EnvelopePatch | None = None
     selected_template_id: str | None = None
     selected_flyer_template_id: str | None = None
     # Free-form but bounded config blobs (colors/fonts, wording, asset refs).
@@ -19,6 +44,7 @@ class EventDesignIn(BaseModel):
 
 
 class EventDesignOut(EventDesignIn):
+    envelope_config: EnvelopeConfig = Field(default_factory=EnvelopeConfig)
     event_id: str
     organization_id: str | None = None
     revision: int = 0
@@ -33,6 +59,7 @@ class PublicTheme(BaseModel):
     event_id: str
     template_id: str
     is_default: bool = False
+    envelope_config: EnvelopeConfig = Field(default_factory=EnvelopeConfig)
     colors: dict
     font_pairing: str
     button_style: str

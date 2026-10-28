@@ -45,3 +45,11 @@ First-visit completion is recorded per event and appearance in browser storage a
 - Frontend production bundle builds successfully. Staging, actual authenticated API integration, live delivery and production deployment remain release checks.
 
 Logo upload, automatic theme matching, reusable multi-design libraries and opening analytics are outside this version.
+
+## Custom wording and initials
+
+Design Studio → Envelope has a Wording section for the top label, opening headline (line breaks supported), envelope inscription, card label/title/message, tap instruction, skip button text and opening status. Blank text uses the existing default; the card title falls back to the event name. Decorative labels/headline/message/inscription and the seal initials can be hidden. The seal remains a labelled, keyboard-accessible opening button when its initials are hidden. Initials support up to three characters; three-character monograms use smaller lettering.
+
+These fields are part of the saved custom appearance. Select Saved custom design in Guests → Invite to use them. The built-in default remains available without Studio access and does not inherit private custom wording. Reset wording restores text/visibility defaults while retaining the seal initials. Text is length-limited and rendered as plain text. Newly added default fields are excluded from visit keys so deployment alone does not replay previously opened envelopes.
+
+`design-service/test_envelope.py` covers wording persistence, validation and default/custom isolation; `frontend/tests/invitation-wording.browser.py` exercises actual controls, visibility, accessibility, reload, literal HTML text, mobile wrapping and visit-key compatibility.

@@ -4,6 +4,24 @@ from pydantic import BaseModel, Field, ConfigDict
 from typing import Literal
 
 
+class EnvelopeWording(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    intro_label: str = Field(default="", max_length=60)
+    headline: str = Field(default="", max_length=120)
+    inscription: str = Field(default="", max_length=80)
+    card_label: str = Field(default="", max_length=60)
+    card_title: str = Field(default="", max_length=140)
+    card_message: str = Field(default="", max_length=100)
+    tap_prompt: str = Field(default="", max_length=80)
+    skip_label: str = Field(default="", max_length=60)
+    opening_message: str = Field(default="", max_length=80)
+    show_intro_label: bool = True
+    show_headline: bool = True
+    show_inscription: bool = True
+    show_card_label: bool = True
+    show_card_message: bool = True
+
+
 class EnvelopeAppearance(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     style: Literal["wax", "classic", "pocket"] = "wax"
@@ -11,6 +29,8 @@ class EnvelopeAppearance(BaseModel):
     paper: str = Field(default="", pattern=r"^(|#[0-9a-fA-F]{6})$")
     seal: Literal["gold", "silver", "rose"] = "gold"
     initials: str = Field(default="M", min_length=1, max_length=3)
+    show_initials: bool = True
+    wording: EnvelopeWording = Field(default_factory=EnvelopeWording)
 
 
 class EnvelopeConfig(BaseModel):

@@ -34,10 +34,10 @@ export default function EnvelopeSettings({ eventId, event, mode = 'design', onSa
     if (!eventId || busy) return
     setBusy(true); setError('')
     try {
-      const patch = mode === 'design' ? { appearance: { ...appearance, initials: appearance.initials.trim() } } : { enabled, frequency }
+      const patch = mode === 'design' ? { appearance: { ...appearance, initials: appearance.initials.trim() || ENVELOPE_DEFAULTS.initials } } : { enabled, frequency }
       const saved = mode === 'design' ? await api.saveEventDesign(eventId, { envelope_config: patch }) : await api.saveInvitationOpening(eventId, { enabled, frequency, use_default: useDefault })
       if (!saved.envelope_config || (mode === 'design' && !saved.envelope_config.appearance)) throw new Error('Envelope settings were not saved. The design service may need an update.')
-      setConfig(saved.envelope_config); if (mode === 'design') setAppearance({ ...ENVELOPE_DEFAULTS, ...saved.envelope_config.appearance }); onSaved?.(saved.envelope_config || {}); setStatus('Saved. Envelope settings are now applied to invitation links.')
+      setConfig(saved.envelope_config); if (mode === 'design') setAppearance({ ...ENVELOPE_DEFAULTS, ...saved.envelope_config.appearance }); onSaved?.(saved.envelope_config || {}); setStatus(mode === 'design' ? (saved.envelope_config.enabled && !saved.envelope_config.use_default ? 'Saved. Your custom envelope is applied to invitation links.' : 'Saved. Select Saved custom design in RSVP → Invite to use this envelope.') : 'Saved. Opening settings are applied to invitation links.')
     } catch (e) { setError(e.message || 'Envelope settings could not be saved. Try again.') }
     finally { setBusy(false) }
   }
@@ -51,9 +51,27 @@ export default function EnvelopeSettings({ eventId, event, mode = 'design', onSa
       <div><h3>Envelope colour</h3><div className="inv-envelope-palettes">{Object.entries(ENVELOPE_PALETTES).map(([id, [name, color]]) => <button type="button" key={id} aria-pressed={!appearance.paper && appearance.palette === id} onClick={() => edit({ palette: id, paper: '' })}><i style={{ background: color }} />{name}</button>)}</div></div>
       <label>Custom colour<input aria-label="Custom envelope colour" type="color" value={appearance.paper || ENVELOPE_PALETTES[appearance.palette]?.[1] || '#eee2c4'} onChange={e => edit({ paper: e.target.value })} /></label>
       <label>Seal finish<select className="rr-select" value={appearance.seal} onChange={e => edit({ seal: e.target.value })}><option value="gold">Gold</option><option value="silver">Silver</option><option value="rose">Rose gold</option></select></label>
-      <label>Initials<input className="rd-field" value={appearance.initials} maxLength={3} onChange={e => edit({ initials: e.target.value })} /></label>
-      <p>Save the look here. Enable it in <Link to="/guests-redesign?tab=invite">RSVP → Invite ↗</Link>. Direct entry stays active until you enable the opening.</p>
-      <button type="button" className="rr-btn primary" disabled={busy || !appearance.initials.trim() || !unsaved} onClick={save}>{busy ? 'Saving…' : 'Save envelope design'}</button>
+      <h3>Seal initials</h3>
+      <label>Show initials<input type="checkbox" checked={appearance.show_initials !== false} onChange={e => edit({ show_initials: e.target.checked })} /></label>
+      <label>Initials (up to 3)<input className="rd-field" disabled={appearance.show_initials === false} value={appearance.initials} maxLength={3} onChange={e => edit({ initials: e.target.value })} /></label>
+      <h3>Wording</h3><p>Leave a field empty to use its default. The card title uses your event name unless you enter another title.</p>
+      {[
+        ['intro_label', 'Top label', 'YOU ARE INVITED', 60, 'show_intro_label'],
+        ['headline', 'Opening headline', 'Something beautiful\nbegins with you.', 120, 'show_headline'],
+        ['inscription', 'Envelope inscription', 'WITH LOVE, FOR YOU', 80, 'show_inscription'],
+        ['card_label', 'Card label', 'AN INVITATION TO', 60, 'show_card_label'],
+        ['card_title', 'Card title', event?.name || 'Our special gathering', 140],
+        ['card_message', 'Card message', 'WE LOOK FORWARD TO WELCOMING YOU', 100, 'show_card_message'],
+        ['tap_prompt', 'Tap instruction', 'Tap to open your invitation', 80],
+        ['skip_label', 'Skip button text', 'Go straight to the invitation ↗', 60],
+        ['opening_message', 'Opening status text', 'Opening your invitation…', 80],
+      ].map(([key, label, placeholder, limit, visibility]) => <div className="inv-wording-field" key={key}>
+        {visibility && <label className="inv-wording-visibility">Show {label.toLowerCase()}<input type="checkbox" checked={appearance.wording?.[visibility] !== false} onChange={e => edit({ wording: { ...appearance.wording, [visibility]: e.target.checked } })} /></label>}
+        <label className="inv-wording-input">{label}{key === 'headline' ? <textarea aria-label={label} className="rd-field" rows={3} value={appearance.wording?.[key] || ''} placeholder={placeholder} maxLength={limit} disabled={visibility && appearance.wording?.[visibility] === false} onChange={e => edit({ wording: { ...appearance.wording, [key]: e.target.value } })} /> : <input aria-label={label} className="rd-field" value={appearance.wording?.[key] || ''} placeholder={placeholder} maxLength={limit} disabled={visibility && appearance.wording?.[visibility] === false} onChange={e => edit({ wording: { ...appearance.wording, [key]: e.target.value } })} />}</label>
+      </div>)}
+      <button type="button" className="rr-btn secondary" onClick={() => edit({ wording: {} })}>Reset wording to defaults</button>
+      <p>Save your custom envelope here, then select Saved custom design in <Link to="/guests-redesign?tab=invite">RSVP → Invite ↗</Link>. The built-in default keeps its own wording.</p>
+      <button type="button" className="rr-btn primary" disabled={busy || (appearance.show_initials !== false && !appearance.initials.trim()) || !unsaved} onClick={save}>{busy ? 'Saving…' : 'Save envelope design'}</button>
     </div><div>{preview ? <InvitationOpening key={replay} embedded appearance={appearance} event={event} onDone={() => setPreview(false)} /> : <div className="inv-envelope-preview-replay"><p>Preview the envelope and its opening.</p><button type="button" className="rr-btn secondary" onClick={() => { setReplay(n => n + 1); setPreview(true) }}>Preview opening ↻</button></div>}</div></div> : <div className="inv-envelope-options">
       <label><input type="radio" name="inv-envelope-mode" checked={!enabled} onChange={() => { setEnabled(false); setStatus('Unsaved changes') }} />Direct entry — show the invitation immediately</label>
       <label><input type="radio" name="inv-envelope-mode" checked={enabled} onChange={() => { setEnabled(true); setStatus('Unsaved changes') }} />Envelope opening — tap to reveal the invitation</label>

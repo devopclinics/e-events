@@ -67,7 +67,7 @@ export default function EnvelopeSettings({ eventId, event, mode = 'design', onSa
   if (!eventId) return <p>Select an event to configure its invitation opening.</p>
   if (loading) return <p role="status">Loading envelope settings…</p>
   if (!config) return <div role="alert"><p>{error || 'Envelope settings are unavailable.'}</p>{mode === 'design' && <p>Custom designs require Design Studio access. You can use the default envelope in Guests → Invite.</p>}<button type="button" className="rr-btn secondary" onClick={() => setRetry(n => n + 1)}>Retry</button></div>
-  const unsaved = mode === 'design' ? JSON.stringify(appearance) !== JSON.stringify({ ...ENVELOPE_DEFAULTS, ...config.appearance }) || !config.appearance || config.use_default !== false : enabled !== (config.enabled === true) || frequency !== (config.frequency || 'once') || useDefault !== (config.use_default === true || !config.appearance) || continueMode !== envelopeContinueMode(config)
+  const unsaved = mode === 'design' ? JSON.stringify(appearance) !== JSON.stringify({ ...ENVELOPE_DEFAULTS, ...config.appearance }) || !config.appearance || config.use_default !== false : enabled !== (config.enabled === true) || frequency !== (config.frequency || 'once') || useDefault !== (config.use_default === true || !config.appearance) || continueMode !== envelopeContinueMode(config) || config.continue_mode == null
   const meta = ENVELOPE_COLLECTION[appearance.style]
   const canSave = !busy && !(appearance.show_initials !== false && !appearance.initials.trim()) && unsaved
   function chooseStyle(style) {

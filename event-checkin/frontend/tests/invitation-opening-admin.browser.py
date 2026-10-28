@@ -5,7 +5,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from playwright.sync_api import sync_playwright, expect
 
 ROOT = Path(__file__).resolve().parents[1]
-config = {'enabled': False, 'frequency': 'once', 'appearance': None, 'use_default': False}
+config = {'enabled': False, 'frequency': 'once', 'appearance': None, 'use_default': True}
 requests = []
 fail_save = False
 checks = []
@@ -41,6 +41,12 @@ with tempfile.TemporaryDirectory(prefix='envelope-admin-') as temp:
         page.route('**/api/**', route)
         base = f'http://127.0.0.1:{server.server_port}'
         page.goto(base)
+        # Old events can persist the displayed three-second default without
+        # making an unrelated settings change to activate Save.
+        save=page.get_by_role('button',name='Save opening options')
+        expect(save).to_be_enabled();save.click()
+        expect(page.get_by_role('status')).to_contain_text('Saved.')
+        check('legacy timing choice is explicitly savable',config['continue_mode']=='auto' and config['enabled'] is False)
         radio = page.get_by_role('radio').nth(1)
         expect(radio).to_be_enabled(); radio.check()
         expect(page.get_by_label('Envelope design', exact=True)).to_have_value('default')

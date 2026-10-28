@@ -1282,6 +1282,8 @@ async def submit_invite_token_rsvp(
     binds to exactly one guest row, so it can only ever update that guest —
     a forwarded link can't register anyone new. Editable until the deadline."""
     guest, event = await _get_guest_by_token(invite_token, db)
+    if guest.paid_ticket_order_id:
+        raise HTTPException(409, "This ticket is managed through its purchase. Use your order link for ticket changes.")
 
     if _deadline_passed(event):
         raise HTTPException(410, "RSVP has closed for this event")

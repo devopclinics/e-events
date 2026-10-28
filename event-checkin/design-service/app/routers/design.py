@@ -24,7 +24,7 @@ from ..store import load_design, save_design, publish_design
 from ..assets import save_upload, asset_path, UploadError
 from ..render import render_flyer, PNG_SIZES, PDF_SIZES
 from ..schemas import (
-    EventDesignIn, EventDesignOut, PublicTheme, EmailTheme, PublishResult, RenderRequest,
+    EnvelopeConfig, EventDesignIn, EventDesignOut, PublicTheme, EmailTheme, PublishResult, RenderRequest,
 )
 
 router = APIRouter(prefix="/api/v1/design")
@@ -183,6 +183,7 @@ def get_event_design(event_id: str):
     d = load_design(event_id) or {}
     return EventDesignOut(
         event_id=event_id,
+        envelope_config=d.get("envelope_config") or {},
         organization_id=d.get("organization_id"),
         selected_template_id=d.get("selected_template_id"),
         selected_flyer_template_id=d.get("selected_flyer_template_id"),
@@ -210,6 +211,13 @@ def put_event_design(event_id: str, body: EventDesignIn, x_org_id: str | None = 
         raise HTTPException(422, "Unknown Event App appearance")
     if isinstance(theme, dict) and "hubLayout" in theme:
         theme["hubLayout"] = validate_hub_layout(theme.get("hubLayout"))
+    if "envelope_config" in data:
+        # A dedicated partial update leaves template drafts and publication untouched.
+        current = (load_design(event_id) or {}).get("envelope_config") or {}
+        merged = {**current, **data["envelope_config"]}
+        if merged.get("enabled") and not merged.get("appearance"):
+            raise HTTPException(400, "Save an envelope design before enabling the opening")
+        data["envelope_config"] = EnvelopeConfig.model_validate(merged).model_dump()
     if x_org_id:
         data["organization_id"] = x_org_id
     expected = data.pop("expected_revision", None)
@@ -317,6 +325,8 @@ def public_theme(
         event_id=event_id,
         template_id=tpl["id"],
         is_default=is_default,
+        # Envelope saves take effect independently of template publication.
+        envelope_config=(load_design(event_id) or {}).get("envelope_config") or {},
         colors=colors,
         font_pairing=design.get("theme_config", {}).get("fontPairing", tpl["fontPairing"]),
         button_style=design.get("theme_config", {}).get("buttonStyle", tpl["buttonStyle"]),

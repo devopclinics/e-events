@@ -8,9 +8,10 @@ import { api } from '../api'
 import './DesignStudioRedesignPage.css'
 import AppearanceChoices from '../components/guesthub/AppearanceChoices'
 import { validAppTheme } from '../components/guesthub/appearance.mjs'
+import EnvelopeSettings from '../components/invitations/EnvelopeSettings'
 import { CertificatesWorkspace } from '../components/live/LiveContentWorkspace'
 
-const TABS = ['Templates', 'GuestHub', 'Flyer', 'Event Page', 'Festio Pass', 'FestioHub', 'Certificates', 'Email Preview', 'Publish']
+const TABS = ['Templates', 'Envelope', 'GuestHub', 'Flyer', 'Event Page', 'Festio Pass', 'FestioHub', 'Certificates', 'Email Preview', 'Publish']
 
 // FestioHub layout + visual themes. Each entry combines a layout type
 // (tabbed vs stacked, mirrored in InvitePage.jsx's HUB_TABBED_STYLES) with
@@ -1057,6 +1058,7 @@ export default function DesignStudioRedesignPage() {
       event_id: eventId,
       template_id: activeTemplate?.id || null,
       is_default: !activeTemplate,
+      envelope_config: design?.envelope_config,
       colors,
       font_pairing: fontPairing,
       button_style: design?.theme_config?.buttonStyle || activeTemplate?.buttonStyle || 'square',
@@ -1327,6 +1329,8 @@ export default function DesignStudioRedesignPage() {
       <div className="rr-tabs">
         {TABS.map((t) => <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{t}</button>)}
       </div>
+
+      {tab === 'Envelope' && <div className="rr-panel" style={{ padding: 24 }}><h2>Invitation envelope</h2><p>Choose the opening style and colours for any invitation design.</p><EnvelopeSettings key={eventId} eventId={eventId} event={event} onSaved={envelope_config => setDesign(current => ({ ...current, envelope_config }))} /></div>}
 
       {tab === 'Templates' && (
         <>

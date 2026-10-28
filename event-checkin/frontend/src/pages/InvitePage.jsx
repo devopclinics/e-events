@@ -3,6 +3,7 @@ import GuestSpeakers from '../components/guesthub/GuestSpeakers'
 import { readDraftPreview } from '../components/design-studio/model.mjs'
 import ProgrammeAudience from '../components/guesthub/ProgrammeAudience.jsx';
 import { filterProgramme } from '../components/guesthub/programmeAudience.mjs';
+import InvitationOpening, { shouldShowEnvelope, rememberEnvelope, envelopeVisitKey } from '../components/invitations/InvitationOpening'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import confetti from 'canvas-confetti'
 import { useParams } from 'react-router-dom'
@@ -3330,6 +3331,8 @@ export default function InvitePage() {
   const [guest, setGuest] = useState(null)
   const [tokenMeta, setTokenMeta] = useState({ deadline_passed: false, already_responded: false })
   const [designTheme, setDesignTheme] = useState(null)
+  const [completedEnvelope, setCompletedEnvelope] = useState(null)
+  const [designLoading, setDesignLoading] = useState(true)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [confirmed, setConfirmed] = useState(null)
@@ -3396,6 +3399,10 @@ export default function InvitePage() {
       return
     }
     let cancelled = false
+    setDesignLoading(true)
+    setDesignTheme(null)
+    // A stalled design service must never strand the RSVP form.
+    const fallback = window.setTimeout(() => { cancelled = true; setDesignTheme(null); setDesignLoading(false) }, 4000)
     if (isStudioPreview) {
       const scoped = readDraftPreview(new URLSearchParams(window.location.search).get('studio-key'), event.id)
       if (scoped) { setDesignTheme(scoped); return () => { cancelled = true } }
@@ -3404,6 +3411,8 @@ export default function InvitePage() {
         const preview = raw ? JSON.parse(raw) : null
         if (preview?.event_id === event.id && preview?.theme) {
           setDesignTheme(preview.theme)
+          setDesignLoading(false)
+          clearTimeout(fallback)
           return () => { cancelled = true }
         }
       } catch { /* fall through to the published theme */ }
@@ -3425,10 +3434,11 @@ export default function InvitePage() {
       .catch(() => {
         if (!cancelled) setDesignTheme(null)
       })
-    return () => { cancelled = true }
+    .finally(() => { if (!cancelled) { clearTimeout(fallback); setDesignLoading(false) } })
+    return () => { cancelled = true; clearTimeout(fallback) }
   }, [event?.id, isStudioPreview])
 
-  if (loading) return (
+  if (loading || (!error && designLoading)) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-900">
       <div className="text-slate-500 text-sm animate-pulse">Loading…</div>
     </div>
@@ -3442,6 +3452,21 @@ export default function InvitePage() {
       </div>
     </div>
   )
+
+  const openingConfig = designTheme?.envelope_config
+  const openingKey = event?.id && openingConfig?.appearance ? envelopeVisitKey(event.id, openingConfig) : null
+  const openingPreview = isStudioPreview || new URLSearchParams(window.location.search).get('envelope-preview') === '1'
+  // Returning confirmed guests need immediate access to their pass/hub.
+  if (!confirmed && !prior && !tokenMeta.already_responded && completedEnvelope !== openingKey && shouldShowEnvelope(event?.id, openingConfig, openingPreview)) {
+    return <InvitationOpening key={openingKey} appearance={openingConfig.appearance} event={event} onDone={() => {
+      if (!openingPreview) rememberEnvelope(event.id, openingConfig)
+      setCompletedEnvelope(openingKey)
+      window.requestAnimationFrame(() => {
+        const heading = document.querySelector('h1')
+        if (heading) { heading.setAttribute('tabindex', '-1'); heading.focus({ preventScroll: true }) }
+      })
+    }} />
+  }
 
   const theme = inviteTheme(event)
   const dColors = designColors(designTheme, event)

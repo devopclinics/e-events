@@ -1,3 +1,4 @@
+import EnvelopeSettings from '../components/invitations/EnvelopeSettings'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import RedesignShell, { Icon, Modal, ConfirmDialog, ChannelPreviewFrame, UnadmitDialog } from './redesign/RedesignShell'
@@ -979,6 +980,11 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
             <strong>Skip RSVP</strong><span>Everyone is treated as attending — no form at all</span>
           </label>
         </div>
+      </div>
+
+      <div className="rr-panel" style={{ padding: 24, marginBottom: 20 }}>
+        <h3>Invitation opening</h3>
+        <EnvelopeSettings key={eventId} eventId={eventId} event={event} mode="options" />
       </div>
 
       <div className="rd-wide-grid">

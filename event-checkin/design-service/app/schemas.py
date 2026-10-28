@@ -24,8 +24,8 @@ class EnvelopeWording(BaseModel):
 
 class EnvelopeAppearance(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    style: Literal["wax", "classic", "pocket"] = "wax"
-    palette: Literal["ivory", "emerald", "burgundy", "navy", "blush", "charcoal"] = "ivory"
+    style: Literal["wax", "classic", "pocket", "folio", "velvet", "drawer", "story", "lattice"] = "wax"
+    palette: Literal["ivory", "emerald", "burgundy", "navy", "blush", "charcoal", "signature"] = "ivory"
     paper: str = Field(default="", pattern=r"^(|#[0-9a-fA-F]{6})$")
     seal: Literal["gold", "silver", "rose"] = "gold"
     initials: str = Field(default="M", min_length=1, max_length=3)

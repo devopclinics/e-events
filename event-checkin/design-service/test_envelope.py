@@ -49,3 +49,23 @@ def test_validation(patch):
 def test_frequency_validation():
     with pytest.raises(ValidationError):
         EventDesignIn.model_validate({'envelope_config': {'frequency': 'sometimes'}})
+
+def test_default_envelope_needs_no_custom_design_and_is_opt_in():
+    put({'envelope_config': {'enabled': True, 'use_default': True}})
+    stored = get_event_design('event-envelope').envelope_config
+    assert stored.enabled and stored.appearance is None
+    public = public_theme('event-envelope').envelope_config
+    assert public.appearance.style == 'wax'
+    assert public.appearance.palette == 'ivory'
+    assert public.appearance.initials == '✧'
+    put({'envelope_config': {'enabled': False}})
+    assert not public_theme('event-envelope').envelope_config.enabled
+
+
+def test_selecting_default_preserves_saved_custom_appearance():
+    put({'envelope_config': {'appearance': {'style': 'pocket', 'palette': 'navy', 'initials': 'AB'}, 'enabled': True}})
+    put({'envelope_config': {'use_default': True}})
+    assert public_theme('event-envelope').envelope_config.appearance.palette == 'ivory'
+    assert get_event_design('event-envelope').envelope_config.appearance.palette == 'navy'
+    put({'envelope_config': {'use_default': False}})
+    assert public_theme('event-envelope').envelope_config.appearance.initials == 'AB'

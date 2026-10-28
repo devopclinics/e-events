@@ -18,6 +18,7 @@ class EnvelopeConfig(BaseModel):
     appearance: EnvelopeAppearance | None = None
     enabled: bool = False
     frequency: Literal["once", "always"] = "once"
+    use_default: bool = False
 
 
 class EnvelopePatch(BaseModel):
@@ -25,6 +26,7 @@ class EnvelopePatch(BaseModel):
     appearance: EnvelopeAppearance | None = None
     enabled: bool | None = None
     frequency: Literal["once", "always"] | None = None
+    use_default: bool | None = None
 
 
 class EventDesignIn(BaseModel):

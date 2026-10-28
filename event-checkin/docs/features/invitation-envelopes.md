@@ -4,11 +4,11 @@ The envelope is an optional web introduction to the existing invitation. It work
 
 ## Organizer workflow
 
-1. Open Design Studio → Envelope. Choose wax seal, classic fold or modern pocket; select one of six palettes or a custom colour, seal finish and up to three initials. Preview and save.
-2. Open Guests → Invite → Invitation opening. Select envelope opening and first visit on this device or every visit. Save opening options.
+1. Open Guests → Invite → Invitation opening. Select envelope opening, choose the ready-to-use default and first visit or every visit, then save. No Design Studio access or saved custom design is required.
+2. Optionally open Design Studio → Envelope to customize the style, colours, finish and initials. After saving, select “Saved custom design” in Guests → Invite.
 3. Use the existing invitation links and delivery controls. Email and WhatsApp deliver the link; the envelope opens on the web page.
 
-The controls use the existing paid event administrator Design Studio permission. They do not grant new access to unpaid events or event managers. Unavailable design access is shown with a retry/error state. No messages are sent by saving a design or opening option.
+Opening options use the same event administrator permissions as invitation settings, including unpaid events and appropriately assigned event managers. Appearance customization retains existing paid Design Studio permissions. The opening-options endpoint accepts only activation, frequency and default/custom selection; it cannot edit any appearance or template fields. No messages are sent by saving a design or opening option.
 
 ## Persistence and publication
 
@@ -18,15 +18,16 @@ A typed `envelope_config` is stored alongside, separately from, existing design 
 {
   "appearance": {"style":"wax","palette":"ivory","paper":"","seal":"gold","initials":"MA"},
   "enabled": false,
-  "frequency": "once"
+  "frequency": "once",
+  "use_default": false
 }
 ```
 
-Design Studio sends only `appearance`; Guests sends only `enabled`/`frequency`. The design service merges these envelope fields and validates them. Enabling requires a saved appearance. Ordinary template saves omit this object and retain it.
+Design Studio sends only `appearance`; Guests sends only `enabled`/`frequency`/`use_default` through the separate `/events/{event_id}/invitation-opening` endpoint. The design service merges these envelope fields and validates them. The default is available without a saved appearance. Selecting a custom opening requires a saved custom appearance; choosing default retains that customization for later use. Ordinary template saves omit this object and retain it.
 
-Envelope saves take effect immediately on existing invitation links, independently of template publication. Public theme responses expose the current envelope configuration alongside the existing published template. Saving the envelope never publishes another editor's template, wording or image drafts. Saving a new appearance while the envelope is enabled updates its live appearance.
+Envelope saves take effect immediately on existing invitation links, independently of template publication. Public theme responses resolve the built-in ivory/gold/star appearance when `use_default` is selected, and expose the current envelope configuration alongside the existing published template. Saving the envelope never publishes another editor's template, wording or image drafts. Saving a new appearance while the envelope is enabled updates its live appearance.
 
-The existing JSON design store supports this field; no relational database migration is required. Deploy the design service and frontend together (service first). An older service drops the new envelope input, so do not release the frontend alone.
+The existing JSON design store supports this field; no relational database migration is required. Deploy the design service and core backend before the frontend. An older service drops the new envelope input, so do not release the frontend alone.
 
 ## Guest behaviour
 
@@ -37,6 +38,8 @@ First-visit completion is recorded per event and appearance in browser storage a
 ## Validation
 
 - `design-service/test_envelope.py`: opt-in defaults, missing design guard, partial saves, published/draft isolation, persistence through template publication, invalid appearance and frequency.
+- `backend/tests/test_invitation_opening.py`: unpaid admin access, tenant boundaries, and rejection of design fields through opening options.
+- `frontend/tests/invitation-opening-admin.browser.py`: default preview/save/reload without Studio API access, saved custom selection and error handling.
 - `frontend/e2e/invitation-envelope.spec.js`: real invitation components with mocked API responses; first visit, replay, five guest layout modes, direct-entry fallbacks, returning guests and three mobile styles.
 - Local component validation exercised Design Studio appearance save, RSVP enable save, saved preview and error handling with mocked API methods.
 - Frontend production bundle builds successfully. Staging, actual authenticated API integration, live delivery and production deployment remain release checks.

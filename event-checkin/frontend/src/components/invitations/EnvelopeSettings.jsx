@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../api'
+import { GUEST_NAME_TOKENS } from './envelopePersonalization.mjs'
 import InvitationOpening, { ENVELOPE_DEFAULTS, ENVELOPE_PALETTES, ENVELOPE_STYLES } from './InvitationOpening'
 
 // Independent partial saves cannot publish or overwrite another editor's template draft.
@@ -17,6 +18,24 @@ export default function EnvelopeSettings({ eventId, event, mode = 'design', onSa
   const [preview, setPreview] = useState(false)
   const [replay, setReplay] = useState(0)
   const [retry, setRetry] = useState(0)
+  const [previewRecipient, setPreviewRecipient] = useState('personal')
+  const [sampleFirstName, setSampleFirstName] = useState('Amina')
+  const [sampleLastName, setSampleLastName] = useState('Idris')
+  const focusedWording = useRef(null)
+  const [tokenMessage, setTokenMessage] = useState('')
+  const previewGuest = mode === 'design' && previewRecipient === 'personal' ? { first_name: sampleFirstName, last_name: sampleLastName } : null
+  function insertGuestToken(token) {
+    const target = focusedWording.current
+    if (!target || target.element.disabled || !target.element.isConnected) { setTokenMessage('Click a wording field, then choose a guest-name placeholder.'); return }
+    const { key, element, limit } = target
+    const value = appearance.wording?.[key] || ''
+    const start = element.selectionStart ?? value.length, end = element.selectionEnd ?? start
+    const marker = `{{${token}}}`
+    const next = value.slice(0, start) + marker + value.slice(end)
+    if (next.length > limit) { setTokenMessage('This field is too long for that placeholder. Shorten the wording first.'); return }
+    edit({ wording: { ...appearance.wording, [key]: next } }); setTokenMessage('')
+    requestAnimationFrame(() => { element.focus(); element.setSelectionRange(start + marker.length, start + marker.length) })
+  }
   useEffect(() => {
     let cancelled = false
     setLoading(true); setError(''); setStatus(''); setPreview(false); setConfig(null)
@@ -54,7 +73,9 @@ export default function EnvelopeSettings({ eventId, event, mode = 'design', onSa
       <h3>Seal initials</h3>
       <label>Show initials<input type="checkbox" checked={appearance.show_initials !== false} onChange={e => edit({ show_initials: e.target.checked })} /></label>
       <label>Initials (up to 3)<input className="rd-field" disabled={appearance.show_initials === false} value={appearance.initials} maxLength={3} onChange={e => edit({ initials: e.target.value })} /></label>
-      <h3>Wording</h3><p>Leave a field empty to use its default. The card title uses your event name unless you enter another title.</p>
+      <h3>Wording</h3>
+      <div className="inv-name-tools"><strong>Personalize with a guest name</strong><p>Click a wording field, then insert a placeholder. Personal invitation links use the invited guest’s name. Shared links use “Guest”; last name is blank.</p><div className="inv-envelope-style-list">{GUEST_NAME_TOKENS.map(token => <button type="button" key={token} onMouseDown={e => e.preventDefault()} onClick={() => insertGuestToken(token)}>{`{{${token}}}`}</button>)}</div>{tokenMessage && <p role="status">{tokenMessage}</p>}</div>
+      <p>Leave a field empty to use its default. The card title uses your event name unless you enter another title.</p>
       {[
         ['intro_label', 'Top label', 'YOU ARE INVITED', 60, 'show_intro_label'],
         ['headline', 'Opening headline', 'Something beautiful\nbegins with you.', 120, 'show_headline'],
@@ -67,12 +88,12 @@ export default function EnvelopeSettings({ eventId, event, mode = 'design', onSa
         ['opening_message', 'Opening status text', 'Opening your invitation…', 80],
       ].map(([key, label, placeholder, limit, visibility]) => <div className="inv-wording-field" key={key}>
         {visibility && <label className="inv-wording-visibility">Show {label.toLowerCase()}<input type="checkbox" checked={appearance.wording?.[visibility] !== false} onChange={e => edit({ wording: { ...appearance.wording, [visibility]: e.target.checked } })} /></label>}
-        <label className="inv-wording-input">{label}{key === 'headline' ? <textarea aria-label={label} className="rd-field" rows={3} value={appearance.wording?.[key] || ''} placeholder={placeholder} maxLength={limit} disabled={visibility && appearance.wording?.[visibility] === false} onChange={e => edit({ wording: { ...appearance.wording, [key]: e.target.value } })} /> : <input aria-label={label} className="rd-field" value={appearance.wording?.[key] || ''} placeholder={placeholder} maxLength={limit} disabled={visibility && appearance.wording?.[visibility] === false} onChange={e => edit({ wording: { ...appearance.wording, [key]: e.target.value } })} />}</label>
+        <label className="inv-wording-input">{label}{key === 'headline' ? <textarea onFocus={e => { focusedWording.current = { key, element: e.target, limit } }} aria-label={label} className="rd-field" rows={3} value={appearance.wording?.[key] || ''} placeholder={placeholder} maxLength={limit} disabled={visibility && appearance.wording?.[visibility] === false} onChange={e => edit({ wording: { ...appearance.wording, [key]: e.target.value } })} /> : <input onFocus={e => { focusedWording.current = { key, element: e.target, limit } }} aria-label={label} className="rd-field" value={appearance.wording?.[key] || ''} placeholder={placeholder} maxLength={limit} disabled={visibility && appearance.wording?.[visibility] === false} onChange={e => edit({ wording: { ...appearance.wording, [key]: e.target.value } })} />}</label>
       </div>)}
       <button type="button" className="rr-btn secondary" onClick={() => edit({ wording: {} })}>Reset wording to defaults</button>
       <p>Save your custom envelope here, then select Saved custom design in <Link to="/guests-redesign?tab=invite">RSVP → Invite ↗</Link>. The built-in default keeps its own wording.</p>
       <button type="button" className="rr-btn primary" disabled={busy || (appearance.show_initials !== false && !appearance.initials.trim()) || !unsaved} onClick={save}>{busy ? 'Saving…' : 'Save envelope design'}</button>
-    </div><div>{preview ? <InvitationOpening key={replay} embedded appearance={appearance} event={event} onDone={() => setPreview(false)} /> : <div className="inv-envelope-preview-replay"><p>Preview the envelope and its opening.</p><button type="button" className="rr-btn secondary" onClick={() => { setReplay(n => n + 1); setPreview(true) }}>Preview opening ↻</button></div>}</div></div> : <div className="inv-envelope-options">
+    </div><div><div className="inv-name-preview"><label>Preview recipient<select aria-label="Preview recipient" className="rr-select" value={previewRecipient} onChange={e => { setPreviewRecipient(e.target.value); setPreview(true) }}><option value="personal">Personal invitation — sample guest</option><option value="shared">Shared link — generic greeting</option></select></label>{previewRecipient === 'personal' && <div className="inv-name-samples"><label>Sample first name<input className="rd-field" maxLength={100} value={sampleFirstName} onChange={e => setSampleFirstName(e.target.value)} /></label><label>Sample last name<input className="rd-field" maxLength={100} value={sampleLastName} onChange={e => setSampleLastName(e.target.value)} /></label></div>}<small>Preview names are examples only and are never saved to the invitation.</small></div>{preview ? <InvitationOpening key={replay} embedded appearance={appearance} event={event} guest={previewGuest} onDone={() => setPreview(false)} /> : <div className="inv-envelope-preview-replay"><p>Preview the envelope and its opening.</p><button type="button" className="rr-btn secondary" onClick={() => { setReplay(n => n + 1); setPreview(true) }}>Preview opening ↻</button></div>}</div></div> : <div className="inv-envelope-options">
       <label><input type="radio" name="inv-envelope-mode" checked={!enabled} onChange={() => { setEnabled(false); setStatus('Unsaved changes') }} />Direct entry — show the invitation immediately</label>
       <label><input type="radio" name="inv-envelope-mode" checked={enabled} onChange={() => { setEnabled(true); setStatus('Unsaved changes') }} />Envelope opening — tap to reveal the invitation</label>
       {enabled && <label>Envelope design<select aria-label="Envelope design" className="rr-select" value={useDefault ? 'default' : 'custom'} onChange={e => { setUseDefault(e.target.value === 'default'); setStatus('Unsaved changes') }}><option value="default">Default — ivory envelope with gold seal</option>{config.appearance && <option value="custom">Saved custom design — {ENVELOPE_STYLES[config.appearance.style]}</option>}</select></label>}

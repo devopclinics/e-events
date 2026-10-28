@@ -53,3 +53,15 @@ Design Studio → Envelope has a Wording section for the top label, opening head
 These fields are part of the saved custom appearance. Select Saved custom design in Guests → Invite to use them. The built-in default remains available without Studio access and does not inherit private custom wording. Reset wording restores text/visibility defaults while retaining the seal initials. Text is length-limited and rendered as plain text. Newly added default fields are excluded from visit keys so deployment alone does not replay previously opened envelopes.
 
 `design-service/test_envelope.py` covers wording persistence, validation and default/custom isolation; `frontend/tests/invitation-wording.browser.py` exercises actual controls, visibility, accessibility, reload, literal HTML text, mobile wrapping and visit-key compatibility.
+
+## Guest-name placeholders
+
+In any envelope wording field, use `{{first_name}}`, `{{full_name}}`, `{{last_name}}` or the full-name alias `{{guest_name}}`. For example: `Dear {{first_name}},` or `An invitation for {{full_name}}`. Click a wording field and then a placeholder button to insert at its cursor, or type the marker directly. The saved design contains the marker, never a preview recipient's resolved name.
+
+Personal `/r/:token` links use the first/last names already returned by the existing personal invitation API. Shared RSVP/event links never resolve identity from URL prefill parameters, logged-in organizer details or prior browser registrations: first/full name fall back to `Guest`, last name is blank. Missing last-name spaces before punctuation are cleaned up. Empty functional prompts fall back to their normal labels. Copy without supported placeholders is unchanged.
+
+Design Studio offers Personal invitation and Shared link preview modes, with editable sample names. Samples exist only in component state. Name substitutions are one-pass plain text, never HTML or expressions; expanded text is bounded. The seal initials remain organizer-controlled rather than automatically becoming the guest's initials.
+
+First-visit completion for personal links is scoped using a SHA-256 digest of the invitation token, plus event and appearance. Raw tokens and guest names are not stored in these records. Different personal links on one browser no longer share the same completion record. If digest support is unavailable, personal completion is memory-only. An in-place route change clears old guest data, aborts old requests and waits for the new invitation before showing wording. Shared-link completion keys retain their prior format.
+
+Verification: `frontend/tests/envelope-personalization.test.mjs` covers substitution/fallbacks, literal text, output bounds and scope hashing. `frontend/e2e/invitation-envelope-personalization.spec.js` covers two guests in one browser, delayed route loading, query-name rejection, shared/missing names, literal markup and mobile layout. The wording-control browser test also checks insertion, preview mode switching and that sample names are not saved.

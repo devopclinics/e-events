@@ -1,3 +1,4 @@
+import { personalEnvelopeScope } from '../components/invitations/envelopePersonalization.mjs'
 import EventWebsiteLink from '../components/guesthub/EventWebsiteLink'
 import GuestSpeakers from '../components/guesthub/GuestSpeakers'
 import { readDraftPreview } from '../components/design-studio/model.mjs'
@@ -3329,6 +3330,9 @@ export default function InvitePage() {
   const rsvpLinkMode = !!rsvpToken
   const [eventRecord, setEvent] = useState(null)
   const [guest, setGuest] = useState(null)
+  const [loadedInviteKey, setLoadedInviteKey] = useState(null)
+  const [envelopeScope, setEnvelopeScope] = useState('')
+  const inviteRequestKey = tokenMode ? `personal:${token}` : rsvpLinkMode ? `shared:${rsvpToken}` : `event:${eventId}`
   const [tokenMeta, setTokenMeta] = useState({ deadline_passed: false, already_responded: false })
   const [designTheme, setDesignTheme] = useState(null)
   const [completedEnvelope, setCompletedEnvelope] = useState(null)
@@ -3368,19 +3372,29 @@ export default function InvitePage() {
   }
 
   useEffect(() => {
+    let cancelled = false
+    const controller = new AbortController()
+    setLoading(true); setError(''); setGuest(null); setEvent(null); setConfirmed(null)
+    setDesignLoading(true); setDesignTheme(null)
+    setCompletedEnvelope(null)
+    setTokenMeta({ deadline_passed: false, already_responded: false })
+    try { const raw = storageKey ? localStorage.getItem(storageKey) : null; setPrior(raw ? JSON.parse(raw) : null) } catch { setPrior(null) }
     const url = tokenMode
       ? `/api/invite/token/${token}`
       : rsvpLinkMode
         ? `/api/invite/link/${rsvpToken}`
         : `/api/invite/${eventId}`
-    fetch(url, { cache: 'no-store' })
+    fetch(url, { cache: 'no-store', signal: controller.signal })
       .then((r) => {
         if (r.status === 410) throw new Error('This event has ended.')
         if (r.status === 404) throw new Error(tokenMode || rsvpLinkMode ? 'This RSVP link is not valid.' : 'Event not found.')
         if (!r.ok) throw new Error('Something went wrong.')
         return r.json()
       })
-      .then((data) => {
+      .then(async (data) => {
+        const scope = tokenMode ? await personalEnvelopeScope(token) : ''
+        if (cancelled) return
+        setEnvelopeScope(scope)
         if (tokenMode) {
           setEvent(data.event)
           setGuest(data.guest)
@@ -3389,9 +3403,10 @@ export default function InvitePage() {
           setEvent(data)
         }
       })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false))
-  }, [eventId, token, tokenMode, rsvpToken, rsvpLinkMode])
+      .catch((e) => { if (!cancelled) setError(e.message) })
+      .finally(() => { if (!cancelled) { setLoadedInviteKey(inviteRequestKey); setLoading(false) } })
+    return () => { cancelled = true; controller.abort() }
+  }, [eventId, token, tokenMode, rsvpToken, rsvpLinkMode, storageKey, inviteRequestKey])
 
   useEffect(() => {
     if (!event?.id) {
@@ -3438,7 +3453,7 @@ export default function InvitePage() {
     return () => { cancelled = true; clearTimeout(fallback) }
   }, [event?.id, isStudioPreview])
 
-  if (loading || (!error && designLoading)) return (
+  if (loading || loadedInviteKey !== inviteRequestKey || (!error && designLoading)) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-900">
       <div className="text-slate-500 text-sm animate-pulse">Loading…</div>
     </div>
@@ -3454,12 +3469,12 @@ export default function InvitePage() {
   )
 
   const openingConfig = designTheme?.envelope_config
-  const openingKey = event?.id && openingConfig?.appearance ? envelopeVisitKey(event.id, openingConfig) : null
+  const openingKey = event?.id && openingConfig?.appearance ? envelopeVisitKey(event.id, openingConfig, envelopeScope) : null
   const openingPreview = isStudioPreview || new URLSearchParams(window.location.search).get('envelope-preview') === '1'
   // Returning confirmed guests need immediate access to their pass/hub.
-  if (!confirmed && !prior && !tokenMeta.already_responded && completedEnvelope !== openingKey && shouldShowEnvelope(event?.id, openingConfig, openingPreview)) {
-    return <InvitationOpening key={openingKey} appearance={openingConfig.appearance} event={event} onDone={() => {
-      if (!openingPreview) rememberEnvelope(event.id, openingConfig)
+  if (!confirmed && !prior && !tokenMeta.already_responded && completedEnvelope !== openingKey && shouldShowEnvelope(event?.id, openingConfig, openingPreview, envelopeScope)) {
+    return <InvitationOpening key={openingKey} appearance={openingConfig.appearance} event={event} guest={tokenMode ? guest : null} onDone={() => {
+      if (!openingPreview) rememberEnvelope(event.id, openingConfig, envelopeScope)
       setCompletedEnvelope(openingKey)
       window.requestAnimationFrame(() => {
         const heading = document.querySelector('h1')

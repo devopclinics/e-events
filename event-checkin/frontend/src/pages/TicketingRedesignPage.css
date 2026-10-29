@@ -100,3 +100,5 @@
 .tk-payout-error summary{cursor:pointer;font-size:12px;font-weight:700;color:#795521}
 .tk-payout-error details p{margin-top:11px;padding:12px;border-radius:8px;background:#fff8;font-family:ui-monospace,monospace;font-size:12px}
 @media(max-width:600px){.tk-payout-error{padding:17px;gap:11px}.tk-payout-error h3{font-size:18px}.tk-payout-error-icon{width:30px;height:30px;font-size:18px}.tk-payout-error-next{padding:12px}}
+
+.tk-payout-fees{font-size:13px;line-height:1.6;color:var(--muted);margin:0 0 18px;max-width:78ch}

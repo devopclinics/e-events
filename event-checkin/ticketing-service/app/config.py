@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     core_backend_url: str = "http://backend:8000"
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
+    stripe_connect_webhook_secret: str = ""
     paystack_secret_key: str = ""
     paystack_webhook_secret: str = ""
     checkout_ip_per_minute: int = 120

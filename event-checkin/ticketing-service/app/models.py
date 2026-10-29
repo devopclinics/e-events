@@ -125,6 +125,8 @@ class Order(Base):
     provider: Mapped[str] = mapped_column(String(20))
     provider_reference: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
     payment_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Immutable account scope for direct charges; NULL preserves legacy platform charges.
+    stripe_account_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     checkout_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     access_token: Mapped[str] = mapped_column(String(64), unique=True, default=lambda: uuid.uuid4().hex)
     delivery_status: Mapped[str] = mapped_column(String(30), default="pending")

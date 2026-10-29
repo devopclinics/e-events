@@ -25,6 +25,7 @@ from .schemas import SetupConfirmIn, BulkResendIn, CancellationDecisionIn, Cance
 from .safety import order_view, payment_kind, csv_safe, checkout_limits, peer_address, client_network, clean_buckets, lock_buyer
 from .readiness import checklist, provider_fingerprint
 from .provider_errors import stripe_onboarding_error
+from .stripe_connect import managed_account, create_managed_account, managed_account_link, refresh_managed_account
 
 logging.basicConfig(level=logging.INFO)
 app = FastAPI(title="Festio Ticketing Service", version="0.1.0")
@@ -151,14 +152,16 @@ def safe_refund_retry(status: str, attempts: int) -> bool:
 def safe_payment_event_replay(provider_name: str, event_type: str, processed: bool, attempts: int) -> bool:
     return (not processed and attempts < 5 and
             (provider_name, event_type) in {
-                ("stripe", "checkout.session.completed"), ("paystack", "charge.success")})
+                ("stripe", "checkout.session.completed"), ("stripe", "checkout.session.async_payment_succeeded"), ("paystack", "charge.success")})
 
 
 def payout_out(row: PayoutAccount):
     return {"id": row.id, "provider": row.provider, "business_name": row.business_name,
             "account_name": row.account_name, "account_last4": row.account_last4,
             "currency": row.currency, "status": row.status, "charges_enabled": row.charges_enabled,
-            "payouts_enabled": row.payouts_enabled, "created_at": row.created_at}
+            "payouts_enabled": row.payouts_enabled, "created_at": row.created_at,
+            "risk_management": "stripe" if managed_account(row) else "legacy",
+            "charge_type": "direct" if managed_account(row) else "legacy"}
 
 
 def add_journal(db: AsyncSession, order: Order, *, kind: str, amount: int,
@@ -562,12 +565,19 @@ async def confirm_setup(event_id: str,body: SetupConfirmIn,ident: Identity=Depen
     if body.confirm_currency:checks.update(currency=cfg.currency,currency_confirmed=True)
     if body.confirm_payout:
         account=await db.scalar(select(PayoutAccount).where(PayoutAccount.org_id==ident.org_id,PayoutAccount.provider==cfg.provider,PayoutAccount.provider_account_id==cfg.provider_account_id))
+        if managed_account(account):
+            await refresh_managed_account(account)
         valid=bool(account and account.currency==cfg.currency and account.charges_enabled and account.payouts_enabled and ((account.provider=='paystack' and account.account_name and account.status in {'created','verified'}) or account.status=='verified'))
         if not valid:raise HTTPException(409,'Connect and select the active organizer payout account first')
         checks.update(payout_confirmed_account_id=cfg.provider_account_id,payout_fingerprint=provider_fingerprint(cfg.provider))
     if body.confirm_webhook_dashboard:
         if not provider_ready(cfg.provider):raise HTTPException(409,'Configure provider credentials before confirming its dashboard webhook')
-        checks.update(webhook_confirmed=True,webhook_provider=cfg.provider,webhook_fingerprint=provider_fingerprint(cfg.provider))
+        account = await db.scalar(select(PayoutAccount).where(PayoutAccount.org_id == ident.org_id,
+            PayoutAccount.provider == cfg.provider, PayoutAccount.provider_account_id == cfg.provider_account_id)) if cfg.provider_account_id else None
+        scope = "connected" if managed_account(account) else "platform"
+        if scope == "connected" and not settings.stripe_connect_webhook_secret:
+            raise HTTPException(409, "Configure the connected-account webhook before confirming it")
+        checks.update(webhook_confirmed=True,webhook_provider=cfg.provider,webhook_fingerprint=provider_fingerprint(cfg.provider),webhook_scope=scope)
     if body.confirm_alert_destination:
         sub=await db.scalar(select(OperationsSubscription).where(OperationsSubscription.event_id==event_id,OperationsSubscription.enabled.is_(True),OperationsSubscription.include_alerts.is_(True)))
         if not sub or not sub.recipient:raise HTTPException(409,'Enable a scheduled operations report with an alert destination first')
@@ -679,6 +689,9 @@ async def list_payout_accounts(event_id: str, ident: Identity = Depends(current_
     if stripe_rows and provider_ready("stripe"):
         async with httpx.AsyncClient(timeout=20) as client:
             for row in stripe_rows:
+                if managed_account(row):
+                    await refresh_managed_account(row)
+                    continue
                 response = await client.get(f"https://api.stripe.com/v1/accounts/{row.provider_account_id}",
                                             auth=(settings.stripe_secret_key, ""))
                 if response.status_code < 400:
@@ -765,22 +778,27 @@ async def create_stripe_account(event_id: str, body: StripeAccountIn,
         raise HTTPException(403, "Wrong event scope")
     if not provider_ready("stripe"):
         raise HTTPException(503, "Stripe credentials are not configured")
-    async with httpx.AsyncClient(timeout=20) as client:
-        created = await client.post("https://api.stripe.com/v1/accounts", auth=(settings.stripe_secret_key, ""), data={
-            "type": "express", "country": body.country, "email": str(body.email),
-            "business_profile[name]": body.business_name,
-            "capabilities[card_payments][requested]": "true", "capabilities[transfers][requested]": "true",
-            "metadata[festio_org_id]": ident.org_id,
-        })
-        if created.status_code >= 400:
-            raise stripe_onboarding_error(created, "create the payout account", (str(body.email), body.business_name, settings.stripe_secret_key))
-        account = created.json()
-    onboarding_url = await stripe_account_link(account["id"])
-    row = PayoutAccount(id=uid(), org_id=ident.org_id, provider="stripe",
-                        provider_account_id=account["id"], business_name=body.business_name,
-                        account_name=body.business_name, currency="USD", status="onboarding",
-                        charges_enabled=False, payouts_enabled=False, details={"country": body.country})
-    db.add(row); await db.commit(); await db.refresh(row)
+    account = await create_managed_account(ident.org_id, body.business_name, str(body.email), body.country)
+    row = await db.scalar(select(PayoutAccount).where(PayoutAccount.org_id == ident.org_id,
+        PayoutAccount.provider == "stripe", PayoutAccount.provider_account_id == account["id"]))
+    if not row:
+        row = PayoutAccount(id=uid(), org_id=ident.org_id, provider="stripe",
+            provider_account_id=account["id"], business_name=body.business_name,
+            account_name=body.business_name, currency="USD", status="onboarding",
+            charges_enabled=False, payouts_enabled=False,
+            details={"country": body.country, "api_version": "v2", "charge_type": "direct", "losses_collector": "stripe"})
+        db.add(row)
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+            row = await db.scalar(select(PayoutAccount).where(PayoutAccount.org_id == ident.org_id,
+                PayoutAccount.provider == "stripe", PayoutAccount.provider_account_id == account["id"]))
+            if not row:
+                raise
+        await db.refresh(row)
+    # Keep the account even if link creation fails, so onboarding can be resumed.
+    onboarding_url = await managed_account_link(row.provider_account_id)
     return {**payout_out(row), "onboarding_url": onboarding_url}
 
 
@@ -795,7 +813,7 @@ async def resume_stripe_onboarding(event_id: str, account_id: str, ident: Identi
         raise HTTPException(404, "Stripe payout account not found")
     if not provider_ready("stripe"):
         raise HTTPException(503, "Stripe credentials are not configured")
-    return {"onboarding_url": await stripe_account_link(account.provider_account_id)}
+    return {"onboarding_url": await (managed_account_link(account.provider_account_id) if managed_account(account) else stripe_account_link(account.provider_account_id))}
 
 
 @app.post("/api/ticketing/events/{event_id}/payout-accounts/{account_id}/select")
@@ -977,9 +995,19 @@ async def create_order(event_id: str, body: OrderIn, db: AsyncSession = Depends(
         (tax if cfg.tax_paid_by == "buyer" else 0)
     if total>0 and settings.environment=='production' and not (await checklist(db,cfg))['ready']:
         raise HTTPException(409,'Paid ticket sales are not ready yet. Please contact the organizer.')
+    payout = await db.scalar(select(PayoutAccount).where(PayoutAccount.org_id == cfg.org_id,
+        PayoutAccount.provider == "stripe", PayoutAccount.provider_account_id == cfg.provider_account_id)) if cfg.provider == "stripe" and cfg.provider_account_id else None
+    direct_account = cfg.provider_account_id if managed_account(payout) else None
+    if direct_account and total > 0:
+        await refresh_managed_account(payout)
+        if not payout.charges_enabled or not payout.payouts_enabled:
+            raise HTTPException(409, "Stripe has not enabled payments and payouts for this organizer")
+    if direct_account and total > 0 and not settings.stripe_connect_webhook_secret:
+        raise HTTPException(409, "Connected-account payment confirmations must be configured before checkout")
     order = Order(id=uid(), event_id=event_id, org_id=cfg.org_id, buyer_name=body.buyer_name,
         buyer_email=str(body.buyer_email), buyer_phone=body.buyer_phone, currency=cfg.currency,
         subtotal=subtotal, discount=discount, platform_fee=fee, tax_amount=tax, total=total, provider=cfg.provider,
+        stripe_account_id=direct_account,
         promo_code=promo.code if promo else None, waitlist_entry_id=offer.id if offer else None,
         custom_answers=body.custom_answers,
         hold_expires_at=datetime.utcnow() + timedelta(minutes=settings.inventory_hold_minutes))
@@ -1023,7 +1051,8 @@ async def create_order(event_id: str, body: OrderIn, db: AsyncSession = Depends(
     else:
         reference, url = await provider(cfg.provider).create_checkout(order_id=order.id,
             access_token=order.access_token, email=order.buyer_email, amount=order.total, currency=order.currency,
-            account_id=cfg.provider_account_id, fee=order.platform_fee)
+            account_id=cfg.provider_account_id, fee=order.platform_fee,
+            **({"direct": True} if direct_account else {}))
         order.provider_reference, order.checkout_url = reference, url
         await db.commit()
     return {"order_id": order.id, "status": order.status, "checkout_url": order.checkout_url,
@@ -1211,6 +1240,17 @@ async def apply_payment_success(db: AsyncSession, payment_event: PaymentEvent, r
         payment_event.processed_at = datetime.utcnow()
         payment_event.last_error = None
         await db.commit(); return order
+    if payment_event.provider == "stripe":
+        proof = payment_event.payload or {}
+        if (proof.get("account") or None) != order.stripe_account_id:
+            payment_event.last_error = "Stripe payment account does not match this order"
+            await db.commit()
+            return None
+        obj = proof.get("data", {}).get("object", {})
+        if order.stripe_account_id and (obj.get("payment_status") != "paid" or proof.get("livemode") is not (settings.environment.lower() == "production")):
+            payment_event.last_error = "Direct payment is not paid in the expected environment"
+            await db.commit()
+            return None
     if amount != order.total or currency.upper() != order.currency.upper():
         logging.error("Rejected mismatched payment for order %s", order.id)
         payment_event.last_error = "Payment amount or currency did not match the order"
@@ -1264,6 +1304,10 @@ async def suspend_for_payment_risk(db: AsyncSession, provider_name: str, provide
         await db.rollback(); return
     order = await db.scalar(select(Order).where(
         (Order.payment_reference == reference) | (Order.provider_reference == reference)).with_for_update())
+    if order and provider_name == "stripe" and (payload.get("account") or None) != order.stripe_account_id:
+        payment_event.last_error = "Stripe risk event account does not match this order"
+        await db.commit()
+        return
     if not order or order.status in ("refunded", "disputed", "payment_reversed"):
         payment_event.processed = True
         payment_event.processed_at = datetime.utcnow()
@@ -1286,7 +1330,7 @@ async def suspend_for_payment_risk(db: AsyncSession, provider_name: str, provide
 
 
 async def update_refund_from_webhook(db: AsyncSession, provider_name: str, refund_id: str | None,
-                                     payment_reference: str | None, succeeded: bool, failure_reason: str | None = None):
+                                     payment_reference: str | None, succeeded: bool, failure_reason: str | None = None, stripe_account_id: str | None = None):
     row = await db.scalar(select(PaymentRefund).where(
         PaymentRefund.provider == provider_name,
         PaymentRefund.provider_refund_id == refund_id).with_for_update()) if refund_id else None
@@ -1299,6 +1343,8 @@ async def update_refund_from_webhook(db: AsyncSession, provider_name: str, refun
                 .order_by(PaymentRefund.created_at).with_for_update())
     if not row or row.status != "processing": return
     order = await db.get(Order, row.order_id)
+    if provider_name == "stripe" and (stripe_account_id or None) != order.stripe_account_id:
+        return
     if succeeded:
         await complete_refund(db, row, order)
     else:
@@ -1308,10 +1354,75 @@ async def update_refund_from_webhook(db: AsyncSession, provider_name: str, refun
     await db.commit()
 
 
+async def direct_refund_event(db, account_id, obj):
+    """Reconcile refunds initiated in Stripe as well as Festio; scope every lookup."""
+    reference = obj.get("payment_intent")
+    if not isinstance(reference, str) or not obj.get("id"):
+        return
+    order = await db.scalar(select(Order).where(Order.provider == "stripe",
+        Order.stripe_account_id == account_id, Order.payment_reference == reference).with_for_update())
+    if not order:
+        return
+    amount = obj.get("amount")
+    if type(amount) is not int or amount <= 0 or str(obj.get("currency", "")).upper() != order.currency:
+        return
+    row = await db.scalar(select(PaymentRefund).where(PaymentRefund.provider == "stripe",
+        PaymentRefund.provider_refund_id == obj["id"]).with_for_update())
+    if row and (row.order_id != order.id or row.amount != amount or row.status == "completed"):
+        return
+    was_internal_pending = bool(row and row.status in ("processing", "retry_unknown") and row.requested_by != "stripe_webhook")
+    if not row:
+        row = PaymentRefund(id=uid(), order_id=order.id, event_id=order.event_id,
+            provider="stripe", provider_refund_id=obj["id"], amount=amount,
+            reason="Refund initiated in Stripe", requested_by="stripe_webhook", status="processing")
+        db.add(row)
+    if obj.get("status") == "succeeded":
+        refunded = abs(int(await db.scalar(select(func.coalesce(func.sum(LedgerEntry.amount), 0)).where(
+            LedgerEntry.order_id == order.id, LedgerEntry.kind == "refund")) or 0))
+        if refunded + amount > order.total:
+            row.status, row.failure_reason = "review_required", "Provider refunds exceed the recorded order total"
+        else:
+            await complete_refund(db, row, order)
+    elif obj.get("status") in ("failed", "canceled"):
+        row.status, row.failure_reason = "failed", obj.get("failure_reason") or "Stripe reported refund failure"
+        if was_internal_pending and order.status == "refund_processing":
+            remaining = await db.scalar(select(func.count(PaymentRefund.id)).where(PaymentRefund.order_id == order.id,
+                PaymentRefund.id != row.id, PaymentRefund.status.in_(("processing", "retry_unknown"))))
+            if not remaining:
+                prior = await db.scalar(select(func.count(LedgerEntry.id)).where(LedgerEntry.order_id == order.id,
+                    LedgerEntry.kind == "refund"))
+                order.status = "partially_refunded" if prior else "fulfilled" if order.fulfilled_at else "paid"
+                order.delivery_status = "queued"
+    await db.commit()
+
+
 @app.post("/api/ticketing/webhooks/stripe")
 async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     raw = await request.body(); event = verify_stripe(raw, request.headers.get("stripe-signature", ""))
-    if event.get("type") == "checkout.session.completed":
+    return await process_stripe_event(event, db)
+
+
+@app.post("/api/ticketing/webhooks/stripe-connect")
+async def stripe_connect_webhook(request: Request, db: AsyncSession = Depends(get_db)):
+    if not settings.stripe_connect_webhook_secret:
+        raise HTTPException(503, "Connected-account webhook signing is not configured")
+    event = verify_stripe(await request.body(), request.headers.get("stripe-signature", ""), secret=settings.stripe_connect_webhook_secret)
+    if not event.get("account"):
+        raise HTTPException(400, "A connected-account event is required")
+    return await process_stripe_event(event, db)
+
+
+async def process_stripe_event(event: dict, db: AsyncSession):
+    if event.get("account") and event.get("livemode") is not (settings.environment.lower() == "production"):
+        return {"received": True, "ignored": "environment"}
+    if event.get("type") == "account.updated" and event.get("account"):
+        row = await db.scalar(select(PayoutAccount).where(PayoutAccount.provider == "stripe",
+            PayoutAccount.provider_account_id == event["account"]))
+        if managed_account(row):
+            await refresh_managed_account(row)
+            await db.commit()
+        return {"received": True}
+    if event.get("type") in ("checkout.session.completed", "checkout.session.async_payment_succeeded"):
         obj = event["data"]["object"]
         await record_success(db, "stripe", event["id"], event["type"], event, obj["id"],
                              obj.get("payment_intent"), int(obj.get("amount_total") or 0),
@@ -1324,16 +1435,19 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
         if isinstance(charge, str):
             async with httpx.AsyncClient(timeout=20) as client:
                 charge_response = await client.get(f"https://api.stripe.com/v1/charges/{charge}",
-                                                   auth=(settings.stripe_secret_key, ""))
+                                                   auth=(settings.stripe_secret_key, ""),
+                                                   headers={"Stripe-Account": event["account"]} if event.get("account") else {})
             if charge_response.status_code < 400:
                 reference = charge_response.json().get("payment_intent") or reference
         await suspend_for_payment_risk(db, "stripe", event.get("id", uid()), event.get("type", "dispute"),
                                        event, reference)
-    elif event.get("type") in ("refund.updated", "refund.created"):
+    elif event.get("type") in ("refund.updated", "refund.created", "refund.failed"):
         obj = event.get("data", {}).get("object", {})
-        if obj.get("status") in ("succeeded", "failed", "canceled"):
+        if event.get("account"):
+            await direct_refund_event(db, event["account"], obj)
+        elif obj.get("status") in ("succeeded", "failed", "canceled"):
             await update_refund_from_webhook(db, "stripe", obj.get("id"), obj.get("payment_intent"),
-                                             obj.get("status") == "succeeded", obj.get("failure_reason"))
+                                             obj.get("status") == "succeeded", obj.get("failure_reason"), event.get("account"))
     return {"received": True}
 
 
@@ -1669,7 +1783,7 @@ async def replay_payment_event(event_id: str, payment_event_id: str,
     if not safe_payment_event_replay(row.provider, row.event_type, row.processed, row.processing_attempts):
         raise HTTPException(409, "Provider event type or replay limit is not safe")
     payload = row.payload or {}
-    if row.provider == "stripe" and row.event_type == "checkout.session.completed":
+    if row.provider == "stripe" and row.event_type in ("checkout.session.completed", "checkout.session.async_payment_succeeded"):
         obj = payload.get("data", {}).get("object", {})
         reference, payment_reference = obj.get("id"), obj.get("payment_intent")
         amount, currency = int(obj.get("amount_total") or 0), obj.get("currency") or ""
@@ -1909,7 +2023,8 @@ async def refund_order(db: AsyncSession, order: Order, body: RefundIn, requested
         PaymentRefund.order_id == order.id, PaymentRefund.status == "processing")) or 0)
     if amount + already_refunded + pending > order.total or order.provider == "manual":
         raise HTTPException(400, "Refund exceeds order total")
-    result = await provider(order.provider).refund(reference=order.payment_reference or order.provider_reference, amount=amount)
+    result = await provider(order.provider).refund(reference=order.payment_reference or order.provider_reference, amount=amount,
+        **({"account_id": order.stripe_account_id} if order.provider == "stripe" and order.stripe_account_id else {}))
     raw_status = str(result.get("status") or "processing").lower()
     completed = raw_status in ("succeeded", "success", "processed", "completed")
     refund_row = PaymentRefund(id=uid(), order_id=order.id, event_id=order.event_id, provider=order.provider,
@@ -1972,7 +2087,8 @@ async def retry_refund(event_id: str, refund_id: str, ident: Identity = Depends(
     try:
         result = await provider(order.provider).refund(
             reference=order.payment_reference or order.provider_reference,
-            amount=row.amount, idempotency_key=idempotency_key)
+            amount=row.amount, idempotency_key=idempotency_key,
+            **({"account_id": order.stripe_account_id} if order.provider == "stripe" and order.stripe_account_id else {}))
     except HTTPException as exc:
         # Network/provider ambiguity is not a confirmed failure. Keep passes suspended
         # until a webhook or an operator reconciliation resolves the provider outcome.

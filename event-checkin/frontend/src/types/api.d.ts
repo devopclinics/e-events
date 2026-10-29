@@ -1344,6 +1344,7 @@ export interface FloorPlanSave {
 export interface FloorTableOut {
   capacity: number
   category?: (string) | null
+  color?: (string) | null
   id: string
   name: string
   pos_x?: (number) | null
@@ -1356,6 +1357,7 @@ export interface FloorTableOut {
 }
 
 export interface FloorTablePos {
+  color?: (string) | null
   id: string
   pos_x?: (number) | null
   pos_y?: (number) | null

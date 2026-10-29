@@ -77,7 +77,7 @@ async def _build_plan_out(event: Event, plan: FloorPlan, db: AsyncSession, *, ed
         table_out.append(FloorTableOut(
             id=t.id, name=t.name, capacity=t.capacity, category=t.category,
             table_group_id=gid, table_group_name=gname, seated=seated.get(t.id, 0),
-            pos_x=t.pos_x, pos_y=t.pos_y, shape=t.shape or "round", rotation=t.rotation or 0,
+            pos_x=t.pos_x, pos_y=t.pos_y, shape=t.shape or "round", rotation=t.rotation or 0, color=t.floor_color,
         ))
 
     elements = (await db.execute(
@@ -125,6 +125,8 @@ async def _apply_save(event_id: str, plan: FloorPlan, data: FloorPlanSave, db: A
                 t.pos_y = pos.pos_y
             if pos.shape in ("round", "rect"):
                 t.shape = pos.shape
+            if "color" in pos.model_fields_set:
+                t.floor_color = pos.color
             if pos.rotation is not None:
                 t.rotation = int(pos.rotation) % 360
 
@@ -277,7 +279,7 @@ def _floor_svg(plan: FloorPlanOut) -> str:
         parts.append(element_svg(el))
     for t in plan.tables:
         fill = color_by_group.setdefault(t.table_group_id, _GROUP_COLORS[len(color_by_group) % len(_GROUP_COLORS)]) if t.table_group_id else "#0ea5e9"
-        parts.append(table_svg(t, fill))
+        parts.append(table_svg(t, t.color or fill))
     parts.append('</svg>')
     return "".join(parts)
 

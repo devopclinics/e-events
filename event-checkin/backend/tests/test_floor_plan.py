@@ -127,3 +127,35 @@ async def test_share_links_view_and_edit(ctx):
 async def test_bad_token_rejected(ctx):
     r = await ctx.client.get("/api/floor/not-a-real-token")
     assert r.status_code == 404
+
+@pytest.mark.asyncio
+async def test_table_colours_persist_reset_and_preserve_seating(ctx):
+    ev = ctx.ids['event_a']
+    async with _Session() as db:
+        source = await db.get(Event, ev)
+        other_event = Event(org_id=source.org_id, name='Other floor plan', couples_name='Test', event_date=source.event_date, checkin_base_url='http://x')
+        db.add(other_event)
+        await db.flush()
+        other = other_event.id
+        await db.commit()
+    await _paid(ev)
+    t1, t2 = await _tables(ev, [('Blue table', 10), ('Purple table', 10)])
+    foreign, = await _tables(other, [('Other event', 5)])
+    ctx.login(ctx.ids['superadmin'])
+    url = f'/api/events/{ev}/floor-plan'
+    saved = await ctx.client.put(url, json={'tables': [{'id': t1, 'color': '#1d4ed8'}, {'id': t2, 'color': '#1d4ed8'}, {'id': foreign, 'color': '#be123c'}]})
+    assert saved.status_code == 200, saved.text
+    got = (await ctx.client.get(url)).json()
+    assert all(t['color'] == '#1d4ed8' and t['capacity'] == 10 for t in got['tables'])
+    async with _Session() as db:
+        assert (await db.get(SeatingTable, foreign)).floor_color is None
+    # An older editor omitting colour must not erase custom styling.
+    await ctx.client.put(url, json={'tables': [{'id': t1, 'pos_x': 100}]})
+    assert next(t for t in (await ctx.client.get(url)).json()['tables'] if t['id'] == t1)['color'] == '#1d4ed8'
+    bad = await ctx.client.put(url, json={'tables': [{'id': t1, 'color': 'red" onload="alert(1)'}]})
+    assert bad.status_code == 422
+    await ctx.client.put(url, json={'tables': [{'id': t1, 'color': None}]})
+    assert next(t for t in (await ctx.client.get(url)).json()['tables'] if t['id'] == t1)['color'] is None
+    from app.routers.floor import _floor_svg
+    from app.schemas import FloorPlanOut
+    assert '#1d4ed8' in _floor_svg(FloorPlanOut.model_validate(got))

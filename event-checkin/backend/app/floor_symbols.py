@@ -28,14 +28,16 @@ def element_svg(el):
     parts.append('</g>');return ''.join(parts)
 
 def table_svg(t, color):
+    custom=bool(getattr(t,"color",None));ink="#ffffff" if custom and (int(color[1:3],16)*299+int(color[3:5],16)*587+int(color[5:7],16)*114)/1000<150 else "#233e50"
+    paper=color if custom else "#fff";chair=color if custom else "#f7fafb"
     w=max(52,44+t.capacity*4);h=w*.7 if t.shape=='rect' else w;capacity=min(20,max(0,t.capacity));cx,cy=w/2,h/2
     parts=[f'<g data-seating-id="{escape(t.id)}" transform="translate({t.pos_x} {t.pos_y}) rotate({t.rotation} {cx} {cy})">']
     for i in range(capacity):
-        if t.shape!='rect':parts.append(f'<rect x="{w/2-5}" y="-13" width="10" height="7" rx="3" fill="#f7fafb" stroke="{color}" transform="rotate({i/capacity*360} {cx} {cy})"/>')
+        if t.shape!='rect':parts.append(f'<rect x="{w/2-5}" y="-13" width="10" height="7" rx="3" fill="{chair}" stroke="{color}" transform="rotate({i/capacity*360} {cx} {cy})"/>')
         else:
             top=i<math.ceil(capacity/2);count=math.ceil(capacity/2) if top else math.floor(capacity/2);j=i if top else i-math.ceil(capacity/2)
-            parts.append(f'<rect x="{(j+1)*w/(count+1)-5}" y="{-12 if top else h+5}" width="10" height="7" rx="3" fill="#f7fafb" stroke="{color}"/>')
-    if t.shape=='rect':parts.append(f'<rect width="{w}" height="{h}" rx="8" fill="#fff" stroke="{color}" stroke-width="2"/>')
-    else:parts.append(f'<circle cx="{cx}" cy="{cy}" r="{w/2}" fill="#fff" stroke="{color}" stroke-width="2"/><circle cx="{cx}" cy="{cy}" r="{max(1,w/2-5)}" fill="{color}" fill-opacity=".055"/>')
-    parts.append(f'<text x="{cx}" y="{cy-3}" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="700" fill="#233e50">{escape(t.name)}</text><text x="{cx}" y="{cy+13}" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#71828e">{t.seated}/{t.capacity} seats</text></g>')
+            parts.append(f'<rect x="{(j+1)*w/(count+1)-5}" y="{-12 if top else h+5}" width="10" height="7" rx="3" fill="{chair}" stroke="{color}"/>')
+    if t.shape=='rect':parts.append(f'<rect width="{w}" height="{h}" rx="8" fill="{paper}" stroke="{color}" stroke-width="2"/>')
+    else:parts.append(f'<circle cx="{cx}" cy="{cy}" r="{w/2}" fill="{paper}" stroke="{color}" stroke-width="2"/><circle cx="{cx}" cy="{cy}" r="{max(1,w/2-5)}" fill="{color}" fill-opacity=".055"/>')
+    parts.append(f'<text x="{cx}" y="{cy-3}" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="700" fill="{ink}">{escape(t.name)}</text><text x="{cx}" y="{cy+13}" text-anchor="middle" font-family="sans-serif" font-size="10" fill="{ink if custom else "#71828e"}">{t.seated}/{t.capacity} seats</text></g>')
     return ''.join(parts)

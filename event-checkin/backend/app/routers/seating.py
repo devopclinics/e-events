@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from ..database import get_db
-from ..models import Event, SeatingTable, Guest, EventUser, EventUserSection, User, TableGroup, TableGroupTable, MenuCategory, MealService, GuestMealService
+from ..models import Event, SeatingTable, Guest, Household, EventUser, EventUserSection, User, TableGroup, TableGroupTable, MenuCategory, MealService, GuestMealService
 from ..schemas import (
     SeatingTableCreate, SeatingTableOut, SeatAssignRequest,
     TableGroupCreate, TableGroupOut, TableGroupTablesUpdate,
@@ -237,15 +237,24 @@ async def create_table(event_id: str, data: SeatingTableCreate, db: AsyncSession
 async def update_table(
     event_id: str, table_id: str, data: SeatingTableCreate,
     if_unmodified_since: datetime | None = None,
+    protect_assigned: bool = False,
     db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin),
 ):
-    table = await db.get(SeatingTable, table_id)
+    table = await db.scalar(select(SeatingTable).where(SeatingTable.id == table_id, SeatingTable.event_id == event_id).with_for_update())
     if not table or table.event_id != event_id:
         raise HTTPException(404, "Table not found")
     # Optional optimistic-concurrency guard, same pattern as task/event/guest/
     # permission updates: omitted by callers that don't track it (legacy UI).
     if if_unmodified_since is not None and table.updated_at and table.updated_at != if_unmodified_since:
         raise HTTPException(409, "This table was changed by another operator. Refresh and try again.")
+    if protect_assigned:
+        if data.capacity < 1:
+            raise HTTPException(400, "A seating table needs at least one seat.")
+        rows = (await db.execute(select(Guest.seat_number, Guest.held_seat).where(Guest.table_id == table_id))).all()
+        occupied = [int(value) for row in rows for value in row if value and str(value).isdigit()]
+        minimum = max(len(rows), max(occupied, default=0))
+        if data.capacity != table.capacity and data.capacity < minimum:
+            raise HTTPException(409, f"Capacity must be at least {minimum} to preserve assigned and reserved seats. Move those guests first.")
     table.name = await _ensure_unique_table_name(event_id, data.name, db, exclude_id=table_id)
     table.capacity = data.capacity
     if "service_section" in data.model_fields_set:
@@ -258,15 +267,19 @@ async def update_table(
     return await _table_out(table, db)
 
 
-async def delete_table_cascade(event_id: str, table_id: str, db: AsyncSession) -> bool:
-    """Shared cascade-delete body used by both the internal admin endpoint
-    below and the public API's write endpoint (public_api.py). No occupancy
-    block — guests on this table are detached (table_id/seat_number cleared),
-    not blocked. Returns False if the table doesn't exist in this event."""
-    table = await db.get(SeatingTable, table_id)
+async def delete_table_cascade(event_id: str, table_id: str, db: AsyncSession, *, require_empty: bool = False) -> bool:
+    """Legacy deletion detaches guests; planner callers explicitly require an empty, unlinked table."""
+    table = await db.scalar(select(SeatingTable).where(SeatingTable.id == table_id, SeatingTable.event_id == event_id).with_for_update())
     if not table or table.event_id != event_id:
         return False
     guests = (await db.execute(select(Guest).where(Guest.table_id == table_id))).scalars().all()
+    if require_empty:
+        if guests:
+            raise HTTPException(409, "This table has assigned guests. Move them before removing the table.")
+        linked = await db.scalar(select(TableGroupTable.id).where(TableGroupTable.table_id == table_id))
+        default = await db.scalar(select(Household.id).where(Household.event_id == event_id, Household.default_table_id == table_id))
+        if linked or default:
+            raise HTTPException(409, "This table is linked to a seating group or household. Update those links before removing it.")
     for g in guests:
         g.table_id = None
         g.seat_number = None
@@ -276,8 +289,8 @@ async def delete_table_cascade(event_id: str, table_id: str, db: AsyncSession) -
 
 
 @router.delete("/{event_id}/tables/{table_id}", status_code=204)
-async def delete_table(event_id: str, table_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
-    if not await delete_table_cascade(event_id, table_id, db):
+async def delete_table(event_id: str, table_id: str, require_empty: bool = False, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
+    if not await delete_table_cascade(event_id, table_id, db, require_empty=require_empty):
         raise HTTPException(404, "Table not found")
 
 

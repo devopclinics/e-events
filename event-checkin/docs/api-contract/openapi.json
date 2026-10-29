@@ -47035,6 +47035,16 @@
               "title": "Table Id",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "require_empty",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Require Empty",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -47098,6 +47108,16 @@
                 }
               ],
               "title": "If Unmodified Since"
+            }
+          },
+          {
+            "in": "query",
+            "name": "protect_assigned",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Protect Assigned",
+              "type": "boolean"
             }
           }
         ],

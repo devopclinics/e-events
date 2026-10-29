@@ -58,7 +58,7 @@ export default function TableManager({ eventId, table: initial, suggestedName, o
     <form onSubmit={saveDetails}><fieldset disabled={busy || loading || !ready}>
       <label className="venue-field"><span>Table name</span><input required maxLength={100} value={name} onChange={e => setName(e.target.value)} autoFocus /></label>
       <label className="venue-field"><span>Seats at this table</span><input required type="number" min="1" max="1000" step="1" value={capacity} onChange={e => setCapacity(e.target.value)} /></label>
-      {initial && <p className="venue-help">{assignedCount} guests assigned. Capacity changes must preserve assigned and reserved seat numbers.</p>}
+      {initial && <p className="venue-help">{assignedCount} guest{assignedCount === 1 ? '' : 's'} assigned. Capacity changes must preserve assigned and reserved seat numbers.</p>}
       <button className="venue-primary" disabled={!name.trim()}>{busy ? 'Saving…' : initial ? 'Save table details' : 'Add table'}</button>
     </fieldset></form>
     {initial && <section className="venue-control-section"><h3>Guests at this table</h3>

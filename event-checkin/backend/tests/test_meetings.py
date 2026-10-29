@@ -20,6 +20,13 @@ def draft(**changes):
         {"name": "Jamie", "email": "jamie@example.com"}], **changes}
 
 
+def rescheduled_times():
+    # Keep rescheduling scenarios in the future when CI runs after the original
+    # fixture's calendar date or local meeting time.
+    day = (datetime.now(timezone.utc) + timedelta(days=8)).strftime("%Y-%m-%d")
+    return {"start": f"{day}T10:00", "end": f"{day}T11:00"}
+
+
 @pytest.fixture(autouse=True)
 def setup_meetings(monkeypatch):
     monkeypatch.setattr(settings, "meetings_sending_enabled", True)
@@ -94,7 +101,7 @@ async def test_reschedule_uid_sequence_add_remove_cancel_and_stale_links(ctx):
         alex = await db.scalar(select(MeetingAttendee).where(MeetingAttendee.email == 'alex@example.com'))
         token = response_token(meeting, alex)
         original = calendar_bytes(meeting, meeting.published, alex, 'REQUEST', 0).decode()
-    data = draft(start='2026-10-29T10:00', end='2026-10-29T11:00', attendees=[{'name':'Jamie','email':'jamie@example.com'}, {'name':'New','email':'new@example.com'}])
+    data = draft(**rescheduled_times(), attendees=[{'name':'Jamie','email':'jamie@example.com'}, {'name':'New','email':'new@example.com'}])
     r = await ctx.client.put(f'/api/meetings/{m["id"]}', json={**data, 'revision': 1})
     assert r.status_code == 200
     # Unsaved publication changes do not invalidate the currently published invitation.
@@ -406,7 +413,7 @@ async def test_channel_lifecycle_repeat_retry_and_wallet_idempotency(ctx,monkeyp
         assert (await db.get(Organization,ctx.ids['org_a'])).message_credit_units==expected
         wa=await db.get(MeetingDelivery,next(d['id'] for d in m['deliveries'] if d['channel']=='whatsapp'))
         assert wa.wire_payload['template_ref']=='mock-project'
-    changed={**m['draft'],'start':'2026-10-29T10:00','end':'2026-10-29T11:00','revision':m['revision']}
+    changed={**m['draft'],**rescheduled_times(),'revision':m['revision']}
     m=(await ctx.client.put(f'/api/meetings/{m["id"]}',json=changed)).json()
     m=await publish_paid(ctx,m)
     assert sorted(d['channel'] for d in m['deliveries'] if d['sequence']==1)==['email','sms','whatsapp']

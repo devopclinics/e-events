@@ -729,7 +729,7 @@ export const api = {
       force,
     }),
   updateGuest: (eventId, guestId, data, ifUnmodifiedSince) =>
-    req('PATCH', `/events/${eventId}/guests/${guestId}${ifUnmodifiedSince ? `?if_unmodified_since=${encodeURIComponent(ifUnmodifiedSince)}` : ''}`, data),
+    req('PATCH', `/events/${eventId}/guests/${guestId}${ifUnmodifiedSince || protectAssigned ? `?${new URLSearchParams({...ifUnmodifiedSince && {if_unmodified_since:ifUnmodifiedSince},...protectAssigned && {protect_assigned:'true'}})}` : ''}`, data),
   guestRsvpAnswers: (eventId, guestId) => req('GET', `/events/${eventId}/guests/${guestId}/rsvp-answers`),
   deleteGuest: (eventId, guestId) => req('DELETE', `/events/${eventId}/guests/${guestId}`),
   resendInvite: (eventId, guestId) => req('POST', `/events/${eventId}/guests/${guestId}/resend-invite`),
@@ -834,9 +834,9 @@ export const api = {
   // Seating
   listTables: (eventId) => req('GET', `/events/${eventId}/tables`),
   createTable: (eventId, data) => req('POST', `/events/${eventId}/tables`, data),
-  updateTable: (eventId, tableId, data, ifUnmodifiedSince) =>
+  updateTable: (eventId, tableId, data, ifUnmodifiedSince, protectAssigned = false) =>
     req('PUT', `/events/${eventId}/tables/${tableId}${ifUnmodifiedSince ? `?if_unmodified_since=${encodeURIComponent(ifUnmodifiedSince)}` : ''}`, data),
-  deleteTable: (eventId, tableId) => req('DELETE', `/events/${eventId}/tables/${tableId}`),
+  deleteTable: (eventId, tableId, requireEmpty = false) => req('DELETE', `/events/${eventId}/tables/${tableId}${requireEmpty ? '?require_empty=true' : ''}`),
 
   // Floor-plan designer (admin, logged-in)
   getFloorPlan: (eventId) => req('GET', `/events/${eventId}/floor-plan`),
@@ -868,7 +868,7 @@ export const api = {
     }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Could not save.'))))),
   getSeatingChart: (eventId) => req('GET', `/events/${eventId}/seating`),
   autoAssign: (eventId, clear = false) => req('POST', `/events/${eventId}/seating/auto-assign?clear=${clear}`),
-  assignSeat: (eventId, guestId, body) => req('PATCH', `/events/${eventId}/guests/${guestId}/seat`, body),
+  assignSeat: (eventId, guestId, body, respectReserved = false) => req('PATCH', `/events/${eventId}/guests/${guestId}/seat${respectReserved ? '?respect_reserved=true' : ''}`, body),
   markMealServed: (eventId, guestId) => req('PATCH', `/events/${eventId}/guests/${guestId}/meal-served`),
   markCategoryServed: (eventId, categoryId, guestId) =>
     req('PATCH', `/events/${eventId}/menu-categories/${categoryId}/guests/${guestId}/served`),

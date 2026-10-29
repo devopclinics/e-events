@@ -24,6 +24,7 @@ from .schemas import SetupConfirmIn, BulkResendIn, CancellationDecisionIn, Cance
 
 from .safety import order_view, payment_kind, csv_safe, checkout_limits, peer_address, client_network, clean_buckets, lock_buyer
 from .readiness import checklist, provider_fingerprint
+from .provider_errors import stripe_onboarding_error
 
 logging.basicConfig(level=logging.INFO)
 app = FastAPI(title="Festio Ticketing Service", version="0.1.0")
@@ -700,7 +701,7 @@ async def stripe_account_link(account_id: str) -> str:
             "return_url": f"{settings.public_base_url}/ticketing-redesign?stripe=complete",
         })
     if response.status_code >= 400:
-        raise HTTPException(502, "Stripe could not start connected-account onboarding")
+        raise stripe_onboarding_error(response, "start payout onboarding", (account_id, settings.stripe_secret_key))
     return response.json()["url"]
 
 
@@ -772,7 +773,7 @@ async def create_stripe_account(event_id: str, body: StripeAccountIn,
             "metadata[festio_org_id]": ident.org_id,
         })
         if created.status_code >= 400:
-            raise HTTPException(502, "Stripe could not create the connected account")
+            raise stripe_onboarding_error(created, "create the payout account", (str(body.email), body.business_name, settings.stripe_secret_key))
         account = created.json()
     onboarding_url = await stripe_account_link(account["id"])
     row = PayoutAccount(id=uid(), org_id=ident.org_id, provider="stripe",

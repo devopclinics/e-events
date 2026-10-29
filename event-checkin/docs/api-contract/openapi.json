@@ -8463,6 +8463,17 @@
             ],
             "title": "Category"
           },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -8542,6 +8553,18 @@
       "FloorTablePos": {
         "description": "A single table's placement in a bulk layout save.",
         "properties": {
+          "color": {
+            "anyOf": [
+              {
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
           "id": {
             "title": "Id",
             "type": "string"

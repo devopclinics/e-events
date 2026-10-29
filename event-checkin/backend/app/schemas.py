@@ -1334,6 +1334,7 @@ class FloorTablePos(BaseModel):
     pos_y: Optional[int] = None
     shape: Optional[str] = None
     rotation: Optional[int] = None
+    color: Optional[str] = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
 
 
 class FloorTableOut(BaseModel):
@@ -1349,6 +1350,7 @@ class FloorTableOut(BaseModel):
     pos_y: Optional[int] = None
     shape: str = "round"
     rotation: int = 0
+    color: Optional[str] = None
 
 
 class FloorPlanOut(BaseModel):

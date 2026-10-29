@@ -23,16 +23,17 @@ function Decor({item}) {
   </>
 }
 function Table({item,color}) {
+  const custom=!!item.color,ink=custom&&((parseInt(color.slice(1,3),16)*299+parseInt(color.slice(3,5),16)*587+parseInt(color.slice(5,7),16)*114)/1000<150)?'#ffffff':'#233e50'
   const {w,h}=sizeOf(item,'table'),capacity=Math.min(20,Math.max(0,item.capacity||0)),round=item.shape!=='rect'
   return <>
-    {Array.from({length:capacity},(_,i)=>{if(round){const angle=(i/capacity)*Math.PI*2;return <rect key={i} x={w/2-5} y={-13} width="10" height="7" rx="3" fill="#f7fafb" stroke={color} strokeWidth="1" transform={`rotate(${angle*180/Math.PI} ${w/2} ${h/2})`}/>}const top=i<Math.ceil(capacity/2),count=top?Math.ceil(capacity/2):Math.floor(capacity/2),j=top?i:i-Math.ceil(capacity/2);return <rect key={i} x={(j+1)*w/(count+1)-5} y={top?-12:h+5} width="10" height="7" rx="3" fill="#f7fafb" stroke={color}/>})}
-    {round?<circle cx={w/2} cy={h/2} r={w/2} fill="#fff" stroke={color} strokeWidth="2"/>:<rect width={w} height={h} rx="8" fill="#fff" stroke={color} strokeWidth="2"/>}
-    {round&&<circle cx={w/2} cy={h/2} r={Math.max(1,w/2-5)} fill={color} fillOpacity=".055"/>}
-    <text x={w/2} y={h/2-3} textAnchor="middle" fontSize="12" fontWeight="700" fill="#233e50" pointerEvents="none">{item.name}</text>
-    <text x={w/2} y={h/2+13} textAnchor="middle" fontSize="10" fill="#71828e" pointerEvents="none">{item.seated||0} / {item.capacity} seats</text>
+    {Array.from({length:capacity},(_,i)=>{if(round){const angle=(i/capacity)*Math.PI*2;return <rect key={i} x={w/2-5} y={-13} width="10" height="7" rx="3" fill={custom?color:"#f7fafb"} stroke={color} strokeWidth="1" transform={`rotate(${angle*180/Math.PI} ${w/2} ${h/2})`}/>}const top=i<Math.ceil(capacity/2),count=top?Math.ceil(capacity/2):Math.floor(capacity/2),j=top?i:i-Math.ceil(capacity/2);return <rect key={i} x={(j+1)*w/(count+1)-5} y={top?-12:h+5} width="10" height="7" rx="3" fill={custom?color:"#f7fafb"} stroke={color}/>})}
+    {round?<circle cx={w/2} cy={h/2} r={w/2} fill={custom?color:"#fff"} stroke={color} strokeWidth={custom?3:2}/>:<rect width={w} height={h} rx="8" fill={custom?color:"#fff"} stroke={color} strokeWidth={custom?3:2}/>}
+    {round&&!custom&&<circle cx={w/2} cy={h/2} r={Math.max(1,w/2-5)} fill={color} fillOpacity=".055"/>}
+    <text x={w/2} y={h/2-3} textAnchor="middle" fontSize="12" fontWeight="700" fill={ink} pointerEvents="none">{item.name}</text>
+    <text x={w/2} y={h/2+13} textAnchor="middle" fontSize="10" fill={custom?ink:"#71828e"} pointerEvents="none">{item.seated||0} / {item.capacity} seats</text>
   </>
 }
-const TableSymbol=memo(Table,(a,b)=>a.color===b.color&&['capacity','seated','name','shape'].every(key=>a.item[key]===b.item[key]))
+const TableSymbol=memo(Table,(a,b)=>a.color===b.color&&['capacity','seated','name','shape','color'].every(key=>a.item[key]===b.item[key]))
 const DecorSymbol=memo(Decor,(a,b)=>['type','width','height','color','label'].every(key=>a.item[key]===b.item[key]))
 export default function FloorCanvas({doc,svgRef,view,grid,selection,onItemDown,onHandleDown,onCanvasDown,onMove,onUp,onCancel,onWheel,marquee,measure,pendingPoint,pending,mode}) {
   const id=useId().replaceAll(':',''),groupColors={};let group=0
@@ -51,7 +52,7 @@ export default function FloorCanvas({doc,svgRef,view,grid,selection,onItemDown,o
       {Array.from({length:Math.min(101,Math.floor(doc.height/rulerStep)+1)},(_,i)=><g key={i}><line x1="-7" y1={i*rulerStep} x2="0" y2={i*rulerStep} stroke="#9db2c0"/><text x="-12" y={i*rulerStep+3} textAnchor="end">{i*rulerStep}</text></g>)}
     </g>
     {items.filter(o=>o.kind==='element').concat(items.filter(o=>o.kind==='table')).map(o=>{const {w,h}=sizeOf(o.item,o.kind),active=selection.includes(o.key);return <g key={o.key} data-object-key={o.key} role="button" aria-label={`${o.kind==='table'?'Table':'Zone'} ${o.item.name||o.item.label||o.item.type}`} aria-pressed={active} tabIndex="-1" onPointerDown={e=>onItemDown(e,o)} className={`venue-object ${active?'is-selected':''}`} transform={`translate(${o.item.pos_x||0} ${o.item.pos_y||0}) rotate(${o.item.rotation||0} ${w/2} ${h/2})`}>
-      {o.kind==='table'?<TableSymbol item={o.item} color={groupColors[o.item.table_group_id]||GROUP_COLORS[0]}/>:<DecorSymbol item={o.item}/>}
+      {o.kind==='table'?<TableSymbol item={o.item} color={o.item.color||groupColors[o.item.table_group_id]||GROUP_COLORS[0]}/>:<DecorSymbol item={o.item}/>}
       {active&&<rect x="-4" y="-4" width={w+8} height={h+8} rx="4" fill="none" stroke="#178b9b" strokeWidth={2*strokeScale} strokeDasharray={`${5*strokeScale} ${3*strokeScale}`} pointerEvents="none"/>}
     </g>})}
     {box&&selected.length>1&&<rect x={box.x-8} y={box.y-8} width={box.w+16} height={box.h+16} fill="none" stroke="#178b9b" strokeWidth={1.5*strokeScale} strokeDasharray="5 4" pointerEvents="none"/>}

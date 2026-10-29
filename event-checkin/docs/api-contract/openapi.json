@@ -28426,6 +28426,37 @@
         ]
       }
     },
+    "/api/events/me/planner-events": {
+      "get": {
+        "description": "Personal planning portfolio, without the platform-wide support bypass.\n\nSupport operators retain explicit event access through the normal event\nselector, but other customers' events do not become their planning work.",
+        "operationId": "my_planner_events_api_events_me_planner_events_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EventOut"
+                  },
+                  "title": "Response My Planner Events Api Events Me Planner Events Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "My Planner Events",
+        "tags": [
+          "events"
+        ]
+      }
+    },
     "/api/events/{event_id}": {
       "delete": {
         "operationId": "delete_event_api_events__event_id__delete",

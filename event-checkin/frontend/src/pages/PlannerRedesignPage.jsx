@@ -4,6 +4,7 @@ import { EmptyState } from './redesign/RedesignPrimitives'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
 import { api } from '../api'
+import { useAuth } from '../context/AuthContext'
 import './PlannerRedesignPage.css'
 
 const TABS = ['Portfolio', 'Dashboard', 'Budget', 'Vendors', 'Procurement', 'Contracts', 'Timeline', 'Runsheet', 'Documents']
@@ -80,8 +81,14 @@ function isoToZonedLocal(value, timeZone) {
 
 export default function PlannerRedesignPage() {
   const [eventId, setEventId] = useCurrentEvent()
-  const { event, loading: eventLoading } = useEventDetails(eventId)
+  const { user } = useAuth()
   const [tab, setTab] = useState('Portfolio')
+  if (!user) return null
+  return <PlannerWorkspace key={`${user?.id || 'signed-out'}:${eventId || 'no-event'}`} eventId={eventId} setEventId={setEventId} tab={tab} setTab={setTab}/>
+}
+
+function PlannerWorkspace({eventId, setEventId, tab, setTab}) {
+  const { event, loading: eventLoading } = useEventDetails(eventId)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [toast, setToast] = useState('')
@@ -158,7 +165,7 @@ export default function PlannerRedesignPage() {
   async function loadPortfolio() {
     setLoading(true)
     try {
-      const events = (await api.listEvents()).filter((candidate) => candidate.planner_enabled)
+      const events = await api.listPlannerEvents()
       const summaries = await Promise.all(events.map(async (candidate) => {
         try {
           const [summary, tasks] = await Promise.all([
@@ -636,7 +643,7 @@ export default function PlannerRedesignPage() {
     return (
       <>
         <div className="pl-portfolio-summary">
-          <div className="rr-panel pl-card"><div className="rd-panel-body"><span className="rd-rowlink">Planner events</span><div className="pl-figure">{portfolioEvents.length}</div></div></div>
+          <div className="rr-panel pl-card"><div className="rd-panel-body"><span className="rd-rowlink">Your Planner events</span><div className="pl-figure">{portfolioEvents.length}</div></div></div>
           <div className="rr-panel pl-card"><div className="rd-panel-body"><span className="rd-rowlink">Average readiness</span><div className="pl-figure">{average}%</div></div></div>
           <div className="rr-panel pl-card"><div className="rd-panel-body"><span className="rd-rowlink">At risk</span><div className="pl-figure">{atRisk}</div></div></div>
           <div className="rr-panel pl-card"><div className="rd-panel-body"><span className="rd-rowlink">Overdue work</span><div className="pl-figure">{scored.reduce((sum, item) => sum + item.overdue, 0)}</div></div></div>
@@ -668,7 +675,7 @@ export default function PlannerRedesignPage() {
             )
           })}
         </div>
-        {!portfolioEvents.length && !loading && <div className="rr-panel pl-empty"><p>No Planner-enabled events are available to this account.</p></div>}
+        {!portfolioEvents.length && !loading && <div className="rr-panel pl-empty"><p>Planner events you manage or have been assigned to plan will appear here.</p></div>}
       </>
     )
   }

@@ -28428,8 +28428,26 @@
     },
     "/api/events/me/planner-events": {
       "get": {
-        "description": "Personal planning portfolio, without the platform-wide support bypass.\n\nSupport operators retain explicit event access through the normal event\nselector, but other customers' events do not become their planning work.",
+        "description": "Planner portfolio for the explicitly selected event only.\n\nMissing scope returns no events, including for older clients. Managing or\nsupporting another event never makes it part of this event's workspace.",
         "operationId": "my_planner_events_api_events_me_planner_events_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "event_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Event Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -28444,6 +28462,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [

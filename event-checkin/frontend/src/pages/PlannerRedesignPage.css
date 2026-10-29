@@ -199,3 +199,5 @@ button.pl-badge { cursor: pointer; }
 @media (max-width: 760px) {
   .pl-quote-line { grid-template-columns: 1fr 1fr; padding: 10px; border: 1px solid #e2e8f0; border-radius: 10px; }
 }
+
+.pl-portfolio-scope{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 16px;padding:12px 0;border-bottom:1px solid var(--line)}.pl-portfolio-scope strong{font-size:14px;color:var(--ink)}.pl-portfolio-scope span{font-size:11px;color:var(--muted)}

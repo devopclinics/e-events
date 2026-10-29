@@ -14,6 +14,12 @@ test('actual Planner API enforces actor isolation',async t=>{
  await build({entryPoints:['src/api.js'],bundle:true,platform:'node',format:'esm',outfile:file,define:{'import.meta.env':'{}'},plugins:[{name:'firebase-fixture',setup(b){b.onResolve({filter:/\/firebase$/},()=>({path:'firebase',namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:'export const auth=globalThis.__plannerTestAuth',loader:'js'}))}}]})
  const {api}=await import(pathToFileURL(file));const tokens=[]
  const mint=opts=>{tokens.push(opts.headers.Authorization);return new Response(JSON.stringify({token:`scoped-${opts.headers.Authorization}`,expires_in:900}))}
+ await t.test('portfolio requests an explicit event and never fetches an unscoped list',async()=>{
+  const urls=[];globalThis.fetch=async url=>{urls.push(url);return new Response('[]')}
+  assert.deepEqual(await api.listPlannerEvents(),[]);assert.equal(urls.length,0)
+  assert.deepEqual(await api.listPlannerEvents('event a/?'),[])
+  assert.deepEqual(urls,['/api/events/me/planner-events?event_id=event%20a%2F%3F'])
+ })
  await t.test('same event after account switch exchanges a new token',async()=>{
   const used=[];globalThis.fetch=async(url,opts)=>url.includes('/planner-token')?mint(opts):(used.push(opts.headers.Authorization),new Response('{}'))
   await api.plannerDashboard('event');globalThis.__plannerTestAuth.currentUser=actor('b');await api.plannerDashboard('event');assert.deepEqual(tokens,['Bearer firebase-a','Bearer firebase-b']);assert.notEqual(used[0],used[1])

@@ -9,7 +9,7 @@ import httpx
 from ..services.credit_balance import available_credits, credit_scope
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, or_, select, update
 from ..database import get_db
 from ..models import BroadcastLog, Event, EventUser, EventUserSection, ExperienceStep, ExperienceWorkflow, FestioMeOutbox, Guest, MenuCategory, MenuItem, Membership, MessageTemplate, Organization, Payment, PlatformSettings, PricingPlan, RSVPQuestion, TableGroup, TicketType, User
 from ..schemas import (
@@ -667,6 +667,35 @@ async def list_events(
                 rows.append(event)
         return [await _event_out_for_user(event, current_user, db) for event in rows]
     return [await _event_out_for_user(event, current_user, db) for event in result.scalars().all()]
+
+
+@router.get("/me/planner-events", response_model=list[EventOut])
+async def my_planner_events(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Personal planning portfolio, without the platform-wide support bypass.
+
+    Support operators retain explicit event access through the normal event
+    selector, but other customers' events do not become their planning work.
+    """
+    managed = select(Membership.id).where(
+        Membership.org_id == Event.org_id,
+        Membership.user_id == user.id,
+        Membership.role.in_(["owner", "admin"]),
+    ).exists()
+    assigned = select(EventUser.id).where(
+        EventUser.event_id == Event.id,
+        EventUser.user_id == user.id,
+        or_(EventUser.event_role == "manager", EventUser.can_view_planner.is_(True)),
+    ).exists()
+    rows = (await db.execute(
+        select(Event).join(Organization, Organization.id == Event.org_id).where(
+            Event.planner_enabled.is_(True), Organization.is_active.is_(True),
+            or_(managed, assigned),
+        ).order_by(Event.created_at.desc())
+    )).scalars().all()
+    return [await _event_out_for_user(event, user, db) for event in rows]
 
 
 @router.get("/me/menu-events", response_model=list[MenuEventOut])

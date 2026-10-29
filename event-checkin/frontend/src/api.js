@@ -1,4 +1,5 @@
 import { auth } from './firebase'
+import { createPlannerSessionCache, assertPlannerActor } from './lib/plannerSession.mjs'
 import { acquisitionAttributionHeaders } from './lib/acquisitionAttribution.mjs'
 
 const BASE = '/api'
@@ -237,33 +238,27 @@ async function festiomeDownloadAttachment(path, filename) {
   URL.revokeObjectURL(url)
 }
 
-let plannerSession = null // { token, expiresAt, eventId }
-
-async function getPlannerSession(eventId, force = false) {
-  const now = Date.now()
-  if (!force && plannerSession?.token && plannerSession.eventId === eventId && plannerSession.expiresAt > now + 30000) {
-    return plannerSession.token
-  }
-  const firebaseToken = await getToken()
-  if (!firebaseToken) throw new Error('Your Festio session is still loading. Please try again.')
-  const res = await fetch(`${BASE}/auth/planner-token?event_id=${encodeURIComponent(eventId)}`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${firebaseToken}` },
-    signal: AbortSignal.timeout(10000),
-  })
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}))
-    const error = new Error(data.detail || 'Planner is temporarily unavailable.')
-    error.status = res.status
-    throw error
-  }
-  const data = await res.json()
-  plannerSession = { token: data.token, expiresAt: now + Number(data.expires_in || 900) * 1000, eventId }
-  return data.token
-}
+const getPlannerSession = createPlannerSessionCache({
+  getActor: () => auth.currentUser,
+  exchange: async (eventId, firebaseToken) => {
+    const res = await fetch(`${BASE}/auth/planner-token?event_id=${encodeURIComponent(eventId)}`, {
+      method: 'POST', headers: { Authorization: `Bearer ${firebaseToken}` },
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      const error = new Error(data.detail || 'Planner is temporarily unavailable.')
+      error.status = res.status
+      throw error
+    }
+    return res.json()
+  },
+})
 
 async function plannerReq(eventId, method, path, body, options = {}) {
+  const actor = auth.currentUser
   const token = await getPlannerSession(eventId)
+  assertPlannerActor(() => auth.currentUser, actor)
   const opts = {
     method,
     headers: { Authorization: `Bearer ${token}`, ...(body && !options.isForm ? { 'Content-Type': 'application/json' } : {}) },
@@ -275,11 +270,15 @@ async function plannerReq(eventId, method, path, body, options = {}) {
     const detail = Array.isArray(err.detail) ? err.detail.map((d) => d.msg || JSON.stringify(d)).join('; ') : err.detail
     throw new Error((typeof detail === 'string' && detail) || res.statusText)
   }
-  return res.status === 204 ? null : res.json()
+  const data = res.status === 204 ? null : await res.json()
+  assertPlannerActor(() => auth.currentUser, actor)
+  return data
 }
 
 async function plannerDownload(eventId, path, filename) {
+  const actor = auth.currentUser
   const token = await getPlannerSession(eventId)
+  assertPlannerActor(() => auth.currentUser, actor)
   const res = await fetch(path, {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(30000),
@@ -288,7 +287,9 @@ async function plannerDownload(eventId, path, filename) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.detail || 'Planner document could not be downloaded')
   }
-  const url = URL.createObjectURL(await res.blob())
+  const blob = await res.blob()
+  assertPlannerActor(() => auth.currentUser, actor)
+  const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
   anchor.download = filename || 'planner-document'
@@ -596,6 +597,7 @@ export const api = {
 
 
   // Events
+  listPlannerEvents: () => req('GET', '/events/me/planner-events'),
   listEvents: (status) => req('GET', status ? `/events?status=${encodeURIComponent(status)}` : '/events'),
   createEvent: (data) => req('POST', '/events', data),
   updateEvent: (id, data) => req('PUT', `/events/${id}`, data),

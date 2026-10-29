@@ -268,6 +268,12 @@ export default function DonationGivingPage() {
     }
   }).catch((e) => setError(e.message)) }, [token])
 
+  useEffect(() => {
+    if (!campaign || window.location.hash !== '#giving-options') return
+    const frame = requestAnimationFrame(() => document.getElementById('giving-options')?.scrollIntoView({ block: 'start' }))
+    return () => cancelAnimationFrame(frame)
+  }, [campaign])
+
   // Donor-return flow: a bookmarkable/shareable ?ref= link reopens the same
   // contribution (via its access_token) without re-entering any details.
   useEffect(() => {
@@ -338,13 +344,13 @@ export default function DonationGivingPage() {
   return <main className="dg-shell">
     <header className="dg-topbar"><div className="dg-org-line">{campaign.logo_url?<img src={campaign.logo_url} alt=""/>:<span>{campaign.event_name.slice(0,1)}</span>}<div><b>{campaign.event_name}</b><small>Giving campaign</small></div></div><a href="#giving-options">Make a contribution <span aria-hidden="true">↗</span></a></header>
     <div className="dg-page-grid"><section className="dg-campaign-story" aria-label="About this campaign">
-      <span className="dg-eyebrow">A shared purpose</span><h1>{selectedFund?selectedFund.title:campaign.title}</h1><p className="dg-campaign-description">{selectedFund?.description||donationIntro}</p>
+      <span className="dg-eyebrow"><i aria-hidden="true"/> A shared purpose</span><h1>{selectedFund?selectedFund.title:campaign.title}</h1><p className="dg-campaign-description">{selectedFund?.description||donationIntro}</p>
       {selectedFund&&<div className="dg-fund-context">Gift List fund · {money(selectedFund.confirmed_minor,selectedFund.currency)} received{selectedFund.goal_minor>0?` of ${money(selectedFund.goal_minor,selectedFund.currency)}`:''}</div>}
       {campaign.cover_image_url&&<img className="dg-cover" src={campaign.cover_image_url} alt=""/>}
 </section><aside className="dg-campaign-progress" aria-label="Campaign progress"><section className="dg-status-card"><article><div><small>Received</small><strong>{money(campaign.confirmed_minor, campaign.currency)}</strong><em>Funds received and verified</em></div></article><article><div><small>Pledged</small><strong>{money(campaign.pledged_minor, campaign.currency)}</strong><em>{campaign.pledge_count || 0} active pledge{campaign.pledge_count === 1 ? '' : 's'}</em></div></article>{campaign.goal_minor > 0 && <div className="dg-progress"><div className="dg-progress-meter" role="progressbar" aria-label="Campaign received toward goal" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><i style={{width:`${progress}%`}}/></div><span><b>{money(campaign.confirmed_minor, campaign.currency)}</b> of {money(campaign.goal_minor, campaign.currency)}</span></div>}</section>
       <p className="dg-tracking-note">Received totals include organizer-confirmed payments. Pledges are counted separately.</p>
 {campaign.recent_public?.length > 0 && <section className="dg-info-card dg-recent"><h2>Recent support</h2>{campaign.recent_public.slice(0,5).map((item)=><article key={item.id}><div><b>{item.name}</b><small>{item.kind === 'pledge' ? 'Pledged' : 'Gave'}{item.amount_minor != null ? ` ${money(item.amount_minor, campaign.currency)}` : ''}</small></div><time>{relativeTime(item.created_at)}</time></article>)}</section>}
-    </aside><section className="dg-giving-card" id="giving-options" aria-label="Contribution options"><div className="dg-card-heading"><h2>{showPledge?'Your pledge':'Your contribution'}</h2><p>{showPledge?'Choose an amount to give later.':'Choose an amount and how you’d like to give.'}</p></div>
+    </aside><section className="dg-giving-card" id="giving-options" aria-label="Contribution options"><div className="dg-card-heading"><span className="dg-card-kicker">A gift with purpose</span><h2>{showPledge?'Your pledge':'Your contribution'}</h2><p>{showPledge?'Choose an amount to give later.':'Choose an amount and how you’d like to give.'}</p></div>
       {directChannels.length>0&&pledgeOption&&<div className="dg-giving-tabs" role="tablist" aria-label="Contribution type" onKeyDown={modeKeys}><button type="button" role="tab" disabled={busy} data-mode="give" aria-selected={!showPledge} aria-controls="dg-give-panel" tabIndex={showPledge?-1:0} onClick={()=>givingMode(false)}>Give today</button><button type="button" role="tab" disabled={busy} data-mode="pledge" aria-selected={showPledge} aria-controls="dg-pledge-panel" tabIndex={showPledge?0:-1} onClick={()=>givingMode(true)}>Pledge later</button></div>}
       {directChannels.length > 0 && <form className="dg-donation-card" hidden={showPledge} id="dg-give-panel" aria-label="Give today" onSubmit={(e) => submit(e, channel)}>
         <StepHeading number="01" title="Choose an amount"/>

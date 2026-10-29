@@ -165,7 +165,7 @@ def test_connect_signature_is_separate_from_platform_signature(monkeypatch):
 
 
 def test_external_refunds_scope_idempotency_and_inventory(tmp_path,monkeypatch):
-    from app.models import OrderItem,PaymentRefund
+    from app.models import OrderItem,PaymentRefund,JournalLine
     calls=[]
     def handler(req):
         assert '/internal/ticketing/void/' in req.url.path
@@ -174,7 +174,7 @@ def test_external_refunds_scope_idempotency_and_inventory(tmp_path,monkeypatch):
     async def run():
         engine,factory=await fixture_db(tmp_path)
         async with factory() as db:
-            order=Order(id='order',event_id='event',org_id='org',buyer_name='Buyer',buyer_email='buyer@example.com',currency='USD',subtotal=5000,total=5000,provider='stripe',stripe_account_id=ACCOUNT,payment_reference='pi_external',status='fulfilled',hold_expires_at=datetime.utcnow()+timedelta(minutes=10))
+            order=Order(id='order',event_id='event',org_id='org',buyer_name='Buyer',buyer_email='buyer@example.com',currency='USD',subtotal=4750,platform_fee=250,total=5000,provider='stripe',stripe_account_id=ACCOUNT,payment_reference='pi_external',status='fulfilled',hold_expires_at=datetime.utcnow()+timedelta(minutes=10))
             db.add(order);db.add(TicketProduct(id='product',event_id='event',name='Ticket',price=5000,currency='USD',capacity=10,sold=1));db.add(OrderItem(id='item',order_id='order',product_id='product',product_name='Ticket',quantity=1,unit_price=5000,attendee_data=[]));await db.commit()
             obj={'id':'re_external','payment_intent':'pi_external','currency':'usd','amount':5000,'status':'succeeded'}
             await main.direct_refund_event(db,'acct_wrong',obj);assert await db.scalar(select(func.count(PaymentRefund.id)))==0
@@ -182,5 +182,8 @@ def test_external_refunds_scope_idempotency_and_inventory(tmp_path,monkeypatch):
             assert (await db.get(TicketProduct,'product')).sold==0
             await main.direct_refund_event(db,ACCOUNT,obj);assert await db.scalar(select(func.count(LedgerEntry.id)).where(LedgerEntry.kind=='refund'))==1
             assert len(calls)==1
+            amounts=await main.external_refund_amounts(db,['order'])
+            assert main.retained_platform_fee(order,5000,amounts['order'])==250
+            assert await db.scalar(select(func.coalesce(func.sum(JournalLine.debit),0)).where(JournalLine.order_id=='order',JournalLine.account=='platform_revenue'))==0
         await engine.dispose()
     asyncio.run(run())

@@ -165,10 +165,10 @@ def payout_out(row: PayoutAccount):
 
 
 def add_journal(db: AsyncSession, order: Order, *, kind: str, amount: int,
-                reference: str | None = None, refund_id: str | None = None) -> str:
+                reference: str | None = None, refund_id: str | None = None, fee_override: int | None = None) -> str:
     """Post a balanced immutable journal transaction for a payment or refund."""
     transaction_id = uid()
-    fee = order.platform_fee * amount // order.total if order.total else 0
+    fee = (order.platform_fee * amount // order.total if order.total else 0) if fee_override is None else fee_override
     tax = order.tax_amount * amount // order.total if order.total else 0
     organizer = amount - fee - tax
     liabilities = (("platform_revenue", fee), ("tax_payable", tax),
@@ -1507,6 +1507,23 @@ async def sync_email_delivery(db,event_id,orders):
     await db.commit()
 
 
+def retained_platform_fee(order, refunded, external_refunded=0):
+    internal_refunded = max(0, refunded - external_refunded)
+    return round(order.platform_fee * max(0, order.total - internal_refunded) / order.total) if order.total else 0
+
+
+async def external_refund_amounts(db, order_ids):
+    if not order_ids:
+        return {}
+    rows = (await db.execute(select(LedgerEntry.order_id, LedgerEntry.amount, LedgerEntry.metadata_json).where(
+        LedgerEntry.order_id.in_(order_ids), LedgerEntry.kind == "refund"))).all()
+    amounts = {}
+    for order_id, amount, metadata in rows:
+        if (metadata or {}).get("external_application_fee_retained"):
+            amounts[order_id] = amounts.get(order_id, 0) + abs(amount)
+    return amounts
+
+
 @app.get("/api/ticketing/events/{event_id}/sales")
 async def sales(event_id: str, ident: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db),
                 q: str = '', status: str = '', from_date: str = '', to_date: str = '', limit: int = 50, offset: int = 0):
@@ -1527,10 +1544,11 @@ async def sales(event_id: str, ident: Identity = Depends(current_identity), db: 
     quantities=(await db.execute(select(OrderItem.order_id,func.sum(OrderItem.quantity)).join(TicketProduct,TicketProduct.id==OrderItem.product_id).where(OrderItem.order_id.in_(order_ids),TicketProduct.product_type=='ticket').group_by(OrderItem.order_id))).all() if order_ids else []
     returned=(await db.execute(select(LedgerEntry.order_id,func.sum(func.abs(LedgerEntry.amount))).where(LedgerEntry.order_id.in_(order_ids),LedgerEntry.kind=='refund').group_by(LedgerEntry.order_id))).all() if order_ids else []
     quantity_by_order,refunds_by_order=dict(quantities),dict(returned)
+    external_refunds = await external_refund_amounts(db, order_ids)
     paid_statuses = ("paid", "fulfilled", "partially_refunded", "refunded", "refund_processing", "disputed")
     gross = sum(o.total for o in rows if o.status in paid_statuses)
     refunds = sum(refunds_by_order.values())
-    commission = sum(round(o.platform_fee * max(0, o.total - refunds_by_order.get(o.id, 0)) / o.total)
+    commission = sum(retained_platform_fee(o, refunds_by_order.get(o.id, 0), external_refunds.get(o.id, 0))
                      for o in rows if o.status in paid_statuses and o.total)
     tax = sum(round(o.tax_amount * max(0, o.total - refunds_by_order.get(o.id, 0)) / o.total)
               for o in rows if o.status in paid_statuses and o.total)
@@ -1545,7 +1563,7 @@ async def sales(event_id: str, ident: Identity = Depends(current_identity), db: 
     order_output = []
     for o in page_rows:
         refunded = refunds_by_order.get(o.id, 0)
-        fee = round(o.platform_fee * max(0, o.total - refunded) / o.total) if o.total else 0
+        fee = retained_platform_fee(o, refunded, external_refunds.get(o.id, 0))
         order_tax = round(o.tax_amount * max(0, o.total - refunded) / o.total) if o.total else 0
         order_output.append({**order_view(o), "cancellation": request_by_order.get(o.id),
                              "ticket_count": quantity_by_order.get(o.id, 0), "refunded_amount": refunded,
@@ -1830,9 +1848,10 @@ async def email_sales_report(event_id: str, body: SalesReportIn,
                      "currency", "tickets", "gross", "refunded", "festio_fee", "tax", "organizer_proceeds"])
     totals = {"gross": 0, "refunds": 0, "fees": 0, "tax": 0, "tickets": 0, "proceeds": 0}
     reportable = ("paid", "fulfilled", "partially_refunded", "refunded", "refund_processing", "disputed")
+    external_refunds = await external_refund_amounts(db, [order.id for order in orders])
     for order in orders:
         returned = refunded.get(order.id, 0)
-        fee = round(order.platform_fee * max(0, order.total - returned) / order.total) if order.total else 0
+        fee = retained_platform_fee(order, returned, external_refunds.get(order.id, 0))
         tax = round(order.tax_amount * max(0, order.total - returned) / order.total) if order.total else 0
         gross = order.total if order.status in reportable else 0
         proceeds = max(0, gross - returned - fee - tax)
@@ -1935,9 +1954,11 @@ async def complete_refund(db: AsyncSession, refund_row: PaymentRefund, order: Or
     order.delivery_status = "cancelled" if order.status == "refunded" else "queued"
     db.add(LedgerEntry(id=uid(), order_id=order.id, kind="refund", amount=-refund_row.amount,
         currency=order.currency, provider_reference=refund_row.provider_refund_id,
-        metadata_json={"reason": refund_row.reason, "refund_id": refund_row.id}))
+        metadata_json={"reason": refund_row.reason, "refund_id": refund_row.id,
+                       **({"external_application_fee_retained": True} if refund_row.requested_by == "stripe_webhook" else {})}))
     add_journal(db, order, kind="refund", amount=refund_row.amount,
-                reference=refund_row.provider_refund_id, refund_id=refund_row.id)
+                reference=refund_row.provider_refund_id, refund_id=refund_row.id,
+                fee_override=0 if refund_row.requested_by == "stripe_webhook" else None)
     if refund_row.item_quantities:
         for product_id, quantity in refund_row.item_quantities.items():
             product_row = await db.get(TicketProduct, product_id, with_for_update=True)
@@ -2215,9 +2236,10 @@ async def export_sales(event_id: str,kind: str='orders',q: str='',status: str=''
             returned=dict((await db.execute(select(LedgerEntry.order_id,func.sum(func.abs(LedgerEntry.amount))).where(LedgerEntry.order_id.in_(ids),LedgerEntry.kind=='refund').group_by(LedgerEntry.order_id))).all()) if ids else {}
             cfg=await db.get(EventConfig,event_id)
             account=await db.scalar(select(PayoutAccount).where(PayoutAccount.org_id==ident.org_id,PayoutAccount.provider==cfg.provider,PayoutAccount.provider_account_id==cfg.provider_account_id)) if cfg and cfg.provider_account_id else None
+            external_refunds=await external_refund_amounts(db,ids)
             for order in orders:
                 refund=returned.get(order.id,0);net=max(0,order.total-refund)
-                fee=round(order.platform_fee*net/order.total) if order.total else 0
+                fee=retained_platform_fee(order,refund,external_refunds.get(order.id,0))
                 tax=round(order.tax_amount*net/order.total) if order.total else 0
                 gross=order.total if order.status in {'paid','fulfilled','partially_refunded','refunded','refund_processing','disputed'} else 0
                 write([order.id,order.created_at.isoformat(),order.buyer_name,order.buyer_email,order.provider,payment_kind(order),order.status,order.currency,gross,refund,fee,tax,max(0,gross-refund-fee-tax),account.account_last4 if account else ''])

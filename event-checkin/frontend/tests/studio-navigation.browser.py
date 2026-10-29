@@ -35,6 +35,7 @@ with tempfile.TemporaryDirectory(prefix='studio-navigation-') as temp:
   elif name=='renderFlyer':data={'svg':'<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800"><rect width="600" height="800" fill="#194e3d"/><rect x="32" y="32" width="536" height="736" rx="240" fill="none" stroke="#dfbf75"/><text x="300" y="360" text-anchor="middle" fill="#dfbf75" font-size="32">Your event, together.</text></svg>','filename':'fixture.png'}
   elif name=='listCertificateTemplates':data=[{'id':'cert-1','name':'Participation','active':True,'design':{'title':'Certificate of Participation','body':'For joining our community','signature_name':'Academy team'},'eligibility':{'minimum_sessions':1,'require_event_checkin':True}}]
   elif name in ['listCertificateCandidates','listEventCertificates','listLiveContentSessions']:data=[]
+  elif name=='createCertificateTemplate':data={'id':'cert-2',**args[1]}
   elif name=='saveCertificateTemplate':certificate_saves.append(args[2]);data={'id':'cert-1',**args[2]}
   elif name in ['designOutputs','websiteReleases']:data=[]
   elif name=='listEvents':data=[event]
@@ -56,6 +57,8 @@ with tempfile.TemporaryDirectory(prefix='studio-navigation-') as temp:
    page.set_viewport_size({'width':width,'height':1000 if width>900 else 844})
    for tab in labels[2:]:
     nav.get_by_role('link',name=tab,exact=True).click();expect(nav.get_by_role('link',name=tab,exact=True)).to_have_attribute('aria-current','page')
+    if tab in ['GuestHub','FestioHub','Event Page']:
+     expected_surface='rsvp' if tab=='Event Page' else 'hub';expect(page.locator('iframe').first).to_have_attribute('src',__import__('re').compile('studio-surface='+expected_surface));check(tab+' iframe targets its own surface at '+str(width))
     if tab=='Flyer':expect(page.get_by_alt_text('Live flyer preview')).to_be_visible()
     if tab=='Certificates':expect(page.get_by_label('Certificate name',exact=True)).to_be_visible()
     if tab!='Envelope':expect(page.locator('.ds-surface-intro')).to_be_visible()
@@ -65,7 +68,13 @@ with tempfile.TemporaryDirectory(prefix='studio-navigation-') as temp:
   page.set_viewport_size({'width':1440,'height':1000});page.goto(base+'/design-studio-redesign?tab=Email%20Preview')
   for button in page.locator('.ds-email-workbench .rd-seg button').all():
    name=button.inner_text();button.click();expect(button).to_have_class('on');check(name+' email type remains selectable')
-  nav.get_by_role('link',name='Certificates',exact=True).click();page.get_by_label('Heading',exact=True).fill('A shared achievement');page.get_by_role('button',name='Save design and rules',exact=True).click();expect(page.get_by_text('Certificate design saved',exact=False)).to_be_visible();check('Certificate design save preserved',certificate_saves[-1]['design']['title']=='A shared achievement')
+  nav.get_by_role('link',name='Certificates',exact=True).click()
+  for kind in ['participation','completion','achievement','appreciation','speaker','volunteer']:
+   page.get_by_label('Certificate type',exact=True).select_option(kind);check(kind+' wording preset is selectable',page.get_by_label('Heading',exact=True).input_value()!='')
+  for name,layout in [('Classic frame','classic'),('Modern band','modern'),('Editorial border','editorial')]:
+   page.get_by_role('button',name=name,exact=True).click();expect(page.locator('.lc-certificate')).to_have_attribute('data-layout',layout);check(name+' preview renders')
+  page.get_by_label('Certificate type',exact=True).select_option('completion');page.get_by_role('button',name='Modern band',exact=True).click();page.get_by_label('Heading',exact=True).fill('A shared achievement');page.get_by_role('button',name='Save design and rules',exact=True).click();expect(page.get_by_text('Certificate design saved',exact=False)).to_be_visible();check('Certificate design save preserved',certificate_saves[-1]['design']['title']=='A shared achievement');check('Certificate purpose and layout saved',certificate_saves[-1]['design']['kind']=='completion' and certificate_saves[-1]['design']['layout']=='modern')
+  page.get_by_label('Certificate type',exact=True).select_option('speaker');page.get_by_role('button',name='Editorial border',exact=True).click();page.get_by_role('button',name=__import__('re').compile('New template')).click();expect(page.get_by_label('Template',exact=True)).to_have_value('cert-2');check('New certificate template keeps chosen type and layout',any(c[0]=='createCertificateTemplate' and c[1][1]['design']['kind']=='speaker' and c[1][1]['design']['layout']=='editorial' for c in calls))
   nav.get_by_role('link',name='Flyer',exact=True).click()
   group=page.locator('.ds-controls-section').filter(has=page.locator('summary',has_text='Wording'));group.locator('summary').click();expect(group.locator('input').first).to_be_visible();check('All flyer wording fields remain available',group.locator('input').count()>20);group.locator('summary').click()
   page.get_by_role('button',name='Download PNG',exact=True).click();expect(page.get_by_text('Flyer rendered and downloaded',exact=True)).to_be_visible()

@@ -1102,7 +1102,7 @@ export default function DesignStudioRedesignPage() {
       return
     }
     if (syncDraftPreviewStorage()) {
-      window.open(`/invite/${eventId}?studio-preview=1${anchor}`, '_blank', 'noopener')
+      window.open(`/invite/${eventId}?studio-preview=1&studio-surface=${tab==='Event Page'?'rsvp':'hub'}${anchor}`, '_blank', 'noopener')
     } else {
       notify('Could not open the draft preview. Allow pop-ups and try again.')
     }
@@ -1670,7 +1670,7 @@ export default function DesignStudioRedesignPage() {
                 <div className={`ds-page-preview-frame-wrap ${mobilePreview ? 'mobile' : ''}`}>
                   <iframe
                     key={eventId}
-                    src={eventPagePreviewNonce > 0 ? `/invite/${eventId}?studio-preview=1&_p=${eventPagePreviewNonce}&focus=hero` : undefined}
+                    src={eventPagePreviewNonce > 0 ? `/invite/${eventId}?studio-preview=1&studio-surface=rsvp&_p=${eventPagePreviewNonce}&focus=hero` : undefined}
                     title="Live event page preview"
                     className="ds-page-preview-frame"
                   />
@@ -1791,7 +1791,7 @@ export default function DesignStudioRedesignPage() {
                 <div className={`ds-page-preview-frame-wrap ${mobilePreview ? 'mobile' : ''}`}>
                   <iframe
                     key={eventId}
-                    src={eventPagePreviewNonce > 0 ? `/invite/${eventId}?studio-preview=1&_p=${eventPagePreviewNonce}` : undefined}
+                    src={eventPagePreviewNonce > 0 ? `/invite/${eventId}?studio-preview=1&studio-surface=hub&_p=${eventPagePreviewNonce}` : undefined}
                     title="Live GuestHub preview"
                     className="ds-page-preview-frame"
                   />
@@ -1883,7 +1883,7 @@ export default function DesignStudioRedesignPage() {
                 <div className={`ds-page-preview-frame-wrap ${mobilePreview ? 'mobile' : ''}`}>
                   <iframe
                     key={eventId}
-                    src={eventPagePreviewNonce > 0 ? `/invite/${eventId}?studio-preview=1&_p=${eventPagePreviewNonce}#guest-hub` : undefined}
+                    src={eventPagePreviewNonce > 0 ? `/invite/${eventId}?studio-preview=1&studio-surface=hub&_p=${eventPagePreviewNonce}#guest-hub` : undefined}
                     title="Live FestioHub preview"
                     className="ds-page-preview-frame"
                   />

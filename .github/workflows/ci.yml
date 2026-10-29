@@ -183,3 +183,20 @@ jobs:
           persist-credentials: false
       - name: Verify scoped release safety offline
         run: python3 -m unittest discover -s .github/tests -p 'test_scoped_release.py' -v
+
+  ticketing-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: event-checkin/ticketing-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: event-checkin/ticketing-service/requirements.txt
+      - name: Install ticketing test dependencies
+        run: pip install -r requirements.txt pytest aiosqlite
+      - name: Test ticketing routing, refunds and Stripe-managed risk without live providers
+        run: python -m pytest -q

@@ -7,6 +7,8 @@ import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
 import { api } from '../api'
 import './DesignStudioRedesignPage.css'
+import './DesignStudioSurfaces.css'
+import SurfaceIntroduction from '../components/design-studio/SurfaceIntroduction'
 import AppearanceChoices from '../components/guesthub/AppearanceChoices'
 import { validAppTheme } from '../components/guesthub/appearance.mjs'
 import EnvelopeSettings from '../components/invitations/EnvelopeSettings'
@@ -1322,6 +1324,7 @@ export default function DesignStudioRedesignPage() {
 
   return (
     <RedesignShell topActive="design" withEventSidebar={false} eventScoped>
+      <div className={`ds-studio-shell ${tab==='Envelope'?'':'ds-refined'}`} data-studio-surface={tab}>
       <div className="rr-pagehead">
         <div>
           <div className="rr-title-row"><h1>Design Studio</h1>{import.meta.env.VITE_EVENT_WEBSITES_ENABLED !== 'false' && <Link className="ds-website-link" to="/design-studio-redesign/website">Event website</Link>}</div>
@@ -1338,6 +1341,7 @@ export default function DesignStudioRedesignPage() {
       </div>
 
       <StudioNavigation active={tab} onSelectTab={selectStudioTab} />
+      <SurfaceIntroduction surface={tab} />
 
       {tab === 'Envelope' && <div className="ds-envelope-collection"><EnvelopeSettings key={eventId} eventId={eventId} event={event} onSaved={envelope_config => setDesign(current => ({ ...current, envelope_config }))} /></div>}
 
@@ -1458,8 +1462,8 @@ export default function DesignStudioRedesignPage() {
               </div>
             </div>
 
-            <div className="rd-panel">
-              <div className="rd-panel-head"><h3>Wording</h3></div>
+            <details className="rd-panel ds-controls-section">
+              <summary>Wording</summary>
               <div className="rd-panel-body">
                 {WORDING_FIELDS.map(([key, label]) => (
                   <div key={key} style={{ marginBottom: 9 }}>
@@ -1473,10 +1477,10 @@ export default function DesignStudioRedesignPage() {
                 </div>
                 <p className="rd-hint" style={{ marginTop: 4 }}>When on, the registrant category dropdown shows just the category name (e.g. "Invited Guest") instead of "Invited Guest - up to 10 additional guests". The guest limit is still enforced.</p>
               </div>
-            </div>
+            </details>
 
-            <div className="rd-panel">
-              <div className="rd-panel-head"><h3>Colors &amp; type</h3></div>
+            <details className="rd-panel ds-controls-section">
+              <summary>Colors &amp; type</summary>
               <div className="rd-panel-body">
                 <div className="ds-color-row">
                   {COLOR_FIELDS.map((c) => (
@@ -1495,10 +1499,10 @@ export default function DesignStudioRedesignPage() {
                   {FLYER_TEXT_SCALES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
               </div>
-            </div>
+            </details>
 
-            <div className="rd-panel">
-              <div className="rd-panel-head"><h3>QR &amp; RSVP link</h3></div>
+            <details className="rd-panel ds-controls-section">
+              <summary>QR &amp; RSVP link</summary>
               <div className="rd-panel-body">
                 <label className="rd-field-label">Flyer size</label>
                 <select className="rr-select" value={flyerSettings.size} onChange={(e) => setFlyerSettings((v) => ({ ...v, size: e.target.value }))}>
@@ -1519,7 +1523,7 @@ export default function DesignStudioRedesignPage() {
                   {QR_POSITIONS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
                 </select>
               </div>
-            </div>
+            </details>
 
             <div className="rd-panel">
                 <div className="rd-panel-head"><h3>{artworkOnly ? 'Complete flyer artwork' : 'Photo'}</h3><p>{artworkOnly ? 'Upload the finished image exactly as guests should see it' : 'Upload and position your cover photo inside the selected template'}</p></div>
@@ -1729,7 +1733,7 @@ export default function DesignStudioRedesignPage() {
 
       {tab === 'GuestHub' && (
         <div className="rd-wide-grid">
-          <div className="rd-panel" style={{gridColumn:'1 / -1'}}><div className="rd-panel-head"><h3>Event App appearance</h3><p>Set the default look for the Event App GuestHub layout.</p></div><div className="rd-panel-body"><AppearanceChoices value={guestAppTheme} onChange={setGuestAppTheme} colors={colors} /><p className="rd-hint">Applies throughout GuestHub, including Programme, Pass, Meals and Forms & Consent. Changes save to your design draft; use Publish to make them live. Guests can choose a personal appearance on their device. Other GuestHub layouts keep their existing design.</p></div></div>
+          <div className="rd-panel ds-app-appearance"><div className="rd-panel-head"><h3>Event App appearance</h3><p>Set the default look for the Event App GuestHub layout.</p></div><div className="rd-panel-body"><AppearanceChoices value={guestAppTheme} onChange={setGuestAppTheme} colors={colors} /><p className="rd-hint">Applies throughout GuestHub, including Programme, Pass, Meals and Forms & Consent. Changes save to your design draft; use Publish to make them live. Guests can choose a personal appearance on their device. Other GuestHub layouts keep their existing design.</p></div></div>
           <div className="rd-panel">
             <div className="rd-panel-head"><h3>GuestHub templates</h3><p>One look for the whole guest experience — RSVP page and FestioHub together</p></div>
             <div className="rd-panel-body">
@@ -1896,12 +1900,13 @@ export default function DesignStudioRedesignPage() {
       )}
 
       {tab === 'Email Preview' && (
-        <div className="rd-panel" style={{ maxWidth: 680 }}>
+        <div className="rd-panel ds-email-workbench">
           <div className="rd-panel-head"><h3>Email preview</h3><p>Your real saved wording, colors, and photo — layout is representative, actual delivery uses your provider's rendering</p></div>
           <div className="rd-panel-body">
             <div className="rd-seg" style={{ marginBottom: 14, flexWrap: 'wrap' }}>
               {EMAIL_TYPES.map((t) => <button key={t} className={emailType === t ? 'on' : ''} onClick={() => setEmailType(t)}>{t}</button>)}
             </div>
+            <aside className="ds-email-guidance"><p className="ds-surface-eyebrow">CURRENT PREVIEW</p><h3>{emailType}</h3><p>Check your event’s colours, artwork, and wording before sending.</p><small>This is a sample preview. Recipient details and final wording come from your message templates.</small></aside>
             <div className="ds-email-card">
               <div className="ds-email-card-banner" style={{ background: colors.primary, color: '#fff' }}>
                 <div className="ds-email-card-brand"><strong>Festio</strong><span>Digital Invitation</span></div>
@@ -1992,6 +1997,7 @@ export default function DesignStudioRedesignPage() {
       )}
 
       {toast && <div className={`rd-toast${toast.error ? ' error' : ''}`} role={toast.error ? 'alert' : 'status'}><Icon name={toast.error ? 'warning' : 'check'} />{toast.message}</div>}
+      </div>
     </RedesignShell>
   )
 }

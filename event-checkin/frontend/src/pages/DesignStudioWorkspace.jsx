@@ -11,6 +11,7 @@ import Images from '../components/design-studio/Images';
 import AppearanceChoices from '../components/guesthub/AppearanceChoices';
 import { payloadOf,signature,createDesignSaver,toPublicTheme,writeDraftPreview,FONTS } from '../components/design-studio/model.mjs';
 import './DesignStudioWorkspace.css';
+import './DesignStudioSurfaces.css';
 import StudioNavigation, { STUDIO_TABS } from '../components/design-studio/StudioNavigation';
 import PresentationControls from '../components/design-studio/PresentationControls';
 import { RSVP_FORMATS } from '../components/invite/rsvpFormats.mjs';

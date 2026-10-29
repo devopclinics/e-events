@@ -11,6 +11,7 @@ import { INVITE_THEMES, RSVP_QUESTION_PRESETS } from './AdminPage'
 import { seatingTerm } from '../seatingTerm'
 import './GuestsRedesignPage.css'
 import GuestSheetControls from './GuestSheetControls'
+import './InviteWorkspace.css'
 
 const STAT_TILES = [
   { key: 'total', label: 'Total Guests', icon: 'users', tone: 'teal' },
@@ -687,8 +688,20 @@ function ManualInvitePanel({ eventId, notify }) {
   )
 }
 
-function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, eventId, event, guests, tableCategories, rsvpQuestions, onQuestionsChanged, onEventChanged }) {
+export function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, eventId, event, guests, tableCategories, rsvpQuestions, onQuestionsChanged, onEventChanged }) {
   const navigate = useNavigate()
+  const [section, setSection] = useState('page')
+  const [previewLoaded, setPreviewLoaded] = useState(false)
+  const [previewDevice, setPreviewDevice] = useState('desktop')
+  const [previewVersion, setPreviewVersion] = useState(0)
+  const sections = [{id:'page',name:'Page & RSVP',title:'A welcome worth opening.',copy:'Your link, invitation page, response rules and guest experience.'},{id:'opening',name:'Opening',title:'Make the first moment yours.',copy:'Choose direct entry or an envelope reveal. Opening options have their own save button.'},{id:'guests',name:'Guest details',title:'Ask for just what you need.',copy:'Contact fields, additional guests, invitation categories and seating rules.'},{id:'questions',name:'Questions',title:'The details that make it personal.',copy:'Create and edit the questions on your RSVP form.'},{id:'delivery',name:'Send & track',title:'Bring everyone into the moment.',copy:'Send invitations, follow up with guests, and review your responses.'}]
+  const currentSection = sections.find(item => item.id === section)
+  function sectionKeys(e) {
+    const keys=['ArrowLeft','ArrowRight','Home','End']; if (!keys.includes(e.key)) return
+    e.preventDefault(); const index=sections.findIndex(item=>item.id===section)
+    const next=e.key==='Home'?0:e.key==='End'?sections.length-1:(index+(e.key==='ArrowRight'?1:-1)+sections.length)%sections.length
+    setSection(sections[next].id); e.currentTarget.querySelectorAll('[role=tab]')[next]?.focus()
+  }
   const [rsvpEnabled, setRsvpEnabled] = useState(true)
   const [mode, setMode] = useState('open')
   const [approval, setApproval] = useState(false)
@@ -932,6 +945,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
         rsvp_landing_layout: landingLayout,
       })
       await onEventChanged()
+      setPreviewVersion(value => value + 1)
       notify('RSVP settings saved')
     } catch (e) {
       notify(e.message || 'RSVP settings could not be saved', true)
@@ -940,35 +954,16 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
     }
   }
 
-  return (
-    <>
-      <div className="gr-quick-row">
-        <button className="rr-panel gr-quick-card" onClick={() => onSendInvites ? onSendInvites(rsvpCounts.notInvited) : notify('Invitation sending is available on the legacy interface during rollout')}>
-          <span className="gr-quick-icon amber"><Icon name="send" size={16} /></span>
-          <span className="gr-quick-text">
-            <strong>Send first invitations</strong>
-            <small>{rsvpCounts.notInvited} guest{rsvpCounts.notInvited === 1 ? '' : 's'} haven't received one yet</small>
-          </span>
-          <span className="gr-quick-count">{rsvpCounts.notInvited}</span>
-        </button>
-        <button className="rr-panel gr-quick-card" disabled={!reminderGuestIds.length} onClick={() => onSendGuests(reminderGuestIds)}>
-          <span className="gr-quick-icon teal"><Icon name="bell" size={16} /></span>
-          <span className="gr-quick-text">
-            <strong>Remind guests with no reply</strong>
-            <small>{reminderGuestIds.length} guest{reminderGuestIds.length === 1 ? '' : 's'} haven't responded</small>
-          </span>
-          <span className="gr-quick-count">{reminderGuestIds.length}</span>
-        </button>
-        <button className="rr-panel gr-quick-card" disabled={!invitedGuestIds.length} onClick={() => onSendGuests(invitedGuestIds)}>
-          <span className="gr-quick-icon teal"><Icon name="upload" size={16} /></span>
-          <span className="gr-quick-text">
-            <strong>Resend to all</strong>
-            <small>Re-send the invite to everyone</small>
-          </span>
-          <span className="gr-quick-count">{invitedGuestIds.length}</span>
-        </button>
-      </div>
-
+  const savedPreviewUrl = eventId ? `/invite/${encodeURIComponent(eventId)}?studio-preview=1&studio-surface=rsvp&invite-refresh=${previewVersion}` : ''
+  return <section className="invite-studio" aria-label="Invitation workspace">
+    <header className="iw-heading"><div><span className="iw-eyebrow">GUEST EXPERIENCE / INVITATIONS</span><h2>Every great event<br/>starts with <em>an invitation.</em></h2><p>{event?.name || 'Your event'} · One thoughtful journey, from first hello to RSVP.</p></div><div className="iw-heading-actions"><p>Design the welcome. Set your RSVP rules.<br/>Send when everything feels right.</p><div><a className="rr-btn secondary" href="/design-studio-redesign?advanced=1&tab=Envelope">Design envelope ↗</a><button className="rr-btn primary" disabled={saving} onClick={saveSettings}>{saving?'Saving…':'Save RSVP settings'}</button></div><small>Opening options have a separate save.</small></div></header>
+    <div className="iw-overview" aria-label="Invitation overview"><div><span>YOUR GUEST LIST</span><b>{rsvpCounts.total}</b><small>guests</small></div><div><span>INVITATIONS SENT</span><b>{invitedGuestIds.length}</b><small>personal invitations</small></div><div><span>CONFIRMED</span><b>{rsvpCounts.confirmed}</b><small>responses</small></div><div><span>AWAITING REPLY</span><b>{rsvpCounts.awaitingReply}</b><small>responses</small></div></div>
+    <div className="iw-tabs" role="tablist" aria-label="Invitation sections" onKeyDown={sectionKeys}>{sections.map((item,index)=><button key={item.id} id={`invite-tab-${item.id}`} role="tab" type="button" aria-selected={section===item.id} aria-controls={`invite-panel-${item.id}`} tabIndex={section===item.id?0:-1} onClick={()=>setSection(item.id)}><span>0{index+1}</span>{item.name}</button>)}</div>
+    <div className="iw-workspace"><aside className="iw-preview" aria-label="Invitation preview"><div className="iw-preview-toolbar"><div><span className="iw-eyebrow">THE GUEST'S VIEW</span><h3>Your invitation.</h3></div><div className="iw-device" role="group" aria-label="Preview size">{['desktop','phone'].map(device=><button key={device} aria-pressed={previewDevice===device} onClick={()=>setPreviewDevice(device)}>{device==='desktop'?'Desktop':'Phone'}</button>)}</div></div><p className="iw-preview-note">Invitation design preview. Save RSVP settings to apply your changes. Registration and purchases are disabled.</p><div className={`iw-preview-stage ${previewDevice}`}>
+      {previewLoaded?<div className="iw-browser"><div className="iw-browser-bar"><i/><i/><i/><span>Invitation preview</span><button aria-label="Refresh invitation preview" onClick={()=>setPreviewVersion(v=>v+1)}>↻</button></div><iframe key={`${eventId}:${previewVersion}`} title="Invitation page preview" src={savedPreviewUrl} sandbox="allow-scripts allow-same-origin" loading="lazy"/></div>:<div className="iw-preview-placeholder"><span className="iw-preview-orbit" aria-hidden="true">✧</span><div className="iw-letter" aria-hidden="true"><span>F</span></div><span className="iw-eyebrow">A FIRST IMPRESSION, BEAUTIFULLY CONSIDERED</span><h3>{event?.name||'Your event'}</h3><p>Open the invitation design in a preview.<br/>Your draft settings stay here as you explore.</p><button className="rr-btn primary" disabled={!eventId} onClick={()=>setPreviewLoaded(true)}>Load invitation preview ↗</button></div>}
+    </div><div className="iw-preview-footer"><span>{rsvpEnabled?'With RSVP':'Skip RSVP'} · {rsvpEnabled && mode==='closed'?'Personal links only':'Public invitation'}</span>{hasPublicLink&&<a href={publicLink} target="_blank" rel="noreferrer">Open guest page ↗</a>}</div><div className="iw-context-note"><span aria-hidden="true">◇</span><p>Page and response settings are saved together. Envelope opening has its own save. Delivery actions keep their existing audience and confirmation steps.</p></div></aside>
+    <div className="iw-editor"><div className="iw-section-intro"><span className="iw-eyebrow">{String(sections.findIndex(item=>item.id===section)+1).padStart(2,'0')} / {currentSection.name}</span><h3>{currentSection.title}</h3><p>{currentSection.copy}</p></div>
+      <section id="invite-panel-page" role="tabpanel" aria-labelledby="invite-tab-page" hidden={section!=='page'} className="iw-panel">
       <div className="rr-panel gr-rsvp-mode">
         <div className="rd-panel-body gr-rsvp-mode-body">
           <label className={`gr-mode-card ${rsvpEnabled ? 'active' : ''}`}>
@@ -982,12 +977,6 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
         </div>
       </div>
 
-      <div className="rr-panel" style={{ padding: 24, marginBottom: 20 }}>
-        <h3>Invitation opening</h3>
-        <EnvelopeSettings key={eventId} eventId={eventId} event={event} mode="options" />
-      </div>
-
-      <div className="rd-wide-grid">
         <div className="rr-panel">
           <div className="rd-panel-head">
             <h3>Invitation page</h3>
@@ -996,7 +985,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
           <div className="rd-panel-body">
             <label className="rd-field-label">Public link</label>
             <div className="gr-link-row">
-              <input className="rd-field" style={{ marginBottom: 0 }} value={publicLink || 'Generate an invitation link to begin'} readOnly />
+              <input className="rd-field" style={{ marginBottom: 0 }} aria-label="Public invitation link" value={publicLink || 'Generate an invitation link to begin'} readOnly />
               <button className="rr-btn secondary" disabled={!hasPublicLink} onClick={copyLink}>
                 <Icon name={linkCopied ? 'check' : 'external'} size={13} /> {linkCopied ? 'Copied' : 'Copy'}
               </button>
@@ -1010,7 +999,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
               : <span className="rd-hint">Generate the invitation link to preview the page.</span>}
 
             <label className="rd-field-label" style={{ marginTop: 14 }}>Invite page theme</label>
-            <select className="rr-select" value={theme} onChange={(e) => { setTheme(e.target.value); notify(`Invite theme set to ${INVITE_THEMES.find((t) => t.id === e.target.value)?.label} — save invitation settings to apply`) }}>
+            <select className="rr-select" aria-label="Invitation theme" value={theme} onChange={(e) => { setTheme(e.target.value); notify(`Invite theme set to ${INVITE_THEMES.find((t) => t.id === e.target.value)?.label} — save invitation settings to apply`) }}>
               {INVITE_THEMES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
             <button className="rr-btn secondary" style={{ marginTop: 8 }} onClick={() => onPreviewInvite ? onPreviewInvite() : notify('Invite email preview opened')}>
@@ -1024,7 +1013,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
                 : <span className="gr-cover-banner-empty"><Icon name="image" size={22} /> No cover image yet</span>}
             </div>
             <div className="gr-cover-row">
-              <input ref={coverFileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(e) => uploadCover(e.target.files?.[0])} />
+              <input ref={coverFileRef} aria-label="Invitation cover image" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(e) => uploadCover(e.target.files?.[0])} />
               <button className="rr-btn secondary" disabled={coverBusy} onClick={() => coverFileRef.current?.click()}>{coverBusy ? 'Working…' : event?.invite_cover_image ? 'Replace image' : 'Upload'}</button>
               {event?.invite_cover_image && <button className="rr-link-btn gr-danger-link" disabled={coverBusy} onClick={removeCover}>Remove</button>}
             </div>
@@ -1049,7 +1038,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
                   : <Icon name="image" size={20} />}
               </div>
               <div>
-                <input ref={logoFileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(e) => uploadLogo(e.target.files?.[0])} />
+                <input ref={logoFileRef} aria-label="Event logo" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(e) => uploadLogo(e.target.files?.[0])} />
                 <button className="rr-btn secondary" disabled={logoBusy} onClick={() => logoFileRef.current?.click()}>{logoBusy ? 'Working…' : event?.logo_url ? 'Replace logo' : 'Upload logo'}</button>
                 {event?.logo_url && <button className="rr-link-btn gr-danger-link" style={{ marginLeft: 8 }} disabled={logoBusy} onClick={removeLogo}>Remove</button>}
                 <p className="rd-hint" style={{ marginTop: 6 }}>Shown as a small badge on the invite page header. A square or circular image with a transparent background works best.</p>
@@ -1061,7 +1050,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
                 {mode === 'open' ? 'Open — anyone with the link can RSVP' : 'Closed — only guests with a personal link can RSVP'}
               </span>
               <label className="rd-switch">
-                <input type="checkbox" checked={mode === 'closed'} onChange={(e) => { const m = e.target.checked ? 'closed' : 'open'; setMode(m); if (m === 'closed') setApproval(false); notify(`Who-can-RSVP set to ${m === 'closed' ? 'Closed' : 'Open'}`) }} />
+                <input type="checkbox" aria-label="Only personal links can RSVP" checked={mode === 'closed'} onChange={(e) => { const m = e.target.checked ? 'closed' : 'open'; setMode(m); if (m === 'closed') setApproval(false); notify(`Who-can-RSVP set to ${m === 'closed' ? 'Closed' : 'Open'}`) }} />
                 <span className="track" /><span className="knob" />
               </label>
             </div>
@@ -1070,7 +1059,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
             {mode === 'open' && <div className="rd-toggle-row" style={{ marginTop: 12 }}>
               <span style={{ fontSize: 12, fontWeight: 600 }}>Review RSVPs before confirming (approval required)</span>
               <label className="rd-switch">
-                <input type="checkbox" checked={approval} onChange={(e) => { setApproval(e.target.checked); notify(`Approval required ${e.target.checked ? 'enabled' : 'disabled'}`) }} />
+                <input type="checkbox" aria-label="Require RSVP approval" checked={approval} onChange={(e) => { setApproval(e.target.checked); notify(`Approval required ${e.target.checked ? 'enabled' : 'disabled'}`) }} />
                 <span className="track" /><span className="knob" />
               </label>
             </div>}
@@ -1078,18 +1067,18 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
             <div className="rd-toggle-row" style={{ marginTop: 12 }}>
               <span style={{ fontSize: 12, fontWeight: 600 }}>Event time is not set yet (show "Time to be announced", hide calendar downloads)</span>
               <label className="rd-switch">
-                <input type="checkbox" checked={timeTbd} onChange={(e) => { setTimeTbd(e.target.checked); notify(`Event time ${e.target.checked ? 'marked as TBD' : 'set'}`) }} />
+                <input type="checkbox" aria-label="Event time to be announced" checked={timeTbd} onChange={(e) => { setTimeTbd(e.target.checked); notify(`Event time ${e.target.checked ? 'marked as TBD' : 'set'}`) }} />
                 <span className="track" /><span className="knob" />
               </label>
             </div>
             <div className="rd-row2" style={{ marginTop: 12 }}>
               <div style={{ flex: 1 }}>
                 <label className="rd-field-label">RSVP deadline</label>
-                <input className="rd-field" type="datetime-local" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+                <input className="rd-field" type="datetime-local" aria-label="RSVP deadline" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
               </div>
               <div style={{ flex: 1 }}>
                 <label className="rd-field-label">Capacity limit</label>
-                <input className="rd-field" type="number" min="0" value={capacity} onChange={(e) => setCapacity(e.target.value)} />
+                <input className="rd-field" type="number" aria-label="Capacity limit" min="0" value={capacity} onChange={(e) => setCapacity(e.target.value)} />
               </div>
             </div>
             <div className="rd-hint">Leave capacity blank for unlimited RSVPs.</div>
@@ -1097,7 +1086,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
             </>}
 
             <label className="rd-field-label" style={{ marginTop: 14 }}>Message for guests</label>
-            <textarea className="rr-textarea" rows={3} value={inviteMessage} placeholder="A short note shown on the RSVP page…" onChange={(e) => setInviteMessage(e.target.value)} />
+            <textarea className="rr-textarea" rows={3} aria-label="Message for guests" value={inviteMessage} placeholder="A short note shown on the RSVP page…" onChange={(e) => setInviteMessage(e.target.value)} />
 
             {rsvpEnabled && <label className="gr-required-check" style={{ marginTop: 10 }}>
               <input type="checkbox" checked={sameEmail} onChange={(e) => { setSameEmail(e.target.checked); notify(`Allow same email on multiple guests: ${e.target.checked ? 'on' : 'off'}`) }} />
@@ -1118,7 +1107,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
               <div key={key} className="rd-toggle-row" style={{ marginTop: 8 }}>
                 <span style={{ fontSize: 12, fontWeight: 600 }}>{label}</span>
                 <label className="rd-switch">
-                  <input type="checkbox" checked={val} onChange={(e) => setter(e.target.checked)} />
+                  <input type="checkbox" aria-label={label} checked={val} onChange={(e) => setter(e.target.checked)} />
                   <span className="track" /><span className="knob" />
                 </label>
               </div>
@@ -1162,26 +1151,16 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
           </div>
         </div>
 
-        <div className="rr-panel">
-          <div className="rd-panel-head">
-            <h3>RSVP status</h3>
-            <p>Live breakdown of responses so far</p>
-          </div>
-          <div className="rd-panel-body">
-            <div className="gr-legend">
-              <div className="gr-legend-row"><i className="gr-dot ok" /> Confirmed <b>{rsvpCounts.confirmed}</b></div>
-              <div className="gr-legend-row"><i className="gr-dot fail" /> Declined <b>{rsvpCounts.declined}</b></div>
-              <div className="gr-legend-row"><i className="gr-dot warn" /> Awaiting reply <b>{rsvpCounts.awaitingReply}</b></div>
-              <div className="gr-legend-row"><i className="gr-dot warn" /> Pending approval <b>{rsvpCounts.pendingApproval}</b></div>
-            </div>
-            <div className="rd-mini-bar" style={{ height: 8, marginTop: 4 }}>
-              <i style={{ width: `${rsvpCounts.total ? Math.round((rsvpCounts.confirmed / rsvpCounts.total) * 100) : 0}%` }} />
-            </div>
-            <button className="rr-link-btn" style={{ marginTop: 12 }} onClick={() => navigate('/event-results-redesign?tab=invitations')}>
-              View full RSVP report <Icon name="arrow" size={13} />
-            </button>
+      </section>
+      <section id="invite-panel-opening" role="tabpanel" aria-labelledby="invite-tab-opening" hidden={section!=='opening'} className="iw-panel">
+      <div className="rr-panel" style={{ padding: 24, marginBottom: 20 }}>
+        <h3>Invitation opening</h3>
+        <EnvelopeSettings key={eventId} eventId={eventId} event={event} mode="options" />
+      </div>
 
-            {rsvpEnabled && <><div className="rr-section-title" style={{ margin: '18px 0 8px' }}>
+      </section>
+      <section id="invite-panel-guests" role="tabpanel" aria-labelledby="invite-tab-guests" hidden={section!=='guests'} className="iw-panel">
+<div className="rr-panel"><div className="rd-panel-head"><h3>Contact requirements</h3><p>Set contact requirements for the person replying and their additional guests.</p></div><div className="rd-panel-body">            {rsvpEnabled && <><div className="rr-section-title" style={{ margin: '18px 0 8px' }}>
               <div><h2 style={{ fontSize: 12 }}>RSVP form fields</h2></div>
             </div>
             <table className="rr-table gr-field-table">
@@ -1190,12 +1169,12 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
                 <tr>
                   <td>Email</td>
                   <td>
-                    <select className="rr-select gr-inline-select" value={submitterEmail} onChange={(e) => setSubmitterEmail(e.target.value)}>
+                    <select className="rr-select gr-inline-select" aria-label="Submitter email" value={submitterEmail} onChange={(e) => setSubmitterEmail(e.target.value)}>
                       <option value="dontask">Don't ask</option><option value="optional">Optional</option><option value="required">Required</option>
                     </select>
                   </td>
                   <td>
-                    <select className="rr-select gr-inline-select" disabled={submitterEmail === 'dontask'} value={submitterEmail === 'dontask' ? 'dontask' : additionalEmail} onChange={(e) => setAdditionalEmail(e.target.value)}>
+                    <select className="rr-select gr-inline-select" aria-label="Additional guest email" disabled={submitterEmail === 'dontask'} value={submitterEmail === 'dontask' ? 'dontask' : additionalEmail} onChange={(e) => setAdditionalEmail(e.target.value)}>
                       <option value="dontask">Don't ask</option><option value="optional">Optional</option><option value="required">Required</option>
                     </select>
                   </td>
@@ -1203,12 +1182,12 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
                 <tr>
                   <td>Phone</td>
                   <td>
-                    <select className="rr-select gr-inline-select" value={submitterPhone} onChange={(e) => setSubmitterPhone(e.target.value)}>
+                    <select className="rr-select gr-inline-select" aria-label="Submitter phone" value={submitterPhone} onChange={(e) => setSubmitterPhone(e.target.value)}>
                       <option value="dontask">Don't ask</option><option value="optional">Optional</option><option value="required">Required</option>
                     </select>
                   </td>
                   <td>
-                    <select className="rr-select gr-inline-select" disabled={submitterPhone === 'dontask'} value={submitterPhone === 'dontask' ? 'dontask' : additionalPhone} onChange={(e) => setAdditionalPhone(e.target.value)}>
+                    <select className="rr-select gr-inline-select" aria-label="Additional guest phone" disabled={submitterPhone === 'dontask'} value={submitterPhone === 'dontask' ? 'dontask' : additionalPhone} onChange={(e) => setAdditionalPhone(e.target.value)}>
                       <option value="dontask">Don't ask</option><option value="optional">Optional</option><option value="required">Required</option>
                     </select>
                   </td>
@@ -1216,12 +1195,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
               </tbody>
             </table>
             <button className="rr-btn primary" disabled={saving} style={{ marginTop: 14 }} onClick={saveSettings}>{saving ? 'Saving…' : 'Save RSVP form fields'}</button>
-            </>}
-          </div>
-        </div>
-      </div>
-
-      {rsvpEnabled && (
+            </>}{!rsvpEnabled && <p className="rd-hint">Enable With RSVP in Page &amp; RSVP to configure the response form.</p>}</div></div>      {rsvpEnabled && (
       <div className="rr-panel gr-multi-invitee">
         <div className="rd-panel-head"><h3>Multi-invitee settings</h3><p>Let one submitter RSVP for guests they're bringing</p></div>
         <div className="rd-panel-body">
@@ -1235,7 +1209,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
           {multiInvitee && (
             <>
               <label className="rd-field-label" style={{ marginTop: 10 }}>Default max invitees per RSVP</label>
-              <input className="rd-field" type="number" min="1" max="100" value={maxInvitees} onChange={(e) => setMaxInvitees(e.target.value)} style={{ maxWidth: 140 }} />
+              <input className="rd-field" type="number" min="1" max="100" aria-label="Maximum invitees" value={maxInvitees} onChange={(e) => setMaxInvitees(e.target.value)} style={{ maxWidth: 140 }} />
               <label className="rd-field-label" style={{ marginTop: 10 }}>Category invitee limits &amp; table-category mapping</label>
               {Object.keys(categoryLimits).length > 0 ? (
                 <table className="rr-table">
@@ -1336,8 +1310,8 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
       </div>
       )}
 
-      <ManualInvitePanel eventId={eventId} notify={notify} />
-
+      </section>
+      <section id="invite-panel-questions" role="tabpanel" aria-labelledby="invite-tab-questions" hidden={section!=='questions'} className="iw-panel">
       <div className="rr-section-title">
         <div><h2>Custom RSVP questions</h2><p>Ask guests anything extra when they confirm</p></div>
         <button onClick={() => setAddingQuestion((v) => !v)}><Icon name="plus" size={14} /> Add question</button>
@@ -1377,6 +1351,60 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
           ))}
         </div>
       </div>
+      </section>
+      <section id="invite-panel-delivery" role="tabpanel" aria-labelledby="invite-tab-delivery" hidden={section!=='delivery'} className="iw-panel">
+        <div className="rr-panel">
+          <div className="rd-panel-head">
+            <h3>RSVP status</h3>
+            <p>Live breakdown of responses so far</p>
+          </div>
+          <div className="rd-panel-body">
+            <div className="gr-legend">
+              <div className="gr-legend-row"><i className="gr-dot ok" /> Confirmed <b>{rsvpCounts.confirmed}</b></div>
+              <div className="gr-legend-row"><i className="gr-dot fail" /> Declined <b>{rsvpCounts.declined}</b></div>
+              <div className="gr-legend-row"><i className="gr-dot warn" /> Awaiting reply <b>{rsvpCounts.awaitingReply}</b></div>
+              <div className="gr-legend-row"><i className="gr-dot warn" /> Pending approval <b>{rsvpCounts.pendingApproval}</b></div>
+            </div>
+            <div className="rd-mini-bar" style={{ height: 8, marginTop: 4 }}>
+              <i style={{ width: `${rsvpCounts.total ? Math.round((rsvpCounts.confirmed / rsvpCounts.total) * 100) : 0}%` }} />
+            </div>
+            <button className="rr-link-btn" style={{ marginTop: 12 }} onClick={() => navigate('/event-results-redesign?tab=invitations')}>
+              View full RSVP report <Icon name="arrow" size={13} />
+            </button>
+
+          </div>
+        </div>
+      <div className="gr-quick-row">
+        <button className="rr-panel gr-quick-card" onClick={() => onSendInvites ? onSendInvites(rsvpCounts.notInvited) : notify('Invitation sending is available on the legacy interface during rollout')}>
+          <span className="gr-quick-icon amber"><Icon name="send" size={16} /></span>
+          <span className="gr-quick-text">
+            <strong>Send first invitations</strong>
+            <small>{rsvpCounts.notInvited} guest{rsvpCounts.notInvited === 1 ? '' : 's'} haven't received one yet</small>
+          </span>
+          <span className="gr-quick-count">{rsvpCounts.notInvited}</span>
+        </button>
+        <button className="rr-panel gr-quick-card" disabled={!reminderGuestIds.length} onClick={() => onSendGuests(reminderGuestIds)}>
+          <span className="gr-quick-icon teal"><Icon name="bell" size={16} /></span>
+          <span className="gr-quick-text">
+            <strong>Remind guests with no reply</strong>
+            <small>{reminderGuestIds.length} guest{reminderGuestIds.length === 1 ? '' : 's'} haven't responded</small>
+          </span>
+          <span className="gr-quick-count">{reminderGuestIds.length}</span>
+        </button>
+        <button className="rr-panel gr-quick-card" disabled={!invitedGuestIds.length} onClick={() => onSendGuests(invitedGuestIds)}>
+          <span className="gr-quick-icon teal"><Icon name="upload" size={16} /></span>
+          <span className="gr-quick-text">
+            <strong>Resend to all</strong>
+            <small>Re-send the invite to everyone</small>
+          </span>
+          <span className="gr-quick-count">{invitedGuestIds.length}</span>
+        </button>
+      </div>
+
+      <ManualInvitePanel eventId={eventId} notify={notify} />
+
+      </section>
+    </div></div>
       {regenerateLink && <ConfirmDialog
         title="Regenerate invitation link?"
         message="The current public link will stop working immediately. Invitations already sent with personal links are not changed."
@@ -1391,8 +1419,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
           } catch (e) { setRegenerateLink(false); notify(e.message || 'Invitation link could not be regenerated', true) }
         }}
       />}
-    </>
-  )
+  </section>
 }
 
 export default function GuestsRedesignPage() {
@@ -1712,7 +1739,7 @@ export default function GuestsRedesignPage() {
       <div className="rr-pagehead">
         <div>
           <div className="rr-title-row">
-            <h1>Guest Engagement</h1>
+            <h1>{tab === 'invite' ? 'Invitations & RSVP' : 'Guest Engagement'}</h1>
           </div>
           <div className="rr-meta"><Icon name="users" size={13} /> {guests.length} guests <span className="rr-dot">·</span> <Icon name="send" size={13} /> {guests.filter((g) => g.invited !== '—').length} invited</div>
         </div>
@@ -1737,7 +1764,7 @@ export default function GuestsRedesignPage() {
           try { await api.bulkAssignTableGroup(eventId, guestIds, tableGroupId); await loadGuests(); notify('Table-group assignment updated') }
           catch (e) { notify(e.message || 'Table-group assignment could not be updated', true) }
         }} rsvpQuestions={rsvpQuestions} stats={stats} />
-        : <InviteTab notify={notify} eventId={eventId} event={event} guests={guests} tableCategories={[...new Set(tables.map((table) => String(table.category || '').trim()).filter(Boolean))]} rsvpQuestions={rsvpQuestions} onQuestionsChanged={loadQuestions} onEventChanged={loadEvent} onSendInvites={(count) => { setSendGuestIds([]); setSendResult(null); setSendCount(count); setSendStep('audience') }} onSendGuests={(ids) => { setSendGuestIds(ids); setSendResult(null); setSendCount(ids.length); setSendStep('audience') }} onPreviewInvite={() => { setInvitePreviewCh('email'); setInvitePreviewOpen(true) }} />}
+        : <InviteTab key={eventId} notify={notify} eventId={eventId} event={event} guests={guests} tableCategories={[...new Set(tables.map((table) => String(table.category || '').trim()).filter(Boolean))]} rsvpQuestions={rsvpQuestions} onQuestionsChanged={loadQuestions} onEventChanged={loadEvent} onSendInvites={(count) => { setSendGuestIds([]); setSendResult(null); setSendCount(count); setSendStep('audience') }} onSendGuests={(ids) => { setSendGuestIds(ids); setSendResult(null); setSendCount(ids.length); setSendStep('audience') }} onPreviewInvite={() => { setInvitePreviewCh('email'); setInvitePreviewOpen(true) }} />}
 
       {toast && <div className="rd-toast" style={toast.error ? { background: 'var(--danger)' } : undefined}><Icon name={toast.error ? 'info' : 'check'} />{toast.message}</div>}
 

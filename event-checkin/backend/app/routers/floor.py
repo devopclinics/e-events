@@ -272,29 +272,12 @@ def _floor_svg(plan: FloorPlanOut) -> str:
     if plan.bg_image_url:
         parts.append(f'<image href="{_html.escape(plan.bg_image_url)}" x="0" y="0" width="{plan.width}" '
                      f'height="{plan.height}" opacity="{plan.bg_opacity/100:.2f}" preserveAspectRatio="xMidYMid slice"/>')
+    from ..floor_symbols import element_svg, table_svg
     for el in plan.elements:
-        parts.append(f'<g transform="rotate({el.rotation} {el.pos_x + el.width/2} {el.pos_y + el.height/2})">'
-                     f'<rect x="{el.pos_x}" y="{el.pos_y}" width="{el.width}" height="{el.height}" rx="6" '
-                     f'fill="{_html.escape(el.color or "#e2e8f0")}" stroke="#94a3b8"/>'
-                     f'<text x="{el.pos_x + el.width/2}" y="{el.pos_y + el.height/2 + 4}" text-anchor="middle" '
-                     f'font-family="sans-serif" font-size="13" fill="#334155">{_html.escape(el.label or el.type)}</text></g>')
+        parts.append(element_svg(el))
     for t in plan.tables:
-        size = max(52, 44 + t.capacity * 4)
-        cx, cy = t.pos_x + size / 2, t.pos_y + size / 2
-        if t.table_group_id:
-            fill = color_by_group.setdefault(t.table_group_id, _GROUP_COLORS[len(color_by_group) % len(_GROUP_COLORS)])
-        else:
-            fill = "#0ea5e9"
-        if t.shape == "rect":
-            shape = f'<rect x="{t.pos_x}" y="{t.pos_y}" width="{size}" height="{size*0.7}" rx="8" fill="{fill}" fill-opacity="0.18" stroke="{fill}" stroke-width="2"/>'
-            cy = t.pos_y + size * 0.35
-        else:
-            shape = f'<circle cx="{cx}" cy="{cy}" r="{size/2}" fill="{fill}" fill-opacity="0.18" stroke="{fill}" stroke-width="2"/>'
-        parts.append(
-            f'<g transform="rotate({t.rotation} {cx} {cy})">{shape}'
-            f'<text x="{cx}" y="{cy - 2}" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="700" fill="#0f172a">{_html.escape(t.name)}</text>'
-            f'<text x="{cx}" y="{cy + 15}" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#475569">{t.seated}/{t.capacity} seats</text></g>'
-        )
+        fill = color_by_group.setdefault(t.table_group_id, _GROUP_COLORS[len(color_by_group) % len(_GROUP_COLORS)]) if t.table_group_id else "#0ea5e9"
+        parts.append(table_svg(t, fill))
     parts.append('</svg>')
     return "".join(parts)
 

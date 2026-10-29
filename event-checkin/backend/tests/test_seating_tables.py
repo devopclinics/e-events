@@ -92,3 +92,30 @@ async def test_floor_table_guards(ctx):
         from sqlalchemy import delete
         await db.execute(delete(TableGroupTable).where(TableGroupTable.table_group_id == link_group)); await db.commit()
     assert (await ctx.client.delete(f'{base}/{tid}?require_empty=true')).status_code == 204
+
+@pytest.mark.asyncio
+async def test_planner_assignment_respects_partner_reservations(ctx):
+    from sqlalchemy import select
+    from app.models import Guest
+    async with _Session() as db:
+        e = await db.get(Event, ctx.ids['event_a']); e.is_paid = True
+        await db.commit()
+    ctx.login(ctx.ids['user_a'])
+    event_id = ctx.ids['event_a']
+    table = (await ctx.client.post(f'/api/events/{event_id}/tables', json={'name':'Reserved', 'capacity':10})).json()
+    async with _Session() as db:
+        holder = await db.scalar(select(Guest).where(Guest.event_id == event_id))
+        partner = Guest(event_id=event_id, first_name='Partner', last_name='Guest', email='partner@example.test')
+        other = Guest(event_id=event_id, first_name='Other', last_name='Guest', email='other@example.test')
+        db.add_all([partner, other]); await db.flush()
+        holder.table_id = table['id']; holder.seat_number = '1'; holder.held_seat = '2'; holder.partner_guest_id = partner.id
+        partner_id, other_id = partner.id, other.id
+        await db.commit()
+    chart = (await ctx.client.get(f'/api/events/{event_id}/seating')).json()
+    reserved = next(s for s in chart[0]['seats'] if s['seat']=='2')
+    assert reserved['reserved'] and reserved['reserved_for_guest_id']==partner_id
+    body = {'table_id':table['id'],'seat_number':'2'}
+    rejected = await ctx.client.patch(f'/api/events/{event_id}/guests/{other_id}/seat?respect_reserved=true',json=body)
+    assert rejected.status_code == 409
+    allowed = await ctx.client.patch(f'/api/events/{event_id}/guests/{partner_id}/seat?respect_reserved=true',json=body)
+    assert allowed.status_code == 200, allowed.text

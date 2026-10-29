@@ -37,8 +37,7 @@ export default function TableManager({ eventId, table: initial, suggestedName, o
   }
   const assigned = seats ? seats.filter(s => s.guest_id) : null
   const assignedCount = assigned ? assigned.length : (table?.assigned_count ?? table?.seated ?? 0)
-  const held = guests.filter(g => g.table_id === table?.id && g.held_seat).map(g => String(g.held_seat))
-  const availableSeats = (seats || []).filter(s => !s.guest_id && s.seat && !held.includes(String(s.seat)))
+  const availableSeats = (seats || []).filter(s => !s.guest_id && s.seat && (!s.reserved || s.reserved_for_guest_id === guestId))
   async function refreshGuests() {
     const [chart, rows] = await Promise.all([api.getSeatingChart(eventId), api.listGuests(eventId)])
     if (!active.current) return
@@ -49,7 +48,7 @@ export default function TableManager({ eventId, table: initial, suggestedName, o
   }
   async function assignGuest(e) {
     e.preventDefault()
-    await run(async () => { await api.assignSeat(eventId, guestId, { table_id: table.id, seat_number: seat }); await refreshGuests() })
+    await run(async () => { await api.assignSeat(eventId, guestId, { table_id: table.id, seat_number: seat }, true); await refreshGuests() })
   }
   return <dialog ref={dialog} className="venue-table-dialog" aria-labelledby="venue-table-title" onKeyDown={e => e.stopPropagation()} onCancel={e => { e.preventDefault(); close() }}>
     <header><div><span className="venue-kicker">EVENT SEATING</span><h2 id="venue-table-title">{initial ? 'Manage table' : 'Add a table'}</h2></div><button type="button" aria-label="Close table manager" disabled={busy} onClick={close}>×</button></header>
@@ -65,10 +64,10 @@ export default function TableManager({ eventId, table: initial, suggestedName, o
     {initial && <section className="venue-control-section"><h3>Guests at this table</h3>
       {seats === null ? <button type="button" disabled={busy || loading || !ready} onClick={() => run(refreshGuests)}>View and assign guests</button> : <>
         <button type="button" disabled={busy} onClick={() => run(refreshGuests)}>Refresh guest list</button>
-        <ul className="venue-table-guests">{assigned.map(s => <li key={s.guest_id}><span><b>{s.name}</b><small>{s.seat ? `Seat ${s.seat}` : 'No seat number'}</small></span><button type="button" disabled={busy} aria-label={`Unassign ${s.name}`} onClick={() => { if (window.confirm(`Remove ${s.name} from this table? Their event registration will remain.`)) run(async () => { await api.assignSeat(eventId, s.guest_id, { table_id: null, seat_number: null }); await refreshGuests() }) }}>Unassign</button></li>)}</ul>
+        <ul className="venue-table-guests">{assigned.map(s => <li key={s.guest_id}><span><b>{s.name}</b><small>{s.seat ? `Seat ${s.seat}` : 'No seat number'}</small></span><button type="button" disabled={busy} aria-label={`Unassign ${s.name}`} onClick={() => { if (window.confirm(`Remove ${s.name} from this table? Their event registration will remain.`)) run(async () => { await api.assignSeat(eventId, s.guest_id, { table_id: null, seat_number: null }, true); await refreshGuests() }) }}>Unassign</button></li>)}</ul>
         {!assigned.length && <p className="venue-help">No guests are assigned to this table.</p>}
-        <form onSubmit={assignGuest}><fieldset disabled={busy}><label className="venue-field"><span>Guest to assign</span><select aria-label="Guest to assign" required value={guestId} onChange={e => setGuestId(e.target.value)}><option value="">Choose an unseated guest</option>{guests.filter(g => !g.table_id || (g.table_id === table.id && !g.seat_number)).map(g => <option key={g.id} value={g.id}>{g.first_name} {g.last_name}</option>)}</select></label>
-          <label className="venue-field"><span>Available seat</span><select aria-label="Available seat" required value={seat} onChange={e => setSeat(e.target.value)}><option value="">Choose a seat</option>{availableSeats.map(s => <option key={s.seat} value={s.seat}>Seat {s.seat}</option>)}</select></label><button disabled={!guestId || !seat}>Assign guest</button></fieldset></form>
+        <form onSubmit={assignGuest}><fieldset disabled={busy}><label className="venue-field"><span>Guest to assign</span><select aria-label="Guest to assign" required value={guestId} onChange={e => { setGuestId(e.target.value); setSeat('') }}><option value="">Choose an unseated guest</option>{guests.filter(g => !g.table_id || (g.table_id === table.id && !g.seat_number)).map(g => <option key={g.id} value={g.id}>{g.first_name} {g.last_name}</option>)}</select></label>
+          <label className="venue-field"><span>Available seat</span><select aria-label="Available seat" required value={seat} onChange={e => setSeat(e.target.value)}><option value="">Choose a seat</option>{availableSeats.map(s => <option key={s.seat} value={s.seat}>Seat {s.seat}{s.reserved ? ' (reserved for this guest)' : ''}</option>)}</select></label><button disabled={!guestId || !seat}>Assign guest</button></fieldset></form>
       </>}
     </section>}
     {initial && <section className="venue-control-section"><h3>Remove table</h3><p className="venue-help">Assigned guests must be moved first. Tables linked to seating groups or household defaults must be unlinked first.</p><button type="button" className="venue-danger" disabled={busy || loading || !ready || assignedCount > 0} onClick={() => { if (window.confirm(`Permanently remove ${table.name}? This cannot be undone with layout undo.`)) run(async () => { await api.deleteTable(eventId, table.id, true); if (active.current) { onChanged(table, 'removed'); onClose() } }) }}>Remove empty table</button></section>}

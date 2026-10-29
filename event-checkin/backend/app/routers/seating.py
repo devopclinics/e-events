@@ -480,13 +480,14 @@ async def seating_chart(event_id: str, db: AsyncSession = Depends(get_db), _: Us
         assigned = sorted(by_table.get(t.id, []), key=lambda g: int(g.seat_number or 0) if (g.seat_number or "").isdigit() else 0)
         seats = []
         assigned_nums = {g.seat_number for g in assigned}
+        reserved = {g.held_seat: g.partner_guest_id for g in assigned if g.held_seat}
         for i in range(1, t.capacity + 1):
             seat_str = str(i)
             g = next((x for x in assigned if x.seat_number == seat_str), None)
             if g:
                 seats.append({"seat": seat_str, "guest_id": g.id, "name": f"{g.first_name} {g.last_name}", "admitted": g.admitted, "meal_served": g.meal_served, "is_vip": g.is_vip})
             else:
-                seats.append({"seat": seat_str, "guest_id": None, "name": None, "admitted": False, "meal_served": False})
+                seats.append({"seat": seat_str, "guest_id": None, "name": None, "admitted": False, "meal_served": False, "reserved": seat_str in reserved, "reserved_for_guest_id": reserved.get(seat_str)})
         # Guests with non-numeric or out-of-range seats
         for g in assigned:
             if g.seat_number not in assigned_nums or not (g.seat_number or "").isdigit() or int(g.seat_number) > t.capacity:
@@ -537,6 +538,7 @@ async def assign_seat(
     event_id: str,
     guest_id: str,
     body: SeatAssignRequest,
+    respect_reserved: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_paid_event_member),
 ):
@@ -589,6 +591,14 @@ async def assign_seat(
     if body.table_id and body.seat_number:
         if not str(body.seat_number).isdigit() or not (1 <= int(body.seat_number) <= table.capacity):
             raise HTTPException(400, f"Seat number must be between 1 and {table.capacity} for {table.name}.")
+
+    if respect_reserved and body.table_id and body.seat_number:
+        holder = await db.scalar(select(Guest).where(
+            Guest.event_id == event_id, Guest.table_id == body.table_id,
+            Guest.held_seat == body.seat_number, Guest.id != guest_id,
+        ))
+        if holder and holder.partner_guest_id != guest.id:
+            raise HTTPException(409, "This seat is reserved for another guest. Refresh the guest list and choose another seat.")
 
     # Reject a seat already held by another guest on the same table — keeps this
     # path consistent with the guest-edit modal (guests.py::update_guest) so the

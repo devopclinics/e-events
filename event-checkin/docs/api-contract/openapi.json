@@ -40481,6 +40481,16 @@
               "title": "Guest Id",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "respect_reserved",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Respect Reserved",
+              "type": "boolean"
+            }
           }
         ],
         "requestBody": {

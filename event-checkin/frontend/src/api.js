@@ -868,7 +868,7 @@ export const api = {
     }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Could not save.'))))),
   getSeatingChart: (eventId) => req('GET', `/events/${eventId}/seating`),
   autoAssign: (eventId, clear = false) => req('POST', `/events/${eventId}/seating/auto-assign?clear=${clear}`),
-  assignSeat: (eventId, guestId, body) => req('PATCH', `/events/${eventId}/guests/${guestId}/seat`, body),
+  assignSeat: (eventId, guestId, body, respectReserved = false) => req('PATCH', `/events/${eventId}/guests/${guestId}/seat${respectReserved ? '?respect_reserved=true' : ''}`, body),
   markMealServed: (eventId, guestId) => req('PATCH', `/events/${eventId}/guests/${guestId}/meal-served`),
   markCategoryServed: (eventId, categoryId, guestId) =>
     req('PATCH', `/events/${eventId}/menu-categories/${categoryId}/guests/${guestId}/served`),

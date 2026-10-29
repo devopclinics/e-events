@@ -671,14 +671,17 @@ async def list_events(
 
 @router.get("/me/planner-events", response_model=list[EventOut])
 async def my_planner_events(
+    event_id: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Personal planning portfolio, without the platform-wide support bypass.
+    """Planner portfolio for the explicitly selected event only.
 
-    Support operators retain explicit event access through the normal event
-    selector, but other customers' events do not become their planning work.
+    Missing scope returns no events, including for older clients. Managing or
+    supporting another event never makes it part of this event's workspace.
     """
+    if not event_id:
+        return []
     managed = select(Membership.id).where(
         Membership.org_id == Event.org_id,
         Membership.user_id == user.id,
@@ -691,8 +694,9 @@ async def my_planner_events(
     ).exists()
     rows = (await db.execute(
         select(Event).join(Organization, Organization.id == Event.org_id).where(
+            Event.id == event_id,
             Event.planner_enabled.is_(True), Organization.is_active.is_(True),
-            or_(managed, assigned),
+            True if user.is_platform_superadmin else or_(managed, assigned),
         ).order_by(Event.created_at.desc())
     )).scalars().all()
     return [await _event_out_for_user(event, user, db) for event in rows]

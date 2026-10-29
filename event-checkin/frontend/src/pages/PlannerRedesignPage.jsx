@@ -163,9 +163,10 @@ function PlannerWorkspace({eventId, setEventId, tab, setTab}) {
   }
 
   async function loadPortfolio() {
+    if (!eventId) { setPortfolioEvents([]); setLoading(false); return }
     setLoading(true)
     try {
-      const events = await api.listPlannerEvents()
+      const events = (await api.listPlannerEvents(eventId)).filter(candidate => candidate.id === eventId)
       const summaries = await Promise.all(events.map(async (candidate) => {
         try {
           const [summary, tasks] = await Promise.all([
@@ -642,8 +643,9 @@ function PlannerWorkspace({eventId, setEventId, tab, setTab}) {
     const atRisk = scored.filter((item) => item.readiness < 70).length
     return (
       <>
+        <div className="pl-portfolio-scope"><strong>{event?.name || 'Selected event'}</strong><span>Portfolio follows the event selected in the header.</span></div>
         <div className="pl-portfolio-summary">
-          <div className="rr-panel pl-card"><div className="rd-panel-body"><span className="rd-rowlink">Your Planner events</span><div className="pl-figure">{portfolioEvents.length}</div></div></div>
+          <div className="rr-panel pl-card"><div className="rd-panel-body"><span className="rd-rowlink">Selected event</span><div className="pl-figure">{portfolioEvents.length}</div></div></div>
           <div className="rr-panel pl-card"><div className="rd-panel-body"><span className="rd-rowlink">Average readiness</span><div className="pl-figure">{average}%</div></div></div>
           <div className="rr-panel pl-card"><div className="rd-panel-body"><span className="rd-rowlink">At risk</span><div className="pl-figure">{atRisk}</div></div></div>
           <div className="rr-panel pl-card"><div className="rd-panel-body"><span className="rd-rowlink">Overdue work</span><div className="pl-figure">{scored.reduce((sum, item) => sum + item.overdue, 0)}</div></div></div>
@@ -675,7 +677,7 @@ function PlannerWorkspace({eventId, setEventId, tab, setTab}) {
             )
           })}
         </div>
-        {!portfolioEvents.length && !loading && <div className="rr-panel pl-empty"><p>Planner events you manage or have been assigned to plan will appear here.</p></div>}
+        {!portfolioEvents.length && !loading && <div className="rr-panel pl-empty"><p>{eventId ? 'No Planner data is available for the selected event.' : 'Select an event in the header to open its Planner portfolio.'}</p></div>}
       </>
     )
   }
@@ -1483,7 +1485,7 @@ function PlannerWorkspace({eventId, setEventId, tab, setTab}) {
     return null
   }
 
-  if (eventId && tab !== 'Portfolio' && !eventLoading && !event?.planner_enabled) {
+  if (eventId && !eventLoading && event && !event.planner_enabled) {
     return (
       <RedesignShell topActive="planner" withEventSidebar eventActive="planner">
         <div className="rr-pagehead">
@@ -1493,6 +1495,7 @@ function PlannerWorkspace({eventId, setEventId, tab, setTab}) {
           <div className="rd-panel-body">
             <span className="rr-locked-badge"><Icon name="lock" size={11} /> Not enabled</span>
             <h3 style={{ marginTop: 8 }}>Planner isn't turned on for this event</h3>
+            <p><strong>{event.name}</strong></p>
             <p className="rd-hint">Budget, vendors, timeline, runsheet and documents live here once the Planner add-on is enabled.</p>
             <a className="rr-btn primary rr-locked-cta" href="/communications-redesign?tab=settings">Enable Planner</a>
           </div>

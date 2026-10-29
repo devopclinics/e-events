@@ -597,7 +597,7 @@ export const api = {
 
 
   // Events
-  listPlannerEvents: () => req('GET', '/events/me/planner-events'),
+  listPlannerEvents: (eventId) => eventId ? req('GET', `/events/me/planner-events?event_id=${encodeURIComponent(eventId)}`) : Promise.resolve([]),
   listEvents: (status) => req('GET', status ? `/events?status=${encodeURIComponent(status)}` : '/events'),
   createEvent: (data) => req('POST', '/events', data),
   updateEvent: (id, data) => req('PUT', `/events/${id}`, data),

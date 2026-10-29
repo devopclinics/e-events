@@ -3470,11 +3470,12 @@ export default function InvitePage() {
 
   const openingConfig = designTheme?.envelope_config
   const openingKey = event?.id && openingConfig?.appearance ? envelopeVisitKey(event.id, openingConfig, envelopeScope) : null
-  const openingPreview = isStudioPreview || new URLSearchParams(window.location.search).get('envelope-preview') === '1'
+  const explicitEnvelopePreview = new URLSearchParams(window.location.search).get('envelope-preview') === '1'
+  const openingPreview = isStudioPreview || explicitEnvelopePreview
   // Ticket delivery explicitly opts into a first-visit opening after payment.
   // Ordinary returning invitation links still go straight to their pass/hub.
   const ticketOpening = tokenMode && guest?.rsvp_status === 'confirmed' && new URLSearchParams(window.location.search).get('ticket-opening') === '1'
-  if ((ticketOpening || (!confirmed && !prior && !tokenMeta.already_responded)) && completedEnvelope !== openingKey && shouldShowEnvelope(event?.id, openingConfig, openingPreview, envelopeScope)) {
+  if ((!isStudioPreview || explicitEnvelopePreview) && (ticketOpening || (!confirmed && !prior && !tokenMeta.already_responded)) && completedEnvelope !== openingKey && shouldShowEnvelope(event?.id, openingConfig, openingPreview, envelopeScope)) {
     return <InvitationOpening key={openingKey} appearance={openingConfig.appearance} continueMode={openingConfig.continue_mode} event={event} guest={tokenMode ? guest : null} onDone={() => {
       if (!openingPreview) rememberEnvelope(event.id, openingConfig, envelopeScope)
       setCompletedEnvelope(openingKey)

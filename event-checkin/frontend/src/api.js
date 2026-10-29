@@ -516,7 +516,12 @@ async function ticketingReq(eventId, method, path, body) {
     ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(15000),
   })
   if (!res.ok) {
-    const data = await res.json().catch(() => ({})); const error = new Error(data.detail || res.statusText)
+    const data = await res.json().catch(() => ({}))
+    const detail = typeof data?.detail === 'string' ? data.detail.trim() : ''
+    // HTTP/2 may omit statusText, and gateways can replace JSON with HTML.
+    // Always give callers a nonempty message so inline error notices render.
+    const fallback = `Ticketing couldn’t complete this request (HTTP ${res.status}). Please try again or contact the Festio team.`
+    const error = new Error(detail || fallback)
     error.status = res.status; throw error
   }
   return res.status === 204 ? null : res.json()

@@ -3,6 +3,7 @@ import { api } from '../api'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import RedesignShell from './redesign/RedesignShell'
 import TicketingOperationsPanel from '../components/TicketingOperationsPanel'
+import PayoutSetupError from '../components/PayoutSetupError'
 import './TicketingRedesignPage.css'
 import './TicketingAnalytics.css'
 
@@ -41,6 +42,7 @@ export default function TicketingRedesignPage() {
   const [payoutAccounts, setPayoutAccounts] = useState([])
   const [banks, setBanks] = useState([])
   const [connectProvider, setConnectProvider] = useState('')
+  const [payoutError, setPayoutError] = useState('')
   const [feeScope, setFeeScope] = useState('event')
   const [payoutDraft, setPayoutDraft] = useState({ business_name: '', settlement_bank: '', account_number: '', contact_name: '', contact_email: '', contact_phone: '', email: '', country: 'US' })
   const [sales, setSales] = useState(null)
@@ -82,7 +84,7 @@ export default function TicketingRedesignPage() {
     }).catch((e) => setError(e.message))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    setConfig(null); setProducts([]); setSales(null); setSettingsDraft(null); setPayoutAccounts([]); setConnectProvider('')
+    setConfig(null); setProducts([]); setSales(null); setSettingsDraft(null); setPayoutAccounts([]); setConnectProvider(''); setPayoutError('')
     load()
   }, [eventId]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -187,14 +189,14 @@ export default function TicketingRedesignPage() {
 
 
   async function openConnector(name) {
-    setConnectProvider(name); setError('')
+    setConnectProvider(name); setError(''); setPayoutError('')
     if (name === 'paystack' && !banks.length) {
-      try { setBanks(await api.ticketingPaystackBanks(eventId)) } catch (e) { setError(e.message) }
+      try { setBanks(await api.ticketingPaystackBanks(eventId)) } catch (e) { setPayoutError(e.message) }
     }
   }
 
   async function connectPaystack(e) {
-    e.preventDefault(); setBusy(true); setError('')
+    e.preventDefault(); setBusy(true); setError(''); setPayoutError('')
     try {
       const account = await api.createPaystackPayoutAccount(eventId, {
         business_name: payoutDraft.business_name, settlement_bank: payoutDraft.settlement_bank,
@@ -203,27 +205,27 @@ export default function TicketingRedesignPage() {
         contact_phone: payoutDraft.contact_phone || null,
       })
       await api.selectTicketingPayoutAccount(eventId, account.id); setConnectProvider(''); await load()
-    } catch (e2) { setError(e2.message) } finally { setBusy(false) }
+    } catch (e2) { setPayoutError(e2.message) } finally { setBusy(false) }
   }
 
   async function connectStripe(e) {
-    e.preventDefault(); setBusy(true); setError('')
+    e.preventDefault(); setBusy(true); setError(''); setPayoutError('')
     try {
       const account = await api.createStripePayoutAccount(eventId, { business_name: payoutDraft.business_name, email: payoutDraft.email, country: payoutDraft.country })
       window.location.assign(account.onboarding_url)
-    } catch (e2) { setError(e2.message); setBusy(false) }
+    } catch (e2) { setPayoutError(e2.message); setBusy(false) }
   }
 
   async function choosePayoutAccount(id) {
-    setBusy(true); setError('')
+    setBusy(true); setError(''); setPayoutError('')
     try { await api.selectTicketingPayoutAccount(eventId, id); await load() }
-    catch (e) { setError(e.message) } finally { setBusy(false) }
+    catch (e) { setPayoutError(e.message) } finally { setBusy(false) }
   }
 
   async function resumeStripe(accountId) {
-    setBusy(true); setError('')
+    setBusy(true); setError(''); setPayoutError('')
     try { const result = await api.resumeStripePayoutOnboarding(eventId, accountId); window.location.assign(result.onboarding_url) }
-    catch (e) { setError(e.message); setBusy(false) }
+    catch (e) { setPayoutError(e.message); setBusy(false) }
   }
 
   const paymentMode = config?.test_mode === true ? 'Test mode' : config?.test_mode === false ? 'Live mode' : 'Checking payment mode…'
@@ -259,9 +261,10 @@ export default function TicketingRedesignPage() {
       {config?.config && <>
         <div hidden={section!=='payments'}>
         <section className="rr-panel tk-section"><div className="tk-section-head"><div><span className="tk-step">Organizer payouts</span><h2 id="tk-payouts">Connect the organizer’s account</h2><p>Connect once, then reuse the verified payout account on any event.</p></div><span className="tk-saved">{paymentMode}</span></div>
+          {payoutError && <PayoutSetupError message={payoutError} platformAdmin={!!config?.fee_policy?.can_manage} />}
           <div className="tk-connect-actions"><button onClick={()=>openConnector('paystack')} disabled={busy || !config?.providers?.paystack}>＋ Connect Paystack</button><button onClick={()=>openConnector('stripe')} disabled={busy || !config?.providers?.stripe}>＋ Connect Stripe{!config?.providers?.stripe?' · credentials required':''}</button></div>
           {connectProvider === 'paystack' && <form className="tk-connect-form" onSubmit={connectPaystack}><div className="tk-connect-title"><strong>New Paystack payout account</strong><button type="button" onClick={()=>setConnectProvider('')}>×</button></div><label><span>Business name</span><input required value={payoutDraft.business_name} onChange={e=>setPayoutDraft({...payoutDraft,business_name:e.target.value})}/></label><label><span>Settlement bank</span><select required value={payoutDraft.settlement_bank} onChange={e=>setPayoutDraft({...payoutDraft,settlement_bank:e.target.value})}><option value="">Choose bank…</option>{banks.map(bank=><option key={bank.code} value={bank.code}>{bank.name}</option>)}</select></label><label><span>Account number</span><input required inputMode="numeric" value={payoutDraft.account_number} onChange={e=>setPayoutDraft({...payoutDraft,account_number:e.target.value.replace(/\D/g,'')})}/></label><label><span>Contact name</span><input value={payoutDraft.contact_name} onChange={e=>setPayoutDraft({...payoutDraft,contact_name:e.target.value})}/></label><label><span>Contact email</span><input type="email" value={payoutDraft.contact_email} onChange={e=>setPayoutDraft({...payoutDraft,contact_email:e.target.value})}/></label><button disabled={busy}>Verify bank & create account</button></form>}
-          {connectProvider === 'stripe' && <form className="tk-connect-form" onSubmit={connectStripe}><div className="tk-connect-title"><strong>Start Stripe-hosted onboarding</strong><button type="button" onClick={()=>setConnectProvider('')}>×</button></div><label><span>Business name</span><input required value={payoutDraft.business_name} onChange={e=>setPayoutDraft({...payoutDraft,business_name:e.target.value})}/></label><label><span>Organizer email</span><input required type="email" value={payoutDraft.email} onChange={e=>setPayoutDraft({...payoutDraft,email:e.target.value})}/></label><label><span>Country</span><input required maxLength="2" value={payoutDraft.country} onChange={e=>setPayoutDraft({...payoutDraft,country:e.target.value.toUpperCase()})}/></label><button disabled={busy}>Continue securely with Stripe ↗</button></form>}
+          {connectProvider === 'stripe' && <form className="tk-connect-form" onSubmit={connectStripe}><div className="tk-connect-title"><strong>Start Stripe-hosted onboarding</strong><button type="button" onClick={()=>setConnectProvider('')}>×</button></div><label><span>Business name</span><input required value={payoutDraft.business_name} onChange={e=>setPayoutDraft({...payoutDraft,business_name:e.target.value})}/></label><label><span>Organizer email</span><input required type="email" value={payoutDraft.email} onChange={e=>setPayoutDraft({...payoutDraft,email:e.target.value})}/></label><label><span>Country</span><input required maxLength="2" value={payoutDraft.country} onChange={e=>setPayoutDraft({...payoutDraft,country:e.target.value.toUpperCase()})}/></label><button disabled={busy}>{busy ? 'Connecting securely…' : 'Continue securely with Stripe ↗'}</button></form>}
           {payoutAccounts.length ? <div className="tk-accounts">{payoutAccounts.map(account=><div className={account.selected?'selected':''} key={account.id}><span className={`tk-provider ${account.provider}`}>{account.provider==='paystack'?'P':'S'}</span><span><strong>{account.business_name}</strong><small>{account.provider==='paystack'?'Paystack':'Stripe'} · {account.account_name || 'Onboarding'}{account.account_last4?` · •••• ${account.account_last4}`:''}</small></span><span className={`tk-status ${account.status}`}>{account.status}</span>{account.provider==='stripe' && account.status!=='verified'?<button disabled={busy} onClick={()=>resumeStripe(account.id)}>Continue onboarding</button>:account.selected?<strong className="tk-selected">Used for this event</strong>:<button disabled={busy} onClick={()=>choosePayoutAccount(account.id)}>Use for this event</button>}</div>)}</div>:<div className="tk-empty tk-account-empty"><span>🏦</span><strong>No connected payout accounts</strong><p>Connect Paystack or Stripe above. Festio will create and save the provider account automatically.</p></div>}
           <div className="tk-fee-summary"><div><span>Festio service share</span><strong>{((config?.fee_policy?.fee_bps ?? 500)/100).toFixed(2)}%</strong></div><div><span>Applied from</span><strong>{(config?.fee_policy?.source || 'platform default').replace('_',' ')}</strong></div><form className="tk-arrangement" onSubmit={saveFeeArrangement}><label><span>How should the fee be handled?</span><select value={settingsDraft?.fees_paid_by || 'buyer'} onChange={e=>setSettingsDraft({...settingsDraft,fees_paid_by:e.target.value})}><option value="buyer">Add it to the buyer’s total</option><option value="organizer">Deduct it from my proceeds</option></select></label><button disabled={busy}>Save choice</button></form></div>
           {config?.fee_policy?.can_manage && <form className="tk-fee-form" onSubmit={saveFeePolicy}><label><span>Override level</span><select value={feeScope} onChange={e=>setFeeScope(e.target.value)}><option value="global">Global default</option><option value="organization">This organization</option><option value="event">This event</option></select></label><label><span>Festio share (basis points)</span><input type="number" min="0" max="5000" value={settingsDraft?.fee_bps ?? 500} onChange={e=>setSettingsDraft({...settingsDraft,fee_bps:e.target.value})}/></label><button disabled={busy}>Apply superadmin override</button></form>}

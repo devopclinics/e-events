@@ -84,3 +84,19 @@
 @media(max-width:800px){.tk-order-filters{grid-template-columns:1fr 1fr}.tk-live-checklist li{flex-wrap:wrap}.tk-live-checklist li>div:first-of-type{flex-basis:80%}.tk-live-checklist li>button{margin-left:30px}}
 @media(max-width:480px){.tk-order-filters{grid-template-columns:1fr}.tk-export-actions>button{flex:1 1 130px}}
 .tk-paused-notice{margin:18px 0;padding:18px 24px;border-left:4px solid #a66b36;background:#fff5e6;color:#59402b}.tk-paused-notice p{margin:6px 0 0;font-size:14px;line-height:1.6}
+
+/* Keep payout failures beside the controls, with a clear recovery path. */
+.tk-payout-error{display:flex;align-items:flex-start;gap:16px;padding:24px;margin:0 0 20px;border:1px solid #e2c98c;border-radius:18px;background:linear-gradient(135deg,#fffaf0,#fffdf8);color:#4c3820;box-shadow:0 8px 26px #76521a0a;scroll-margin:120px;outline-offset:4px}
+.tk-payout-error:focus-visible{outline:3px solid #a76b24}
+.tk-payout-error-icon{display:grid;place-items:center;flex:none;width:38px;height:38px;border:1px solid #dfc17c;border-radius:12px;background:#f8ebc8;color:#865416;font-size:22px;font-weight:800}
+.tk-payout-error-content{min-width:0;flex:1}
+.tk-payout-error-eyebrow{font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:800;color:#876226}
+.tk-payout-error h3{margin:7px 0 9px;font-size:21px;line-height:1.3;color:#49341b}
+.tk-payout-error p{margin:0;font-size:14px;line-height:1.65;overflow-wrap:anywhere}
+.tk-payout-error-next{margin-top:17px;padding:15px 17px;border-radius:12px;background:#f4e9cf80}
+.tk-payout-error-next strong{display:block;margin-bottom:4px;font-size:12px;color:#795521}
+.tk-payout-error-next a{display:inline-flex;align-items:center;gap:12px;margin-top:13px;padding:10px 14px;border-radius:9px;background:#513b24;color:#fff;text-decoration:none;font-size:13px;font-weight:700}
+.tk-payout-error details{margin-top:16px;border-top:1px solid #e6d8ba;padding-top:13px}
+.tk-payout-error summary{cursor:pointer;font-size:12px;font-weight:700;color:#795521}
+.tk-payout-error details p{margin-top:11px;padding:12px;border-radius:8px;background:#fff8;font-family:ui-monospace,monospace;font-size:12px}
+@media(max-width:600px){.tk-payout-error{padding:17px;gap:11px}.tk-payout-error h3{font-size:18px}.tk-payout-error-icon{width:30px;height:30px;font-size:18px}.tk-payout-error-next{padding:12px}}

@@ -1,6 +1,7 @@
 import {flyerRequest, FLYER_LAYOUTS} from '../components/design-studio/flyerModel.mjs';
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
+import StudioNavigation, { STUDIO_TABS } from '../components/design-studio/StudioNavigation'
 import RedesignShell, { Icon, Modal } from './redesign/RedesignShell'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
@@ -11,7 +12,7 @@ import { validAppTheme } from '../components/guesthub/appearance.mjs'
 import EnvelopeSettings from '../components/invitations/EnvelopeSettings'
 import { CertificatesWorkspace } from '../components/live/LiveContentWorkspace'
 
-const TABS = ['Templates', 'Envelope', 'GuestHub', 'Flyer', 'Event Page', 'Festio Pass', 'FestioHub', 'Certificates', 'Email Preview', 'Publish']
+const TABS = STUDIO_TABS
 
 // FestioHub layout + visual themes. Each entry combines a layout type
 // (tabbed vs stacked, mirrored in InvitePage.jsx's HUB_TABBED_STYLES) with
@@ -789,10 +790,20 @@ function humanizeKey(value) {
 export default function DesignStudioRedesignPage() {
   const [eventId] = useCurrentEvent()
   const { event } = useEventDetails(eventId)
+  const [studioParams, setStudioParams] = useSearchParams()
   const [tab, setTab] = useState(() => {
     const requested = new URLSearchParams(window.location.search).get('tab')
     return TABS.includes(requested) ? requested : 'Templates'
   })
+  useEffect(() => {
+    const requested = studioParams.get('tab')
+    setTab(TABS.includes(requested) ? requested : 'Templates')
+  }, [studioParams])
+  function selectStudioTab(next) {
+    const params = new URLSearchParams(studioParams)
+    params.set('advanced', '1'); params.set('tab', next)
+    setStudioParams(params)
+  }
   const [templates, setTemplates] = useState([])
   const [tplCategory, setTplCategory] = useState('All')
   const [tplStyle, setTplStyle] = useState('All styles')
@@ -1326,9 +1337,7 @@ export default function DesignStudioRedesignPage() {
         </div>
       </div>
 
-      <div className="rr-tabs">
-        {TABS.map((t) => <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{t}</button>)}
-      </div>
+      <StudioNavigation active={tab} onSelectTab={selectStudioTab} />
 
       {tab === 'Envelope' && <div className="ds-envelope-collection"><EnvelopeSettings key={eventId} eventId={eventId} event={event} onSaved={envelope_config => setDesign(current => ({ ...current, envelope_config }))} /></div>}
 

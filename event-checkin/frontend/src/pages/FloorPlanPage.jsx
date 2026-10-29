@@ -1,288 +1,87 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../api'
+import FloorCanvas from '../components/floorplan/FloorCanvas'
+import { CATALOG, align, arrange, bounds, createBatch, distribute, intersects, keyOf, normalize, objects, patch, payload, resized, restoreGeometry, signature, sizeOf, snap, translate, union } from '../components/floorplan/model.mjs'
+import './FloorPlanStudio.css'
 
-const GRID = 10
-const GROUP_COLORS = ['#0ea5e9', '#f59e0b', '#10b981', '#a855f7', '#ef4444', '#14b8a6', '#eab308', '#ec4899']
-const DECOR = [
-  { type: 'stage', label: 'Stage', w: 260, h: 70, color: '#cbd5e1' },
-  { type: 'dancefloor', label: 'Dance floor', w: 200, h: 160, color: '#fde68a' },
-  { type: 'entrance', label: 'Entrance', w: 120, h: 44, color: '#bbf7d0' },
-  { type: 'exit', label: 'Exit', w: 120, h: 44, color: '#fecaca' },
-  { type: 'bar', label: 'Bar', w: 180, h: 50, color: '#e9d5ff' },
-  { type: 'label', label: 'Text', w: 120, h: 40, color: '#f1f5f9' },
-]
-
-const snap = (n) => Math.round(n / GRID) * GRID
-const tableSize = (cap) => Math.max(52, 44 + (cap || 0) * 4)
-
-function paidFeatureMessage(e) {
-  return e?.status === 402
-    ? `${e.message || 'Floor plan sharing requires an Event Pass.'} Open Event Setup to activate the recommended pass.`
-    : e.message
+const fitView=doc=>({x:-50,y:-50,w:doc.width+100,h:doc.height+100})
+const initialPreset={...CATALOG[0],count:1,columns:1,gap:30,rotation:0}
+const errorMessage=e=>e?.status===402?`${e.message||'This feature requires an Event Pass.'} Open Event Setup to manage your pass.`:(e?.message||'The floor plan could not be updated.')
+const newId=()=>`new-${crypto.randomUUID()}`
+function Numeric({label,value,onChange,min=0,max=20000,step=1,suffix}) {
+  const [text,setText]=useState(value==null?'':String(value))
+  useEffect(()=>setText(value==null?'':String(value)),[value])
+  function commit(){const n=Number(text);if(text.trim()&&Number.isFinite(n)){const next=Math.round(Math.min(max,Math.max(min,n)));if(next!==value)onChange(next);setText(String(next))}else setText(value==null?'':String(value))}
+  return <label className="venue-field"><span>{label}</span><div className="venue-number"><input aria-label={label} type="number" min={min} max={max} step={step} value={text} placeholder={value==null?'Mixed':''} onChange={e=>setText(e.target.value)} onBlur={commit} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();e.currentTarget.blur()}}}/>{suffix&&<small>{suffix}</small>}</div></label>
 }
+function Tool({label,shortcut,active,onClick,children}) {return <button type="button" title={`${label}${shortcut?` (${shortcut})`:''}`} aria-label={label} aria-pressed={active} onClick={onClick}><span aria-hidden="true">{children}</span><small>{label}</small></button>}
+function CopyLink({label,url}) {const [copied,setCopied]=useState(false),[error,setError]=useState('');return <label className="venue-share-row"><span>{label}</span><div><input readOnly value={url} onFocus={e=>e.target.select()} aria-label={label}/><button onClick={async()=>{try{await navigator.clipboard.writeText(url);setCopied(true);setError('')}catch{setError('Select the address and copy it manually.')}}}>{copied?'Copied':'Copy'}</button></div>{error&&<small role="status">{error}</small>}</label>}
 
 export default function FloorPlanPage() {
-  const { eventId, token } = useParams()
-  const tokenMode = !!token
-
-  const [plan, setPlan] = useState(null)
-  const [tables, setTables] = useState([])
-  const [elements, setElements] = useState([])
-  const [sel, setSel] = useState(null)      // {kind:'table'|'element', id}
-  const [editable, setEditable] = useState(false)
-  const [status, setStatus] = useState('')
-  const [error, setError] = useState('')
-  const [dirty, setDirty] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const svgRef = useRef(null)
-  const drag = useRef(null)
-
-  const load = useCallback(async () => {
-    try {
-      const data = tokenMode ? await api.getSharedFloor(token) : await api.getFloorPlan(eventId)
-      setPlan(data)
-      setTables(data.tables || [])
-      setElements(data.elements || [])
-      setEditable(!!data.editable)
-      setError('')
-    } catch (e) { setError(e.message) }
-  }, [tokenMode, token, eventId])
-
-  useEffect(() => { load() }, [load])
-
-  const groupColor = useMemo(() => {
-    const map = {}
-    let i = 0
-    for (const t of tables) if (t.table_group_id && !(t.table_group_id in map)) map[t.table_group_id] = GROUP_COLORS[i++ % GROUP_COLORS.length]
-    return map
-  }, [tables])
-
-  function toSvg(e) {
-    const r = svgRef.current.getBoundingClientRect()
-    return { x: (e.clientX - r.left) * (plan.width / r.width), y: (e.clientY - r.top) * (plan.height / r.height) }
+  const {eventId,token}=useParams(),tokenMode=!!token
+  const [doc,setDoc]=useState(null),[loadError,setLoadError]=useState(''),[notice,setNotice]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(''),[selection,setSelection]=useState([]),[panel,setPanel]=useState('build'),[kit,setKit]=useState('mixed'),[query,setQuery]=useState(''),[mode,setMode]=useState('select'),[grid,setGrid]=useState(true),[snapping,setSnapping]=useState(true),[preset,setPreset]=useState(initialPreset),[view,setView]=useState(null),[marquee,setMarquee]=useState(null),[measure,setMeasure]=useState(null),[pendingPoint,setPendingPoint]=useState(null),[columns,setColumns]=useState(4),[spacing,setSpacing]=useState(35),[shareOpen,setShareOpen]=useState(false),[historyVersion,setHistoryVersion]=useState(0),[savedSignature,setSavedSignature]=useState('')
+  const presetRef=useRef(null),svgRef=useRef(null),fileRef=useRef(null),shareRef=useRef(null),current=useRef(null),drag=useRef(null),history=useRef({undo:[],redo:[]}),operation=useRef(false),generation=useRef(0),alive=useRef(true)
+  current.current=doc
+  const dirty=!!doc&&signature(doc)!==savedSignature,editable=!!doc?.editable,canEdit=editable&&!busy
+  const load=useCallback(async()=>{const request=++generation.current;setLoadError('');try{const data=tokenMode?await api.getSharedFloor(token):await api.getFloorPlan(eventId);if(!alive.current||request!==generation.current)return;const next=normalize(data);setDoc(next);current.current=next;setSavedSignature(signature(next));setView(fitView(next));setSelection([]);setPanel(data.editable?'build':'inspect');setError('');history.current={undo:[],redo:[]};setHistoryVersion(n=>n+1)}catch(e){if(alive.current&&request===generation.current)setLoadError(errorMessage(e))}},[eventId,tokenMode,token])
+  useEffect(()=>{alive.current=true;setDoc(null);load();return()=>{alive.current=false;generation.current++}},[load])
+  useEffect(()=>{const warn=e=>{if(dirty||operation.current){e.preventDefault();e.returnValue=''}};window.addEventListener('beforeunload',warn);return()=>window.removeEventListener('beforeunload',warn)},[dirty])
+  useEffect(()=>{if(shareOpen)shareRef.current?.showModal();else shareRef.current?.close()},[shareOpen])
+  const all=useMemo(()=>doc?objects(doc):[],[doc]),chosen=all.filter(o=>selection.includes(o.key)),selectedZones=chosen.filter(o=>o.kind==='element'),selectedTables=chosen.filter(o=>o.kind==='table'),selectionBox=union(chosen.map(o=>bounds(o.item,o.kind))),single=chosen.length===1?chosen[0]:null
+  const catalog=CATALOG.filter(item=>(kit==='mixed'||item.environment==='both'||item.environment===kit)&&`${item.label} ${item.category}`.toLowerCase().includes(query.toLowerCase()))
+  function checkpoint(){const value=current.current;if(!value)return;const stack=history.current.undo;if(!stack.length||signature(stack.at(-1))!==signature(value)){stack.push(structuredClone(value));if(stack.length>60)stack.shift()}history.current.redo=[];setHistoryVersion(n=>n+1)}
+  function edit(update){if(!editable||operation.current)return;checkpoint();setDoc(previous=>typeof update==='function'?update(previous):({...previous,...update}));setNotice('');setError('')}
+  function undo(){if(operation.current||!canEdit||!history.current.undo.length)return;const previous=history.current.undo.pop();history.current.redo.push(structuredClone(current.current));setDoc(restoreGeometry(current.current,previous));setSelection([]);setHistoryVersion(n=>n+1);setError('')}
+  function redo(){if(operation.current||!canEdit||!history.current.redo.length)return;history.current.undo.push(structuredClone(current.current));setDoc(restoreGeometry(current.current,history.current.redo.pop()));setSelection([]);setHistoryVersion(n=>n+1);setError('')}
+  function point(e){const svg=svgRef.current,p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;return p.matrixTransform(svg.getScreenCTM().inverse())}
+  function capture(e){svgRef.current.focus({preventScroll:true});svgRef.current.setPointerCapture?.(e.pointerId)}
+  function itemDown(e,o){if(e.button!==0)return;e.stopPropagation();capture(e);if(mode==='pan'){drag.current={type:'pan',start:point(e),view:{...view}};return}if(mode==='measure'){measureAt(point(e));return}if(mode==='place'){placeAt(point(e));return}let keys=selection;if(e.shiftKey){keys=keys.includes(o.key)?keys.filter(key=>key!==o.key):[...keys,o.key];setSelection(keys);return}if(!keys.includes(o.key)){keys=[o.key];setSelection(keys)}setPanel('inspect');if(!canEdit||operation.current)return;checkpoint();drag.current={type:'move',start:point(e),anchor:{x:o.item.pos_x||0,y:o.item.pos_y||0},keys,doc:structuredClone(current.current)}}
+  function handleDown(e,type,o){e.stopPropagation();if(!canEdit||operation.current)return;capture(e);checkpoint();const p=point(e),size=sizeOf(o.item,o.kind),center={x:o.item.pos_x+size.w/2,y:o.item.pos_y+size.h/2};drag.current={type,start:p,keys:[o.key],object:o,doc:structuredClone(current.current),center,angle:Math.atan2(p.y-center.y,p.x-center.x)}}
+  function measureAt(p){setMeasure(old=>!old?.a||old.b?{a:{x:p.x,y:p.y}}:{...old,b:{x:p.x,y:p.y}})}
+  function canvasDown(e){if(e.button!==0)return;capture(e);const p=point(e);if(mode==='pan'||e.altKey){drag.current={type:'pan',start:p,view:{...view}};return}if(mode==='measure'){measureAt(p);return}if(mode==='place'){placeAt(p);return}if(!e.shiftKey)setSelection([]);drag.current={type:'marquee',start:p,prior:e.shiftKey?selection:[]};setMarquee({x:p.x,y:p.y,w:0,h:0})}
+  function pointerMove(e){const p=point(e),d=drag.current;if(mode==='place')setPendingPoint({x:snap(p.x,snapping),y:snap(p.y,snapping)});if(!d)return;if(d.type==='pan'){setView(old=>({...old,x:old.x+d.start.x-p.x,y:old.y+d.start.y-p.y}));return}if(d.type==='marquee'){const box={x:Math.min(p.x,d.start.x),y:Math.min(p.y,d.start.y),w:Math.abs(p.x-d.start.x),h:Math.abs(p.y-d.start.y)};d.box=box;setMarquee(box);return}if(!canEdit||operation.current)return
+    if(d.type==='move'){setDoc(translate(d.doc,d.keys,snap(d.anchor.x+p.x-d.start.x,snapping)-d.anchor.x,snap(d.anchor.y+p.y-d.start.y,snapping)-d.anchor.y));return}
+    if(d.type==='resize'){const next=resized(d.object.item,p.x-d.start.x,p.y-d.start.y,snapping);setDoc(patch(d.doc,d.keys,next,'element'));return}
+    if(d.type==='rotate'){const angle=(Math.atan2(p.y-d.center.y,p.x-d.center.x)-d.angle)*180/Math.PI+(d.object.item.rotation||0),rotation=((Math.round(angle/(snapping?15:1))*(snapping?15:1))%360+360)%360;setDoc(patch(d.doc,d.keys,{rotation}))}
   }
-
-  function onItemDown(e, kind, id) {
-    if (!editable) return
-    e.stopPropagation()
-    setSel({ kind, id })
-    const list = kind === 'table' ? tables : elements
-    const it = list.find((x) => x.id === id)
-    const p = toSvg(e)
-    drag.current = { kind, id, dx: p.x - (it.pos_x || 0), dy: p.y - (it.pos_y || 0) }
-    e.target.setPointerCapture?.(e.pointerId)
-  }
-
-  function onMove(e) {
-    // Capture the drag target now: onUp/onPointerLeave can null drag.current
-    // before React runs the state updater below, and reading a nulled ref inside
-    // the map callback would crash (Cannot read properties of null 'id').
-    const d = drag.current
-    if (!d) return
-    const p = toSvg(e)
-    const nx = snap(p.x - d.dx), ny = snap(p.y - d.dy)
-    const setter = d.kind === 'table' ? setTables : setElements
-    setter((arr) => arr.map((x) => (x && x.id === d.id ? { ...x, pos_x: Math.max(0, nx), pos_y: Math.max(0, ny) } : x)))
-    setDirty(true)
-  }
-  const onUp = () => { drag.current = null }
-
-  function patchSel(patch) {
-    const s = sel
-    if (!s) return
-    const setter = s.kind === 'table' ? setTables : setElements
-    setter((arr) => arr.map((x) => (x && x.id === s.id ? { ...x, ...patch } : x)))
-    setDirty(true)
-  }
-
-  function addDecor(d) {
-    const id = `new-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-    setElements((a) => [...a, { id, type: d.type, label: d.label, pos_x: 80, pos_y: 80, width: d.w, height: d.h, rotation: 0, color: d.color }])
-    setSel({ kind: 'element', id }); setDirty(true)
-  }
-  function deleteSel() {
-    if (!sel || sel.kind !== 'element') return
-    setElements((a) => a.filter((x) => x.id !== sel.id)); setSel(null); setDirty(true)
-  }
-
-  async function save() {
-    setSaving(true); setStatus(''); setError('')
-    const payload = {
-      width: plan.width, height: plan.height, bg_image_url: plan.bg_image_url, bg_opacity: plan.bg_opacity,
-      tables: tables.map((t) => ({ id: t.id, pos_x: t.pos_x, pos_y: t.pos_y, shape: t.shape, rotation: t.rotation })),
-      elements: elements.map((e) => ({ id: e.id?.startsWith('new-') ? undefined : e.id, type: e.type, label: e.label, pos_x: e.pos_x, pos_y: e.pos_y, width: e.width, height: e.height, rotation: e.rotation, color: e.color })),
-    }
-    try {
-      const data = tokenMode ? await api.saveSharedFloor(token, payload) : await api.saveFloorPlan(eventId, payload)
-      setPlan(data); setTables(data.tables || []); setElements(data.elements || [])
-      setDirty(false); setStatus('Saved'); setTimeout(() => setStatus(''), 1500)
-    } catch (e) { setError(paidFeatureMessage(e)) } finally { setSaving(false) }
-  }
-
-  async function share() {
-    try {
-      const d = await api.shareFloorPlan(eventId)
-      setPlan((p) => ({ ...p, share_token: d.share_token, edit_token: d.edit_token }))
-    } catch (e) { setError(paidFeatureMessage(e)) }
-  }
-  async function uploadBg(file) {
-    if (!file) return
-    try { const { url } = await api.uploadFloorBg(eventId, file); setPlan((p) => ({ ...p, bg_image_url: url })); setDirty(true) }
-    catch (e) { setError(paidFeatureMessage(e)) }
-  }
-
-  if (error && !plan) return <div className="flex min-h-screen items-center justify-center bg-slate-100 text-slate-600">{error}</div>
-  if (!plan) return <div className="flex min-h-screen items-center justify-center bg-slate-100 text-slate-500 animate-pulse">Loading floor plan…</div>
-
-  const origin = typeof window !== 'undefined' ? window.location.origin : ''
-  const selItem = sel && (sel.kind === 'table' ? tables : elements).find((x) => x.id === sel.id)
-
-  return (
-    <div className="min-h-screen bg-slate-100 text-slate-900">
-      <header className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-4 py-3">
-        <h1 className="text-lg font-extrabold">{plan.event_name} · Floor plan</h1>
-        {!editable && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500">View only</span>}
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          {!tokenMode && (
-            <button onClick={() => api.floorPlanPdf(eventId, plan.event_name)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-bold hover:bg-slate-50">Download PDF</button>
-          )}
-          {!tokenMode && editable && <button onClick={share} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-bold hover:bg-slate-50">Share link</button>}
-          {editable && (
-            <button onClick={save} disabled={saving || !dirty} className="rounded-lg bg-teal-600 px-4 py-1.5 text-sm font-bold text-white hover:bg-teal-500 disabled:opacity-50">
-              {saving ? 'Saving…' : dirty ? 'Save' : status || 'Saved'}
-            </button>
-          )}
-        </div>
-      </header>
-
-      {error && (
-        <div className="flex flex-wrap items-center gap-3 bg-amber-50 px-4 py-2 text-sm text-amber-700">
-          <span>{error}</span>
-          {!tokenMode && <a href="/admin?tab=billing" className="rounded-lg bg-teal-600 px-3 py-1 text-xs font-black text-white hover:bg-teal-700">Open Event Pass</a>}
-        </div>
-      )}
-      {!tokenMode && editable && (plan.share_token || plan.edit_token) && (
-        <div className="flex flex-wrap gap-4 border-b border-slate-200 bg-white px-4 py-2 text-xs">
-          <ShareRow label="Client view link" url={`${origin}/floor/${plan.share_token}`} />
-          <ShareRow label="Client edit link" url={`${origin}/floor/${plan.edit_token}`} />
-        </div>
-      )}
-
-      <div className="flex flex-col gap-4 p-4 lg:flex-row">
-        {/* Canvas */}
-        <div className="min-w-0 flex-1 overflow-auto rounded-xl border border-slate-200 bg-white p-3">
-          <svg
-            ref={svgRef}
-            viewBox={`0 0 ${plan.width} ${plan.height}`}
-            className="mx-auto block w-full max-w-full touch-none"
-            style={{ aspectRatio: `${plan.width} / ${plan.height}`, background: '#f8fafc' }}
-            onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}
-            onPointerDown={() => setSel(null)}
-          >
-            {plan.bg_image_url && <image href={plan.bg_image_url} x="0" y="0" width={plan.width} height={plan.height} opacity={(plan.bg_opacity ?? 40) / 100} preserveAspectRatio="xMidYMid slice" />}
-            {editable && <GridLines w={plan.width} h={plan.height} />}
-            {elements.map((el) => {
-              const cx = (el.pos_x || 0) + el.width / 2, cy = (el.pos_y || 0) + el.height / 2
-              const active = sel?.kind === 'element' && sel.id === el.id
-              return (
-                <g key={el.id} transform={`rotate(${el.rotation || 0} ${cx} ${cy})`} onPointerDown={(e) => onItemDown(e, 'element', el.id)} style={{ cursor: editable ? 'move' : 'default' }}>
-                  <rect x={el.pos_x} y={el.pos_y} width={el.width} height={el.height} rx="6" fill={el.color || '#e2e8f0'} stroke={active ? '#0f766e' : '#94a3b8'} strokeWidth={active ? 2.5 : 1} />
-                  <text x={cx} y={cy + 4} textAnchor="middle" fontSize="13" fill="#334155" style={{ pointerEvents: 'none' }}>{el.label || el.type}</text>
-                </g>
-              )
-            })}
-            {tables.map((t) => {
-              const size = tableSize(t.capacity)
-              const x = t.pos_x ?? 40, y = t.pos_y ?? 40
-              const cx = x + size / 2, cy = y + size / 2
-              const fill = t.table_group_id ? groupColor[t.table_group_id] : '#0ea5e9'
-              const active = sel?.kind === 'table' && sel.id === t.id
-              return (
-                <g key={t.id} transform={`rotate(${t.rotation || 0} ${cx} ${cy})`} onPointerDown={(e) => onItemDown(e, 'table', t.id)} style={{ cursor: editable ? 'move' : 'default' }}>
-                  {t.shape === 'rect'
-                    ? <rect x={x} y={y} width={size} height={size * 0.7} rx="8" fill={fill} fillOpacity="0.18" stroke={fill} strokeWidth={active ? 3 : 2} />
-                    : <circle cx={cx} cy={cy} r={size / 2} fill={fill} fillOpacity="0.18" stroke={fill} strokeWidth={active ? 3 : 2} />}
-                  <text x={cx} y={(t.shape === 'rect' ? y + size * 0.35 : cy) - 2} textAnchor="middle" fontSize="13" fontWeight="700" fill="#0f172a" style={{ pointerEvents: 'none' }}>{t.name}</text>
-                  <text x={cx} y={(t.shape === 'rect' ? y + size * 0.35 : cy) + 15} textAnchor="middle" fontSize="11" fill="#475569" style={{ pointerEvents: 'none' }}>{t.seated}/{t.capacity} seats</text>
-                </g>
-              )
-            })}
-          </svg>
-        </div>
-
-        {/* Side panel */}
-        {editable && (
-          <aside className="w-full shrink-0 space-y-4 lg:w-72">
-            <Panel title="Add decor">
-              <div className="grid grid-cols-2 gap-2">
-                {DECOR.map((d) => <button key={d.type} onClick={() => addDecor(d)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs font-bold hover:bg-slate-50">{d.label}</button>)}
-              </div>
-            </Panel>
-
-            {!tokenMode && (
-              <Panel title="Background image">
-                <label className="block cursor-pointer rounded-lg border border-dashed border-slate-300 px-3 py-2 text-center text-xs font-bold text-slate-600 hover:bg-slate-50">
-                  {plan.bg_image_url ? 'Replace image' : 'Upload venue image'}
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadBg(e.target.files?.[0])} />
-                </label>
-                {plan.bg_image_url && (
-                  <div className="mt-2">
-                    <label className="text-xs text-slate-500">Opacity {plan.bg_opacity}%</label>
-                    <input type="range" min="0" max="100" value={plan.bg_opacity ?? 40} onChange={(e) => { setPlan((p) => ({ ...p, bg_opacity: +e.target.value })); setDirty(true) }} className="w-full" />
-                    <button onClick={() => { setPlan((p) => ({ ...p, bg_image_url: null })); setDirty(true) }} className="text-xs font-bold text-red-500">Remove image</button>
-                  </div>
-                )}
-              </Panel>
-            )}
-
-            {selItem && sel.kind === 'table' && (
-              <Panel title={`${plan.seating_term || 'Table'} · ${selItem.name}`}>
-                <Row label="Shape">
-                  {['round', 'rect'].map((sh) => <button key={sh} onClick={() => patchSel({ shape: sh })} className={`rounded-lg px-3 py-1 text-xs font-bold ${selItem.shape === sh ? 'bg-teal-600 text-white' : 'border border-slate-300'}`}>{sh}</button>)}
-                </Row>
-                <Row label="Rotate"><button onClick={() => patchSel({ rotation: ((selItem.rotation || 0) + 45) % 360 })} className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-bold">↻ 45°</button></Row>
-                <p className="text-xs text-slate-500">{selItem.seated}/{selItem.capacity} seated{selItem.table_group_name ? ` · ${selItem.table_group_name}` : ''}</p>
-              </Panel>
-            )}
-
-            {selItem && sel.kind === 'element' && (
-              <Panel title="Decor">
-                <input value={selItem.label || ''} onChange={(e) => patchSel({ label: e.target.value })} placeholder="Label" className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm" />
-                <Row label="Rotate"><button onClick={() => patchSel({ rotation: ((selItem.rotation || 0) + 45) % 360 })} className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-bold">↻ 45°</button></Row>
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="text-xs text-slate-500">W<input type="number" value={selItem.width} onChange={(e) => patchSel({ width: Math.max(20, +e.target.value) })} className="w-full rounded border border-slate-300 px-1 text-sm" /></label>
-                  <label className="text-xs text-slate-500">H<input type="number" value={selItem.height} onChange={(e) => patchSel({ height: Math.max(20, +e.target.value) })} className="w-full rounded border border-slate-300 px-1 text-sm" /></label>
-                </div>
-                <button onClick={deleteSel} className="mt-1 text-xs font-bold text-red-500">Delete</button>
-              </Panel>
-            )}
-          </aside>
-        )}
+  function pointerUp(){const d=drag.current;if(d?.type==='marquee'&&(d.box||marquee)){const keys=all.filter(o=>intersects(bounds(o.item,o.kind),d.box||marquee)).map(o=>o.key);setSelection([...new Set([...d.prior,...keys])]);if(keys.length)setPanel('inspect')}drag.current=null;setMarquee(null)}
+  function cancelDrag(){const d=drag.current;if(d?.doc)setDoc(d.doc);drag.current=null;setMarquee(null)}
+  function zoomBy(factor,anchor){setView(old=>{const p=anchor||{x:old.x+old.w/2,y:old.y+old.h/2},nextWidth=Math.max((doc.width+100)/6,Math.min((doc.width+100)*3,old.w/factor)),ratio=nextWidth/old.w;return {x:p.x-(p.x-old.x)*ratio,y:p.y-(p.y-old.y)*ratio,w:nextWidth,h:old.h*ratio}})}
+  function wheel(e){if(e.ctrlKey||e.metaKey){e.preventDefault();zoomBy(e.deltaY<0?1.12:1/1.12,point(e))}}
+  function placeAt(p,configuration=preset){if(!canEdit||operation.current)return;try{const batch=createBatch(current.current,configuration,p,newId);edit(previous=>({...previous,elements:[...previous.elements,...batch]}));setSelection(batch.map(item=>keyOf('element',item.id)));setPanel('inspect');setMode('select');setPendingPoint(null)}catch(e){setError(e.message)}}
+  function choosePreset(item){setPreset({...item,count:1,columns:1,gap:30,rotation:0});setPanel('build');setMode('select');requestAnimationFrame(()=>presetRef.current?.scrollIntoView({block:'start'}))}
+  function removeSelected(){if(!canEdit||!selectedZones.length)return;const ids=new Set(selectedZones.map(o=>o.item.id));edit(previous=>({...previous,elements:previous.elements.filter(item=>!ids.has(item.id))}));setSelection(selectedTables.map(o=>o.key))}
+  function duplicate(){if(!canEdit||!selectedZones.length)return;const copies=selectedZones.map(o=>({...o.item,id:newId(),pos_x:(o.item.pos_x||0)+20,pos_y:(o.item.pos_y||0)+20}));edit(previous=>({...previous,elements:[...previous.elements,...copies]}));setSelection(copies.map(item=>keyOf('element',item.id)))}
+  function runGeometry(fn){try{const next=fn(current.current);edit(()=>next)}catch(e){setError(e.message)}}
+  function editSelection(changes,kind){edit(previous=>patch(previous,selection,changes,kind))}
+  function moveTo(axis,value){if(!selectionBox)return;edit(previous=>translate(previous,selection,axis==='x'?value-selectionBox.x:0,axis==='y'?value-selectionBox.y:0))}
+  function keyDown(e){if(e.target.closest('input,textarea,select,[contenteditable=true]'))return;const meta=e.ctrlKey||e.metaKey,key=e.key.toLowerCase();if(key==='escape'){cancelDrag();setMode('select');setSelection([]);setPendingPoint(null);setMeasure(null);return}if(meta&&key==='s'){e.preventDefault();if(canEdit&&dirty)save();return}if(meta&&key==='a'){e.preventDefault();setSelection(all.map(o=>o.key));setPanel('inspect');return}if(!canEdit){if(key==='h')setMode('pan');if(key==='v')setMode('select');return}if(meta&&key==='z'){e.preventDefault();e.shiftKey?redo():undo()}else if(meta&&key==='y'){e.preventDefault();redo()}else if(meta&&key==='d'){e.preventDefault();duplicate()}else if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)&&selection.length){e.preventDefault();const step=(snapping?10:1)*(e.shiftKey?10:1);edit(previous=>translate(previous,selection,e.key==='ArrowLeft'?-step:e.key==='ArrowRight'?step:0,e.key==='ArrowUp'?-step:e.key==='ArrowDown'?step:0))}else if(key==='delete'||key==='backspace'){e.preventDefault();removeSelected()}else if(key==='v')setMode('select');else if(key==='h')setMode('pan');else if(key==='m')setMode('measure')}
+  async function save(){if(!editable||operation.current)return false;operation.current=true;setBusy('saving');setError('');setNotice('');const request=generation.current;try{const data=tokenMode?await api.saveSharedFloor(token,payload(current.current)):await api.saveFloorPlan(eventId,payload(current.current));if(!alive.current||request!==generation.current)return false;const next=normalize(data);setDoc(next);current.current=next;setSavedSignature(signature(next));setSelection([]);setNotice('Layout saved.');return true}catch(e){if(alive.current)setError(errorMessage(e));return false}finally{operation.current=false;if(alive.current)setBusy('')}}
+  async function exportPdf(){if(operation.current)return;if(dirty&&!(await save()))return;try{operation.current=true;setBusy('exporting');setError('');await api.floorPlanPdf(eventId,current.current.event_name)}catch(e){setError(errorMessage(e))}finally{operation.current=false;if(alive.current)setBusy('')}}
+  async function share(){if(!editable||operation.current)return;if(dirty&&!(await save()))return;try{operation.current=true;setBusy('sharing');setError('');const request=generation.current;const data=await api.shareFloorPlan(eventId);if(!alive.current||request!==generation.current)return;setDoc(previous=>({...previous,share_token:data.share_token,edit_token:data.edit_token}));setShareOpen(true)}catch(e){setError(errorMessage(e))}finally{operation.current=false;if(alive.current)setBusy('')}}
+  async function upload(file){if(!file||!canEdit||operation.current)return;operation.current=true;setBusy('uploading');setError('');checkpoint();const request=generation.current;try{const {url}=await api.uploadFloorBg(eventId,file);if(alive.current&&request===generation.current)setDoc(previous=>({...previous,bg_image_url:url}))}catch(e){if(alive.current)setError(errorMessage(e))}finally{operation.current=false;if(alive.current)setBusy('');if(fileRef.current)fileRef.current.value=''}}
+  const mixed=(field,list=chosen)=>list.length&&list.every(o=>o.item[field]===list[0].item[field])?list[0].item[field]:null
+  if(!doc||!view)return <main className="venue-app venue-loading"><span className="venue-kicker">FESTIO / VENUE STUDIO</span><h1>{loadError?'Your plan could not load.':'Preparing your space…'}</h1>{loadError?<><p role="alert">{loadError}</p><button onClick={load}>Retry loading</button></>:<p role="status">Loading the venue, tables, and layout.</p>}</main>
+  const origin=location.origin,totalSeats=doc.tables.reduce((n,t)=>n+(t.capacity||0),0),seated=doc.tables.reduce((n,t)=>n+(t.seated||0),0),zoom=Math.round((doc.width+100)/view.w*100),outliers=all.filter(o=>{const b=bounds(o.item,o.kind);return b.x<0||b.y<0||b.x+b.w>doc.width+1||b.y+b.h>doc.height+1}).length
+  return <main className="venue-app" onKeyDown={keyDown} data-history={historyVersion} aria-busy={!!busy}>
+    <header className="venue-header"><div className="venue-brand"><span className="venue-brand-mark" aria-hidden="true">F<span>◈</span></span><div><span className="venue-kicker">VENUE STUDIO</span><h1>{doc.event_name}</h1></div></div><div className="venue-header-actions"><div className="venue-history"><button aria-label="Undo layout change" disabled={!canEdit||!history.current.undo.length} onClick={undo}>↶</button><button aria-label="Redo layout change" disabled={!canEdit||!history.current.redo.length} onClick={redo}>↷</button></div>{!tokenMode&&<><button disabled={!!busy} onClick={exportPdf}>Export PDF <span aria-hidden="true">↗</span></button>{editable&&<button disabled={!!busy} onClick={share}>Share plan</button>}</>}{editable?<button className="venue-primary" onClick={save} disabled={!!busy||!dirty}>{busy==='saving'?'Saving…':dirty?'Save layout':'All changes saved'}<span aria-hidden="true"> ↗</span></button>:<span className="venue-readonly">View only</span>}</div></header>
+    <div className="venue-context"><div>{!tokenMode&&<a href="/addons-redesign?tab=seating">← Event seating</a>}<span>Plan view / 2D</span><span className={dirty?'venue-unsaved':'venue-saved'} role="status">{busy?({saving:'Saving layout…',exporting:'Preparing PDF…',sharing:'Creating links…',uploading:'Uploading background…'})[busy]:dirty?'Unsaved layout':'Saved layout'}</span></div><div className="venue-metrics"><span><b>{doc.tables.length}</b> {doc.seating_term||'Tables'}</span><span><b>{seated}/{totalSeats}</b> seated</span><span><b>{doc.elements.length}</b> zones & objects</span></div></div>
+    {(error||notice)&&<div className={`venue-notice ${error?'is-error':''}`} role={error?'alert':'status'}><span>{error||notice}</span><button aria-label="Dismiss notice" onClick={()=>{setError('');setNotice('')}}>×</button></div>}
+    <div className="venue-workspace"><section className="venue-stage" aria-label="Plan workspace" onDragOver={e=>{if(canEdit){e.preventDefault();e.dataTransfer.dropEffect='copy'}}} onDrop={e=>{if(!canEdit)return;e.preventDefault();const type=e.dataTransfer.getData('application/festio-floor-object'),item=CATALOG.find(item=>item.type===type);if(item)placeAt(point(e),preset.type===type?preset:{...item,count:1,columns:1,gap:30,rotation:0})}}>
+      <div className="venue-stage-heading"><div><span className="venue-kicker">THE SPACE, REIMAGINED</span><strong>{mode==='place'?`Place ${preset.count>1?preset.count+' × ':''}${preset.label}`:mode==='measure'?'Measure your drawing':mode==='pan'?'Explore the plan':'Your event, from above.'}</strong></div><span>{doc.width} × {doc.height}<small> drawing units</small></span></div>
+      <div className="venue-canvas-container"><FloorCanvas doc={doc} svgRef={svgRef} view={view} grid={grid} selection={selection} mode={mode} onItemDown={itemDown} onHandleDown={handleDown} onCanvasDown={canvasDown} onMove={pointerMove} onUp={pointerUp} onCancel={cancelDrag} onWheel={wheel} marquee={marquee} measure={measure} pendingPoint={pendingPoint} pending={mode==='place'?preset:null}/>
+        <div className="venue-tool-rail" role="toolbar" aria-label="Canvas tools"><Tool label="Select" shortcut="V" active={mode==='select'} onClick={()=>setMode('select')}>↖</Tool><Tool label="Pan" shortcut="H" active={mode==='pan'} onClick={()=>setMode('pan')}>✥</Tool><Tool label="Measure" shortcut="M" active={mode==='measure'} onClick={()=>{setMode('measure');setMeasure(null)}}>↔</Tool>{editable&&<Tool label="Build" active={panel==='build'&&mode==='place'} onClick={()=>{setPanel('build');setMode('select')}}>＋</Tool>}</div>
+        {!all.length&&<div className="venue-empty"><span className="venue-empty-orbit" aria-hidden="true">◇</span><h2>Make room for a great event.</h2><p>Build a space guests can picture themselves in.</p>{editable&&<button className="venue-primary" onClick={()=>{setPanel('build');setMode('place')}}>Place your first zone →</button>}</div>}
       </div>
-    </div>
-  )
-}
-
-function GridLines({ w, h }) {
-  const lines = []
-  for (let x = 0; x <= w; x += 40) lines.push(<line key={`v${x}`} x1={x} y1={0} x2={x} y2={h} stroke="#e2e8f0" strokeWidth="1" />)
-  for (let y = 0; y <= h; y += 40) lines.push(<line key={`h${y}`} x1={0} y1={y} x2={w} y2={y} stroke="#e2e8f0" strokeWidth="1" />)
-  return <g style={{ pointerEvents: 'none' }}>{lines}</g>
-}
-function Panel({ title, children }) {
-  return <div className="rounded-xl border border-slate-200 bg-white p-3"><div className="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">{title}</div><div className="space-y-2">{children}</div></div>
-}
-function Row({ label, children }) {
-  return <div className="flex items-center justify-between gap-2"><span className="text-xs text-slate-500">{label}</span><div className="flex gap-1">{children}</div></div>
-}
-function ShareRow({ label, url }) {
-  const [copied, setCopied] = useState(false)
-  return (
-    <div className="flex items-center gap-2">
-      <span className="font-bold text-slate-500">{label}:</span>
-      <code className="max-w-[220px] truncate rounded bg-slate-100 px-1.5 py-0.5">{url}</code>
-      <button onClick={() => { navigator.clipboard?.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1500) }} className="font-bold text-teal-600">{copied ? 'Copied' : 'Copy'}</button>
-    </div>
-  )
+      <footer className="venue-stage-footer"><div><button aria-pressed={grid} onClick={()=>setGrid(v=>!v)}>Dot grid</button>{editable&&<button aria-pressed={snapping} onClick={()=>setSnapping(v=>!v)}>Snap {snapping?'on':'off'}</button>}<span>{selection.length?`${selection.length} selected`:'Shift + click to select multiple'}</span></div><div className="venue-zoom"><button aria-label="Zoom out" onClick={()=>zoomBy(1/1.2)}>−</button><span>{zoom}%</span><button aria-label="Zoom in" onClick={()=>zoomBy(1.2)}>＋</button><button onClick={()=>setView(fitView(doc))}>Fit</button></div></footer>
+    </section>
+    <aside className="venue-sidebar" aria-label="Floor plan configuration"><nav className="venue-panel-tabs" aria-label="Floor plan panels">{(editable?['build','inspect','layers','venue']:['inspect','layers']).map(id=><button key={id} aria-pressed={panel===id} onClick={()=>setPanel(id)}>{id==='build'?'Build':id==='inspect'?'Configure':id==='layers'?'Objects':'Venue'}</button>)}</nav><div className="venue-panel-content">
+      {panel==='build'&&editable&&<><div className="venue-panel-intro"><span className="venue-kicker">SPACE MAKING</span><h2>Build your setting.</h2><p>Configure a whole set, then place it together. Or drag an object straight onto the plan.</p></div><div className="venue-kit" role="group" aria-label="Planning kit">{[['indoor','Indoor'],['outdoor','Outdoor'],['mixed','Mixed']].map(([id,label])=><button aria-pressed={kit===id} key={id} onClick={()=>setKit(id)}>{label}</button>)}</div><label className="venue-search"><span className="venue-sr">Search objects</span><input type="search" placeholder="Find a stage, tent, doorway…" value={query} onChange={e=>setQuery(e.target.value)}/></label><div className="venue-catalog">{[...new Set(catalog.map(item=>item.category))].map(category=><section key={category}><h3>{category}</h3><div>{catalog.filter(item=>item.category===category).map(item=><button key={item.type} draggable={!busy} disabled={!!busy} onDragStart={e=>{e.dataTransfer.setData('application/festio-floor-object',item.type);e.dataTransfer.effectAllowed='copy'}} aria-pressed={preset.type===item.type} onClick={()=>choosePreset(item)}><i className={`venue-catalog-icon type-${item.type}`} style={{'--object-color':item.color}} aria-hidden="true"/><span>{item.label}</span></button>)}</div></section>)}</div>{!catalog.length&&<p className="venue-help">No matching objects. Try another name or planning kit.</p>}<fieldset ref={presetRef} className="venue-preset" disabled={!!busy}><legend>Configure · {preset.label}</legend><label className="venue-field"><span>Label</span><input value={preset.label} maxLength={120} onChange={e=>setPreset(p=>({...p,label:e.target.value}))}/></label><div className="venue-fields"><Numeric label="Object width" value={preset.w} min={8} onChange={w=>setPreset(p=>({...p,w}))}/><Numeric label="Object depth" value={preset.h} min={8} onChange={h=>setPreset(p=>({...p,h}))}/><Numeric label="Quantity" value={preset.count} min={1} max={40} onChange={count=>setPreset(p=>({...p,count:Math.floor(count)}))}/><Numeric label="Columns" value={preset.columns} min={1} max={40} onChange={n=>setPreset(p=>({...p,columns:Math.floor(n)}))}/><Numeric label="Set spacing" value={preset.gap} onChange={gap=>setPreset(p=>({...p,gap}))}/><Numeric label="Set rotation" value={preset.rotation} min={0} max={359} onChange={rotation=>setPreset(p=>({...p,rotation}))}/></div><label className="venue-color"><span>Object colour</span><input aria-label="Object colour" type="color" value={preset.color} onChange={e=>setPreset(p=>({...p,color:e.target.value}))}/></label><button className="venue-primary" onClick={()=>{setMode('place');setPendingPoint(null)}}>Place {preset.count>1?`${preset.count} objects`:'on canvas'} →</button><button onClick={()=>placeAt({x:doc.width/2,y:doc.height/2})}>Add set to centre</button></fieldset><p className="venue-help">Tables come from your seating plan. Use Objects to select and arrange them together.</p></>}
+      {panel==='inspect'&&<><div className="venue-panel-intro"><span className="venue-kicker">THE FINER DETAILS</span><h2>{single?(single.item.name||single.item.label||single.item.type):chosen.length?`${chosen.length} items, together.`:'A little precision.'}</h2><p>{chosen.length?'Move, align and configure your selection as one.':'Select an object or drag a selection box on the canvas. Shift + click adds to the selection.'}</p></div>{!chosen.length?<div className="venue-inspector-empty"><span aria-hidden="true">⌖</span><p>Your selection’s controls appear here.</p><button onClick={()=>{setSelection(doc.tables.map(t=>keyOf('table',t.id)));setPanel('inspect')}} disabled={!doc.tables.length}>Select all seating</button></div>:<><div className="venue-selection-meta"><span>{selectedTables.length} seating · {selectedZones.length} zones</span><button onClick={()=>setSelection([])}>Clear</button></div>{single?.kind==='table'&&<div className="venue-linked"><b>{single.item.seated||0} of {single.item.capacity} seats assigned</b><span>{single.item.table_group_name||'Ungrouped seating'}</span><small>Capacity and guest assignments are managed in Seating.</small></div>}{editable&&<fieldset disabled={!canEdit} className="venue-inspector-fields">{single?.kind==='element'&&<label className="venue-field"><span>Zone label</span><input value={single.item.label||''} maxLength={120} onFocus={checkpoint} onChange={e=>{if(operation.current)return;setDoc(previous=>patch(previous,selection,{label:e.target.value},'element'))}}/></label>}<div className="venue-fields"><Numeric label="Selection X" value={Math.round(selectionBox?.x||0)} onChange={v=>moveTo('x',v)}/><Numeric label="Selection Y" value={Math.round(selectionBox?.y||0)} onChange={v=>moveTo('y',v)}/><Numeric label="Orientation" value={mixed('rotation')??0} min={0} max={359} suffix="°" onChange={rotation=>editSelection({rotation})}/></div>{selectedZones.length>0&&<><div className="venue-fields"><Numeric label="Zone width" value={mixed('width',selectedZones)} min={8} onChange={width=>editSelection({width},'element')}/><Numeric label="Zone depth" value={mixed('height',selectedZones)} min={8} onChange={height=>editSelection({height},'element')}/></div><label className="venue-color"><span>Zone colour</span><input aria-label="Zone colour" type="color" value={mixed('color',selectedZones)||'#dce5ec'} onFocus={checkpoint} onChange={e=>{if(!operation.current)setDoc(previous=>patch(previous,selection,{color:e.target.value},'element'))}}/></label></>}{selectedTables.length>0&&<div className="venue-kit" role="group" aria-label="Seating shape">{[['round','Round'],['rect','Rectangular']].map(([shape,label])=><button key={shape} aria-pressed={mixed('shape',selectedTables)===shape} onClick={()=>editSelection({shape},'table')}>{label}</button>)}</div>}<section className="venue-control-section"><h3>Align selection</h3><div className="venue-align">{[['x','start','Left'],['x','center','Centre'],['x','end','Right'],['y','start','Top'],['y','center','Middle'],['y','end','Bottom']].map(([axis,how,label])=><button key={label} disabled={chosen.length<2} onClick={()=>runGeometry(previous=>align(previous,selection,axis,how))}>{label}</button>)}</div><div className="venue-fields"><button disabled={chosen.length<3} onClick={()=>runGeometry(previous=>distribute(previous,selection,'x'))}>Space horizontally</button><button disabled={chosen.length<3} onClick={()=>runGeometry(previous=>distribute(previous,selection,'y'))}>Space vertically</button></div></section><section className="venue-control-section"><h3>Arrange as a set</h3><div className="venue-fields"><Numeric label="Layout columns" value={columns} min={1} max={40} onChange={n=>setColumns(Math.floor(n))}/><Numeric label="Layout spacing" value={spacing} onChange={setSpacing}/></div><button disabled={chosen.length<2} onClick={()=>runGeometry(previous=>arrange(previous,selection,columns,spacing))}>Arrange selection →</button></section><div className="venue-fields"><button disabled={!selectedZones.length} onClick={duplicate}>Duplicate zones</button><button className="venue-danger" disabled={!selectedZones.length} onClick={removeSelected}>Remove zones</button></div></fieldset>}</> }</>}
+      {panel==='layers'&&<><div className="venue-panel-intro"><span className="venue-kicker">YOUR PLAN, AT A GLANCE</span><h2>Every piece in place.</h2><p>Select multiple objects here, then configure them together.</p></div><div className="venue-layer-actions"><button onClick={()=>setSelection(all.map(o=>o.key))}>Select all</button><button onClick={()=>setSelection(doc.tables.map(t=>keyOf('table',t.id)))}>Seating only</button><button onClick={()=>setSelection([])}>Clear</button></div><div className="venue-object-list">{all.map(o=><label key={o.key} className={selection.includes(o.key)?'is-selected':''}><input type="checkbox" aria-label={`Select ${o.item.name||o.item.label||o.item.type}`} checked={selection.includes(o.key)} onChange={e=>setSelection(old=>e.target.checked?[...old,o.key]:old.filter(key=>key!==o.key))}/><span><b>{o.item.name||o.item.label||o.item.type}</b><small>{o.kind==='table'?`${o.item.seated||0} / ${o.item.capacity} seated`:CATALOG.find(item=>item.type===o.item.type)?.category||'Zone'}</small></span><button aria-label={`Configure ${o.item.name||o.item.label||o.item.type}`} onClick={e=>{e.preventDefault();setSelection([o.key]);setPanel('inspect')}}>↗</button></label>)}</div>{!all.length&&<p className="venue-help">Your objects will appear here when you add them.</p>}{!!selection.length&&<button className="venue-primary" onClick={()=>setPanel('inspect')}>Configure {selection.length} selected →</button>}</>}
+      {panel==='venue'&&editable&&<><div className="venue-panel-intro"><span className="venue-kicker">START WITH THE SPACE</span><h2>Set the scene.</h2><p>Set your drawing area and trace a venue image, garden plan, or architectural drawing.</p></div><fieldset disabled={!canEdit} className="venue-inspector-fields"><div className="venue-fields"><Numeric label="Venue width" value={doc.width} min={200} max={20000} onChange={width=>{edit({width});setView(fitView({...doc,width}))}}/><Numeric label="Venue depth" value={doc.height} min={200} max={20000} onChange={height=>{edit({height});setView(fitView({...doc,height}))}}/></div><p className="venue-help">Dimensions and measurements use drawing units. Match the proportions of your venue drawing before arranging the space.</p>{!tokenMode&&<><input ref={fileRef} type="file" accept="image/*" aria-label="Venue background image" className="venue-sr" onChange={e=>upload(e.target.files?.[0])}/><button className="venue-upload" onClick={()=>fileRef.current?.click()}><span aria-hidden="true">▧</span><b>{doc.bg_image_url?'Replace venue image':'Add a venue image'}</b><small>Use a floor plan, site map or aerial image</small></button></>}{doc.bg_image_url&&<><label className="venue-field"><span>Background opacity · {doc.bg_opacity??40}%</span><input aria-label="Background opacity" type="range" min="0" max="100" value={doc.bg_opacity??40} onFocus={checkpoint} onChange={e=>{if(!operation.current)setDoc(previous=>({...previous,bg_opacity:Number(e.target.value)}))}}/></label><button className="venue-danger" onClick={()=>edit({bg_image_url:null})}>Remove background image</button></>}<section className="venue-control-section"><h3>Plan overview</h3><div className="venue-overview"><span>Seating capacity<b>{totalSeats}</b></span><span>Assigned seats<b>{seated}</b></span><span>Zones & objects<b>{doc.elements.length}</b></span></div>{outliers>0&&<p className="venue-help venue-warning">{outliers} item{outliers===1?' is':'s are'} beyond the drawing boundary. Enlarge the venue or reposition them.</p>}</section></fieldset><details className="venue-shortcuts"><summary>Keyboard & canvas controls</summary><p>V · Select<br/>H · Pan<br/>M · Measure<br/>Shift + click · Multi-select<br/>Drag empty space · Selection box<br/>Arrow keys · Nudge selection<br/>Shift + arrows · Larger nudge<br/>Ctrl / ⌘ + Z · Undo<br/>Ctrl / ⌘ + D · Duplicate zones<br/>Ctrl / ⌘ + S · Save<br/>Ctrl / ⌘ + wheel · Zoom<br/>Escape · Clear selection or placement</p></details></>}
+    </div></aside></div>
+    <dialog className="venue-share-dialog" ref={shareRef} onCancel={()=>setShareOpen(false)}><header><span className="venue-kicker">BRING YOUR TEAM INTO THE PLAN</span><button aria-label="Close sharing" onClick={()=>setShareOpen(false)}>×</button></header><h2>One plan. Everyone aligned.</h2><p>View links show the saved plan. Edit links allow changes, so share them only with your planning team.</p>{doc.share_token&&<CopyLink label="View-only link" url={`${origin}/floor/${doc.share_token}`}/>} {doc.edit_token&&<CopyLink label="Collaborator edit link" url={`${origin}/floor/${doc.edit_token}`}/>}<button className="venue-primary" onClick={()=>setShareOpen(false)}>Done</button></dialog>
+  </main>
 }

@@ -1,0 +1,76 @@
+"""Real visual venue editor with isolated event and shared-link API fixtures."""
+import copy,json,os,subprocess,tempfile,threading
+from pathlib import Path
+from http.server import ThreadingHTTPServer,SimpleHTTPRequestHandler
+from playwright.sync_api import sync_playwright,expect
+ROOT=Path(__file__).resolve().parents[1];OUT=Path(os.environ.get('FESTIO_APP_ARTIFACTS','/tmp/venue-studio-evidence'));OUT.mkdir(parents=True,exist_ok=True)
+initial={'event_id':'venue-demo','event_name':'Mumineen Academy · Venue study','width':1400,'height':1000,'editable':True,'bg_image_url':None,'bg_opacity':40,'seating_term':'Tables','tables':[{'id':f't{i+1}','name':f'Table {i+1}','capacity':10,'seated':(i*2)%9,'pos_x':240+(i%3)*210,'pos_y':300+(i//3)*210,'shape':'round' if i<3 else 'rect','rotation':0,'table_group_id':'a' if i<3 else 'b','table_group_name':'Community' if i<3 else 'Families'} for i in range(6)],'elements':[{'id':'e1','type':'stage','label':'Main stage','pos_x':360,'pos_y':95,'width':440,'height':90,'rotation':0,'color':'#d4e9ea'},{'id':'e2','type':'entrance','label':'Welcome','pos_x':100,'pos_y':800,'width':140,'height':50,'rotation':0,'color':'#b8e4cc'},{'id':'e3','type':'bar','label':'Refreshments','pos_x':1060,'pos_y':280,'width':180,'height':60,'rotation':90,'color':'#e7def3'}]}
+state=copy.deepcopy(initial);calls=[];checks=[];errors=[];fail=False;delay=False
+with tempfile.TemporaryDirectory(prefix='venue-studio-') as temp:
+ build=Path(temp)
+ script=r'''import {build} from 'esbuild';await build({stdin:{contents:'import React from "react";import {createRoot} from "react-dom/client";import {BrowserRouter,Routes,Route} from "react-router-dom";import Floor from "./src/pages/FloorPlanPage.jsx";createRoot(document.getElementById("root")).render(<BrowserRouter><Routes><Route path="/floorplan-redesign/:eventId" element={<Floor/>}/><Route path="/floor/:token" element={<Floor/>}/></Routes></BrowserRouter>);',resolveDir:process.cwd(),loader:'jsx'},bundle:true,jsx:'automatic',outfile:process.argv[1],define:{'process.env.NODE_ENV':'"production"'},loader:{'.css':'css'},plugins:[{name:'isolated-api',setup(b){b.onResolve({filter:/\/api$/},a=>({path:a.path,namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},()=>({loader:'js',contents:'export const api=new Proxy({},{get:(_,name)=>(...args)=>fetch("/fixture/"+name,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(args)}).then(async r=>{const d=await r.json();if(!r.ok)throw Object.assign(Error(d.detail),{status:r.status});return d})});'}));}}]})'''
+ subprocess.run([os.environ.get('FESTIO_NODE','/tmp/mumineen-node/node-v22.16.0-linux-x64/bin/node'),'--input-type=module','-e',script,str(build/'app.js')],cwd=ROOT,check=True)
+ (build/'index.html').write_text('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0}</style><link rel="stylesheet" href="/app.css"><div id="root"></div><script src="/app.js"></script>')
+ class Handler(SimpleHTTPRequestHandler):
+  def __init__(self,*a,**kw):super().__init__(*a,directory=temp,**kw)
+  def do_GET(self):
+   if not self.path.startswith('/app.'):self.path='/index.html'
+   super().do_GET()
+  def log_message(self,*a):pass
+ server=ThreadingHTTPServer(('127.0.0.1',0),Handler);threading.Thread(target=server.serve_forever,daemon=True).start();base=f'http://127.0.0.1:{server.server_port}'
+ def route(r):
+  global state
+  if not r.request.url.startswith(base):return r.abort()
+  if '/fixture/' not in r.request.url:return r.continue_()
+  name=r.request.url.split('/')[-1];args=r.request.post_data_json;calls.append([name,args]);data={}
+  if name in ['getFloorPlan','getSharedFloor']:data={**state,'editable':args[0]!='view-only'}
+  elif name in ['saveFloorPlan','saveSharedFloor']:
+   if fail:return r.fulfill(status=503,json={'detail':'Synthetic save unavailable'})
+   p=args[1];assert all(set(t)=={'id','pos_x','pos_y','shape','rotation'} for t in p['tables']);assert set(t['id'] for t in p['tables'])==set(t['id'] for t in initial['tables']);state={**state,**p,'tables':[{**t,**next(x for x in p['tables'] if x['id']==t['id'])} for t in state['tables']],'elements':[{**e,'id':e.get('id') or f'saved-{i}'} for i,e in enumerate(p['elements'])]};data=state
+  elif name=='shareFloorPlan':data={'share_token':'view-only','edit_token':'edit-only'}
+  elif name=='uploadFloorBg':data={'url':'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="1400" height="1000"%3E%3Crect width="1400" height="1000" fill="%23d9e4e9"/%3E%3C/svg%3E'}
+  r.fulfill(json=copy.deepcopy(data))
+ def check(label,ok=True):assert ok,label;checks.append(label)
+ with sync_playwright() as p:
+  browser=p.chromium.launch(executable_path='/home/dev/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome');page=browser.new_page(viewport={'width':1600,'height':1000});page.route('**/*',route);page.on('pageerror',lambda e:errors.append(str(e)));canvas=page.get_by_role('application',name='Venue floor plan canvas')
+  def load(path='/floorplan-redesign/venue-demo'):
+   page.goto(base+path);expect(canvas).to_be_visible()
+  def world(x,y):return canvas.evaluate('(svg,p)=>{const q=svg.createSVGPoint();q.x=p.x;q.y=p.y;const a=q.matrixTransform(svg.getScreenCTM());return {x:a.x,y:a.y}}',{'x':x,'y':y})
+  def click_world(x,y,shift=False):
+   q=world(x,y)
+   if shift:page.keyboard.down('Shift')
+   page.mouse.click(q['x'],q['y'])
+   if shift:page.keyboard.up('Shift')
+  def drag_world(x,y,dx,dy):
+   a=world(x,y);b=world(x+dx,y+dy);page.mouse.move(a['x'],a['y']);page.mouse.down();page.mouse.move(b['x'],b['y'],steps=8);page.mouse.up()
+  def field(label,value):page.get_by_label(label,exact=True).fill(str(value));page.get_by_label(label,exact=True).press('Tab')
+  load();check('Linked tables render with chairs',page.locator('[data-object-key^="table:"]').count()==6);page.screenshot(path=str(OUT/'desktop.png'))
+  drag_world(200,260,600,420);expect(page.get_by_text('6 items, together.',exact=True)).to_be_visible();check('Marquee selects multiple real tables');page.get_by_role('button',name='Clear',exact=True).click()
+  click_world(282,342);click_world(492,342,True);expect(page.get_by_text('2 items, together.',exact=True)).to_be_visible();drag_world(282,342,100,50);field('Orientation',45);page.get_by_role('button',name='Left',exact=True).click();check('Batch selection moves and configures together',page.locator('[data-object-key="table:t1"]').get_attribute('transform').endswith('42 42)'))
+  page.get_by_role('button',name='Undo layout change').click();page.get_by_role('button',name='Redo layout change').click();check('Undo and redo remain usable')
+  page.get_by_role('button',name='Zoom in',exact=True).click();page.get_by_role('button',name='Zoom in',exact=True).click();click_world(540,140);drag_world(540,140,60,40);expect(page.get_by_label('Zone label',exact=True)).to_have_value('Main stage');check('Dragging works after zoom',page.locator('[data-object-key="element:e1"]').get_attribute('transform').startswith('translate(420 140)'))
+  page.get_by_role('button',name='Fit',exact=True).click();drag_world(860,230,80,30);check('Resize handle changes zone dimensions',page.locator('[data-object-key="element:e1"]>rect').first.get_attribute('width')=='520')
+  handle=page.locator('[data-handle="rotate"]').bounding_box();target=world(780,200);page.mouse.move(handle['x']+handle['width']/2,handle['y']+handle['height']/2);page.mouse.down();page.mouse.move(target['x'],target['y'],steps=8);page.mouse.up();expect(page.get_by_label('Orientation',exact=True)).to_have_value('90');check('Rotation handle edits orientation');field('Orientation',0)
+  page.once('dialog',lambda d:d.dismiss());page.get_by_role('link',name=__import__('re').compile('Event seating')).click();check('Unsaved browser navigation can be cancelled',page.url==base+'/floorplan-redesign/venue-demo')
+  page.get_by_role('button',name='Fit',exact=True).click();page.get_by_role('button',name='Measure',exact=True).click();click_world(100,100);click_world(300,100);expect(page.locator('svg text').filter(has_text='200 units')).to_be_visible();check('Canvas measurement reports drawing units');page.get_by_role('button',name='Pan',exact=True).click();old=canvas.get_attribute('viewBox');drag_world(100,100,50,30);check('Pan changes the view without changing layout',canvas.get_attribute('viewBox')!=old)
+  page.get_by_role('button',name='Fit',exact=True).click();page.get_by_role('button',name='Build',exact=True).first.click();page.get_by_role('button',name='Outdoor',exact=True).click();page.get_by_role('button',name='Marquee / tent',exact=True).click();field('Object width',100);field('Object depth',80);field('Quantity',4);field('Columns',2);field('Set spacing',25);page.get_by_role('button',name='Place 4 objects →',exact=True).click();click_world(1000,650);check('Configured outdoor set placed together',page.locator('[data-object-key^="element:new-"]').count()==4);expect(page.get_by_text('4 items, together.',exact=True)).to_be_visible()
+  page.get_by_role('button',name='Duplicate zones',exact=True).click();check('Batch duplication preserves linked table count',page.locator('[data-object-key^="table:"]').count()==6 and page.locator('[data-object-key^="element:new-"]').count()==8);page.get_by_role('button',name='Remove zones',exact=True).click();check('Batch delete removes only decorations',page.locator('[data-object-key^="element:new-"]').count()==4)
+  page.get_by_role('button',name='Objects',exact=True).click();page.get_by_role('button',name='Seating only',exact=True).click();page.get_by_role('button',name='Configure 6 selected →',exact=True).click();field('Layout columns',3);field('Layout spacing',40);page.get_by_role('button',name='Arrange selection →',exact=True).click();check('Seating arrangement retains six real tables',page.locator('[data-object-key^="table:"]').count()==6)
+  field('Layout spacing',2000);page.get_by_role('button',name='Arrange selection →',exact=True).click();expect(page.get_by_role('alert')).to_contain_text('does not fit');check('Impossible layouts show an error without crashing');field('Layout spacing',40)
+  page.get_by_role('button',name='Save layout',exact=True).click();expect(page.get_by_text('Layout saved.',exact=True)).to_be_visible();check('Save uses authenticated floor-plan endpoint',any(c[0]=='saveFloorPlan' for c in calls));check('Saved payload preserves capacity and occupancy',state['tables'][0]['capacity']==10 and state['tables'][0]['seated']==0)
+  load();check('New zones survive reload',len(state['elements'])==7);page.get_by_role('button',name='Venue',exact=True).click();field('Venue width',1600);expect(page.get_by_role('button',name='Save layout',exact=True)).to_be_enabled();check('Venue dimensions are configurable')
+  page.get_by_label('Venue background image',exact=True).set_input_files({'name':'sample.svg','mimeType':'image/svg+xml','buffer':b'<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>'});expect(page.get_by_role('button',name='Remove background image',exact=True)).to_be_visible();page.get_by_role('button',name='Remove background image',exact=True).click();check('Background removal serializes an empty string',True)
+  fail=True;page.get_by_role('button',name='Save layout',exact=True).click();expect(page.get_by_role('alert')).to_contain_text('Synthetic save unavailable');expect(page.get_by_role('button',name='Save layout',exact=True)).to_be_enabled();check('Save failure retains unsaved edits');fail=False
+  page.get_by_role('button',name='Export PDF',exact=False).click();expect(page.get_by_role('button',name='All changes saved',exact=False)).to_be_visible();check('PDF export saves the current layout first',next(i for i,c in enumerate(calls) if c[0]=='floorPlanPdf')>max(i for i,c in enumerate(calls) if c[0]=='saveFloorPlan'));check('Background removal persists',state['bg_image_url']=='')
+  page.get_by_role('button',name='Share plan',exact=True).click();expect(page.get_by_label('View-only link',exact=True)).to_have_value(base+'/floor/view-only');expect(page.get_by_label('Collaborator edit link',exact=True)).to_have_value(base+'/floor/edit-only');page.get_by_role('button',name='Done',exact=True).click();check('Distinct view and edit sharing preserved')
+  for width in [1440,1024,768,390,320]:
+   page.set_viewport_size({'width':width,'height':900 if width>800 else 844});page.get_by_role('button',name='Build',exact=True).first.click();check(f'{width}px workspace fits',page.evaluate('document.documentElement.scrollWidth<=innerWidth'));page.screenshot(path=str(OUT/f'workspace-{width}.png'),full_page=width<800)
+  page.set_viewport_size({'width':1440,'height':1000});load('/floor/view-only');expect(page.get_by_text('View only',exact=True)).to_be_visible();check('Read-only links expose no editing controls',page.get_by_role('button',name='Save layout',exact=True).count()==0 and page.get_by_role('button',name='Share plan',exact=True).count()==0 and page.get_by_role('button',name='Venue',exact=True).count()==0);before=len([c for c in calls if c[0].startswith('save')]);click_world(state['tables'][0]['pos_x']+42,state['tables'][0]['pos_y']+42);page.keyboard.press('Delete');page.keyboard.press('ArrowRight');page.keyboard.press('Control+s');check('Read-only shortcuts cause zero mutations',len([c for c in calls if c[0].startswith('save')])==before)
+  load('/floor/edit-only');page.get_by_role('button',name='Build',exact=True).first.click();page.get_by_role('button',name='Add set to centre',exact=True).click();page.get_by_role('button',name='Save layout',exact=True).click();expect(page.get_by_text('Layout saved.',exact=True)).to_be_visible();check('Collaborator saves use the token endpoint',any(c[0]=='saveSharedFloor' for c in calls));check('Collaborators cannot upload or share access',page.get_by_role('button',name='Share plan',exact=True).count()==0)
+  touch=browser.new_context(viewport={'width':390,'height':844},has_touch=True,is_mobile=True);page=touch.new_page();page.route('**/*',route);page.on('pageerror',lambda e:errors.append(str(e)));canvas=page.get_by_role('application',name='Venue floor plan canvas');load()
+  t=state['tables'][0];a=world(t['pos_x']+42,t['pos_y']+42);b=world(t['pos_x']+82,t['pos_y']+82);before=page.locator('[data-object-key="table:t1"]').get_attribute('transform');cdp=touch.new_cdp_session(page);cdp.send('Input.dispatchTouchEvent',{'type':'touchStart','touchPoints':[{'x':a['x'],'y':a['y']}]})
+  for i in range(1,7):cdp.send('Input.dispatchTouchEvent',{'type':'touchMove','touchPoints':[{'x':a['x']+(b['x']-a['x'])*i/6,'y':a['y']+(b['y']-a['y'])*i/6}]})
+  cdp.send('Input.dispatchTouchEvent',{'type':'touchEnd','touchPoints':[]});check('Touch drag moves linked seating',page.locator('[data-object-key="table:t1"]').get_attribute('transform')!=before);touch.close()
+  assert not errors,errors;browser.close()
+ server.shutdown()
+(OUT/'validation.json').write_text(json.dumps({'checks':checks,'errors':errors,'scope':'Real venue editor, isolated API fixtures; no production layout writes.'},indent=2));print(json.dumps({'passed':len(checks),'errors':errors}))

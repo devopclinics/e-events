@@ -318,7 +318,7 @@ async def floor_plan_pdf(event_id: str, db: AsyncSession = Depends(get_db), _: U
         headers["X-Internal-Token"] = token
     try:
         async with httpx.AsyncClient(timeout=45) as c:
-            r = await c.post(url, json={"html": html, "width": f"{out.width + 60}px", "height": f"{out.height + 260}px"}, headers=headers)
+            r = await c.post(url, json={"html": html, "width": f"{out.width + 60}px", "height": f"{out.height + 260}px", "landscape": False}, headers=headers)
     except httpx.HTTPError:
         raise HTTPException(502, "Floor-plan PDF service is unavailable")
     if r.status_code != 200:

@@ -800,3 +800,232 @@
     display: none;
   }
 }
+
+/* Stable preview panels keep controls mounted and preserve focus as guests advance. */
+.fh-home .preview-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+.fh-home .preview-panel[hidden] {
+  display: none;
+}
+.fh-home .preview-panel.pass {
+  width: 250px;
+  max-width: 100%;
+}
+.fh-home .scene .float {
+  pointer-events: none;
+}
+.fh-home .scene .float.one {
+  bottom: 16px;
+}
+.fh-home .scene .float.two {
+  top: 16px;
+}
+.fh-home .fh-menu-toggle {
+  display: none;
+}
+.fh-home .fh-design-section {
+  padding: 60px 0 0;
+  scroll-margin-top: 110px;
+}
+.fh-home .fh-design-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+.fh-home .fh-design-art {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 18px;
+  min-height: 230px;
+  margin: 18px;
+  padding: 20px;
+  text-align: center;
+  border-radius: 6px;
+}
+.fh-home .fh-design-art span {
+  font-size: 8px;
+  letter-spacing: 2px;
+}
+.fh-home .fh-design-art strong {
+  font:
+    28px/1.15 Georgia,
+    serif;
+}
+.fh-home .fh-design-art i {
+  font:
+    italic 12px Georgia,
+    serif;
+}
+.fh-home .fh-design-invite {
+  background: #eee0be;
+  color: #65502f;
+  border: 4px double #c9b47e;
+}
+.fh-home .fh-design-website {
+  background: #233a39;
+  color: #f5e7c5;
+  border-radius: 60px 60px 6px 6px;
+}
+.fh-home .fh-design-pass {
+  background: #e9e4f1;
+  color: #423a58;
+  border: 1px dashed #a59ab9;
+}
+.fh-home .fh-occasions {
+  padding: 0 0 45px;
+}
+.fh-home .fh-occasions .closing {
+  padding-bottom: 28px;
+}
+.fh-home .fh-occasion-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+.fh-home .fh-occasion-grid .card {
+  display: flex;
+  flex-direction: column;
+}
+.fh-home .fh-occasion-grid .card-copy {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.fh-home .fh-occasion-grid .text-link {
+  margin-top: auto;
+}
+.fh-home .fh-occasion-art {
+  min-height: 205px;
+  padding: 26px 19px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 20px;
+}
+.fh-home .fh-occasion-art span {
+  font-size: 9px;
+  line-height: 1.6;
+}
+.fh-home .fh-occasion-art strong {
+  font:
+    27px/1.15 Georgia,
+    serif;
+}
+.fh-home .fh-occasion-art small {
+  font-size: 8px;
+  opacity: 0.8;
+}
+.fh-home .fh-art-motif {
+  font:
+    italic 13px Georgia,
+    serif;
+  border-top: 1px solid currentColor;
+  padding-top: 12px;
+}
+.fh-home .conference {
+  background: #e5e0ee;
+  color: #4d4167;
+}
+.fh-home .celebration {
+  background: #f0e1d6;
+  color: #7a4837;
+}
+.fh-home .fundraiser {
+  background: #dde9dc;
+  color: #315740;
+}
+.fh-home .community {
+  background: #e0e9ee;
+  color: #3c5664;
+}
+.fh-home .fh-occasion-grid h3 {
+  font-size: 21px;
+}
+.fh-home .preview-panel:focus {
+  outline: 2px solid #9a603e;
+  outline-offset: 5px;
+}
+@media (max-width: 1000px) {
+  .fh-home .fh-menu-toggle {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--line);
+    color: var(--ink);
+    background: var(--surface);
+    border-radius: 7px;
+  }
+  .fh-home .lr-nav {
+    position: sticky;
+  }
+  .fh-home .lr-nav-links.is-open {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    left: 22px;
+    right: 22px;
+    top: calc(100% + 8px);
+    padding: 16px;
+    gap: 0;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: 0 12px 30px #0002;
+  }
+  .fh-home .lr-nav-links.is-open a {
+    padding: 13px 12px;
+    font-size: 14px;
+    border-radius: 5px;
+  }
+  .fh-home .lr-nav-links.is-open a:hover {
+    background: var(--surface-2);
+  }
+  .fh-home .fh-occasion-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 800px) {
+  .fh-home .fh-design-grid {
+    grid-template-columns: 1fr;
+  }
+  .fh-home .fh-design-section {
+    padding-top: 30px;
+  }
+}
+@media (max-width: 480px) {
+  .fh-home .fh-occasion-grid {
+    grid-template-columns: 1fr;
+  }
+  .fh-home .lr-nav-inner {
+    padding-left: 16px;
+    padding-right: 16px;
+    gap: 10px;
+  }
+  .fh-home .lr-nav-actions {
+    gap: 6px;
+  }
+  .fh-home .lr-brand-mark {
+    width: 27px;
+    height: 30px;
+  }
+}
+@media (max-width: 360px) {
+  .fh-home .lr-nav-actions .lr-btn {
+    padding: 0 7px;
+    font-size: 10px;
+  }
+  .fh-home .lr-brand {
+    font-size: 18px;
+  }
+  .fh-home .fh-menu-toggle {
+    width: 28px;
+    height: 30px;
+  }
+}

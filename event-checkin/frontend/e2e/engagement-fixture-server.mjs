@@ -76,7 +76,7 @@ const server = await createServer({
           res.setHeader('Content-Type', 'application/json');
           return res.end(JSON.stringify({ events: [], id: 'organizer-1', role: 'official' }));
         }
-        if (req.url !== '/__engagement-test') return next();
+        if (!['/__engagement-test', '/'].includes(req.url?.split('?')[0])) return next();
         instance.transformIndexHtml('/__engagement-test', '<!doctype html><html><body><div id="root"></div><script type="module" src="/e2e/fixtures/engagement.jsx"></script></body></html>').then(html => {
           res.setHeader('Content-Type', 'text/html');
           // Optional manual CUA run must never contact fake Chatwoot hosts or

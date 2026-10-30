@@ -409,3 +409,14 @@ test('homepage mobile menu exposes all links and closes accessibly', async ({ pa
   await page.mouse.click(4, 800)
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
 })
+
+test('homepage anchor survives event cards arriving after initial layout', async ({ page }) => {
+  await setup(page)
+  await page.route('**/api/ticketing/public/events', async route => {
+    await new Promise(resolve => setTimeout(resolve, 300))
+    await route.fulfill({ json: { events: [{ id: 'fixture-public-event', name: 'Local event preview', event_date: '2027-02-08T12:00:00Z', venue_name: 'Fixture venue', timing: 'upcoming' }] } })
+  })
+  await page.goto('/?delayed-events=1#pricing')
+  await expect(page.getByRole('link').filter({ hasText: 'Local event preview' })).toBeVisible()
+  await expect.poll(async () => Math.round((await page.locator('#pricing').boundingBox()).y)).toBe(110)
+})

@@ -24,6 +24,15 @@ function redesignHome(role) {
     : '/scanner-redesign'
 }
 
+function scrollToHomepageHash(focus = false) {
+  let id
+  try { id = decodeURIComponent(window.location.hash.slice(1)) } catch { return }
+  if (!id) return
+  const target = document.getElementById(id)
+  target?.scrollIntoView({ block: 'start', behavior: 'instant' })
+  if (focus) target?.focus({ preventScroll: true })
+}
+
 function defaultDemoTime() {
   const d = new Date()
   d.setDate(d.getDate() + 2)
@@ -290,18 +299,7 @@ export default function LandingRedesignPage() {
     let frame
     function scrollToSection() {
       cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(() => {
-        let id
-        try {
-          id = decodeURIComponent(window.location.hash.slice(1))
-        } catch {
-          return
-        }
-        if (!id) return
-        const target = document.getElementById(id)
-        target?.scrollIntoView({ block: 'start', behavior: 'instant' })
-        target?.focus({ preventScroll: true })
-      })
+      frame = requestAnimationFrame(() => scrollToHomepageHash(true))
       setMenuOpen(false)
     }
     scrollToSection()
@@ -313,6 +311,14 @@ export default function LandingRedesignPage() {
       window.removeEventListener('popstate', scrollToSection)
     }
   }, [])
+
+  // Event cards arrive asynchronously and can move the sections below them.
+  // Restore the anchor after their layout commits without moving keyboard focus.
+  useEffect(() => {
+    if (!publicEvents.length) return
+    const frame = requestAnimationFrame(() => scrollToHomepageHash())
+    return () => cancelAnimationFrame(frame)
+  }, [publicEvents.length])
 
   useEffect(() => {
     if (!menuOpen) return

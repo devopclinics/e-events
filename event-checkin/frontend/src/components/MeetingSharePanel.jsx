@@ -24,7 +24,7 @@ export default function MeetingSharePanel({ meeting, client }) {
   const request = useRef(0);
   const attendees = meeting.attendees.filter(a => a.active);
   const cancelled = meeting.status === 'cancelled';
-  return <section className="mt-card mt-share" aria-label="Share meeting">
+  return <section id="meeting-share" tabIndex={-1} className="mt-card mt-share" aria-label="Share meeting">
     <div className="mt-step">↗ <span>Share meeting</span></div>
     <h2>Your meeting links</h2>
     {cancelled ? <p>This meeting is cancelled. Its response links are closed.</p> : <>
@@ -35,7 +35,7 @@ export default function MeetingSharePanel({ meeting, client }) {
       {meeting.status === 'scheduled' && attendees.length > 0 ? <div className="mt-share-responses">
         <h3>Share a personal invitation</h3>
         <p className="mt-muted">Choose an attendee for their private Accept, Maybe or Decline link. Share it only with that person.</p>
-        <label>Attendee<select value={recipient} onChange={e => { ++request.current; setRecipient(e.target.value); setLink(null); setError(''); setLoading(false); }}>
+        <label>Attendee<select aria-label="Attendee" value={recipient} onChange={e => { ++request.current; setRecipient(e.target.value); setLink(null); setError(''); setLoading(false); }}>
           <option value="">Choose an attendee</option>
           {attendees.map(a => <option key={a.id} value={a.id}>{a.name}{a.email || a.phone ? ` · ${a.email || a.phone}` : ''}</option>)}
         </select></label>

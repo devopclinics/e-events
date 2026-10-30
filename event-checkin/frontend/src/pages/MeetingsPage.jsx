@@ -186,6 +186,11 @@ export function MeetingsWorkspace({
       await refresh();
       if (showPreview) setPreview(await client.previewMeeting(m.id));
       setNotice(showPreview ? 'Review this saved version before sending.' : 'Draft saved. No invitations sent.');
+      if (!showPreview) requestAnimationFrame(() => {
+        const share = document.getElementById('meeting-share');
+        share?.focus({ preventScroll: true });
+        share?.scrollIntoView({ block: 'start' });
+      });
     });
   }
   async function publish() {

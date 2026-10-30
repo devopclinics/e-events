@@ -244,8 +244,7 @@ function DemoContactForm() {
           placeholder="RSVP, QR passes, check-in, seating, venue access..."
         />
       </label>
-      <MarketingEmailConsent
-        checked={marketingEmail}
+      <MarketingEmailConsent checked={marketingEmail}
         onChange={setMarketingEmail}
         disabled={status === 'loading'}
       />

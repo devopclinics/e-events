@@ -5,6 +5,7 @@ import os
 import re
 import secrets
 import uuid as _uuid
+from urllib.parse import quote
 import httpx
 from ..services.credit_balance import available_credits, credit_scope
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
@@ -1012,12 +1013,39 @@ async def set_org_member_role(
     return {"ok": True, "role": membership.role}
 
 
+async def _email_team_invitation(event: Event, user: User, role: str, inviter: User, db: AsyncSession) -> str:
+    """Team access already exists; an email failure must not undo that access."""
+    org = await db.get(Organization, event.org_id)
+    organization = org.name if org else "your event organization"
+    destination = f"/team-redesign?event={event.id}&tab=team"
+    url = settings.frontend_url.rstrip("/") + "/login?next=" + quote(destination, safe="")
+    escape = _html.escape
+    body = (
+        f"<p>Hello {escape(user.name)},</p>"
+        f"<p>{escape(inviter.name)} invited you to the <strong>{escape(organization)}</strong> team on Festio "
+        f"to help with <strong>{escape(event.name)}</strong>.</p>"
+        f"<p>Your organization role is <strong>{escape(role)}</strong>.</p>"
+        f'<p><a href="{escape(url, quote=True)}">Open Festio</a></p>'
+        f"<p>Sign in with <strong>{escape(user.email)}</strong>. If you do not have an account yet, "
+        "create one using that same email address and verify your email. "
+        "Your assigned events will appear after you sign in.</p>"
+        "<p>This is a team access invitation, not a guest RSVP.</p>"
+    )
+    try:
+        # Account-access mail is transactional, independent of guest message credits.
+        accepted = await send_simple_email(user.email, f"You're invited to join {organization} on Festio", body, message_kind="team_invitation")
+        return "accepted" if accepted else "failed"
+    except Exception:
+        logging.getLogger(__name__).exception("Team invitation email failed for user %s", user.id)
+        return "failed"
+
+
 @router.post("/{event_id}/org-members", response_model=OrgMemberOut, status_code=201)
 async def invite_org_member(
     event_id: str,
     body: OrgMemberInvite,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_event_admin),
+    inviter: User = Depends(require_event_admin),
 ):
     """Add a teammate to this event's org by email. If they don't have an account
     yet, a placeholder is created and linked when they first sign in with that
@@ -1039,7 +1067,24 @@ async def invite_org_member(
         db.add(Membership(org_id=event.org_id, user_id=user.id, role=body.role))
     await db.commit()
     await db.refresh(user)
-    return OrgMemberOut(user=UserOut.model_validate(user), role=body.role)
+    status = await _email_team_invitation(event, user, body.role, inviter, db)
+    return OrgMemberOut(user=UserOut.model_validate(user), role=body.role, invite_email_status=status)
+
+
+@router.post("/{event_id}/org-members/{user_id}/invitation")
+async def resend_team_invitation(
+    event_id: str,
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    inviter: User = Depends(require_event_admin),
+):
+    event = await db.get(Event, event_id)
+    membership = await db.scalar(select(Membership).where(Membership.org_id == event.org_id, Membership.user_id == user_id))
+    if not membership:
+        raise HTTPException(404, "That person is not a member of this organization")
+    user = await db.get(User, user_id)
+    status = await _email_team_invitation(event, user, membership.role, inviter, db)
+    return {"invite_email_status": status}
 
 
 @router.put("/{event_id}/source", response_model=EventOut)

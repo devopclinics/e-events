@@ -15149,6 +15149,21 @@
       },
       "OrgMemberOut": {
         "properties": {
+          "invite_email_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "accepted",
+                  "failed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invite Email Status"
+          },
           "role": {
             "title": "Role",
             "type": "string"
@@ -43121,6 +43136,60 @@
           }
         ],
         "summary": "Set Org Member Role",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/api/events/{event_id}/org-members/{user_id}/invitation": {
+      "post": {
+        "operationId": "resend_team_invitation_api_events__event_id__org_members__user_id__invitation_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Resend Team Invitation",
         "tags": [
           "events"
         ]

@@ -2392,6 +2392,7 @@ export interface OrgMemberInvite {
 }
 
 export interface OrgMemberOut {
+  invite_email_status?: ('accepted' | 'failed') | null
   role: string
   user: UserOut
 }

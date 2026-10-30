@@ -367,10 +367,10 @@ async def _charge_email_credit(msg: MIMEMultipart) -> bool:
         return True
 
 
-async def _send(msg: MIMEMultipart):
+async def _send(msg: MIMEMultipart) -> bool:
     if not (msg["To"] or "").strip():
         logger.info("Skipping email — recipient has no email address (likely a VVIP walk-in)")
-        return
+        return False
     if not recipient_allowed("email", msg["To"]):
         await _record_email_delivery(
             msg,
@@ -379,7 +379,7 @@ async def _send(msg: MIMEMultipart):
             status="blocked_recipient_safety",
             payload={"source": "staging_recipient_guard"},
         )
-        return
+        return False
     if not await _charge_email_credit(msg):
         logger.warning("Email to %s blocked — event past free email quota with no credits", msg["To"])
         await _record_email_delivery(
@@ -389,7 +389,7 @@ async def _send(msg: MIMEMultipart):
             status="blocked_no_credits",
             payload={"source": "credit_gate"},
         )
-        return
+        return False
     # Prefer the Resend HTTP API when configured; otherwise fall back to SMTP.
     if settings.resend_api_key:
         try:
@@ -402,6 +402,7 @@ async def _send(msg: MIMEMultipart):
                 status="sent",
                 payload={"source": "send_attempt"},
             )
+            return True
         except Exception as exc:
             logger.exception("Resend send failed for %s", msg["To"])
             await _record_email_delivery(
@@ -412,7 +413,7 @@ async def _send(msg: MIMEMultipart):
                 error_message=str(exc),
                 payload={"source": "send_attempt"},
             )
-        return
+        return False
     if settings.bird_email_api_base and settings.bird_workspace_id and settings.bird_access_key:
         try:
             data = await _send_via_bird(msg)
@@ -425,6 +426,7 @@ async def _send(msg: MIMEMultipart):
                 status="sent",
                 payload={"source": "send_attempt"},
             )
+            return True
         except Exception as exc:
             logger.exception("Bird email send failed for %s", msg["To"])
             await _record_email_delivery(
@@ -435,7 +437,7 @@ async def _send(msg: MIMEMultipart):
                 error_message=str(exc),
                 payload={"source": "send_attempt"},
             )
-        return
+        return False
     if not settings.smtp_host:
         logger.warning("Email not configured — skipping email to %s", msg["To"])
         await _record_email_delivery(
@@ -446,7 +448,7 @@ async def _send(msg: MIMEMultipart):
             error_message="Email provider is not configured",
             payload={"source": "send_attempt"},
         )
-        return
+        return False
     try:
         async with aiosmtplib.SMTP(
             hostname=settings.smtp_host,
@@ -464,6 +466,7 @@ async def _send(msg: MIMEMultipart):
             status="sent",
             payload={"source": "send_attempt"},
         )
+        return True
     except Exception as exc:
         logger.exception("Failed to send email to %s", msg["To"])
         await _record_email_delivery(
@@ -474,6 +477,8 @@ async def _send(msg: MIMEMultipart):
             error_message=str(exc),
             payload={"source": "send_attempt"},
         )
+
+    return False
 
 
 def _plain_text_from_html(html_body: str) -> str:
@@ -614,7 +619,7 @@ async def send_simple_email(
             encoders.encode_base64(part)
         part.add_header("Content-Disposition", "attachment", filename=filename)
         msg.attach(part)
-    await _send(msg)
+    return await _send(msg)
 
 
 def render_simple_email_preview(subject: str, html_body: str) -> str:

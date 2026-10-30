@@ -1180,6 +1180,7 @@ export const api = {
 
   // Organization team (members of an event's org)
   listOrgMembers: (eventId) => req('GET', `/events/${eventId}/org-members`),
+  resendTeamInvitation: (eventId, userId) => req('POST', `/events/${eventId}/org-members/${userId}/invitation`),
   inviteOrgMember: (eventId, body) => req('POST', `/events/${eventId}/org-members`, body),
   setOrgMemberRole: (eventId, userId, role) => req('PUT', `/events/${eventId}/org-members/${userId}`, { role }),
 

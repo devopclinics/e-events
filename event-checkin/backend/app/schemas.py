@@ -374,6 +374,7 @@ class OrgMemberInvite(BaseModel):
 class OrgMemberOut(BaseModel):
     user: UserOut
     role: str
+    invite_email_status: Literal["accepted", "failed"] | None = None
 
 
 class MemberRoleUpdate(BaseModel):

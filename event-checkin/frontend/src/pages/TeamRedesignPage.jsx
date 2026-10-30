@@ -266,6 +266,8 @@ function TeamTab({ eventId, notify, onRequestDelete }) {
   const [orgRoles, setOrgRoles] = useState({})
 
   const [inviteEmail, setInviteEmail] = useState('')
+  const [inviting, setInviting] = useState(false)
+  const [resending, setResending] = useState('')
   const [inviteRole, setInviteRole] = useState('staff')
   const [confirmInvite, setConfirmInvite] = useState(null)
   const [memberSearch, setMemberSearch] = useState('')
@@ -332,6 +334,7 @@ function TeamTab({ eventId, notify, onRequestDelete }) {
     if (!assignedIds.has(orgMember.user.id)) await api.assignMember(eventId, orgMember.user.id)
     if (role === 'manager') await api.updateMemberPermissions(eventId, orgMember.user.id, { event_role: 'manager' })
     await Promise.all([loadMembers(), loadOrgMembers()])
+    return orgMember
   }
 
   async function sendInvite() {
@@ -340,12 +343,16 @@ function TeamTab({ eventId, notify, onRequestDelete }) {
   }
 
   async function confirmInviteAnyway() {
+    if (inviting) return
+    setInviting(true)
     try {
-      await inviteAndAssign(confirmInvite.email, confirmInvite.role)
-      notify(`${confirmInvite.email} added as ${ROLE_LABEL[confirmInvite.role] || confirmInvite.role}`)
+      const result = await inviteAndAssign(confirmInvite.email, confirmInvite.role)
+      const accepted = result.invite_email_status === 'accepted'
+      notify(accepted ? `${confirmInvite.email} added. Invitation email accepted for sending; inbox delivery is not yet confirmed.` : `${confirmInvite.email} added, but the invitation email could not be sent. Use Send invitation email on their team card to retry.`, !accepted)
       setConfirmInvite(null)
       setInviteEmail('')
     } catch (e) { notify(e.message || 'Teammate could not be added', true) }
+    finally { setInviting(false) }
   }
 
   async function updatePermissions(member, patch, message) {
@@ -416,7 +423,7 @@ function TeamTab({ eventId, notify, onRequestDelete }) {
             <div className="rd-panel">
               <div className="rd-panel-head"><h3>Invite teammate</h3><p>Add a new person by email</p></div>
               <div className="rd-panel-body">
-                {confirmInvite ? <div className="tm-noaccount-confirm"><p><b>{confirmInvite.email}</b> doesn't have a Festio account yet. Send the invite anyway? They'll be prompted to create one.</p><div className="rd-row2"><button className="rr-btn secondary" onClick={() => setConfirmInvite(null)}>Cancel</button><button className="rr-btn primary" onClick={confirmInviteAnyway}>Invite anyway</button></div></div> : <>
+                {confirmInvite ? <div className="tm-noaccount-confirm"><p><b>{confirmInvite.email}</b> will receive a team invitation. They can sign in with this email, or create an account using it.</p><div className="rd-row2"><button className="rr-btn secondary" onClick={() => setConfirmInvite(null)}>Cancel</button><button className="rr-btn primary" disabled={inviting} onClick={confirmInviteAnyway}>{inviting ? 'Sending…' : 'Send invitation'}</button></div></div> : <>
                   <label className="rd-field-label">Email address</label><input className="rd-field" type="email" placeholder="name@example.com" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)}/>
                   <label className="rd-field-label">Role</label><select className="rr-select" value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}><option value="staff">Staff</option><option value="manager">Event owner/admin</option></select>
                   <button className="rr-btn primary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={sendInvite}><Icon name="send" size={13}/> Send invite</button>
@@ -460,6 +467,15 @@ function TeamTab({ eventId, notify, onRequestDelete }) {
                     </div>
                     <div className="tm-member-card-actions">
                       <button className="rr-btn secondary" onClick={() => setEditingMemberId(editingMember?.id === member.id ? '' : member.id)}>{editingMember?.id === member.id ? 'Close settings' : 'Edit access'}</button>
+                      <button className="rr-btn secondary" disabled={!!resending} onClick={async () => {
+                        setResending(member.user.id)
+                        try {
+                          const result = await api.resendTeamInvitation(eventId, member.user.id)
+                          const accepted = result.invite_email_status === 'accepted'
+                          notify(accepted ? `Invitation email to ${member.user.email} accepted for sending; inbox delivery is not yet confirmed.` : 'Invitation email could not be sent. Please try again or contact support.', !accepted)
+                        } catch (e) { notify(e.message || 'Invitation email could not be sent.', true) }
+                        finally { setResending('') }
+                      }}>{resending === member.user.id ? 'Sending…' : 'Send invitation email'}</button>
                       <button className="rr-link-btn gr-danger-link" onClick={() => requestRemove(member)}>Remove</button>
                     </div>
                   </article>

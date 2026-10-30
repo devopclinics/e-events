@@ -1,6 +1,6 @@
 .ml-library,
 .ml-dialog {
-  --ml-ink: var(--text, #29251f);
+  --ml-ink: var(--ink, #29251f);
   --ml-muted: var(--muted, #746e63);
   --ml-line: var(--line, #e3ddd0);
   --ml-paper: var(--surface, #fffdf8);
@@ -737,4 +737,14 @@
   padding: 3px 8px;
   font-size: 9px;
   letter-spacing: 0.08em;
+}
+
+.dark .ml-tools input,
+.dark .ml-tools select,
+.dark .ml-studio-fields input,
+.dark .ml-studio-fields textarea,
+.dark .ml-studio-fields select {
+  background: var(--surface, #1d1810) !important;
+  color: var(--ink, #f3ece0) !important;
+  border-color: var(--line, #362d20) !important;
 }

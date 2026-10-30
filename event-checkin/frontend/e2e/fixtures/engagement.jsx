@@ -9,8 +9,21 @@ import RegisterPage from '../../src/pages/RegisterPage'
 import LandingPage from '../../src/pages/LandingPage'
 import LandingRedesignPage from '../../src/pages/LandingRedesignPage'
 import PublicTicketsPage from '../../src/pages/PublicTicketsPage'
+import MeetingSharePanel from '../../src/components/MeetingSharePanel'
+import '../../src/pages/MeetingsPage.css'
 import '../../src/index.css'
 
+function MeetingShareFixture() {
+  const [status, setStatus] = React.useState('draft')
+  const meeting = { id: 'sample-meeting', status, draft: { video_url: 'https://meet.example.test/team' }, attendees: [{ id: 'ada', name: 'Ada', email: 'ada@example.test', active: true }, { id: 'sam', name: 'Sam', email: 'sam@example.test', active: true }] }
+  return <main className="mt-workspace" style={{ paddingTop: 70 }}>
+    {['draft', 'scheduled', 'cancelled'].map(value => <button key={value} onClick={() => setStatus(value)}>{value}</button>)}
+    <MeetingSharePanel key={status} meeting={meeting} client={{ meetingAttendeeLink: async (id, attendee) => {
+      (window.fixtureMeetingLinks ||= []).push({ id, attendee })
+      return { url: `https://example.test/meeting-response/${attendee}-private` }
+    } }} />
+  </main>
+}
 function Fixture() {
   return <BrowserRouter><ThemeProvider><AuthProvider>
     <nav aria-label="Fixture navigation" style={{ position: 'fixed', top: 0, left: 0, zIndex: 100, padding: 4, background: 'white' }}>
@@ -18,6 +31,7 @@ function Fixture() {
     </nav>
     <Routes>
       <Route path="/" element={<LandingRedesignPage />} />
+      <Route path="/meeting-share" element={<MeetingShareFixture />} />
       <Route path="/tickets" element={<PublicTicketsPage />} />
       <Route path="/landing-legacy" element={<LandingPage />} />
       <Route path="/marketing" element={<MarketingPage />} />

@@ -4,6 +4,7 @@ import { api } from '../api';
 import { normalizeMeetingUrl } from '../lib/meetingUrl.mjs';
 import {meetingStatus,parseMeetingAttendees,mergeMeetingAttendees} from '../lib/meetingWorkspace.mjs';
 import MeetingTimezonePicker from '../components/MeetingTimezonePicker';
+import MeetingSharePanel from '../components/MeetingSharePanel';
 import RedesignShell from './redesign/RedesignShell';
 import './MeetingsPage.css';
 const newAttendee = () => ({
@@ -240,6 +241,7 @@ export function MeetingsWorkspace({
     <div className="mt-list" aria-label="Your meetings">{meetings===null?<p>Loading meetings…</p>:meetings.length?meetings.map(m=><button disabled={busy} key={m.id} className={selected?.id===m.id?'selected':''} onClick={()=>selectMeeting(m)}><strong>{m.draft.title}</strong><span>{m.draft.start.replace('T',' ')} · {m.draft.timezone}</span><span>{meetingStatus(m)}{m.revision!==m.published_revision&&m.status==='scheduled'?' · unsent changes':''}</span>{m.response_counts&&<small>{m.response_counts.accepted||0} accepted · {m.response_counts.maybe||0} maybe · {m.response_counts.declined||0} declined · {m.response_counts.pending||0} awaiting reply</small>}</button>):<p>No meetings match this view. Create a meeting or change the filters.</p>}</div>
     {summary&&<div className="mt-pagination"><span>{summary.total} matching meetings · Page {Math.floor(offset/20)+1}</span><button disabled={busy||!offset} onClick={()=>setOffset(o=>Math.max(0,o-20))}>Previous</button><button disabled={busy||offset+20>=summary.total} onClick={()=>setOffset(o=>o+20)}>Next</button></div>}
     {selected&&<section className="mt-selected-summary"><div><span className="mt-eyebrow">SELECTED MEETING</span><h2>{selected.draft.title}</h2><p>{selected.draft.start.replace('T',' ')} · {selected.draft.timezone}</p></div><span className={`mt-state-pill ${archived?'archived':cancelled?'cancelled':'active'}`}>{meetingStatus(selected)}</span><p className="mt-summary-help">{archived?'Archived · automatic follow-ups stopped':cancelled?'Cancelled · response links closed':selected.status==='scheduled'?'Invitation sent · manage replies and delivery below':'Draft · no invitations sent'}</p></section>}
+    {selected && <MeetingSharePanel key={`${selected.id}:${selected.revision}:${selected.status}`} meeting={selected} client={client} />}
     {selected&&<div className="mt-meeting-tools">
       <button disabled={busy} onClick={()=>{setSelected(null);setForm({...empty(),...structuredClone(form),title:'Copy of '+form.title,start:'',end:''});setPreview(null);setEditing(true);setNotice('New draft copy. Choose a future date and review attendees before saving.');}}>Duplicate</button>
       <button disabled={busy||cancelled} onClick={()=>act(async()=>download(await client.meetingCalendar(selected.id),'text/calendar;charset=utf-8'))}>Add to calendar (.ics)</button>

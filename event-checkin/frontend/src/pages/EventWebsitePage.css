@@ -22,7 +22,7 @@
 .ews-editor-panel h2{margin:5px 0 6px;font:700 18px Georgia,serif;color:var(--ink)}
 .ews-editor-panel h3{font-size:13px}
 .ews-help{margin:0 0 16px;color:var(--muted);font-size:12px;line-height:1.5}
-.ews-editor-panel>label,.ews-action-editor label,.ews-session label{display:grid;gap:6px;margin:13px 0;font-size:10px;font-weight:800;text-transform:uppercase;color:var(--muted)}
+.ews-editor-panel>label,.ews-editor-panel>.ews-image-control,.ews-action-editor label,.ews-session label{display:grid;gap:6px;margin:13px 0;font-size:10px;font-weight:800;text-transform:uppercase;color:var(--muted)}
 .ews-editor-panel input,.ews-editor-panel select,.ews-editor-panel textarea{width:100%;border:1px solid var(--line);border-radius:9px;background:var(--surface);padding:10px;color:var(--ink)}
 .ews-editor-panel input[readonly]{background:var(--surface-2);color:var(--muted)}
 .ews-slug{display:flex;align-items:center;border:1px solid var(--line);border-radius:9px;padding-left:10px;background:var(--surface);text-transform:none}

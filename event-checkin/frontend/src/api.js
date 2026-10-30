@@ -2062,6 +2062,16 @@ export const api = {
   website: (eventId) => req('GET', `/events/${eventId}/website`),
   websiteConnections: (eventId) => req('GET', `/events/${eventId}/website/connections`),
   websiteContentSources: (eventId) => req('GET', `/events/${eventId}/website/content-sources`),
+  listSharedMedia: (eventId) => req('GET', `/events/${encodeURIComponent(eventId)}/media-library`),
+  renameSharedMedia: (eventId, assetId, title) => req('PATCH', `/events/${encodeURIComponent(eventId)}/media-library/${encodeURIComponent(assetId)}`, {title}),
+  removeSharedMedia: (eventId, assetId) => req('DELETE', `/events/${encodeURIComponent(eventId)}/media-library/${encodeURIComponent(assetId)}`),
+  uploadSharedMedia: async (eventId, file) => {
+    const token = await getToken(); const body = new FormData(); body.append('file',file)
+    const response = await fetch(`${BASE}/events/${encodeURIComponent(eventId)}/media-library`, {method:'POST',headers:token?{Authorization:`Bearer ${token}`}:{},body})
+    const data = await response.json().catch(()=>({}))
+    if(!response.ok)throw new Error(data.detail || 'File upload failed')
+    return data
+  },
   uploadWebsiteAsset,
   saveWebsite: (eventId, body) => req('PUT', `/events/${eventId}/website`, body),
   renderWebsitePreview: (eventId, body) => req('POST', `/events/${eventId}/website/render-preview`, body),

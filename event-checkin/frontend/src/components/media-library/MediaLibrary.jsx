@@ -15,10 +15,12 @@ import {
   mediaLink,
 } from './templates.mjs'
 import './MediaLibrary.css'
+import { SharedMediaCollection } from './SharedMedia'
 import { MEDIA_COVERS } from './covers.mjs'
 
 const COLLECTIONS = [
   ['templates', 'Create & reuse', 'A fresh version for every audience.'],
+  ['uploads', 'Shared uploads', 'Images and files for every event in your organization.'],
   [
     'presentations',
     'Presentations',
@@ -423,7 +425,7 @@ export default function MediaLibrary() {
           <h2>{active[1]}</h2>
           <p>{active[2]}</p>
         </div>
-        <div className="ml-tools">
+        <div className="ml-tools" hidden={collection === "uploads"}>
           <label className="ml-search">
             <span className="sr-only">Search media</span>
             <input
@@ -455,6 +457,7 @@ export default function MediaLibrary() {
           {status}
         </p>
       )}
+      {collection === 'uploads' && <SharedMediaCollection />}
       {collection === 'templates' && (
         <>
           <div className="ml-template-grid">

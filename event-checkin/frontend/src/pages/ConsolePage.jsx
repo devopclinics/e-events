@@ -1747,8 +1747,8 @@ function GlobalCreditRatesPanel() {
       <p className="text-xs text-slate-500 dark:text-slate-400">
         Credits charged per send, by channel — applies to every org unless
         overridden below. Can be a fraction (e.g. 0.1 = 10 emails per credit) or
-        1+ (e.g. 3 = 3 credits per MMS). See team-docs §2c for how these were
-        derived.
+        1+ (e.g. 3 = 3 credits per MMS). Organization overrides take precedence
+        over these default rates.
       </p>
       <CreditRateTable rows={rows} onSave={save} msg={msg} />
     </div>

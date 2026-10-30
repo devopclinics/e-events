@@ -497,3 +497,53 @@ test('meeting sharing keeps personal response links tied to the chosen attendee'
   await expect(share.getByText('This meeting is cancelled. Its response links are closed.')).toBeVisible()
   await expect(share.getByRole('button')).toHaveCount(0)
 })
+
+
+test('platform operations keeps every existing console section reachable and linked to its real tool', async ({ page }) => {
+  await setup(page)
+  await page.evaluate(() => window.fixtureSetUser({id:'operator',role:'official',is_platform_superadmin:true}))
+  await navigate(page, 'Operations')
+  const nav = page.getByRole('navigation', {name:'Platform operations',exact:true})
+  await expect(page.locator('.po-stats strong')).toHaveText(['2','5','8','1'])
+  const sections = [
+    ['Organizations','accounts','adminListAccounts'], ['Event access & credits','overview','adminOverview'],
+    ['Organization add-ons','addon-access','adminOverview'], ['Platform operators','operators','adminListOperators'],
+    ['Organization plans','org-plans','adminListOrgPlans'], ['Pricing catalog','pricing','adminListPlans'],
+    ['Trial requests','trials','adminListTrials'], ['Support chat','support','platformSettings'],
+    ['QA submissions','qa','qaChecklistSubmissions'], ['Messaging usage','usage','adminUsageReport'],
+    ['Referrals','referrals','adminAllReferrals'], ['Affiliate stores','affiliates','adminListAffiliateStores'],
+  ]
+  for (const [label, id, endpoint] of sections) {
+    await page.evaluate(() => { window.fixtureOperationCalls = [] })
+    await nav.getByRole('link', {name:label,exact:true}).click()
+    await expect(page).toHaveURL(new RegExp('section='+id+'$'))
+    await expect(page.locator('.po-section-head h2')).toHaveText(label)
+    await expect(page.locator('.po-section-head h2')).toBeFocused()
+    await expect.poll(() => page.evaluate(() => window.fixtureOperationCalls)).toContain(endpoint)
+    await expect(nav.getByRole('link', {name:label,exact:true})).toHaveAttribute('aria-current','page')
+  }
+  await page.goBack()
+  await expect(page.locator('.po-section-head h2')).toHaveText('Referrals')
+  await expect(nav.getByRole('link', {name:'Media Library',exact:false})).toHaveAttribute('href','/media-redesign')
+  await nav.getByRole('link',{name:'Overview',exact:true}).click()
+  await page.evaluate(() => { window.fixtureOperationError = true })
+  await page.getByRole('button',{name:'Refresh overview',exact:true}).click()
+  await expect(page.getByRole('alert')).toContainText('Showing the previous account snapshot')
+  await expect(page.locator('.po-stats strong')).toHaveText(['2','5','8','1'])
+  await page.evaluate(() => { window.fixtureOperationError = false })
+  await page.getByRole('button',{name:'Try again',exact:true}).click()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  for (const width of [320,390,768,1440]) {
+    await page.setViewportSize({width,height:900})
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  }
+})
+
+test('platform operations retains platform staff authorization', async ({ page }) => {
+  await setup(page)
+  await page.evaluate(() => window.fixtureSetUser({id:'organizer',role:'admin',is_platform_superadmin:false}))
+  await navigate(page, 'Operations')
+  await expect(page).toHaveURL('http://127.0.0.1:4178/')
+  await expect(page.getByRole('navigation',{name:'Platform operations',exact:true})).toHaveCount(0)
+  expect(await page.evaluate(() => (window.fixtureOperationCalls || []).filter(name => name.startsWith('admin') || name === 'qaChecklistSubmissions'))).toEqual([])
+})

@@ -12,7 +12,20 @@ const modules = {
       return React.createElement(Auth.Provider, { value: { user, loading } }, children);
     }
     export const useAuth = () => useContext(Auth);`,
-  api: `export const api = {
+  api: `const operation = (name, value) => { (window.fixtureOperationCalls ||= []).push(name); return value; };
+    export const api = {
+    adminAccountsSummary: async () => { if (window.fixtureOperationError) throw new Error('Account snapshot unavailable'); return operation('adminAccountsSummary', [{id:'org-one',name:'Academy',owner_email:'owner@example.test',is_active:true,event_types:[],member_count:1,event_count:3,message_credits_spent:7,created_at:'2026-10-01'}, {id:'org-two',name:'Community',owner_email:'team@example.test',is_active:false,event_types:[],member_count:1,event_count:2,message_credits_spent:1,created_at:'2026-10-02'}]); },
+    adminOverview: async () => operation('adminOverview', []),
+    adminListAccounts: async () => operation('adminListAccounts', []),
+    adminUsageReport: async () => operation('adminUsageReport', {orgs: []}),
+    adminListTrials: async () => operation('adminListTrials', []),
+    qaChecklistSubmissions: async () => operation('qaChecklistSubmissions', []),
+    adminAllReferrals: async () => operation('adminAllReferrals', []),
+    adminListPlans: async () => operation('adminListPlans', []),
+    adminListOrgPlans: async () => operation('adminListOrgPlans', []),
+    adminListAffiliateStores: async () => operation('adminListAffiliateStores', []),
+    adminListOperators: async () => operation('adminListOperators', []),
+    adminListGlobalCreditRates: async () => operation('adminListGlobalCreditRates', []),
     marketingModule: async () => [{ id: 'sequence-one', name: 'Sample welcome sequence', status: 'draft', payload: { stage: 'registered', steps: [{ subject: 'Welcome to Festio', body: 'Create your first event.', cta: 'Create event', cta_url: 'https://festio.events/setup-redesign' }] } }],
     marketingLeads: async () => [{ id:'client-one',name:'Sample organiser',email:'organiser@example.test',stage:'registered',consent_email:true,automation:{automatic_eligible:false} }],
     marketingSavedViews: async () => [],
@@ -23,7 +36,7 @@ const modules = {
     marketingMe: async () => ({ name: 'Sample marketing operator', email: 'example@example.test', role: 'manager' }),
     marketingDashboard: async () => ({ total_leads: 24, conversion: { registered: 24, event_created: 8, paid: 0 }, automation: { runtime: { state: 'running', scheduler_running: true, blockers: [], conversion: { enrolled: 24, first_event_created: 8, rate: 33 }, last_run: { checked_at: '2026-10-21T14:00:00Z' } }, sequences: [] }, stages: {} }),
 
-    platformSettings: async () => {
+    platformSettings: async () => { operation('platformSettings', null);
       window.fixtureSettingsCalls = (window.fixtureSettingsCalls || 0) + 1;
       if (window.fixtureDeferSettings) return new Promise(resolve => window.fixtureResolveSettings = resolve);
       return { support_chat_enabled: window.fixtureSupportEnabled !== false };
@@ -49,7 +62,7 @@ const modules = {
   app: `export const setPreferredView = () => {}; export const getPreferredView = () => '/admin';`,
 }
 const aliases = {
-  '../context/AuthContext': 'auth', '../api': 'api', '../firebase': 'firebase',
+  '../context/AuthContext': 'auth', '../api': 'api', '../../api': 'api', '../firebase': 'firebase',
   'firebase/auth': 'firebaseAuth', '../auth/googleSignIn': 'google', '../App': 'app',
 }
 const definitions = {
@@ -76,7 +89,7 @@ const server = await createServer({
           res.setHeader('Content-Type', 'application/json');
           return res.end(JSON.stringify({ events: [], id: 'organizer-1', role: 'official' }));
         }
-        if (!['/__engagement-test', '/'].includes(req.url?.split('?')[0])) return next();
+        if (!['/__engagement-test', '/', '/platform-operations'].includes(req.url?.split('?')[0])) return next();
         instance.transformIndexHtml('/__engagement-test', '<!doctype html><html><body><div id="root"></div><script type="module" src="/e2e/fixtures/engagement.jsx"></script></body></html>').then(html => {
           res.setHeader('Content-Type', 'text/html');
           // Optional manual CUA run must never contact fake Chatwoot hosts or

@@ -420,3 +420,47 @@ test('homepage anchor survives event cards arriving after initial layout', async
   await expect(page.getByRole('link').filter({ hasText: 'Local event preview' })).toBeVisible()
   await expect.poll(async () => Math.round((await page.locator('#pricing').boundingBox()).y)).toBe(110)
 })
+
+const discoveryEvents = [
+  { id: 'late-event', name: 'Autumn Gathering', event_date: '2099-10-20T12:00:00Z', timezone: 'UTC', venue_name: 'Garden Hall', organizer_name: 'Community Team', event_type: 'Community', currency: 'USD', from_price: 2500, sales_url: '/tickets/e/late-event', timing: 'upcoming' },
+  { id: 'early-event', name: 'Spring Concert', event_date: '2099-04-10T12:00:00Z', timezone: 'UTC', venue_name: 'River Stage', organizer_name: 'Music Collective', event_type: 'Music', currency: 'NGN', from_price: 750000, sales_url: '/tickets/e/early-event', timing: 'upcoming' },
+  { id: 'current-event', name: 'Open Studio', event_date: '2099-01-01T12:00:00Z', timezone: 'UTC', venue_name: 'Arts House', organizer_name: 'Local Artists', event_type: 'Art', currency: 'USD', from_price: 0, sales_url: '/tickets/e/current-event', timing: 'current' },
+]
+
+test('event discovery filters real listings, sorts dates and preserves event links and currencies', async ({ page }) => {
+  await setup(page)
+  await page.route('**/api/ticketing/public/events', route => route.fulfill({ json: { events: discoveryEvents } }))
+  await navigate(page, 'Discover')
+  await expect(page).toHaveTitle('Discover events & experiences | Festio')
+  await expect(page.locator('.ptd-card h3')).toHaveText(['Open Studio', 'Spring Concert', 'Autumn Gathering'])
+  await expect(page.locator('.ptd-card').filter({ hasText: 'Spring Concert' }).getByRole('link')).toHaveAttribute('href', '/tickets/e/early-event')
+  await expect(page.locator('.ptd-card').filter({ hasText: 'Spring Concert' }).locator('strong')).toContainText('7,500.00')
+  await expect(page.locator('.ptd-card').filter({ hasText: 'Spring Concert' }).locator('strong')).toContainText(/NGN|₦/)
+  await page.getByRole('button', { name: 'Coming up', exact: true }).click()
+  await expect(page.locator('.ptd-card h3')).toHaveText(['Spring Concert', 'Autumn Gathering'])
+  await page.getByLabel('Sort events').selectOption('latest')
+  await expect(page.locator('.ptd-card h3')).toHaveText(['Autumn Gathering', 'Spring Concert'])
+  await page.getByLabel('Search events').fill('Music Collective')
+  await expect(page.locator('.ptd-card h3')).toHaveText(['Spring Concert'])
+  await page.getByLabel('Search events').fill('nothing-matches')
+  await expect(page.getByRole('heading', { name: 'A different search, perhaps?' })).toBeVisible()
+  await page.getByRole('button', { name: 'Clear search & filters' }).click()
+  await page.getByRole('combobox', { name: 'Event type', exact: true }).selectOption('Art')
+  await expect(page.locator('.ptd-card h3')).toHaveText(['Open Studio'])
+  expect(await page.evaluate(() => window.fixtureDemoRequests || [])).toEqual([])
+})
+
+test('event discovery distinguishes retryable errors from an empty catalog and works on mobile', async ({ page }) => {
+  await setup(page)
+  let fail = true
+  await page.route('**/api/ticketing/public/events', route => fail ? route.fulfill({ status: 503, json: { detail: 'Unavailable' } }) : route.fulfill({ json: { events: [] } }))
+  await navigate(page, 'Discover')
+  await expect(page.getByRole('alert')).toContainText('We couldn’t load the events right now.')
+  await expect(page.getByRole('heading', { name: 'Good things are on the way.' })).toHaveCount(0)
+  fail = false
+  await page.getByRole('button', { name: 'Try again', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Good things are on the way.' })).toBeVisible()
+  await page.setViewportSize({ width: 360, height: 844 })
+  await expect(page.getByRole('link', { name: 'Create event', exact: false }).first()).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})

@@ -5,19 +5,14 @@ import { SpeakerCarousel } from '../components/SpeakerShowcase'
 import { PartnerCarousel } from '../components/PartnerShowcase'
 import { api } from '../api'
 import './PublicTicketsPage.css'
+import EventDiscovery from './EventDiscovery'
 
 const tone={panelStrong:'#ffffff',border:'#d8e1df',text:'#102c2a',muted:'#657674',accent:'#d89b45'}
-const money=(n,c)=>new Intl.NumberFormat(undefined,{style:'currency',currency:c}).format(Number(n||0)/100)
 const date=(value,options={})=>value?new Intl.DateTimeFormat(undefined,{month:'long',day:'numeric',year:'numeric',...options}).format(new Date(value)):''
-
-function EventCard({event}) {
-  return <article className="pt-card"><a href={event.sales_url} className="pt-card-image" style={event.cover_image?{backgroundImage:`linear-gradient(180deg,transparent 30%,rgba(8,20,19,.65)),url("${event.cover_image}")`}:{}}><span>{event.timing==='current'?'Happening now':'Upcoming'}</span></a><div><small>{date(event.event_date,{weekday:'short',timeZone:event.timezone || 'UTC'})}</small><h2>{event.name}</h2><p>{event.venue_name||event.venue_address||'Location from organizer'}</p><footer><strong>From {money(event.from_price,event.currency)}</strong><a href={event.sales_url}>View event →</a></footer></div></article>
-}
 
 export default function PublicTicketsPage({embed=false}) {
   const {eventId}=useParams()
   const [events,setEvents]=useState(null)
-  const [query,setQuery]=useState('')
   const [loadError,setLoadError]=useState('')
   const [retry,setRetry]=useState(0)
   const [speakers,setSpeakers]=useState(null)
@@ -64,6 +59,5 @@ export default function PublicTicketsPage({embed=false}) {
     {event && <div className="pt-checkout"><PublicTicketCheckout eventId={eventId} tone={tone}/></div>}{embed && !event && <p role="status">{events===null ? "Loading event…" : loadError || "Ticket sales are unavailable."}</p>}
     {!embed&&event&&<footer className="pt-footer"><span>Powered by <b>Festio</b></span><span>Secure checkout · Unique QR tickets · Mobile entry</span></footer>}
   </main>
-  const visible=(events||[]).filter(e=>`${e.name} ${e.venue_name||''} ${e.venue_address||''}`.toLowerCase().includes(query.toLowerCase())),current=visible.filter(e=>e.timing==='current'),upcoming=visible.filter(e=>e.timing!=='current')
-  return <main className="pt-market"><nav><a href="/" className="pt-brand"><i>F</i> Festio</a><a href="/login">Organizer sign in</a></nav><header><span>DISCOVER WITH FESTIO</span><h1>Find something<br/>worth showing up for.</h1><p>Official event pages, secure tickets and fast QR entry, all in one place.</p><input aria-label="Search events" placeholder="Search by event or location..." value={query} onChange={e=>setQuery(e.target.value)} style={{width:'min(600px,100%)',boxSizing:'border-box',marginTop:22,padding:'16px 18px',borderRadius:12,border:'1px solid #6f8f8a',fontSize:16}}/></header>{events===null?<div className="pt-loading">Finding events...</div>:events.length===0?<div className="pt-empty"><h2>No ticketed events are live yet.</h2><p>Events appear here as soon as an organizer enables ticket sales.</p></div>:visible.length===0?<div className="pt-empty"><h2>No events match your search.</h2><button onClick={()=>setQuery('')}>Clear search</button></div>:<>{current.length>0&&<section><div className="pt-heading"><div><small>LIVE NOW</small><h2>Current events</h2></div></div><div className="pt-grid">{current.map(e=><EventCard event={e} key={e.id}/>)}</div></section>}<section><div className="pt-heading"><div><small>PLAN AHEAD</small><h2>Upcoming events</h2></div><span>{upcoming.length} event{upcoming.length===1?'':'s'}</span></div><div className="pt-grid">{upcoming.map(e=><EventCard event={e} key={e.id}/>)}</div></section></>}</main>
+  return <EventDiscovery events={events} loadError={loadError} onRetry={() => setRetry(n => n + 1)} />
 }

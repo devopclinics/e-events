@@ -6,6 +6,7 @@ import "./MarketingPage.css";
 import { useTheme } from '../context/ThemeContext'
 import { marketingGroups, marketingTab } from './marketingNavigation.mjs'
 import './MarketingVisual.css'
+import './MarketingWorkflow.css'
 import OrganizerHandoffs from './OrganizerHandoffs'
 
 const TAB_DESCRIPTIONS = {
@@ -500,9 +501,9 @@ function Dashboard({ data, run, message, navigate }) {
     paid = data?.conversion?.paid || 0;
   const runtimeState = ['running','blocked','paused','starting'].includes(data?.automation?.runtime?.state) ? data.automation.runtime.state : 'unavailable';
   const stages = [
-    ["Registered", total, "#22c3ae"],
-    ["Event created", created, "#f1b45b"],
-    ["Paid customer", paid, "#8b7bd8"],
+    ["Captured people", total, "#22c3ae"],
+    ["Event-created or later stage", created, "#f1b45b"],
+    ["Paid / customer stage", paid, "#8b7bd8"],
   ];
   return (
     <div className="space-y-5">
@@ -513,10 +514,10 @@ function Dashboard({ data, run, message, navigate }) {
       </section>
       <section className="mk-journey-steps" aria-label="Client journey milestones">
         {[
-          ['♧','A new beginning','Registered organisers',total,'All time'],
+          ['♧','A new beginning','Captured people',total,'All time'],
           ['✉','A personal welcome','Email guidance requires recorded consent',data?.email_marketable ?? 0,'Email opted in'],
           ['✦','A helpful next step','Messages checked for eligibility before sending',data?.follow_ups_due ?? 0,'Scheduled follow-ups'],
-          ['⚑','An event comes to life','Organisers with a recorded event',created,'All time'],
+          ['⚑','An event comes to life','Event-created or later sales stage',created,'All time'],
         ].map(([icon,title,copy,count,label]) => <article key={title}><span className="mk-milestone-icon" aria-hidden="true">{icon}</span><h3>{title}</h3><p>{copy}</p><footer><strong>{count}</strong><span>{label}</span></footer></article>)}
       </section>
         <section role="status" className={`mk-automation-status mk-worker-status is-${runtimeState}`} aria-label="Automatic onboarding status">
@@ -932,323 +933,404 @@ function LegacyLeads() {
 }
 
 function Leads() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams()
   const [rows, setRows] = useState([]),
     [filters, setFilters] = useState({
-      q: searchParams.get("q") || "",
-      stage: searchParams.get("stage") || "",
-      owner: searchParams.get("owner") || "",
-      source: searchParams.get("source") || "",
-      consent: searchParams.get("consent") || "",
+      q: searchParams.get('q') || '',
+      follow_up: searchParams.get('follow_up') || '',
+      stage: searchParams.get('stage') || '',
+      owner: searchParams.get('owner') || '',
+      source: searchParams.get('source') || '',
+      consent: searchParams.get('consent') || '',
     }),
-    [viewMode, setViewMode] = useState(searchParams.get("view") || "cards"),
+    [viewMode, setViewMode] = useState(searchParams.get('view') || 'cards'),
     [selected, setSelected] = useState(null),
     [checked, setChecked] = useState([]),
     [activity, setActivity] = useState([]),
     [creating, setCreating] = useState(false),
     [draft, setDraft] = useState({
-      name: "",
-      email: "",
-      organization: "",
-      source: "website",
+      name: '',
+      email: '',
+      organization: '',
+      source: 'website',
       consent_email: false,
     }),
-    [note, setNote] = useState(""),
+    [note, setNote] = useState(''),
     [bulkEdit, setBulkEdit] = useState(null),
     [views, setViews] = useState([]),
-    [notice, setNotice] = useState("");
-  const now = useTick();
+    [notice, setNotice] = useState('')
+  const [loadError, setLoadError] = useState(''),
+    [loading, setLoading] = useState(true)
+  const now = useTick()
   const query = () =>
     Object.entries(filters)
-      .filter(([, v]) => v !== "")
+      .filter(([, v]) => v !== '')
       .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
-      .join("&");
-  const load = () => api.marketingLeads(query()).then(setRows);
+      .join('&')
+  const load = () => {
+    setLoading(true)
+    setLoadError('')
+    return api
+      .marketingLeads(query())
+      .then(setRows)
+      .catch((e) => setLoadError(e.message || 'People could not load.'))
+      .finally(() => setLoading(false))
+  }
   function applyFilters() {
     const next = Object.fromEntries(
-      Object.entries(filters).filter(([, value]) => value !== ""),
-    );
-    if (viewMode !== "table") next.view = viewMode;
-    setSearchParams(next);
-    load();
+      Object.entries(filters).filter(([, value]) => value !== ''),
+    )
+    if (viewMode !== 'table') next.view = viewMode
+    setSearchParams({ tab: 'leads', ...next })
+    load()
   }
   useEffect(() => {
-    load();
-    api.marketingSavedViews().then(setViews);
-  }, []);
+    load()
+    api
+      .marketingSavedViews()
+      .then(setViews)
+      .catch((e) => setNotice(e.message))
+  }, [])
   async function open(row) {
-    setSelected(row);
+    setSelected(row)
     try {
-      setActivity(await api.marketingLeadActivity(row.id));
+      setActivity(await api.marketingLeadActivity(row.id))
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message)
     }
   }
   async function update(body) {
     try {
-      const row = await api.marketingUpdateLead(selected.id, body);
-      setSelected(row);
-      load();
+      const row = await api.marketingUpdateLead(selected.id, body)
+      setSelected(row)
+      load()
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message)
     }
   }
   async function bulk(e) {
-    e.preventDefault();
-    if (!bulkEdit?.value) return;
+    e.preventDefault()
+    if (!bulkEdit?.value) return
     try {
       await api.marketingBulkLeads({
         ids: checked,
         action: bulkEdit.action,
         value: bulkEdit.value,
-      });
-      const label = bulkEdit.action === "assign" ? `Owner set to ${bulkEdit.value}` : bulkEdit.action === "stage" ? `Stage changed to ${bulkEdit.value}` : `Tag "${bulkEdit.value}" added`;
-      setNotice(`${checked.length} lead${checked.length !== 1 ? "s" : ""} updated — ${label}`);
-      setChecked([]);
-      setBulkEdit(null);
-      load();
+      })
+      const label =
+        bulkEdit.action === 'assign'
+          ? `Owner set to ${bulkEdit.value}`
+          : bulkEdit.action === 'stage'
+            ? `Stage changed to ${bulkEdit.value}`
+            : `Tag "${bulkEdit.value}" added`
+      setNotice(
+        `${checked.length} lead${checked.length !== 1 ? 's' : ''} updated — ${label}`,
+      )
+      setChecked([])
+      setBulkEdit(null)
+      load()
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message)
     }
   }
   async function scheduleNow() {
     try {
-      const result = await api.marketingBulkLeads({ ids: checked, action: "schedule", value: "now" });
-      const noConsent = result.no_consent || 0;
-      const eligible = checked.length - noConsent;
+      const result = await api.marketingBulkLeads({
+        ids: checked,
+        action: 'schedule',
+        value: 'now',
+      })
+      const noConsent = result.no_consent || 0
+      const eligible = checked.length - noConsent
       if (noConsent > 0 && eligible === 0) {
-        setNotice(`${noConsent} lead${noConsent !== 1 ? "s" : ""} not queued — no email consent on file, so automation can't reach ${noConsent !== 1 ? "them" : "this lead"}`);
+        setNotice(
+          `${noConsent} lead${noConsent !== 1 ? 's' : ''} not queued — no email consent on file, so automation can't reach ${noConsent !== 1 ? 'them' : 'this lead'}`,
+        )
       } else if (noConsent > 0) {
-        setNotice(`${eligible} of ${checked.length} leads queued (${noConsent} skipped — no email consent) — go to Dashboard and click Run automation`);
+        setNotice(
+          `${eligible} of ${checked.length} leads queued (${noConsent} skipped — no email consent) — go to Dashboard and click Run automation`,
+        )
       } else {
-        setNotice(`${checked.length} lead${checked.length !== 1 ? "s" : ""} queued — go to Dashboard and click Run automation`);
+        setNotice(
+          `${checked.length} lead${checked.length !== 1 ? 's' : ''} queued — go to Dashboard and click Run automation`,
+        )
       }
-      setChecked([]);
-      load();
+      setChecked([])
+      load()
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message)
     }
   }
   async function grantConsent() {
     if (
       !confirm(
-        `Grant email consent to ${checked.length} lead${checked.length !== 1 ? "s" : ""}? Only do this if you have a real basis for treating them as opted in.`,
+        `Grant email consent to ${checked.length} lead${checked.length !== 1 ? 's' : ''}? Only do this if you have a real basis for treating them as opted in.`,
       )
     )
-      return;
+      return
     try {
-      const result = await api.marketingBulkLeads({ ids: checked, action: "consent", value: "granted" });
-      const skipped = result.already_unsubscribed || 0;
-      const granted = checked.length - skipped;
+      const result = await api.marketingBulkLeads({
+        ids: checked,
+        action: 'consent',
+        value: 'granted',
+      })
+      const skipped = result.already_unsubscribed || 0
+      const granted = checked.length - skipped
       setNotice(
         skipped > 0
-          ? `Consent granted for ${granted} lead${granted !== 1 ? "s" : ""} (${skipped} skipped — already unsubscribed)`
-          : `Consent granted for ${granted} lead${granted !== 1 ? "s" : ""} — eligible for automation now`,
-      );
-      setChecked([]);
-      load();
+          ? `Consent granted for ${granted} lead${granted !== 1 ? 's' : ''} (${skipped} skipped — already unsubscribed)`
+          : `Consent granted for ${granted} lead${granted !== 1 ? 's' : ''} — eligible for automation now`,
+      )
+      setChecked([])
+      load()
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message)
     }
   }
   async function sendLeadNow(lead) {
     try {
-      const bulk = await api.marketingBulkLeads({ ids: [lead.id], action: "schedule", value: "now" });
+      const bulk = await api.marketingBulkLeads({
+        ids: [lead.id],
+        action: 'schedule',
+        value: 'now',
+      })
       if (bulk.no_consent) {
-        setNotice(`${lead.name || lead.email} has no email consent on file — automation can't reach them`);
-        return;
+        setNotice(
+          `${lead.name || lead.email} has no email consent on file — automation can't reach them`,
+        )
+        return
       }
-      const result = await api.marketingRunAutomation(false, lead.id);
+      const result = await api.marketingRunAutomation(false, lead.id)
       setNotice(
         result.queued > 0
           ? `Sent next step to ${lead.name || lead.email}`
           : `Nothing sent to ${lead.name || lead.email} — no active sequence matches their stage`,
-      );
-      load();
+      )
+      load()
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message)
     }
   }
   async function saveView() {
-    const name = `View ${views.length + 1}`;
+    const name = `View ${views.length + 1}`
     try {
-      const row = await api.marketingCreateSavedView({ name, filters });
-      setViews((v) => [...v, row]);
-      setNotice(`${name} saved`);
+      const row = await api.marketingCreateSavedView({ name, filters })
+      setViews((v) => [...v, row])
+      setNotice(`${name} saved`)
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message)
     }
   }
   async function importCsv(file) {
-    if (!file) return;
+    if (!file) return
     try {
-      const result = await api.marketingImportLeads(file);
-      setNotice(`${result.created} created, ${result.updated} matched`);
-      load();
+      const result = await api.marketingImportLeads(file)
+      setNotice(`${result.created} created, ${result.updated} matched`)
+      load()
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message)
     }
   }
   async function create(e) {
-    e.preventDefault();
+    e.preventDefault()
     try {
-      await api.marketingCreateLead(draft);
-      setCreating(false);
+      await api.marketingCreateLead(draft)
+      setCreating(false)
       setDraft({
-        name: "",
-        email: "",
-        organization: "",
-        source: "website",
+        name: '',
+        email: '',
+        organization: '',
+        source: 'website',
         consent_email: false,
-      });
-      load();
+      })
+      load()
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message)
     }
   }
   async function addNote() {
-    if (!note.trim()) return;
+    if (!note.trim()) return
     try {
       await api.marketingAddActivity(selected.id, {
-        kind: "note",
+        kind: 'note',
         summary: note,
-      });
-      setNote("");
-      setActivity(await api.marketingLeadActivity(selected.id));
+      })
+      setNote('')
+      setActivity(await api.marketingLeadActivity(selected.id))
     } catch (error) {
-      setNotice(error.message);
+      setNotice(error.message)
     }
   }
   return (
     <div className="mk-workspace mk-leads">
       <SectionIntro
         eyebrow="RELATIONSHIP PIPELINE"
-        title="People, not rows."
+        title="One person. A clear next step."
         copy="Filter, understand, assign, and follow every organizer from first touch to paid event."
         count={rows.length}
         action={() => setCreating(true)}
-        actionLabel="Add lead"
+        actionLabel="Add person"
       />
       {notice && <div className="mk-notice">{notice}</div>}
-      <div className="mk-filterbar">
+      {loadError && (
+        <p className="mg-notice" role="alert">
+          {loadError} <button onClick={load}>Retry people</button>
+        </p>
+      )}
+      {loading && <p role="status">Loading people…</p>}
+      <form
+        className="mg-people-search"
+        onSubmit={(event) => {
+          event.preventDefault()
+          applyFilters()
+        }}
+      >
         <input
+          aria-label="Search people"
           placeholder="Search people or organizations"
           value={filters.q}
           onChange={(e) => setFilters((v) => ({ ...v, q: e.target.value }))}
         />
         <select
+          aria-label="Organizer stage"
           value={filters.stage}
           onChange={(e) => setFilters((v) => ({ ...v, stage: e.target.value }))}
         >
           <option value="">All stages</option>
           {STAGES.map((v) => (
-            <option key={v}>{v}</option>
-          ))}
-        </select>
-        <input
-          placeholder="Owner"
-          value={filters.owner}
-          onChange={(e) => setFilters((v) => ({ ...v, owner: e.target.value }))}
-        />
-        <input
-          placeholder="Source"
-          value={filters.source}
-          onChange={(e) =>
-            setFilters((v) => ({ ...v, source: e.target.value }))
-          }
-        />
-        <select
-          value={filters.consent}
-          onChange={(e) =>
-            setFilters((v) => ({ ...v, consent: e.target.value }))
-          }
-        >
-          <option value="">Any consent</option>
-          <option value="true">Email ready</option>
-          <option value="false">Not opted in</option>
-        </select>
-        <button onClick={applyFilters}>Apply</button>
-        <select
-          value={viewMode}
-          onChange={(e) => {
-            const next = e.target.value;
-            setViewMode(next);
-            setSearchParams({
-              ...Object.fromEntries(searchParams),
-              view: next,
-            });
-          }}
-        >
-          <option value="cards">Client cards</option><option value="table">Table view</option>
-          <option value="kanban">Stage board</option>
-          <option value="automation">Automation board</option>
-        </select>
-        <button onClick={saveView}>Save view</button>
-        <select
-          onChange={(e) => {
-            const view = views.find((v) => v.id === e.target.value);
-            if (view) setFilters(view.filters);
-          }}
-          defaultValue=""
-        >
-          <option value="">Saved views</option>
-          {views.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.name}
+            <option key={v} value={v}>
+              {v.replaceAll('_', ' ')}
             </option>
           ))}
         </select>
-        <label className="mk-file-button">
-          Import CSV
+        <button className="mg-button primary" type="submit">
+          Find people
+        </button>
+      </form>
+      {filters.follow_up === 'due' && (
+        <p className="mg-notice">
+          Showing people with due follow-ups.{' '}
+          <button
+            onClick={() =>
+              setSearchParams((previous) => {
+                const next = new URLSearchParams(previous)
+                next.delete('follow_up')
+                return next
+              })
+            }
+          >
+            Show all follow-up dates
+          </button>
+        </p>
+      )}
+      <details className="mg-people-tools">
+        <summary>Advanced filters, views & imports</summary>
+        <div className="mk-filterbar">
           <input
-            hidden
-            type="file"
-            accept=".csv,text/csv"
-            onChange={(e) => importCsv(e.target.files?.[0])}
+            placeholder="Owner"
+            value={filters.owner}
+            onChange={(e) =>
+              setFilters((v) => ({ ...v, owner: e.target.value }))
+            }
           />
-        </label>
-        <button onClick={() => api.marketingExportLeads()}>Export CSV</button>
-      </div>
+          <input
+            placeholder="Source"
+            value={filters.source}
+            onChange={(e) =>
+              setFilters((v) => ({ ...v, source: e.target.value }))
+            }
+          />
+          <select
+            value={filters.consent}
+            onChange={(e) =>
+              setFilters((v) => ({ ...v, consent: e.target.value }))
+            }
+          >
+            <option value="">Any consent</option>
+            <option value="true">Email ready</option>
+            <option value="false">Not opted in</option>
+          </select>
+          <button onClick={applyFilters}>Apply</button>
+          <select
+            value={viewMode}
+            onChange={(e) => {
+              const next = e.target.value
+              setViewMode(next)
+              setSearchParams({
+                ...Object.fromEntries(searchParams),
+                view: next,
+              })
+            }}
+          >
+            <option value="cards">Client cards</option>
+            <option value="table">Table view</option>
+            <option value="kanban">Stage board</option>
+            <option value="automation">Automation board</option>
+          </select>
+          <button onClick={saveView}>Save view</button>
+          <select
+            onChange={(e) => {
+              const view = views.find((v) => v.id === e.target.value)
+              if (view) setFilters(view.filters)
+            }}
+            defaultValue=""
+          >
+            <option value="">Saved views</option>
+            {views.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+          </select>
+          <label className="mk-file-button">
+            Import CSV
+            <input
+              hidden
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(e) => importCsv(e.target.files?.[0])}
+            />
+          </label>
+          <button onClick={() => api.marketingExportLeads()}>Export CSV</button>
+        </div>
+      </details>
+
       {checked.length > 0 && (
         <div className="mk-bulkbar">
           <b>{checked.length} selected</b>
-          <button onClick={() => setBulkEdit({ action: "assign", value: "" })}>
+          <button onClick={() => setBulkEdit({ action: 'assign', value: '' })}>
             Assign owner
           </button>
           <button
             onClick={() =>
-              setBulkEdit({ action: "stage", value: "registered" })
+              setBulkEdit({ action: 'stage', value: 'registered' })
             }
           >
             Change stage
           </button>
-          <button onClick={() => setBulkEdit({ action: "tag", value: "" })}>
+          <button onClick={() => setBulkEdit({ action: 'tag', value: '' })}>
             Add tag
           </button>
-          <button onClick={grantConsent}>
-            Grant email consent
-          </button>
-          <button onClick={scheduleNow}>
-            ↗ Start automation
-          </button>
+          <button onClick={grantConsent}>Grant email consent</button>
+          <button onClick={scheduleNow}>↗ Start automation</button>
         </div>
       )}
-      {viewMode === "kanban" ? (
+      {viewMode === 'kanban' ? (
         <div className="mk-kanban">
           {STAGES.map((stage) => (
             <section
               key={stage}
               onDragOver={(event) => event.preventDefault()}
               onDrop={async (event) => {
-                const id = event.dataTransfer.getData("text/lead-id");
+                const id = event.dataTransfer.getData('text/lead-id')
                 if (id) {
-                  await api.marketingUpdateLead(id, { stage });
-                  load();
+                  await api.marketingUpdateLead(id, { stage })
+                  load()
                 }
               }}
             >
               <header>
-                <b>{stage.replaceAll("_", " ")}</b>
+                <b>{stage.replaceAll('_', ' ')}</b>
                 <span>
                   {rows.filter((lead) => lead.stage === stage).length}
                 </span>
@@ -1260,7 +1342,7 @@ function Leads() {
                     key={lead.id}
                     draggable
                     onDragStart={(event) =>
-                      event.dataTransfer.setData("text/lead-id", lead.id)
+                      event.dataTransfer.setData('text/lead-id', lead.id)
                     }
                     onClick={() => open(lead)}
                   >
@@ -1272,30 +1354,53 @@ function Leads() {
             </section>
           ))}
         </div>
-      ) : viewMode === "cards" ? (
+      ) : viewMode === 'cards' ? (
         <div className="mk-client-cards">
-          {!rows.length && <p className="mk-empty">No clients match these filters.</p>}
-          {rows.map(lead => <article key={lead.id}><span className="mk-client-avatar">{(lead.name || lead.email || '?').slice(0,2).toUpperCase()}</span><h3>{lead.name || lead.email}</h3><p>{lead.organization || lead.email}</p><span className="mk-client-stage">{(lead.stage || 'New client').replaceAll('_',' ')}</span><p>{leadAutomationStatus(lead)}</p><button onClick={() => open(lead)}>View client →</button></article>)}
+          {!rows.length && (
+            <p className="mk-empty">No clients match these filters.</p>
+          )}
+          {rows.map((lead) => (
+            <article key={lead.id}>
+              <span className="mk-client-avatar">
+                {(lead.name || lead.email || '?').slice(0, 2).toUpperCase()}
+              </span>
+              <h3>{lead.name || lead.email}</h3>
+              <p>{lead.organization || lead.email}</p>
+              <span className="mk-client-stage">
+                {(lead.stage || 'New client').replaceAll('_', ' ')}
+              </span>
+              <p>{leadAutomationStatus(lead)}</p>
+              <button onClick={() => open(lead)}>View client →</button>
+            </article>
+          ))}
         </div>
-      ) : viewMode === "automation" ? (
+      ) : viewMode === 'automation' ? (
         <div className="mk-kanban mk-automation-board">
           {(() => {
-            const maxSteps = Math.max(0, ...rows.map((r) => r.automation?.total_steps || 0));
+            const maxSteps = Math.max(
+              0,
+              ...rows.map((r) => r.automation?.total_steps || 0),
+            )
             const columns = [
-              { key: "none", label: "Not enrolled" },
-              ...Array.from({ length: maxSteps }, (_, i) => ({ key: i, label: `Step ${i + 1}` })),
-              { key: "complete", label: "Complete" },
-            ];
+              { key: 'none', label: 'Not enrolled' },
+              ...Array.from({ length: maxSteps }, (_, i) => ({
+                key: i,
+                label: `Step ${i + 1}`,
+              })),
+              { key: 'complete', label: 'Complete' },
+            ]
             const bucketOf = (lead) => {
-              if (!lead.automation) return "none";
-              if (lead.automation.complete) return "complete";
-              return lead.automation.step;
-            };
+              if (!lead.automation) return 'none'
+              if (lead.automation.complete) return 'complete'
+              return lead.automation.step
+            }
             return columns.map((col) => (
               <section key={col.key}>
                 <header>
                   <b>{col.label}</b>
-                  <span>{rows.filter((lead) => bucketOf(lead) === col.key).length}</span>
+                  <span>
+                    {rows.filter((lead) => bucketOf(lead) === col.key).length}
+                  </span>
                 </header>
                 {rows
                   .filter((lead) => bucketOf(lead) === col.key)
@@ -1312,7 +1417,7 @@ function Leads() {
                           <span className="mk-automation-next">
                             {lead.next_follow_up_at
                               ? `Next: ${formatCountdown(lead.next_follow_up_at, now)}`
-                              : "Not scheduled"}
+                              : 'Not scheduled'}
                           </span>
                         )}
                       </div>
@@ -1320,8 +1425,8 @@ function Leads() {
                         <button
                           type="button"
                           onClick={(event) => {
-                            event.stopPropagation();
-                            sendLeadNow(lead);
+                            event.stopPropagation()
+                            sendLeadNow(lead)
                           }}
                         >
                           Send now
@@ -1330,7 +1435,7 @@ function Leads() {
                     </article>
                   ))}
               </section>
-            ));
+            ))
           })()}
         </div>
       ) : (
@@ -1382,46 +1487,52 @@ function Leads() {
                   </td>
                   <td>
                     <span className="mk-stage-pill">
-                      {r.stage.replaceAll("_", " ")}
+                      {r.stage.replaceAll('_', ' ')}
                     </span>
                   </td>
-                  <td>{r.owner_email || "Unassigned"}</td>
+                  <td>{r.owner_email || 'Unassigned'}</td>
                   <td>{r.source}</td>
                   <td>
                     <b className="mk-score">{r.score}</b>
                   </td>
                   <td>
                     <span
-                      className={`mk-consent ${r.consent_email && !r.unsubscribed ? "yes" : ""}`}
+                      className={`mk-consent ${r.consent_email && !r.unsubscribed ? 'yes' : ''}`}
                     >
                       {r.consent_email && !r.unsubscribed
-                        ? "● Email ready"
-                        : "○ Not opted in"}
+                        ? '● Email ready'
+                        : '○ Not opted in'}
                     </span>
                   </td>
                   <td>
                     {r.automation ? (
                       <span
-                        className={`mk-automation-pill ${r.automation.complete ? "done" : ""}`}
+                        className={`mk-automation-pill ${r.automation.complete ? 'done' : ''}`}
                         title={
                           r.automation.last_touch_status
                             ? `Last touch: ${r.automation.last_touch_status}`
-                            : "No touches sent yet"
+                            : 'No touches sent yet'
                         }
                       >
                         {leadAutomationStatus(r)}
                         <small>{r.automation.sequence_name}</small>
-                        {!r.automation.complete && !r.automation_paused && !r.suppression_reason && !r.handoff_requested_at && !r.unsubscribed && (
-                          <small className="mk-automation-next">
-                            Next: step {r.automation.step + 1}
-                            {formatCountdown(r.next_follow_up_at, now)
-                              ? ` — ${formatCountdown(r.next_follow_up_at, now)}`
-                              : ""}
-                          </small>
-                        )}
+                        {!r.automation.complete &&
+                          !r.automation_paused &&
+                          !r.suppression_reason &&
+                          !r.handoff_requested_at &&
+                          !r.unsubscribed && (
+                            <small className="mk-automation-next">
+                              Next: step {r.automation.step + 1}
+                              {formatCountdown(r.next_follow_up_at, now)
+                                ? ` — ${formatCountdown(r.next_follow_up_at, now)}`
+                                : ''}
+                            </small>
+                          )}
                       </span>
                     ) : (
-                      <span className="mk-automation-pill none">{leadAutomationStatus(r)}</span>
+                      <span className="mk-automation-pill none">
+                        {leadAutomationStatus(r)}
+                      </span>
                     )}
                   </td>
                 </tr>
@@ -1452,9 +1563,7 @@ function Leads() {
                 <>
                   <div className="mk-automation-status-row">
                     <span>{selected.automation.sequence_name}</span>
-                    <b>
-                      {leadAutomationStatus(selected)}
-                    </b>
+                    <b>{leadAutomationStatus(selected)}</b>
                   </div>
                   <div className="mk-automation-status-track">
                     <i
@@ -1466,17 +1575,21 @@ function Leads() {
                   <p>
                     {selected.automation.last_touch_at
                       ? `Last touch: ${selected.automation.last_touch_status} · ${new Date(selected.automation.last_touch_at).toLocaleString()}`
-                      : "No touches sent yet"}
+                      : 'No touches sent yet'}
                   </p>
-                  {!selected.automation.complete && !selected.automation_paused && !selected.suppression_reason && !selected.handoff_requested_at && !selected.unsubscribed && (
-                    <p>
-                      Next: step {selected.automation.step + 1} of{" "}
-                      {selected.automation.total_steps}
-                      {selected.next_follow_up_at
-                        ? ` — ${formatCountdown(selected.next_follow_up_at, now)} (${new Date(selected.next_follow_up_at).toLocaleString()})`
-                        : " · No follow-up scheduled"}
-                    </p>
-                  )}
+                  {!selected.automation.complete &&
+                    !selected.automation_paused &&
+                    !selected.suppression_reason &&
+                    !selected.handoff_requested_at &&
+                    !selected.unsubscribed && (
+                      <p>
+                        Next: step {selected.automation.step + 1} of{' '}
+                        {selected.automation.total_steps}
+                        {selected.next_follow_up_at
+                          ? ` — ${formatCountdown(selected.next_follow_up_at, now)} (${new Date(selected.next_follow_up_at).toLocaleString()})`
+                          : ' · No follow-up scheduled'}
+                      </p>
+                    )}
                 </>
               ) : (
                 <p>Not enrolled in an active sequence for this stage.</p>
@@ -1508,39 +1621,39 @@ function Leads() {
               <button
                 onClick={async () => {
                   const email = prompt(
-                    "Email of the duplicate lead to merge into this profile",
-                  );
+                    'Email of the duplicate lead to merge into this profile',
+                  )
                   const source = rows.find(
                     (lead) =>
                       lead.email.toLowerCase() ===
-                      String(email || "").toLowerCase(),
-                  );
+                      String(email || '').toLowerCase(),
+                  )
                   if (!source)
                     return setNotice(
-                      "Duplicate lead not found in the current view",
-                    );
+                      'Duplicate lead not found in the current view',
+                    )
                   const merged = await api.marketingMergeLeads({
                     target_id: selected.id,
                     source_id: source.id,
-                  });
-                  setSelected(merged);
-                  setNotice("Duplicate merged");
-                  load();
+                  })
+                  setSelected(merged)
+                  setNotice('Duplicate merged')
+                  load()
                 }}
               >
                 Merge duplicate
               </button>
               <button
                 onClick={async () => {
-                  const startsAt = prompt("Demo start time (YYYY-MM-DD HH:MM)");
-                  if (!startsAt) return;
+                  const startsAt = prompt('Demo start time (YYYY-MM-DD HH:MM)')
+                  if (!startsAt) return
                   const result = await api.marketingScheduleDemo(selected.id, {
                     starts_at: new Date(startsAt).toISOString(),
                     duration_minutes: 30,
-                  });
-                  window.open(result.calendar_url, "_blank", "noopener");
-                  setNotice("Demo booked and calendar opened");
-                  load();
+                  })
+                  window.open(result.calendar_url, '_blank', 'noopener')
+                  setNotice('Demo booked and calendar opened')
+                  load()
                 }}
               >
                 Book demo
@@ -1549,14 +1662,14 @@ function Leads() {
                 className="danger"
                 onClick={async () => {
                   if (
-                    confirm("Schedule this lead for permanent GDPR deletion?")
+                    confirm('Schedule this lead for permanent GDPR deletion?')
                   ) {
-                    const result = await api.marketingGdprDelete(selected.id);
+                    const result = await api.marketingGdprDelete(selected.id)
                     setNotice(
                       `Deletion scheduled after ${result.purge_after_days} days`,
-                    );
-                    setSelected(null);
-                    load();
+                    )
+                    setSelected(null)
+                    load()
                   }
                 }}
               >
@@ -1618,7 +1731,7 @@ function Leads() {
                   onChange={(e) =>
                     setDraft((v) => ({ ...v, consent_email: e.target.checked }))
                   }
-                />{" "}
+                />{' '}
                 Explicit email consent received
               </label>
             </div>
@@ -1635,13 +1748,13 @@ function Leads() {
         <div className="mk-modal-backdrop">
           <form className="mk-studio-modal" onSubmit={bulk}>
             <h3>
-              {bulkEdit.action === "assign"
-                ? "Assign owner"
-                : bulkEdit.action === "stage"
-                  ? "Change stage"
-                  : "Add tag"}
+              {bulkEdit.action === 'assign'
+                ? 'Assign owner'
+                : bulkEdit.action === 'stage'
+                  ? 'Change stage'
+                  : 'Add tag'}
             </h3>
-            {bulkEdit.action === "stage" ? (
+            {bulkEdit.action === 'stage' ? (
               <select
                 value={bulkEdit.value}
                 onChange={(e) =>
@@ -1649,7 +1762,9 @@ function Leads() {
                 }
               >
                 {STAGES.map((v) => (
-                  <option key={v}>{v}</option>
+                  <option key={v} value={v}>
+                    {v.replaceAll('_', ' ')}
+                  </option>
                 ))}
               </select>
             ) : (
@@ -1657,7 +1772,7 @@ function Leads() {
                 autoFocus
                 required
                 placeholder={
-                  bulkEdit.action === "assign" ? "owner@festio.events" : "Tag"
+                  bulkEdit.action === 'assign' ? 'owner@festio.events' : 'Tag'
                 }
                 value={bulkEdit.value}
                 onChange={(e) =>
@@ -1675,7 +1790,7 @@ function Leads() {
         </div>
       )}
     </div>
-  );
+  )
 }
 
 function LegacyModule({ module }) {
@@ -2095,7 +2210,7 @@ function Module({ module }) {
                 >
                   {["draft", "scheduled", "active", "paused", "complete"].map(
                     (v) => (
-                      <option key={v}>{v}</option>
+                      <option key={v} value={v}>{v.replaceAll("_"," ")}</option>
                     ),
                   )}
                 </select>
@@ -2206,23 +2321,78 @@ function Tags() {
   );
 }
 
-function Analytics() {
+function Analytics({ overview, commerce }) {
   const [days, setDays] = useState(30),
     [data, setData] = useState(null),
-    [providers, setProviders] = useState(null);
+    [providers, setProviders] = useState(null)
+  const [error, setError] = useState(''),
+    [refresh, setRefresh] = useState(0)
   useEffect(() => {
-    api.marketingAnalytics(days).then(setData);
-    api.marketingProviders().then(setProviders);
-  }, [days]);
+    let current = true
+    setData(null)
+    setError('')
+    setProviders(null)
+    Promise.allSettled([
+      api.marketingAnalytics(days),
+      api.marketingProviders(),
+    ]).then(([results, connections]) => {
+      if (!current) return
+      if (results.status === 'fulfilled') setData(results.value)
+      else setError(results.reason.message || 'Results could not load.')
+      if (connections.status === 'fulfilled') setProviders(connections.value)
+    })
+    return () => {
+      current = false
+    }
+  }, [days, refresh])
   return (
     <div className="mk-workspace">
       <SectionIntro
         eyebrow="ATTRIBUTION & DELIVERY"
-        title="Know what creates momentum."
-        copy="Measure registrations, acquisition sources, campaigns, and provider health over the period that matters."
+        title="See what becomes an event."
+        copy="Review recorded outcomes, captured interest and campaign attribution."
       />
+      <section
+        className="mg-result-milestones"
+        aria-label="All-time organizer milestones"
+      >
+        {[
+          ['People captured', overview?.total_leads, 'All captured records'],
+          [
+            'First events verified',
+            overview?.automation?.runtime?.conversion?.first_event_created,
+            'Current welcome journey cohort',
+          ],
+          [
+            'Paying organizers',
+            commerce?.organizer_acquired,
+            'Recorded paid Event Pass buyers',
+          ],
+        ].map(([label, value, scope]) => (
+          <article key={label}>
+            <span className="mg-eyebrow">{scope}</span>
+            <strong>
+              {value == null ? '—' : Number(value).toLocaleString()}
+            </strong>
+            <h3>{label}</h3>
+          </article>
+        ))}
+      </section>
+      {error && (
+        <p role="alert" className="mg-notice">
+          {error}{' '}
+          <button onClick={() => setRefresh((value) => value + 1)}>
+            Retry results
+          </button>
+        </p>
+      )}
+      {!data && !error && <p role="status">Loading results…</p>}
       <div className="mk-filterbar">
-        <select value={days} onChange={(e) => setDays(Number(e.target.value))}>
+        <select
+          aria-label="Reporting period"
+          value={days}
+          onChange={(e) => setDays(Number(e.target.value))}
+        >
           <option value="7">Last 7 days</option>
           <option value="30">Last 30 days</option>
           <option value="90">Last 90 days</option>
@@ -2231,7 +2401,7 @@ function Analytics() {
       </div>
       <div className="mk-analytics-grid">
         <section>
-          <h3>Registration trend</h3>
+          <h3>People captured over time</h3>
           <div className="mk-bars">
             {Object.entries(data?.daily || {}).map(([day, count]) => (
               <span key={day}>
@@ -2260,46 +2430,59 @@ function Analytics() {
             </div>
           ))}
         </section>
-        <section>
-          <h3>Connected providers</h3>
-          <div className="mk-provider-list">
-            <span className={providers?.email?.configured ? "ready" : ""}>
-              Email · Resend{" "}
-              <b>{providers?.email?.configured ? "Ready" : "Setup needed"}</b>
-            </span>
-            <span className={providers?.sms?.configured ? "ready" : ""}>
-              SMS · SignalHouse{" "}
-              <b>{providers?.sms?.configured ? "Ready" : "Setup needed"}</b>
-            </span>
-            <span className={providers?.whatsapp?.configured ? "ready" : ""}>
-              WhatsApp · Bird{" "}
-              <b>
-                {providers?.whatsapp?.configured ? "Ready" : "Setup needed"}
-              </b>
-            </span>
-            {Object.entries(providers?.social || {}).map(([name, ready]) => (
-              <span className={ready ? "ready" : ""} key={name}>
-                {name}
-                <b>{ready ? "Connected" : "Connect account"}</b>
-                {ready && providers?.oauth_refresh?.[name] ? (
-                  <button
-                    onClick={async () => {
-                      await api.marketingRefreshProvider(name);
-                      setProviders(await api.marketingProviders());
-                    }}
-                  >
-                    Refresh OAuth
-                  </button>
-                ) : ready ? (
-                  <small>Static token</small>
-                ) : null}
+        <details className="mg-advanced mg-provider-details">
+          <summary>Delivery & provider configuration</summary>
+          <section>
+            <h3>Connected providers</h3>
+            <p>Configuration is separate from confirmed message delivery.</p>
+            {!providers && <p>Provider configuration is unavailable.</p>}
+            <div className="mk-provider-list">
+              <span className={providers?.email?.configured ? 'ready' : ''}>
+                Email{' '}
+                <b>
+                  {providers?.email?.configured
+                    ? 'Configured'
+                    : 'Not configured'}
+                </b>
               </span>
-            ))}
-          </div>
-        </section>
+              <span className={providers?.sms?.configured ? 'ready' : ''}>
+                SMS{' '}
+                <b>
+                  {providers?.sms?.configured ? 'Configured' : 'Not configured'}
+                </b>
+              </span>
+              <span className={providers?.whatsapp?.configured ? 'ready' : ''}>
+                WhatsApp{' '}
+                <b>
+                  {providers?.whatsapp?.configured
+                    ? 'Configured'
+                    : 'Not configured'}
+                </b>
+              </span>
+              {Object.entries(providers?.social || {}).map(([name, ready]) => (
+                <span className={ready ? 'ready' : ''} key={name}>
+                  {name}
+                  <b>{ready ? 'Connected' : 'Connect account'}</b>
+                  {ready && providers?.oauth_refresh?.[name] ? (
+                    <button
+                      onClick={async () => {
+                        await api.marketingRefreshProvider(name)
+                        setProviders(await api.marketingProviders())
+                      }}
+                    >
+                      Refresh OAuth
+                    </button>
+                  ) : ready ? (
+                    <small>Static token</small>
+                  ) : null}
+                </span>
+              ))}
+            </div>
+          </section>
+        </details>
       </div>
     </div>
-  );
+  )
 }
 
 const SOCIAL_CONNECTION_FIELDS = {
@@ -2883,80 +3066,1042 @@ function SequenceStudio() {
   )
 }
 
+function GrowthToday({ data, commerce, error, reload, navigate, advanced }) {
+  const [work, setWork] = useState(null),
+    [workError, setWorkError] = useState('')
+  const [refresh, setRefresh] = useState(0)
+  useEffect(() => {
+    let current = true
+    setWork(null)
+    setWorkError('')
+    Promise.allSettled([
+      api.marketingLeads('follow_up=due'),
+      api.marketingHandoffs(),
+    ]).then(([people, replies]) => {
+      if (!current) return
+      setWork({
+        people: people.status === 'fulfilled' ? people.value : null,
+        replies: replies.status === 'fulfilled' ? replies.value : null,
+      })
+      if (people.status === 'rejected' || replies.status === 'rejected')
+        setWorkError('Some follow-up information could not load.')
+    })
+    return () => {
+      current = false
+    }
+  }, [refresh])
+  const open = work?.replies?.filter((row) => row.status !== 'resolved'),
+    due = work?.people
+  const runtime = data?.automation?.runtime
+  const state = runtime?.state || 'unavailable'
+  const counts = [
+    ['People captured', data?.total_leads, 'All captured records'],
+    [
+      'First events verified',
+      data?.automation?.runtime?.conversion?.first_event_created,
+      'Current welcome journey cohort',
+    ],
+    [
+      'Paying organizers',
+      commerce?.organizer_acquired,
+      'Recorded paid Event Pass buyers',
+    ],
+  ]
+  return (
+    <div className="mg-today">
+      <section className="mg-intro">
+        <div>
+          <span className="mg-eyebrow">YOUR NEXT USEFUL ACTION</span>
+          <h2>Make the next event happen.</h2>
+          <p>
+            Follow up with the right people. Help new organizers get started.
+            See what turns into an event.
+          </p>
+        </div>
+        <button className="mg-button primary" onClick={() => navigate('leads')}>
+          Open people →
+        </button>
+      </section>
+      {error && (
+        <div className="mg-notice" role="alert">
+          {error} <button onClick={reload}>Retry overview</button>
+        </div>
+      )}
+      <section className="mg-action-grid" aria-label="Work needing attention">
+        <article className="mg-action mint">
+          <span className="mg-eyebrow">CONTINUE A CONVERSATION</span>
+          <strong>{open ? open.length : '—'}</strong>
+          <h3>Replies to follow up</h3>
+          <p>Open cases waiting for a teammate to continue the conversation.</p>
+          <button className="mg-button" onClick={() => navigate('handoffs')}>
+            Open follow-ups →
+          </button>
+        </article>
+        <article className="mg-action lavender">
+          <span className="mg-eyebrow">KEEP YOUR COMMITMENTS</span>
+          <strong>{due ? due.length : '—'}</strong>
+          <h3>Follow-ups due</h3>
+          <p>
+            People with a recorded follow-up due. Consent and sending checks
+            still apply.
+          </p>
+          <button
+            className="mg-button"
+            onClick={() => navigate('leads', { follow_up: 'due' })}
+          >
+            Review due people →
+          </button>
+        </article>
+        <article className="mg-action sand">
+          <span className="mg-eyebrow">HELP SOMEONE GET STARTED</span>
+          <strong aria-hidden="true">↗</strong>
+          <h3>A thoughtful welcome</h3>
+          <p>
+            Review the messages that guide new organizers toward their first
+            event.
+          </p>
+          <button className="mg-button" onClick={() => navigate('sequences')}>
+            Review welcome journey →
+          </button>
+        </article>
+      </section>
+      {workError && (
+        <p className="mg-notice" role="alert">
+          {workError}{' '}
+          <button onClick={() => setRefresh((value) => value + 1)}>
+            Retry follow-ups
+          </button>
+        </p>
+      )}
+      <section className="mg-work-grid">
+        <article className="mg-panel">
+          <div className="mg-panel-title">
+            <div>
+              <span className="mg-eyebrow">PEOPLE TO CHECK IN WITH</span>
+              <h3>The next conversation</h3>
+            </div>
+            <button
+              className="mg-link"
+              onClick={() => navigate('leads', { follow_up: 'due' })}
+            >
+              View all →
+            </button>
+          </div>
+          {due === null ? (
+            <p>People needing follow-up are unavailable. Retry above.</p>
+          ) : !due ? (
+            <p role="status">Loading follow-ups…</p>
+          ) : due.length === 0 ? (
+            <div className="mg-empty">
+              <b>No follow-ups are due.</b>
+              <p>
+                Set a next follow-up date in a person’s record to keep their
+                next step visible here.
+              </p>
+            </div>
+          ) : (
+            <div className="mg-person-list">
+              {due.slice(0, 5).map((person) => (
+                <button
+                  key={person.id}
+                  onClick={() =>
+                    navigate('leads', {
+                      q: person.email || person.name || '',
+                      follow_up: 'due',
+                    })
+                  }
+                >
+                  <span className="mg-avatar">
+                    {(person.name || person.email || '?')
+                      .slice(0, 1)
+                      .toUpperCase()}
+                  </span>
+                  <span>
+                    <b>{person.name || person.email}</b>
+                    <small>
+                      {person.owner_email || 'Needs an owner'} ·{' '}
+                      {(person.stage || 'registered').replaceAll('_', ' ')}
+                    </small>
+                  </span>
+                  <span aria-hidden="true">↗</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </article>
+        <article className="mg-panel">
+          <span className="mg-eyebrow">AUTOMATIC WELCOME JOURNEY</span>
+          <h3>Welcome journey: {state}</h3>
+          <p>
+            {state==='running' && runtime?.scheduler_running
+              ? 'The welcome journey is checking for eligible organizers. Each email still needs current consent.'
+              : state==='blocked'
+                ? 'Automatic messages need attention. Review the reasons below.'
+                : state==='paused'
+                  ? 'Automatic welcome messages are paused. Review the journey before resuming.'
+                  : 'Automatic messaging status is unavailable or starting. Open the journey or refresh this overview.'}
+          </p>
+          {(runtime?.blockers || []).map((reason) => (
+            <p className="mg-notice" key={reason}>
+              {reason}
+            </p>
+          ))}
+          {runtime?.last_run?.checked_at && (
+            <small>
+              Last checked{' '}
+              {new Date(runtime.last_run.checked_at).toLocaleString()}
+            </small>
+          )}
+          <button className="mg-button" onClick={() => navigate('sequences')}>
+            Review automatic messages
+          </button>
+        </article>
+      </section>
+      <section className="mg-progress" aria-label="Organizer progress">
+        <div>
+          <span className="mg-eyebrow">WHAT THIS WORK LEADS TO</span>
+          <h3>From interest to an event.</h3>
+          <p>Recorded outcomes, with their scope shown.</p>
+        </div>
+        {counts.map(([label, value, scope]) => (
+          <div key={label}>
+            <strong>
+              {value == null ? '—' : Number(value).toLocaleString()}
+            </strong>
+            <span>{label}</span>
+            <small>{scope}</small>
+          </div>
+        ))}
+        <button className="mg-link" onClick={() => navigate('analytics')}>
+          Open results →
+        </button>
+      </section>
+      <details className="mg-advanced">
+        <summary>Advanced · Automation controls & detailed overview</summary>
+        {advanced}
+      </details>
+    </div>
+  )
+}
+function MarketingMessages({ navigate }) {
+  return (
+    <div className="mg-hub">
+      <section className="mg-intro">
+        <div>
+          <span className="mg-eyebrow">START WITH THE PURPOSE</span>
+          <h2>
+            The right message.
+            <br />
+            <em>At the right moment.</em>
+          </h2>
+          <p>
+            Choose a one-time campaign or an automatic journey. Review your
+            audience and test the message before sending.
+          </p>
+        </div>
+      </section>
+      <div className="mg-choice-grid">
+        <button className="mg-choice" onClick={() => navigate('campaigns')}>
+          <span className="mg-eyebrow">ONE AUDIENCE · ONE OCCASION</span>
+          <i>Send a campaign.</i>
+          <p>
+            Share an announcement, invite organizers to a demo, or follow up
+            with a saved audience.
+          </p>
+          <b>Create or review campaigns ↗</b>
+        </button>
+        <button
+          className="mg-choice lavender"
+          onClick={() => navigate('sequences')}
+        >
+          <span className="mg-eyebrow">A JOURNEY OVER TIME</span>
+          <i>Make the welcome count.</i>
+          <p>
+            Review welcome messages, delays and eligibility for automatic
+            organizer guidance.
+          </p>
+          <b>Open welcome journeys ↗</b>
+        </button>
+      </div>
+      <aside className="mg-panel mg-publishing">
+        <div>
+          <span className="mg-eyebrow">CONTENT & PUBLISHING</span>
+          <h3>Plan what you’ll share next.</h3>
+          <p>
+            Keep social posts and the content calendar together, separate from
+            organizer email campaigns.
+          </p>
+        </div>
+        <button className="mg-button" onClick={() => navigate('content')}>
+          Open publishing planner →
+        </button>
+      </aside>
+    </div>
+  )
+}
+function MarketingSettings({ navigate, tabs }) {
+  const available = new Set(tabs.map(([id]) => id))
+  const groups = [
+    [
+      'Audience setup',
+      [
+        [
+          'segments',
+          'Saved audiences',
+          'Define reusable groups of people for campaigns.',
+        ],
+        ['tags', 'Labels', 'Organize people with consistent tags.'],
+      ],
+    ],
+    [
+      'Workspace setup',
+      [
+        ['preferences', 'Preferences', 'Workspace defaults and notifications.'],
+        [
+          'social-settings',
+          'Sender & social connections',
+          'Manage provider connections and sending destinations.',
+        ],
+        ['access', 'Staff access', 'Roles and authorized Marketing teammates.'],
+        [
+          'audit',
+          'Activity history',
+          'Review significant changes and actions.',
+        ],
+      ],
+    ],
+    [
+      'Guidance',
+      [
+        [
+          'help',
+          'How this workspace works',
+          'Practical steps for acquisition, onboarding and follow-up.',
+        ],
+      ],
+    ],
+  ]
+  return (
+    <div className="mg-hub">
+      <section className="mg-intro">
+        <div>
+          <span className="mg-eyebrow">CONFIGURE ONCE. WORK WITH CLARITY.</span>
+          <h2>The essentials behind the work.</h2>
+          <p>Audience setup, team permissions and workspace configuration.</p>
+        </div>
+      </section>
+      {groups.map(([label, items]) => (
+        <section className="mg-settings-group" key={label}>
+          <h3>{label}</h3>
+          <div className="mg-settings-grid">
+            {items
+              .filter(([id]) => available.has(id))
+              .map(([id, title, copy]) => (
+                <button
+                  className="mg-setting"
+                  key={id}
+                  onClick={() => navigate(id)}
+                >
+                  <strong>
+                    {title}
+                    <span aria-hidden="true">↗</span>
+                  </strong>
+                  <p>{copy}</p>
+                </button>
+              ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  )
+}
+function campaignLinkValid(value) {
+  if (!value) return true
+  try {
+    return new URL(value).protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+function CampaignStudio({ me }) {
+  const [rows, setRows] = useState(null),
+    [segments, setSegments] = useState([]),
+    [editing, setEditing] = useState(null),
+    [step, setStep] = useState(0),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState(''),
+    [notice, setNotice] = useState(''),
+    [audience, setAudience] = useState(null),
+    [tested, setTested] = useState(false)
+  const canEdit = me?.role !== 'viewer',
+    canSend = ['manager', 'superadmin'].includes(me?.role)
+  async function load() {
+    setError('')
+    try {
+      const [campaigns, savedSegments] = await Promise.all([
+        api.marketingModule('campaigns'),
+        api.marketingModule('segments'),
+      ])
+      setRows(campaigns)
+      setSegments(savedSegments)
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+  useEffect(() => {
+    load()
+  }, [])
+  function open(row) {
+    setEditing(
+      row
+        ? {
+            ...row,
+            payload: {
+              ...row.payload,
+              ...(row.payload?.steps?.[0] || {}),
+              segment_id:
+                segments.find(
+                  (item) =>
+                    item.id ===
+                      (row.payload?.segment_id || row.payload?.audience) ||
+                    item.name === row.payload?.audience,
+                )?.id || row.payload?.segment_id,
+            },
+          }
+        : {
+            name: '',
+            status: 'draft',
+            owner_email: me?.email || '',
+            payload: {
+              channels: ['email'],
+              audience: '',
+              subject: '',
+              body: '',
+              cta: '',
+              cta_url: '',
+            },
+            isNew: true,
+          },
+    )
+    setStep(0)
+    setAudience(null)
+    setTested(false)
+    setNotice('')
+    setError('')
+  }
+  function update(key, value, payload = false) {
+    setEditing((current) =>
+      payload
+        ? { ...current, payload: { ...current.payload, [key]: value } }
+        : { ...current, [key]: value },
+    )
+    setAudience(null)
+    setTested(false)
+  }
+  async function persist() {
+    const body = {
+      name: editing.name.trim(),
+      status: editing.status || 'draft',
+      owner_email: editing.owner_email || null,
+      payload: {
+        ...editing.payload,
+        ...(editing.payload.steps?.length
+          ? {
+              steps: [
+                {
+                  ...editing.payload.steps[0],
+                  subject: editing.payload.subject,
+                  body: editing.payload.body,
+                  cta: editing.payload.cta,
+                  cta_url: editing.payload.cta_url,
+                },
+                ...editing.payload.steps.slice(1),
+              ],
+            }
+          : {}),
+      },
+      scheduled_at: editing.scheduled_at || null,
+    }
+    const saved = editing.isNew
+      ? await api.marketingCreateRecord('campaigns', body)
+      : await api.marketingUpdateRecord('campaigns', editing.id, body)
+    if (!saved?.id)
+      throw new Error(
+        'The campaign could not be saved. Reopen it before continuing.',
+      )
+    setEditing({ ...saved, isNew: false })
+    return saved
+  }
+  async function action(kind) {
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      const saved = await persist()
+      if (kind === 'audience') {
+        const result = await api.marketingExecuteCampaign(saved.id, true)
+        setAudience(result)
+        setNotice(
+          `${result.eligible} eligible recipients match this saved audience.`,
+        )
+      } else if (kind === 'test') {
+        const result = await api.marketingPreviewCampaign(saved.id)
+        if (result.status !== 'sent')
+          throw new Error(
+            result.error ||
+              `The test was not accepted (${result.status || 'unknown status'}).`,
+          )
+        setTested(true)
+        setNotice(
+          `The email provider accepted your test for ${me?.email || 'your Marketing email'}. Check your inbox before sending the campaign.`,
+        )
+      } else if (kind === 'send') {
+        const fresh = await api.marketingExecuteCampaign(saved.id, true)
+        setAudience(fresh)
+        if (!fresh.eligible)
+          throw new Error('No eligible recipients match this audience.')
+        if (
+          !window.confirm(
+            `Send “${saved.name}” to up to ${fresh.eligible} eligible recipients? Consent, suppression and previous sends are checked again.`,
+          )
+        )
+          return
+        const result = await api.marketingExecuteCampaign(saved.id)
+        setNotice(
+          `${result.sent} accepted by the email provider; ${result.failed} failed or skipped. Delivery is confirmed separately by receipts.`,
+        )
+        setEditing(null)
+        await load()
+      } else {
+        setNotice('Draft saved. No campaign emails were sent.')
+        await load()
+      }
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  const validAudience =
+    !!editing?.name?.trim() &&
+    segments.some(segment=>segment.id===(editing?.payload?.segment_id||editing?.payload?.audience)||segment.name===editing?.payload?.audience)
+  const validMessage =
+    !!editing?.payload?.subject?.trim() &&
+    !!editing?.payload?.body?.trim() &&
+    (!editing?.payload?.cta_url || campaignLinkValid(editing.payload.cta_url))
+  return (
+    <section className="mg-campaigns">
+      <div className="mg-intro">
+        <div>
+          <span className="mg-eyebrow">ONE-TIME ORGANIZER EMAILS</span>
+          <h2>
+            A clear message.
+            <br />A considered audience.
+          </h2>
+          <p>
+            Build a campaign in four steps. Saving a draft does not send an
+            email.
+          </p>
+        </div>
+        {!editing && canEdit && (
+          <button className="mg-button primary" onClick={() => open(null)}>
+            Create campaign +
+          </button>
+        )}
+      </div>
+      {error && (
+        <div role="alert" className="mg-notice">
+          {error}
+          {!rows && (
+            <button className="mg-button" onClick={load}>
+              Retry campaigns
+            </button>
+          )}
+        </div>
+      )}
+      {notice && (
+        <p role="status" className="mg-notice">
+          {notice}
+        </p>
+      )}
+      {editing ? (
+        <div className="mg-campaign-editor">
+          <div className="mg-editor-heading">
+            <h3>{editing.name || 'New campaign'}</h3>
+            <button
+              className="mg-button"
+              disabled={busy}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    'Close this editor? Save your draft first to keep changes.',
+                  )
+                ) {
+                  setEditing(null)
+                  load()
+                }
+              }}
+            >
+              Close editor
+            </button>
+          </div>
+          <ol className="mg-steps" aria-label="Campaign steps">
+            {['Audience', 'Message', 'Test', 'Review & send'].map(
+              (label, index) => (
+                <li
+                  key={label}
+                  aria-current={step === index ? 'step' : undefined}
+                >
+                  <span>{index + 1}</span>
+                  {label}
+                </li>
+              ),
+            )}
+          </ol>
+          <div className="mg-campaign-fields">
+            {step === 0 && (
+              <>
+                <h3>Who should hear from you?</h3>
+                <label>
+                  Campaign name
+                  <input
+                    value={editing.name}
+                    maxLength={255}
+                    onChange={(e) => update('name', e.target.value)}
+                  />
+                </label>
+                <label>
+                  Saved audience
+                  <select
+                    value={
+                      editing.payload.segment_id ||
+                      editing.payload.audience ||
+                      ''
+                    }
+                    onChange={(e) => {
+                      setEditing((current) => ({
+                        ...current,
+                        payload: {
+                          ...current.payload,
+                          segment_id: e.target.value,
+                          audience: e.target.value,
+                        },
+                      }))
+                      setAudience(null)
+                      setTested(false)
+                    }}
+                  >
+                    <option value="">Choose a saved audience</option>
+                    {segments.map((segment) => (
+                      <option key={segment.id} value={segment.id}>
+                        {segment.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {!segments.length && (
+                  <p className="mg-notice">
+                    Create a saved audience in Settings → Saved audiences, then
+                    return to this campaign.
+                  </p>
+                )}
+                <p>
+                  Only people with current email consent who pass suppression
+                  and eligibility checks can receive this campaign.
+                </p>
+                <label>
+                  Campaign owner
+                  <input
+                    type="email"
+                    value={editing.owner_email || ''}
+                    onChange={(e) => update('owner_email', e.target.value)}
+                  />
+                </label>
+                <details>
+                  <summary>Existing scheduling & campaign state</summary>
+                  <p>
+                    These are planning fields. Saving a date or marking a record
+                    active does not confirm that messages were sent.
+                  </p>
+                  <label>
+                    Record state
+                    <select
+                      value={editing.status || 'draft'}
+                      onChange={(e) => update('status', e.target.value)}
+                    >
+                      {[...new Set([editing.status || 'draft',
+                        'draft',
+                        'active',
+                        'paused',
+                        'completed',
+                        'archived',
+                      ])].map((value) => (
+                        <option key={value}>{value}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Planned date
+                    <input
+                      type="datetime-local"
+                      value={
+                        editing.scheduled_at
+                          ? editing.scheduled_at.slice(0, 16)
+                          : ''
+                      }
+                      onChange={(e) =>
+                        update('scheduled_at', e.target.value || null)
+                      }
+                    />
+                  </label>
+                </details>
+              </>
+            )}
+            {step === 1 && (
+              <>
+                <h3>What would you like to say?</h3>
+                <label>
+                  Email subject
+                  <input
+                    value={editing.payload.subject || ''}
+                    maxLength={300}
+                    onChange={(e) => update('subject', e.target.value, true)}
+                  />
+                </label>
+                <label>
+                  Message
+                  <textarea
+                    rows={8}
+                    value={editing.payload.body || ''}
+                    onChange={(e) => update('body', e.target.value, true)}
+                  />
+                </label>
+                <label>
+                  Button label
+                  <input
+                    value={editing.payload.cta || ''}
+                    onChange={(e) => update('cta', e.target.value, true)}
+                  />
+                </label>
+                <label>
+                  Button destination
+                  <input
+                    type="url"
+                    placeholder="https://festio.events/…"
+                    value={editing.payload.cta_url || ''}
+                    onChange={(e) => update('cta_url', e.target.value, true)}
+                  />
+                </label>
+                {editing.payload.cta_url &&
+                  !campaignLinkValid(editing.payload.cta_url) && (
+                    <p className="mg-notice">Use a full HTTPS destination.</p>
+                  )}
+                <p>
+                  Keep the purpose clear and the next step useful. Review the
+                  actual test email before sending.
+                </p>
+              </>
+            )}
+            {step === 2 && (
+              <>
+                <h3>Check it before it reaches people.</h3>
+                <p>
+                  These actions save the current draft. Checking the audience
+                  sends no email. Sending a test emails only your authenticated
+                  Marketing address.
+                </p>
+                <div className="mg-test-actions">
+                  <button
+                    className="mg-button"
+                    disabled={busy || !canSend}
+                    onClick={() => action('audience')}
+                  >
+                    Check eligible recipients
+                  </button>
+                  <button
+                    className="mg-button primary"
+                    disabled={busy || !canSend}
+                    onClick={() => action('test')}
+                  >
+                    Send test to my email
+                  </button>
+                </div>
+                {!canSend && (
+                  <p>
+                    Your role can prepare drafts. A manager must check the
+                    audience, test and send.
+                  </p>
+                )}
+                {audience && (
+                  <div className="mg-audience-preview">
+                    <strong>{audience.eligible} eligible recipients</strong>
+                    <p>
+                      Showing up to {audience.recipients?.length || 0} matched
+                      recipients.
+                    </p>
+                    <ul>
+                      {(audience.recipients || [])
+                        .slice(0, 10)
+                        .map((person) => (
+                          <li key={person.id}>
+                            {person.name || person.email} · {person.email}
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                )}
+                <p>
+                  {tested
+                    ? 'Test accepted by the provider. Confirm its appearance in your inbox.'
+                    : 'A successful test is required before the Send action becomes available.'}
+                </p>
+              </>
+            )}
+            {step === 3 && (
+              <>
+                <h3>One last look.</h3>
+                <div className="mg-review">
+                  <span>CAMPAIGN</span>
+                  <h4>{editing.name}</h4>
+                  <span>EMAIL SUBJECT</span>
+                  <h4>{editing.payload.subject}</h4>
+                  <p className="mg-message-copy">{editing.payload.body}</p>
+                  <p>
+                    <b>Audience:</b>{' '}
+                    {segments.find(
+                      (segment) =>
+                        segment.id ===
+                          (editing.payload.segment_id ||
+                            editing.payload.audience) ||
+                        segment.name === editing.payload.audience,
+                    )?.name || editing.payload.audience}
+                  </p>
+                  <p>
+                    <b>Last audience check:</b>{' '}
+                    {audience
+                      ? `${audience.eligible} eligible people`
+                      : 'Not checked'}
+                  </p>
+                  <p>
+                    <b>Test:</b>{' '}
+                    {tested
+                      ? 'Provider accepted · check your inbox'
+                      : 'Not completed'}
+                  </p>
+                </div>
+                <p>
+                  Recipients are checked again immediately before sending.
+                  Provider acceptance and confirmed delivery are different
+                  outcomes.
+                </p>
+                <button
+                  className="mg-button primary"
+                  disabled={
+                    busy ||
+                    !canSend ||
+                    !tested ||
+                    !audience?.eligible ||
+                    !validAudience ||
+                    !validMessage
+                  }
+                  onClick={() => action('send')}
+                >
+                  {busy ? 'Working…' : 'Review recipients & send campaign'}
+                </button>
+              </>
+            )}
+          </div>
+          <footer className="mg-editor-footer">
+            <button
+              className="mg-button"
+              disabled={busy || step === 0}
+              onClick={() => setStep((value) => value - 1)}
+            >
+              ← Back
+            </button>
+            <button
+              className="mg-button"
+              disabled={busy || !editing.name.trim()}
+              onClick={() => action('save')}
+            >
+              Save draft
+            </button>
+            {step < 3 && (
+              <button
+                className="mg-button primary"
+                disabled={
+                  busy ||
+                  (step === 0 && !validAudience) ||
+                  (step === 1 && !validMessage)
+                }
+                onClick={() => setStep((value) => value + 1)}
+              >
+                Continue →
+              </button>
+            )}
+          </footer>
+        </div>
+      ) : (
+        <>
+          {rows === null && !error && <p role="status">Loading campaigns…</p>}
+          <div className="mg-campaign-grid">
+            {(rows || []).map((row) => (
+              <article className="mg-panel" key={row.id}>
+                <span className="mg-eyebrow">
+                  {row.status === 'active'
+                    ? 'Active record · sending checks still apply'
+                    : row.status || 'Draft'}
+                </span>
+                <h3>{row.name}</h3>
+                <p>{row.payload?.subject || 'No email subject added yet.'}</p>
+                <small>{row.owner_email || 'No owner assigned'}</small>
+                {row.payload?.last_executed_at && (
+                  <p>
+                    Last run: {row.payload.sent || 0} provider accepted ·{' '}
+                    {row.payload.failed || 0} failed or skipped
+                  </p>
+                )}
+                {canEdit ? (
+                  <button className="mg-button" onClick={() => open(row)}>
+                    Open campaign →
+                  </button>
+                ) : (
+                  <p>Read-only access</p>
+                )}
+                {canSend&&<button className="mg-link" disabled={busy} onClick={async()=>{if(!window.confirm('Delete this campaign? This cannot undo messages already sent.'))return;setBusy(true);setError('');try{await api.marketingDeleteRecord('campaigns',row.id);await load();setNotice('Campaign deleted.')}catch(e){setError(e.message)}finally{setBusy(false)}}}>Delete campaign</button>}
+              </article>
+            ))}
+          </div>
+          {rows?.length === 0 && (
+            <div className="mg-empty">
+              <h3>Your first campaign starts with an audience.</h3>
+              <p>
+                Create a campaign to choose people, write the email and review
+                it before sending.
+              </p>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  )
+}
+
 export default function MarketingPage() {
   const theme = useTheme()
   const menuButton = React.useRef(null)
   const [mobileMenu, setMobileMenu] = useState(false)
-  const [expandedGroups, setExpandedGroups] = useState({ onboarding: true })
-  const [pageParams, setPageParams] = useSearchParams();
-  const [tab, setTabState] = useState(pageParams.get("tab") || "dashboard"),
+  const [dashError, setDashError] = useState('')
+  const [commerce, setCommerce] = useState(null)
+  const [pageParams, setPageParams] = useSearchParams()
+  const [tab, setTabState] = useState(pageParams.get('tab') || 'dashboard'),
     [me, setMe] = useState(null),
     [dash, setDash] = useState(null),
-    [error, setError] = useState(""),
-    [message, setMessage] = useState(""),
+    [error, setError] = useState(''),
+    [message, setMessage] = useState(''),
     [automationQueue, setAutomationQueue] = useState(null),
-    [automationRunning, setAutomationRunning] = useState(false);
-  const now = useTick();
+    [automationRunning, setAutomationRunning] = useState(false)
+  const now = useTick()
+  function reloadDashboard() {
+    setDashError('')
+    api
+      .marketingDashboard()
+      .then(setDash)
+      .catch((e) => setDashError(e.message || 'The overview could not load.'))
+    api
+      .marketingCommerceMetrics()
+      .then(setCommerce)
+      .catch(() => setCommerce(null))
+  }
   useEffect(() => {
     api
       .marketingMe()
       .then(setMe)
-      .catch((e) => setError(e.message));
-    api
-      .marketingDashboard()
-      .then(setDash)
-      .catch(() => {});
-  }, []);
+      .catch((e) => setError(e.message))
+    reloadDashboard()
+  }, [])
   const tabs = useMemo(
     () => [
-      ["dashboard", "Overview"],
-      ["leads", "Clients"],
-      ["handoffs", "Replies & follow-up"],
-      ["tags", "Tags"],
+      ['dashboard', 'Today'],
+      ['leads', 'People'],
+      ['handoffs', 'Follow-ups'],
+      ['tags', 'Labels'],
+      ['messages', 'Messages'],
+      ['settings', 'Settings'],
       ...MODULE_TABS,
-      ["analytics", "Analytics"],
-      ["preferences", "Preferences"],
-      ["help", "Help"],
-      ...(me?.role === "superadmin"
+      ['analytics', 'Analytics'],
+      ['preferences', 'Preferences'],
+      ['help', 'Help'],
+      ...(me?.role === 'superadmin'
         ? [
-            ["social-settings", "Social settings"],
-            ["access", "Staff access"],
-            ["audit", "Audit history"],
+            ['social-settings', 'Social settings'],
+            ['access', 'Staff access'],
+            ['audit', 'Audit history'],
           ]
         : []),
     ],
     [me],
-  );
+  )
   const groups = useMemo(() => marketingGroups(tabs), [tabs])
   const currentTab = marketingTab(pageParams.get('tab') || 'dashboard', tabs)
-  useEffect(() => { setTabState(currentTab); setMobileMenu(false); const group = groups.find(group => group.ids.includes(currentTab)); if (group) setExpandedGroups(previous => ({ ...previous, [group.id]: true })) }, [currentTab, groups])
+  const activeGroup = groups.find((group) => group.ids.includes(currentTab))
+  useEffect(() => {
+    setTabState(currentTab)
+    setMobileMenu(false)
+  }, [currentTab])
   useEffect(() => {
     if (!mobileMenu) return
-    const close = event => { if (event.key === 'Escape') { setMobileMenu(false); menuButton.current?.focus() } }
+    const close = (event) => {
+      if (event.key === 'Escape') {
+        setMobileMenu(false)
+        menuButton.current?.focus()
+      }
+    }
     document.addEventListener('keydown', close)
     return () => document.removeEventListener('keydown', close)
   }, [mobileMenu])
-  const setTab = (next) => {
-    setTabState(next);
-    setPageParams({ tab: marketingTab(next, tabs) });
-    setMobileMenu(false);
-  };
+  const setTab = (next, filters = {}) => {
+    setTabState(next)
+    setPageParams({ tab: marketingTab(next, tabs), ...filters })
+    setMobileMenu(false)
+  }
   if (error)
     return (
-      <main className="mk-app mk-access-error"><section className="mk-panel">
-        <h1 className="text-xl font-bold">Client onboarding & growth</h1>
-        <p className="mt-3 text-slate-500">{error}</p>
-        <Link className="mt-5 inline-block text-teal-700" to="/">
-          Return to Festio
-        </Link>
-      </section></main>
-    );
-  if (!me) return <main className="mk-app mk-access-error" role="status">Loading Marketing…</main>;
+      <main className="mk-app mk-access-error">
+        <section className="mk-panel">
+          <h1 className="text-xl font-bold">Marketing</h1>
+          <p className="mt-3 text-slate-500">{error}</p>
+          <Link className="mt-5 inline-block text-teal-700" to="/">
+            Return to Festio
+          </Link>
+        </section>
+      </main>
+    )
+  if (!me)
+    return (
+      <main className="mk-app mk-access-error" role="status">
+        Loading Marketing…
+      </main>
+    )
   return (
     <div className="mk-app">
-      {mobileMenu && <button className="mk-nav-backdrop" aria-label="Close Marketing navigation" onClick={() => setMobileMenu(false)} />}
-      <aside id="marketing-navigation" className={`mk-sidebar${mobileMenu ? ' is-open' : ''}`}>
-        <button className="mk-mobile-close" onClick={() => setMobileMenu(false)}>Close navigation</button>
+      {mobileMenu && (
+        <button
+          className="mk-nav-backdrop"
+          aria-label="Close Marketing navigation"
+          onClick={() => setMobileMenu(false)}
+        />
+      )}
+      <aside
+        id="marketing-navigation"
+        className={`mk-sidebar${mobileMenu ? ' is-open' : ''}`}
+      >
+        <button
+          className="mk-mobile-close"
+          onClick={() => setMobileMenu(false)}
+        >
+          Close navigation
+        </button>
         <Link className="mk-brand" to="/admin-redesign">
           <b>F</b>
           <span>
@@ -2964,16 +4109,33 @@ export default function MarketingPage() {
           </span>
         </Link>
         <nav aria-label="Marketing workspace navigation">
-          {groups.map(group => {
-            const active = group.tabs.some(([id]) => id === tab)
-            const expanded = expandedGroups[group.id] ?? active
-            return <section className="mk-nav-group" key={group.id}>
-              <button className="mk-nav-group-toggle" aria-expanded={expanded} aria-controls={`marketing-group-${group.id}`} onClick={() => setExpandedGroups(previous => ({ ...previous, [group.id]: !expanded }))}>{group.label}<span aria-hidden="true">{expanded ? '−' : '+'}</span></button>
-              <div id={`marketing-group-${group.id}`} hidden={!expanded}>{group.tabs.map(([id,label]) => <button key={id} onClick={() => setTab(id)} className={tab === id ? 'active' : ''} aria-current={tab === id ? 'page' : undefined}><i aria-hidden="true">{NAV_ICONS[id] || '◫'}</i><span>{label}</span></button>)}</div>
-            </section>
-          })}
+          {groups.map((group) => (
+            <button
+              key={group.id}
+              onClick={() => setTab(group.tabs[0][0])}
+              className={`mg-primary-link${activeGroup?.id === group.id ? ' active' : ''}`}
+              aria-current={activeGroup?.id === group.id ? 'page' : undefined}
+            >
+              <i aria-hidden="true">
+                {
+                  {
+                    today: '◷',
+                    people: '♧',
+                    messages: '✉',
+                    followups: '↗',
+                    results: '▥',
+                    settings: '⚙',
+                  }[group.id]
+                }
+              </i>
+              <span>{group.label}</span>
+            </button>
+          ))}
         </nav>
-        <p className="mk-scope-note">Client marketing · guest invitations and event messages belong in the event workspace.</p>
+        <p className="mk-scope-note">
+          Client marketing · guest invitations and event messages belong in the
+          event workspace.
+        </p>
         <div className="mk-sidebar-foot">
           <span>FG</span>
           <div>
@@ -2986,57 +4148,137 @@ export default function MarketingPage() {
         <header className="mk-topbar">
           <div>
             <span>Workspace</span>
-            <h1>{tabs.find(([id]) => id === tab)?.[1] || "Marketing"}</h1>
-            <p className="mk-subtitle">{TAB_DESCRIPTIONS[tab] || 'Plan and review your client marketing in one workspace.'}</p>
+            <h1>{activeGroup?.label || 'Marketing'}</h1>
+            <p className="mk-subtitle">
+              {{
+                today:
+                  'Your next actions, from the first conversation to the first event.',
+                people: 'Organizer records, next steps and lead capture.',
+                messages: 'Campaigns and automatic welcome journeys.',
+                followups: 'Conversations and commitments that need a person.',
+                results:
+                  'See what becomes a registration, an event and a paying organizer.',
+                settings:
+                  'Audience setup, team access and workspace configuration.',
+              }[activeGroup?.id] || TAB_DESCRIPTIONS[tab]}
+            </p>
           </div>
           <div className="mk-top-actions">
-            <button ref={menuButton} className="mk-mobile-menu" aria-controls="marketing-navigation" aria-expanded={mobileMenu} onClick={() => setMobileMenu(value => !value)}>Menu</button>
-            {theme && <button className="mk-theme-switch" onClick={theme.toggle} aria-label={theme.dark ? 'Switch to light theme' : 'Switch to dark theme'}>{theme.dark ? 'Light theme' : 'Dark theme'}</button>}
+            <button
+              ref={menuButton}
+              className="mk-mobile-menu"
+              aria-controls="marketing-navigation"
+              aria-expanded={mobileMenu}
+              onClick={() => setMobileMenu((value) => !value)}
+            >
+              Menu
+            </button>
+            {theme && (
+              <button
+                className="mk-theme-switch"
+                onClick={theme.toggle}
+                aria-label={
+                  theme.dark ? 'Switch to light theme' : 'Switch to dark theme'
+                }
+              >
+                {theme.dark ? 'Light theme' : 'Dark theme'}
+              </button>
+            )}
             <button onClick={() => setTab('help')}>Help</button>
             <span>
               {new Date().toLocaleDateString(undefined, {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
               })}
             </span>
           </div>
         </header>
         <div className={`mk-content mk-view-${tab}`}>
+          {activeGroup?.tabs.length > 1 && (
+            <nav
+              className="mg-subnav"
+              aria-label={`${activeGroup.label} tools`}
+            >
+              {activeGroup.tabs.map(([id, label]) => (
+                <button
+                  key={id}
+                  onClick={() => setTab(id)}
+                  aria-current={tab === id ? 'page' : undefined}
+                >
+                  {{
+                    campaigns: 'Email campaigns',
+                    sequences: 'Welcome journeys',
+                    forms: 'Capture interest',
+                    content: 'Publishing',
+                    segments: 'Saved audiences',
+                    preferences: 'Preferences',
+                    analytics: 'Performance',
+                    handoffs: 'Conversations',
+                    tasks: 'Follow-up tasks',
+                    experiments: 'Experiments',
+                    referrals: 'Referrals',
+                  }[id] || label}
+                </button>
+              ))}
+            </nav>
+          )}
           <MarketingErrorBoundary key={tab}>
-            {tab === "dashboard" ? (
-              <Dashboard
+            {tab === 'dashboard' ? (
+              <GrowthToday
                 data={dash}
-                message={message}
+                commerce={commerce}
+                error={dashError}
+                reload={reloadDashboard}
                 navigate={setTab}
-                run={async () => {
-                  try {
-                    const leads = await api.marketingLeads('follow_up=due&consent=true');
-                    setAutomationQueue(onboardingPreviewLeads(leads, dash?.automation?.runtime));
-                  } catch (error) {
-                    setMessage(error.message);
-                  }
-                }}
+                advanced={
+                  <Dashboard
+                    data={dash}
+                    message={message}
+                    navigate={setTab}
+                    run={async () => {
+                      try {
+                        const leads = await api.marketingLeads(
+                          'follow_up=due&consent=true',
+                        )
+                        setAutomationQueue(
+                          onboardingPreviewLeads(
+                            leads,
+                            dash?.automation?.runtime,
+                          ),
+                        )
+                      } catch (error) {
+                        setMessage(error.message)
+                      }
+                    }}
+                  />
+                }
               />
-            ) : tab === "leads" ? (
-              <Leads />
-            ) : tab === "access" ? (
+            ) : tab === 'messages' ? (
+              <MarketingMessages navigate={setTab} />
+            ) : tab === 'settings' ? (
+              <MarketingSettings navigate={setTab} tabs={tabs} />
+            ) : tab === 'campaigns' ? (
+              <CampaignStudio me={me} />
+            ) : tab === 'leads' ? (
+              <Leads key={pageParams.toString()} />
+            ) : tab === 'access' ? (
               <Access />
-            ) : tab === "handoffs" ? (
-              <OrganizerHandoffs me={me}/>
-            ) : tab === "tags" ? (
+            ) : tab === 'handoffs' ? (
+              <OrganizerHandoffs me={me} />
+            ) : tab === 'tags' ? (
               <Tags />
-            ) : tab === "analytics" ? (
-              <Analytics />
-            ) : tab === "social-settings" ? (
+            ) : tab === 'analytics' ? (
+              <Analytics overview={dash} commerce={commerce} />
+            ) : tab === 'social-settings' ? (
               <SocialSettings />
-            ) : tab === "audit" ? (
+            ) : tab === 'audit' ? (
               <Audit />
-            ) : tab === "preferences" ? (
+            ) : tab === 'preferences' ? (
               <Preferences />
-            ) : tab === "help" ? (
+            ) : tab === 'help' ? (
               <MarketingHelp />
-            ) : tab === "sequences" ? (
+            ) : tab === 'sequences' ? (
               <SequenceStudio />
             ) : (
               <Module module={tab} />
@@ -3045,41 +4287,93 @@ export default function MarketingPage() {
         </div>
       </main>
       {automationQueue !== null && (
-        <div className="mk-drawer-backdrop" onClick={() => !automationRunning && setAutomationQueue(null)}>
-          <aside className="mk-drawer" style={{maxWidth:'560px'}} onClick={(e) => e.stopPropagation()}>
+        <div
+          className="mk-drawer-backdrop"
+          onClick={() => !automationRunning && setAutomationQueue(null)}
+        >
+          <aside
+            className="mk-drawer"
+            style={{ maxWidth: '560px' }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <header>
               <div>
                 <span className="mk-drawer-eyebrow">AUTOMATION PREVIEW</span>
                 <h2>Ready to send</h2>
-                <p>{automationQueue.length === 0 ? 'No leads are due right now.' : `${automationQueue.length} eligible candidate${automationQueue.length !== 1 ? 's' : ''}. Consent, current event state and message limits are checked again before sending.`}</p>
+                <p>
+                  {automationQueue.length === 0
+                    ? 'No leads are due right now.'
+                    : `${automationQueue.length} eligible candidate${automationQueue.length !== 1 ? 's' : ''}. Consent, current event state and message limits are checked again before sending.`}
+                </p>
               </div>
-              <button onClick={() => !automationRunning && setAutomationQueue(null)}>Close</button>
+              <button
+                onClick={() => !automationRunning && setAutomationQueue(null)}
+              >
+                Close
+              </button>
             </header>
             {automationQueue.length > 0 && (
-              <div style={{overflowX:'auto',margin:'0 0 1rem'}}>
-                <table style={{width:'100%',fontSize:'0.82rem',borderCollapse:'collapse'}}>
+              <div style={{ overflowX: 'auto', margin: '0 0 1rem' }}>
+                <table
+                  style={{
+                    width: '100%',
+                    fontSize: '0.82rem',
+                    borderCollapse: 'collapse',
+                  }}
+                >
                   <thead>
-                    <tr style={{borderBottom:'1px solid #e2e8f0',textAlign:'left',color:'#64748b'}}>
-                      <th style={{padding:'6px 8px'}}>Lead</th>
-                      <th style={{padding:'6px 8px'}}>Stage</th>
-                      <th style={{padding:'6px 8px'}}>Sending next</th>
-                      <th style={{padding:'6px 8px'}}>Next follow-up</th>
+                    <tr
+                      style={{
+                        borderBottom: '1px solid #e2e8f0',
+                        textAlign: 'left',
+                        color: '#64748b',
+                      }}
+                    >
+                      <th style={{ padding: '6px 8px' }}>Lead</th>
+                      <th style={{ padding: '6px 8px' }}>Stage</th>
+                      <th style={{ padding: '6px 8px' }}>Sending next</th>
+                      <th style={{ padding: '6px 8px' }}>Next follow-up</th>
                     </tr>
                   </thead>
                   <tbody>
                     {automationQueue.map((lead) => (
-                      <tr key={lead.id} style={{borderBottom:'1px solid #f1f5f9'}}>
-                        <td style={{padding:'7px 8px'}}>
-                          <b style={{display:'block'}}>{lead.name || lead.email}</b>
-                          {lead.name && <small style={{color:'#94a3b8'}}>{lead.email}</small>}
+                      <tr
+                        key={lead.id}
+                        style={{ borderBottom: '1px solid #f1f5f9' }}
+                      >
+                        <td style={{ padding: '7px 8px' }}>
+                          <b style={{ display: 'block' }}>
+                            {lead.name || lead.email}
+                          </b>
+                          {lead.name && (
+                            <small style={{ color: '#94a3b8' }}>
+                              {lead.email}
+                            </small>
+                          )}
                         </td>
-                        <td style={{padding:'7px 8px'}}><span className="mk-stage-pill">{lead.stage.replaceAll('_',' ')}</span></td>
-                        <td style={{padding:'7px 8px',color:'#64748b',fontSize:'0.78rem'}}>
+                        <td style={{ padding: '7px 8px' }}>
+                          <span className="mk-stage-pill">
+                            {lead.stage.replaceAll('_', ' ')}
+                          </span>
+                        </td>
+                        <td
+                          style={{
+                            padding: '7px 8px',
+                            color: '#64748b',
+                            fontSize: '0.78rem',
+                          }}
+                        >
                           {lead.automation
                             ? `Step ${lead.automation.step + 1} of ${lead.automation.total_steps} — ${lead.automation.sequence_name}`
                             : '—'}
                         </td>
-                        <td style={{padding:'7px 8px',color:'#94a3b8',fontSize:'0.78rem'}}>
+                        <td
+                          style={{
+                            padding: '7px 8px',
+                            color: '#94a3b8',
+                            fontSize: '0.78rem',
+                          }}
+                        >
                           {lead.next_follow_up_at
                             ? `${formatCountdown(lead.next_follow_up_at, now)} · ${new Date(lead.next_follow_up_at).toLocaleString()}`
                             : '—'}
@@ -3094,26 +4388,36 @@ export default function MarketingPage() {
               <button
                 disabled={automationRunning || automationQueue.length === 0}
                 onClick={async () => {
-                  setAutomationRunning(true);
+                  setAutomationRunning(true)
                   try {
-                    const r = await api.marketingRunAutomation();
-                    setMessage(r.disabled ? "Automatic sending is disabled. Check the runtime status." : `${r.sent || 0} message(s) accepted by the provider; ${r.failed || 0} failed. Acceptance is separate from delivery.`);
-                    setDash(await api.marketingDashboard());
+                    const r = await api.marketingRunAutomation()
+                    setMessage(
+                      r.disabled
+                        ? 'Automatic sending is disabled. Check the runtime status.'
+                        : `${r.sent || 0} message(s) accepted by the provider; ${r.failed || 0} failed. Acceptance is separate from delivery.`,
+                    )
+                    setDash(await api.marketingDashboard())
                   } catch (error) {
-                    setMessage(error.message);
+                    setMessage(error.message)
                   } finally {
-                    setAutomationRunning(false);
-                    setAutomationQueue(null);
+                    setAutomationRunning(false)
+                    setAutomationQueue(null)
                   }
                 }}
               >
-                {automationRunning ? 'Sending…' : `Confirm — send ${automationQueue.length} email${automationQueue.length !== 1 ? 's' : ''}`}
+                {automationRunning
+                  ? 'Sending…'
+                  : `Confirm — send ${automationQueue.length} email${automationQueue.length !== 1 ? 's' : ''}`}
               </button>
-              <button onClick={() => !automationRunning && setAutomationQueue(null)}>Cancel</button>
+              <button
+                onClick={() => !automationRunning && setAutomationQueue(null)}
+              >
+                Cancel
+              </button>
             </div>
           </aside>
         </div>
       )}
     </div>
-  );
+  )
 }

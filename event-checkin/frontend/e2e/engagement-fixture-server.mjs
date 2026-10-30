@@ -18,6 +18,11 @@ const modules = {
     const consoleWrite = (name, args, result = {ok:true}) => { (window.fixtureConsoleWrites ||= []).push({name,args}); return result; };
     const operation = (name, value) => { (window.fixtureOperationCalls ||= []).push(name); return value; };
     export const api = {
+    listEvents: async () => [{id:'event-one',name:'Academy fundraiser'},{id:'event-two',name:'Academy next occasion'}],
+    listSharedMedia: async eventId => { if(window.fixtureMediaError)throw new Error('Shared files unavailable');return {organization:{id:'org-one',name:'Academy'},assets:window.fixtureMediaAssets ||= [{id:'media-one',title:'Academy logo',filename:'logo.png',url:'/media/help2-event-setup.png',content_type:'image/png',byte_size:1200,width:80,height:40},{id:'media-pdf',title:'Programme',filename:'programme.pdf',url:'/media/festio-onepager.pdf',content_type:'application/pdf',byte_size:2500}]}; },
+    uploadSharedMedia: async (eventId,file) => { (window.fixtureMediaWrites ||= []).push({action:'upload',eventId,name:file.name});const asset={id:'media-uploaded',title:file.name,filename:file.name,url:'/media/help2-org-start.png',content_type:file.type,byte_size:file.size};(window.fixtureMediaAssets ||= []).push(asset);return asset; },
+    renameSharedMedia: async (eventId,id,title) => { (window.fixtureMediaWrites ||= []).push({action:'rename',eventId,id,title});const row=window.fixtureMediaAssets.find(a=>a.id===id);row.title=title;return row; },
+    removeSharedMedia: async (eventId,id) => { (window.fixtureMediaWrites ||= []).push({action:'remove',eventId,id});window.fixtureMediaAssets=window.fixtureMediaAssets.filter(a=>a.id!==id);return {ok:true}; },
     adminAccountsSummary: async () => { if (window.fixtureOperationError) throw new Error('Account snapshot unavailable'); return operation('adminAccountsSummary', [{id:'org-one',name:'Academy',owner_email:'owner@example.test',is_active:true,event_types:[],member_count:1,event_count:3,message_credits_spent:7,created_at:'2026-10-01'}, {id:'org-two',name:'Community',owner_email:'team@example.test',is_active:false,event_types:[],member_count:1,event_count:2,message_credits_spent:1,created_at:'2026-10-02'}]); },
     adminOverview: async () => operation('adminOverview', consoleRead('overview', [])),
     adminListAccounts: async () => operation('adminListAccounts', consoleRead('accounts', [])),

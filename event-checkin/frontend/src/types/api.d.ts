@@ -214,6 +214,10 @@ export interface Body_upload_material_api_events__event_id__presenter_materials_
   visibility?: string
 }
 
+export interface Body_upload_media_api_events__event_id__media_library_post {
+  file: string
+}
+
 export interface Body_upload_partner_logo_api_events__event_id__partners_upload_logo_post {
   file: string
 }
@@ -2160,6 +2164,10 @@ export interface MealProgressIn {
 export interface MealTrackingIn {
   expected_mode: 'headcount' | 'orders' | 'both'
   tracking_mode: 'headcount' | 'orders' | 'both'
+}
+
+export interface MediaTitle {
+  title: string
 }
 
 export interface MeetingInput {

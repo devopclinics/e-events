@@ -100,7 +100,7 @@ const modules = {
   app: `export const setPreferredView = () => {}; export const getPreferredView = () => '/admin';`,
 }
 const aliases = {
-  '../context/AuthContext': 'auth', '../api': 'api', '../../api': 'api', '../firebase': 'firebase',
+  '../context/AuthContext': 'auth', '../../context/AuthContext': 'auth', '../api': 'api', '../../api': 'api', '../firebase': 'firebase',
   'firebase/auth': 'firebaseAuth', '../auth/googleSignIn': 'google', '../App': 'app',
 }
 const definitions = {

@@ -10,6 +10,7 @@ import LandingPage from '../../src/pages/LandingPage'
 import LandingRedesignPage from '../../src/pages/LandingRedesignPage'
 import PublicTicketsPage from '../../src/pages/PublicTicketsPage'
 import ConsolePage from '../../src/pages/ConsolePage'
+import MediaLibrary from '../../src/components/media-library/MediaLibrary'
 import MeetingSharePanel from '../../src/components/MeetingSharePanel'
 import MeetingInvitationDocument from '../../src/components/MeetingInvitationDocument'
 import '../../src/pages/MeetingsPage.css'
@@ -32,12 +33,13 @@ function InvitationDocumentFixture() {
 function Fixture() {
   return <BrowserRouter><ThemeProvider><AuthProvider>
     <nav aria-label="Fixture navigation" style={{ position: 'fixed', top: 0, left: 0, zIndex: 100, padding: 4, background: 'white' }}>
-      {[['/', 'Home'], ['/pricing', 'Pricing'], ['/admin-redesign', 'Admin'], ['/register', 'Signup'], ['/marketing', 'Marketing'], ['/scan/private-token', 'Guest'], ['/landing-legacy', 'Legacy'], ['/tickets', 'Discover'], ['/platform-operations', 'Operations']].map(([to, text]) => <Link key={to} to={to} style={{ margin: 6 }}>{text}</Link>)}
+      {[['/', 'Home'], ['/pricing', 'Pricing'], ['/admin-redesign', 'Admin'], ['/register', 'Signup'], ['/marketing', 'Marketing'], ['/scan/private-token', 'Guest'], ['/landing-legacy', 'Legacy'], ['/tickets', 'Discover'], ['/platform-operations', 'Operations'], ['/media-studio', 'Media']].map(([to, text]) => <Link key={to} to={to} style={{ margin: 6 }}>{text}</Link>)}
     </nav>
     <Routes>
       <Route path="/" element={<LandingRedesignPage />} />
       <Route path="/invitation-document" element={<InvitationDocumentFixture />} />
       <Route path="/meeting-share" element={<MeetingShareFixture />} />
+      <Route path="/media-studio" element={<MediaLibrary />} />
       <Route path="/platform-operations" element={<ConsolePage operations />} />
       <Route path="/tickets" element={<PublicTicketsPage />} />
       <Route path="/landing-legacy" element={<LandingPage />} />

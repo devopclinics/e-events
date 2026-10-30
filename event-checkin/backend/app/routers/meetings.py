@@ -575,9 +575,8 @@ def private_headers(response):
     response.headers["X-Robots-Tag"] = "noindex, nofollow"
 
 
-@public_router.get("/shared/{token}")
-async def shared_invitation(token: str, response: Response, db: AsyncSession = Depends(get_db)):
-    private_headers(response)
+async def resolve_shared_invitation(token: str, db: AsyncSession):
+    """Validate a reusable invitation without rendering or changing any state."""
     try:
         if len(settings.meetings_signing_key) < 32:
             raise ValueError()
@@ -590,6 +589,13 @@ async def shared_invitation(token: str, response: Response, db: AsyncSession = D
     org = await db.get(Organization, m.org_id) if m else None
     if not m or not org or not org.is_active or m.status == "cancelled" or m.revision != claims["revision"]:
         raise HTTPException(410, "This invitation changed or was cancelled. Ask the organizer for the latest link.")
+    return m
+
+
+@public_router.get("/shared/{token}")
+async def shared_invitation(token: str, response: Response, db: AsyncSession = Depends(get_db)):
+    private_headers(response)
+    m = await resolve_shared_invitation(token, db)
     data = {key: m.draft[key] for key in ["title", "agenda", "start", "end", "timezone", "location_type", "location", "video_url", "invitation_style"] if key in m.draft}
     return {"meeting": data, "html": invitation(data, web=True, shared=True)[1]}
 

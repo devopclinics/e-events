@@ -1027,20 +1027,14 @@ export default function LandingRedesignPage() {
                 <span className="lr-brand-mark">F</span>Festio
               </a>
               <p>
-                Invitations, individual guest passes, and live check-in, all
-                connected to one guest record.
-              </p>
-              <p>
-                <strong>
-                  FestioEvents is an event-management platform operated by FOHMA
-                  Solutions LLC.
-                </strong>
+                Thoughtful tools for planning events, welcoming guests, and
+                bringing people together.
               </p>
             </div>
             <div className="lr-foot-cols">
               <div className="lr-foot-col">
                 <strong>Product</strong>
-                <a href="#journey">Guest journey</a>
+                <a href="#journey">Guest experience</a>
                 <a href="#design-studio">Design Studio</a>
                 <a href="#tools">Plan &amp; run events</a>
                 <Link to="/pricing">Pricing</Link>
@@ -1056,9 +1050,9 @@ export default function LandingRedesignPage() {
               </div>
               <div className="lr-foot-col">
                 <strong>Legal</strong>
-                <Link to="/privacy">Privacy</Link>
-                <Link to="/terms">Terms</Link>
-                <Link to="/sms-policy">SMS terms</Link>
+                <Link to="/privacy">Privacy Policy</Link>
+                <Link to="/terms">Terms of Service</Link>
+                <Link to="/sms-policy">SMS Terms</Link>
               </div>
             </div>
           </div>
@@ -1067,7 +1061,7 @@ export default function LandingRedesignPage() {
               &copy; {new Date().getFullYear()} FestioEvents. Operated by FOHMA
               Solutions LLC.
             </span>
-            <span>{CONTACT_EMAIL}</span>
+            <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
           </div>
         </div>
       </footer>

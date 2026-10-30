@@ -651,6 +651,20 @@
   max-width: 1240px;
   padding: 0 40px;
 }
+/* Keep the legal line and contact readable at every viewport width. */
+.fh-home .lr-foot-bottom {
+  align-items: center;
+  gap: 16px 32px;
+  line-height: 1.7;
+}
+.fh-home .lr-foot-bottom a {
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.fh-home .lr-foot-bottom a:hover {
+  color: var(--ink);
+}
 .fh-home .lr-section {
   padding: 45px 0;
 }

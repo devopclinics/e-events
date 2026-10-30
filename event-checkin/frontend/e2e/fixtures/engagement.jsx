@@ -11,6 +11,7 @@ import LandingRedesignPage from '../../src/pages/LandingRedesignPage'
 import PublicTicketsPage from '../../src/pages/PublicTicketsPage'
 import ConsolePage from '../../src/pages/ConsolePage'
 import MeetingSharePanel from '../../src/components/MeetingSharePanel'
+import MeetingInvitationDocument from '../../src/components/MeetingInvitationDocument'
 import '../../src/pages/MeetingsPage.css'
 import '../../src/index.css'
 
@@ -19,11 +20,14 @@ function MeetingShareFixture() {
   const meeting = { id: 'sample-meeting', status, draft: { video_url: 'https://meet.example.test/team' }, attendees: [{ id: 'ada', name: 'Ada', email: 'ada@example.test', active: true }, { id: 'sam', name: 'Sam', email: 'sam@example.test', active: true }] }
   return <main className="mt-workspace" style={{ paddingTop: 70 }}>
     {['draft', 'scheduled', 'cancelled'].map(value => <button key={value} onClick={() => setStatus(value)}>{value}</button>)}
-    <MeetingSharePanel key={status} meeting={meeting} client={{ meetingAttendeeLink: async (id, attendee) => {
+    <MeetingSharePanel key={status} meeting={meeting} client={{ meetingSharedLink: async () => ({url:'https://example.test/meeting-invitation/shared'}), meetingAttendeeLink: async (id, attendee) => {
       (window.fixtureMeetingLinks ||= []).push({ id, attendee })
       return { url: `https://example.test/meeting-response/${attendee}-private` }
     } }} />
   </main>
+}
+function InvitationDocumentFixture() {
+  return <main style={{maxWidth:650,margin:'50px auto'}}><MeetingInvitationDocument html={'<!doctype html><html><body style="margin:0"><div style="padding:30px;background:#183e3a;color:white"><h1>Project catch-up</h1><p>Hello Ada,</p><a href="https://meet.example.test/team" target="_blank" rel="noopener noreferrer">JOIN ONLINE</a><p style="height:600px">Your invitation</p><a href="#meeting-reply">View invitation &amp; respond</a></div><script>parent.fixtureUnsafeScriptRan=true</script></body></html>'} /><section id="meeting-reply" tabIndex={-1}><h2>Will you attend, Ada?</h2><button>Accept</button></section></main>
 }
 function Fixture() {
   return <BrowserRouter><ThemeProvider><AuthProvider>
@@ -32,6 +36,7 @@ function Fixture() {
     </nav>
     <Routes>
       <Route path="/" element={<LandingRedesignPage />} />
+      <Route path="/invitation-document" element={<InvitationDocumentFixture />} />
       <Route path="/meeting-share" element={<MeetingShareFixture />} />
       <Route path="/platform-operations" element={<ConsolePage operations />} />
       <Route path="/tickets" element={<PublicTicketsPage />} />

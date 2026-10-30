@@ -52626,6 +52626,46 @@
         ]
       }
     },
+    "/api/meeting-responses/shared/{token}": {
+      "get": {
+        "operationId": "shared_invitation_api_meeting_responses_shared__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Shared Invitation",
+        "tags": [
+          "meeting-responses"
+        ]
+      }
+    },
     "/api/meeting-responses/{token}": {
       "get": {
         "operationId": "response_preview_api_meeting_responses__token__get",
@@ -53791,6 +53831,51 @@
           }
         ],
         "summary": "Send",
+        "tags": [
+          "meetings"
+        ]
+      }
+    },
+    "/api/meetings/{mid}/share-link": {
+      "post": {
+        "operationId": "share_invitation_api_meetings__mid__share_link_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mid",
+            "required": true,
+            "schema": {
+              "title": "Mid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Share Invitation",
         "tags": [
           "meetings"
         ]

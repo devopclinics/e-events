@@ -553,6 +553,7 @@ function AppRoutes() {
       <Route path="/festiome-redesign" element={<ProtectedRoute><FestioMeRedesignPage /></ProtectedRoute>} />
       <Route path="/planner-redesign" element={<ProtectedRoute><PlannerRedesignPage /></ProtectedRoute>} />
       <Route path="/meetings" element={<ProtectedRoute><MeetingsPage /></ProtectedRoute>} />
+      <Route path="/meeting-invitation/:token" element={<MeetingResponsePage reusable />} />
       <Route path="/meeting-response/:token" element={<MeetingResponsePage />} />
       <Route path="/conference-center" element={<ProtectedRoute paidOnly><ConferenceCenterPage /></ProtectedRoute>} />
       <Route path="/live-redesign" element={<ProtectedRoute><FestioLiveRedesignPage /></ProtectedRoute>} />

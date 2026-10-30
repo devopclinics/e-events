@@ -466,11 +466,13 @@ test('event discovery distinguishes retryable errors from an empty catalog and w
 })
 
 
-test('meeting sharing exposes saved join links with clipboard failure recovery', async ({ page }) => {
+test('meeting sharing exposes reusable invitation links with clipboard failure recovery', async ({ page }) => {
   await setup(page)
   await page.evaluate(() => { history.pushState({}, '', '/meeting-share'); window.dispatchEvent(new PopStateEvent('popstate')) })
   const share = page.getByRole('region', { name: 'Share meeting', exact: true })
-  await expect(share.getByLabel('Saved meeting join link')).toHaveValue('https://meet.example.test/team')
+  await expect(share.getByLabel('Saved meeting join link')).toHaveCount(0)
+  await share.getByRole('button', {name:'Create reusable invitation link'}).click()
+  await expect(share.getByLabel('Reusable invitation link')).toHaveValue('https://example.test/meeting-invitation/shared')
   await expect(share.getByText(/Personal RSVP links become available/)).toBeVisible()
   await page.evaluate(() => { Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new Error('denied') } } }) })
   await share.getByRole('button', { name: 'Copy link', exact: true }).click()
@@ -546,4 +548,20 @@ test('platform operations retains platform staff authorization', async ({ page }
   await expect(page).toHaveURL('http://127.0.0.1:4178/')
   await expect(page.getByRole('navigation',{name:'Platform operations',exact:true})).toHaveCount(0)
   expect(await page.evaluate(() => (window.fixtureOperationCalls || []).filter(name => name.startsWith('admin') || name === 'qaChecklistSubmissions'))).toEqual([])
+})
+
+
+test('meeting invitation document keeps join links inside the template and connects personal RSVP controls', async ({ page }) => {
+  await setup(page)
+  await page.evaluate(() => { history.pushState({}, '', '/invitation-document'); window.dispatchEvent(new PopStateEvent('popstate')) })
+  const frame = page.frameLocator('iframe[title="Meeting invitation"]')
+  await expect(frame.getByRole('heading',{name:'Project catch-up'})).toBeVisible()
+  await expect(frame.getByRole('link',{name:'JOIN ONLINE'})).toHaveAttribute('href','https://meet.example.test/team')
+  expect(await page.evaluate(() => window.fixtureUnsafeScriptRan || false)).toBe(false)
+  await frame.getByRole('link',{name:'View invitation & respond'}).click()
+  await expect(page.locator('#meeting-reply')).toBeFocused()
+  for (const width of [320,390,768,1440]) {
+    await page.setViewportSize({width,height:900})
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  }
 })

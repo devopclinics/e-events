@@ -153,7 +153,7 @@ INVITATION_STYLES = {
 }
 
 
-def invitation(data, *, method="REQUEST", response_url=None, recipient_name=None, purpose="invitation"):
+def invitation(data, *, method="REQUEST", response_url=None, recipient_name=None, purpose="invitation", web=False, shared=False):
     subject = ("Cancelled: " if method == "CANCEL" else "You're invited: ") + data["title"]
     ink, accent, soft = INVITATION_STYLES.get(data.get("invitation_style"), INVITATION_STYLES["aurora"])
     start, end = datetime.fromisoformat(data["start"]), datetime.fromisoformat(data["end"])
@@ -178,12 +178,17 @@ def invitation(data, *, method="REQUEST", response_url=None, recipient_name=None
     elif purpose and purpose.startswith("resend:"):
         subject, state = "Your invitation: " + data["title"], "YOUR PERSONAL INVITATION"
     action = ""
-    if method != "CANCEL":
+    if method != "CANCEL" and not shared:
         style = f"display:inline-block;background:{ink};color:#ffffff;padding:15px 23px;border-radius:12px;font-weight:700;text-decoration:none"
         action = (f'<a href="{escape(response_url, quote=True)}" style="{style}">View invitation &amp; respond →</a>' if response_url
                   else f'<span style="{style}">View invitation &amp; respond →</span>')
-    else:
+    elif method == "CANCEL":
         action = '<p style="font-weight:700;color:#9a312d">This meeting has been cancelled.</p>'
+    detail = ("Anyone with this link can view this invitation and join the meeting. Opening it does not record an RSVP." if shared else
+              "Choose Accept, Maybe or Decline below to reply to your organizer." if web else
+              "Your personal invitation includes a calendar attachment and a link to accept, decline or reply maybe. Responses are recorded in Festio.")
+    footer = ("Shared by the meeting organizer. For a personal RSVP link, contact your organizer." if shared else
+              "You received this personal invitation from the meeting organizer. Google/Outlook replies are not synchronized. This personal response link is intended for its named recipient. Responses close 24 hours after the meeting ends.")
     body = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{escape(subject)}</title></head>
 <body style="margin:0;background:#f1f3ef;font-family:Arial,Helvetica,sans-serif;color:#19302e;line-height:1.6">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:24px 12px">
@@ -194,8 +199,8 @@ def invitation(data, *, method="REQUEST", response_url=None, recipient_name=None
 <tr><td style="padding:26px 30px;background:{soft}"><p style="font-size:11px;letter-spacing:2px;font-weight:700;margin:0;color:{ink}">SAVE THE DATE</p><p style="font-size:21px;font-weight:700;margin:7px 0;color:{ink}">{day}</p><p style="margin:0;color:{ink}">{hours}</p><p style="font-size:12px;margin:5px 0 0;color:{ink}">{escape(data["timezone"])}</p></td></tr>
 <tr><td style="padding:28px 30px"><p style="font-size:11px;letter-spacing:2px;font-weight:700;color:{ink};margin:0 0 8px">{'MEETING ACCESS' if data["location_type"] == 'online' else 'MEET US HERE'}</p><p style="margin:0 0 24px;overflow-wrap:anywhere">{access}</p>
 {('<p style="font-size:11px;letter-spacing:2px;font-weight:700;color:'+ink+';margin:0 0 8px">ON THE AGENDA</p><p style="margin:0 0 24px;overflow-wrap:anywhere">'+agenda+'</p>') if agenda else ''}
-{action}<p style="font-size:12px;color:#596e68;margin:18px 0 0">{'Your personal invitation includes a calendar attachment and a link to accept, decline or reply maybe. Responses are recorded in Festio.' if method != 'CANCEL' else 'The attached calendar cancellation updates the original invitation.'}</p></td></tr>
-<tr><td style="padding:20px 30px;border-top:1px solid #e3eae5;color:#596e68;font-size:11px">A meeting made simple. Powered by <strong>Festio</strong>.<br>You received this personal invitation from the meeting organizer. Google/Outlook replies are not synchronized. This personal response link is intended for its named recipient. Responses close 24 hours after the meeting ends.</td></tr>
+{action}<p style="font-size:12px;color:#596e68;margin:18px 0 0">{detail if method != 'CANCEL' else 'The attached calendar cancellation updates the original invitation.'}</p></td></tr>
+<tr><td style="padding:20px 30px;border-top:1px solid #e3eae5;color:#596e68;font-size:11px">A meeting made simple. Powered by <strong>Festio</strong>.<br>{footer}</td></tr>
 </table></td></tr></table></body></html>'''
     return subject, body
 

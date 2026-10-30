@@ -118,7 +118,7 @@ test('authenticated support never falls back to a configured anonymous sales inb
 })
 
 test('scoped workflow rejects invalid support configuration with the exact frontend parser before publication', () => {
-  const workflow = readFileSync(new URL('../../../.github/workflows/release-engagement.yml', import.meta.url), 'utf8')
+  const workflow = readFileSync(new URL('../../../.github/disabled-workflows/release-engagement.yml', import.meta.url), 'utf8')
   const [, script] = workflow.match(/node --input-type=module -e '([^'\n]+chatWidgetConfig[^'\n]+)'/)
   const cases = [
     [env, true],

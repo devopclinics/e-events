@@ -541,7 +541,7 @@ class ConfigurationTests(unittest.TestCase):
 class WorkflowContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.workflow = (ROOT / ".github/workflows/release-engagement.yml").read_text()
+        cls.workflow = (ROOT / ".github/disabled-workflows/release-engagement.yml").read_text()
         cls.dockerfile = (ROOT / "event-checkin/frontend/Dockerfile.scoped-release").read_text()
 
     def test_manual_main_source_and_minimal_permissions(self):
@@ -603,7 +603,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("RUN npm run build", self.dockerfile)
 
     def test_normal_ci_runs_offline_guards_without_registry_or_credentials(self):
-        ci = (ROOT / ".github/workflows/ci.yml").read_text()
+        ci = (ROOT / ".github/disabled-workflows/ci.yml").read_text()
         job = ci.split("  scoped-release-guards:\n", 1)[1]
         self.assertIn("contents: read", job)
         self.assertIn("persist-credentials: false", job)

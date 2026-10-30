@@ -427,7 +427,7 @@ export default function LandingRedesignPage() {
           >
             <a href="#journey">Product</a>
             <a href="#design-studio">Design Studio</a>
-            <a href="#tools">For organizers</a>
+            <a href="#tools">Plan &amp; run events</a>
             <a href="#occasions">Your kind of event</a>
             <Link to="/tickets">Find events</Link>
             <Link to="/pricing">Pricing</Link>
@@ -776,25 +776,20 @@ export default function LandingRedesignPage() {
         </section>
         <section className="band" id="tools" tabIndex={-1}>
           <div className="band-copy">
-            <div className="eyebrow">
-              Beautiful for guests. Powerful for you.
+            <div className="eyebrow">Your event workspace</div>
+            <h2>Plan the details.<br />Run the day with confidence.</h2>
+            <p>Manage the work behind your event, from the first budget to the last guest checked in.</p>
+            <ul className="fh-operations-list">
+              <li><strong>Plan the work</strong><span>Budgets, vendors, timelines, and team tasks.</span></li>
+              <li><strong>Organize your guests</strong><span>Guest lists, RSVPs, seating, and floor plans.</span></li>
+              <li><strong>Sell tickets & send updates</strong><span>Ticket types, orders, and guest communications.</span></li>
+              <li><strong>Welcome guests on the day</strong><span>Individual passes, QR check-in, and live attendance.</span></li>
+            </ul>
+            <div className="fh-operations-actions">
+              <Link className="btn" to={appHome || '/register?redesign=1'}>{user ? 'Open your workspace ↗' : 'Start planning free ↗'}</Link>
+              <Link className="text-link" to="/pricing">View plans & pricing ↗</Link>
             </div>
-            <h2>
-              Behind every effortless event,
-              <br />a plan that works.
-            </h2>
-            <p>
-              Arrange the room. Coordinate your team. Sell tickets, send
-              updates, and keep the moving parts in view.
-            </p>
-            <p>
-              Planner & budgets · Seating & floor plans
-              <br />
-              Ticketing · Messaging · Live check-in
-            </p>
-            <Link className="btn" to="/pricing">
-              Explore plans & tools ↗
-            </Link>
+            <p className="fh-operations-note">Start free. Add paid tools as your event grows.</p>
           </div>
           <div className="floor" aria-label="Illustrative floor plan">
             <div className="stage">THE STAGE</div>
@@ -1047,7 +1042,7 @@ export default function LandingRedesignPage() {
                 <strong>Product</strong>
                 <a href="#journey">Guest journey</a>
                 <a href="#design-studio">Design Studio</a>
-                <a href="#tools">Organizer tools</a>
+                <a href="#tools">Plan &amp; run events</a>
                 <Link to="/pricing">Pricing</Link>
               </div>
               <div className="lr-foot-col">

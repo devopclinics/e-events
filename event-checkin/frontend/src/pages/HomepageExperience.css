@@ -1029,3 +1029,13 @@
     height: 30px;
   }
 }
+
+.fh-home .fh-operations-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; padding:0; margin:24px 0; list-style:none; }
+.fh-home .fh-operations-list li { border-top:1px solid #ffffff30; padding-top:12px; }
+.fh-home .fh-operations-list strong { display:block; font-size:12px; line-height:1.5; color:#fff; margin-bottom:6px; }
+.fh-home .fh-operations-list span { display:block; font-size:12px; line-height:1.7; color:#d4e1d6; }
+.fh-home .fh-operations-actions { display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
+.fh-home .fh-operations-actions .btn { margin-top:0; }
+.fh-home .fh-operations-actions .text-link { color:#eef0d9; text-decoration:underline; text-underline-offset:4px; }
+.fh-home .band-copy .fh-operations-note { font-size:10px; margin-bottom:0; }
+@media(max-width:480px) { .fh-home .fh-operations-list { grid-template-columns:1fr; gap:15px; } }

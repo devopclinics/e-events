@@ -396,7 +396,7 @@ test('homepage mobile menu exposes all links and closes accessibly', async ({ pa
   const toggle = nav.getByRole('button', { name: 'Open navigation menu' })
   await toggle.click()
   await expect(nav.getByRole('link', { name: 'Product', exact: true })).toBeFocused()
-  for (const label of ['Product', 'Design Studio', 'For organizers', 'Your kind of event', 'Find events', 'Pricing']) await expect(nav.getByRole('link', { name: label, exact: true })).toBeVisible()
+  for (const label of ['Product', 'Design Studio', 'Plan & run events', 'Your kind of event', 'Find events', 'Pricing']) await expect(nav.getByRole('link', { name: label, exact: true })).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(toggle).toBeFocused()
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')

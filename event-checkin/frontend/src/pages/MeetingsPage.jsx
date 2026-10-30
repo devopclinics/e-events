@@ -5,6 +5,7 @@ import { normalizeMeetingUrl } from '../lib/meetingUrl.mjs';
 import {meetingStatus,parseMeetingAttendees,mergeMeetingAttendees} from '../lib/meetingWorkspace.mjs';
 import MeetingTimezonePicker from '../components/MeetingTimezonePicker';
 import MeetingSharePanel from '../components/MeetingSharePanel';
+import MeetingInvitationDocument from '../components/MeetingInvitationDocument';
 import RedesignShell from './redesign/RedesignShell';
 import './MeetingsPage.css';
 const newAttendee = () => ({
@@ -339,12 +340,12 @@ export default function MeetingsPage() {
   return <RedesignShell topActive="meetings" eventScoped={false}><MeetingsWorkspace /></RedesignShell>;
 }
 export function MeetingResponsePage({
-  client = api
+  client = api, reusable = false
 }) {
   const {
     token
   } = useParams();
-  const preferencesOnly = new URLSearchParams(window.location.search).has('preferences');
+  const preferencesOnly = !reusable && new URLSearchParams(window.location.search).has('preferences');
   const [data, setData] = useState(null),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
@@ -356,7 +357,7 @@ export function MeetingResponsePage({
     meta.name = 'referrer';
     meta.content = 'no-referrer';
     document.head.append(meta);
-    if (!preferencesOnly) client.meetingResponsePreview(token).then(d => {
+    if (!preferencesOnly) (reusable ? client.meetingSharedPreview(token) : client.meetingResponsePreview(token)).then(d => {
       if (active) setData(d);
     }).catch(e => {
       if (active) setError(e.message);
@@ -365,7 +366,7 @@ export function MeetingResponsePage({
       active = false;
       meta.remove();
     };
-  }, [token, preferencesOnly]);
+  }, [token, preferencesOnly, reusable, client]);
   async function reply(response) {
     setBusy(true);
     setError('');
@@ -382,7 +383,19 @@ export function MeetingResponsePage({
       setBusy(false);
     }
   }
-  return <main className="mt-public" data-style={data?.meeting.invitation_style || 'aurora'}><section className="mt-card"><div className="mt-brand">festio</div><p className="mt-eyebrow">MEETING INVITATION</p>{error && <p role="alert" className="mt-error">{error}</p>}{data ? <><MeetingDetails data={data.meeting} /><h3>Will you attend, {data.name}?</h3><div className="mt-reply">{[['accepted', 'Accept'], ['maybe', 'Maybe'], ['declined', 'Decline']].map(([value, label]) => <button key={value} disabled={busy} className={data.response === value ? 'mt-primary' : ''} onClick={() => reply(value)}>{label}</button>)}</div><p role="status">{data.response === 'pending' ? 'Choose a response to let the organizer know.' : `Your response: ${responseLabel[data.response]}`}</p><small>Responses via Festio. Calendar replies are not synchronized. Keep this personal link private; replies close 24 hours after the meeting ends.</small></> : !error && !preferencesOnly && <p>Loading your invitation…</p>}<MeetingNotificationPreferences token={token} client={client} /></section></main>;
+  return <main className={`mt-public ${data?.html ? 'mt-template-public' : ''}`} data-style={data?.meeting.invitation_style || 'aurora'}>
+    <div className="mt-invitation-surface">
+      {error && <p role="alert" className="mt-error">{error}</p>}
+      {data?.html ? <MeetingInvitationDocument html={data.html} /> : data && <section className="mt-card"><div className="mt-brand">festio</div><MeetingDetails data={data.meeting} /></section>}
+      {data && !reusable && <section id="meeting-reply" tabIndex={-1} className="mt-card mt-response-controls">
+        <h3>Will you attend, {data.name}?</h3><div className="mt-reply">{[['accepted', 'Accept'], ['maybe', 'Maybe'], ['declined', 'Decline']].map(([value, label]) => <button key={value} disabled={busy} className={data.response === value ? 'mt-primary' : ''} onClick={() => reply(value)}>{label}</button>)}</div>
+        <p role="status">{data.response === 'pending' ? 'Choose a response to let the organizer know.' : `Your response: ${responseLabel[data.response]}`}</p>
+        <small>Responses via Festio. Calendar replies are not synchronized. Keep this personal link private; replies close 24 hours after the meeting ends.</small>
+      </section>}
+      {!data && !error && !preferencesOnly && <p>Loading your invitation…</p>}
+      {!reusable && <section className="mt-card"><MeetingNotificationPreferences token={token} client={client} /></section>}
+    </div>
+  </main>;
 }
 function MeetingNotificationPreferences({
   token,

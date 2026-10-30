@@ -265,6 +265,20 @@ async def attendee_link(mid: str, aid: str, user: User = Depends(get_current_use
     return {"url": settings.frontend_url.rstrip("/") + "/meeting-response/" + response_token(m, a)}
 
 
+@router.post("/{mid}/share-link")
+async def share_invitation(mid: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    m = await owned(mid, user, db)
+    if m.status == "cancelled":
+        raise HTTPException(410, "This meeting was cancelled")
+    if len(settings.meetings_signing_key) < 32:
+        raise HTTPException(503, "Invitation sharing is not configured")
+    end = utc_time(m.draft["end"], m.draft["timezone"], m.draft.get("end_fold")) + timedelta(days=1)
+    if end < datetime.now(timezone.utc):
+        raise HTTPException(410, "This meeting invitation has expired")
+    token = jwt.encode({"scope": "meeting-shared-invitation", "mid": m.id, "revision": m.revision, "exp": end}, settings.meetings_signing_key, algorithm="HS256")
+    return {"url": settings.frontend_url.rstrip("/") + "/meeting-invitation/" + token}
+
+
 class FollowupRequest(BaseModel):
     revision: int
     key: str = Field(min_length=8, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
@@ -561,13 +575,33 @@ def private_headers(response):
     response.headers["X-Robots-Tag"] = "noindex, nofollow"
 
 
+@public_router.get("/shared/{token}")
+async def shared_invitation(token: str, response: Response, db: AsyncSession = Depends(get_db)):
+    private_headers(response)
+    try:
+        if len(settings.meetings_signing_key) < 32:
+            raise ValueError()
+        claims = jwt.decode(token, settings.meetings_signing_key, algorithms=["HS256"], options={"require": ["exp", "scope", "mid", "revision"]})
+        if claims["scope"] != "meeting-shared-invitation":
+            raise ValueError()
+    except (jwt.InvalidTokenError, ValueError):
+        raise HTTPException(410, "This invitation link is invalid or expired")
+    m = await db.get(Meeting, claims["mid"])
+    org = await db.get(Organization, m.org_id) if m else None
+    if not m or not org or not org.is_active or m.status == "cancelled" or m.revision != claims["revision"]:
+        raise HTTPException(410, "This invitation changed or was cancelled. Ask the organizer for the latest link.")
+    data = {key: m.draft[key] for key in ["title", "agenda", "start", "end", "timezone", "location_type", "location", "video_url", "invitation_style"] if key in m.draft}
+    return {"meeting": data, "html": invitation(data, web=True, shared=True)[1]}
+
+
 @public_router.get("/{token}")
 async def response_preview(token: str, response: Response, db: AsyncSession = Depends(get_db)):
     private_headers(response)
     m, a = await resolve(token, db)
     # Only the intended recipient, never other attendees or their response links.
     return {"meeting": {k: v for k, v in m.published.items() if k not in {"attendees", "shared_with_org_admins", "reminder_minutes", "nudge_hours_before"}},
-        "name": a.name, "response": a.response, "sequence": m.sequence}
+        "name": a.name, "response": a.response, "sequence": m.sequence,
+        "html": invitation(m.published, response_url="#meeting-reply", recipient_name=a.name, web=True)[1]}
 
 
 @public_router.get("/preferences/{token}")

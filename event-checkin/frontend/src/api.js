@@ -573,6 +573,8 @@ export const api = {
   deleteMeetingDraft: (id, revision) => req('DELETE', `/meetings/${encodeURIComponent(id)}?revision=${revision}`),
   meetingCalendar: (id) => req('GET', `/meetings/${encodeURIComponent(id)}/calendar`),
   exportMeetingResponses: (id) => req('GET', `/meetings/${encodeURIComponent(id)}/responses.csv`),
+  meetingSharedLink: (id) => req('POST', `/meetings/${encodeURIComponent(id)}/share-link`),
+  meetingSharedPreview: (token) => guestRead(`/meeting-responses/shared/${encodeURIComponent(token)}`, 'Invitation unavailable'),
   meetingAttendeeLink: (id, attendee) => req('GET', `/meetings/${encodeURIComponent(id)}/attendees/${encodeURIComponent(attendee)}/link`),
   resendMeetingAttendee: (id, attendee, revision, key) => req('POST', `/meetings/${encodeURIComponent(id)}/attendees/${encodeURIComponent(attendee)}/resend`, {revision, key}),
   nudgeMeetingPending: (id, revision, key) => req('POST', `/meetings/${encodeURIComponent(id)}/nudge`, {revision, key}),

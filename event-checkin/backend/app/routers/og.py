@@ -26,12 +26,56 @@ from ..models import Event, Guest
 from ..timeutil import event_tz, to_event_local
 from .invite import _get_public_event, _get_public_event_by_rsvp_token
 from .registry import _event_by_token as _get_event_by_registry_token
+from .meetings import resolve, resolve_shared_invitation
+from ..config import settings
 
 router = APIRouter()
 
 # Default social card shipped with the frontend (frontend/public/media/).
 _DEFAULT_IMAGE = "/media/og-image.png"
 _SITE_NAME = "Festio"
+
+
+def _meeting_card(title: str, canonical_path: str) -> HTMLResponse:
+    """Share the meeting title only, never attendee details, agenda or join URLs."""
+    base = settings.frontend_url.rstrip("/")
+    t = _html.escape(title or "Meeting invitation")
+    url = _html.escape(base + canonical_path)
+    image = _html.escape(_abs_url(base, _DEFAULT_IMAGE))
+    description = "Open your meeting invitation for details."
+    return HTMLResponse(f"""<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>{t}</title>
+<meta name="description" content="{description}" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Festio" />
+<meta property="og:title" content="{t}" />
+<meta property="og:description" content="{description}" />
+<meta property="og:url" content="{url}" />
+<meta property="og:image" content="{image}" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="{t}" />
+<meta name="twitter:description" content="{description}" />
+<meta name="twitter:image" content="{image}" />
+<link rel="canonical" href="{url}" />
+</head><body><p><a href="{url}">Open meeting invitation</a></p></body></html>""", headers={
+        "Cache-Control": "no-store", "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow", "Vary": "User-Agent",
+    })
+
+
+@router.get("/meeting-response/{token}", response_class=HTMLResponse)
+async def og_meeting_response(token: str, db: AsyncSession = Depends(get_db)):
+    meeting, _ = await resolve(token, db)
+    return _meeting_card(meeting.published.get("title"), f"/meeting-response/{token}")
+
+
+@router.get("/meeting-invitation/{token}", response_class=HTMLResponse)
+async def og_meeting_invitation(token: str, db: AsyncSession = Depends(get_db)):
+    meeting = await resolve_shared_invitation(token, db)
+    return _meeting_card(meeting.draft.get("title"), f"/meeting-invitation/{token}")
 
 
 def _abs_url(base_url: str, value: str | None) -> str:

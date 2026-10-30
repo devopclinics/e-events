@@ -73,17 +73,17 @@ const PRICING_TIERS = [
     to: '/register?redesign=1',
   },
   {
-    tier: 'Essential',
+    tier: 'Event Pass',
     title: 'Run your event',
-    body: 'Invitations, passes, messaging, and check-in for complete guest management.',
+    body: 'Compare paid plans, guest limits, message credits, and available add-ons on our pricing page.',
     cta: 'See pricing',
     to: '/pricing',
     featured: true,
   },
   {
-    tier: 'Professional',
+    tier: 'Enterprise',
     title: 'Scale operations',
-    body: 'Venue access intelligence, seating workflows, and reporting for complex events.',
+    body: 'Talk to our team about requirements for larger or more complex events.',
     cta: 'Talk to us',
     to: '#contact',
   },
@@ -266,6 +266,75 @@ export default function LandingRedesignPage() {
   const appHome = user ? redesignHome(user.role) : null
   const [publicEvents, setPublicEvents] = useState([])
   const [preview, setPreview] = useState('invite')
+  const [menuOpen, setMenuOpen] = useState(false)
+  const navigation = useRef(null)
+  const menuToggle = useRef(null)
+  const previewFocus = useRef(false)
+  const previewPanel = useRef(null)
+
+  function changePreview(next, focus = false) {
+    previewFocus.current = focus
+    setPreview(next)
+  }
+
+  useEffect(() => {
+    if (!previewFocus.current) return
+    previewFocus.current = false
+    const panel = previewPanel.current?.querySelector(
+      '[data-preview-panel]:not([hidden])',
+    )
+    ;(panel?.querySelector('button') || panel)?.focus({ preventScroll: true })
+  }, [preview])
+
+  useEffect(() => {
+    let frame
+    function scrollToSection() {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        let id
+        try {
+          id = decodeURIComponent(window.location.hash.slice(1))
+        } catch {
+          return
+        }
+        if (!id) return
+        const target = document.getElementById(id)
+        target?.scrollIntoView({ block: 'start', behavior: 'instant' })
+        target?.focus({ preventScroll: true })
+      })
+      setMenuOpen(false)
+    }
+    scrollToSection()
+    window.addEventListener('hashchange', scrollToSection)
+    window.addEventListener('popstate', scrollToSection)
+    return () => {
+      cancelAnimationFrame(frame)
+      window.removeEventListener('hashchange', scrollToSection)
+      window.removeEventListener('popstate', scrollToSection)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!menuOpen) return
+    navigation.current?.querySelector('#homepage-navigation a')?.focus()
+    function dismiss(event) {
+      if (event.type === 'keydown' && event.key === 'Escape') {
+        setMenuOpen(false)
+        menuToggle.current?.focus()
+      } else if (
+        event.type === 'pointerdown' &&
+        !navigation.current?.contains(event.target)
+      ) {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener('keydown', dismiss)
+    document.addEventListener('pointerdown', dismiss)
+    return () => {
+      document.removeEventListener('keydown', dismiss)
+      document.removeEventListener('pointerdown', dismiss)
+    }
+  }, [menuOpen])
   useEffect(() => {
     fetch('/api/ticketing/public/events', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
@@ -274,9 +343,13 @@ export default function LandingRedesignPage() {
   }, [])
 
   function renderPreview() {
-    if (preview === 'invite')
-      return (
-        <>
+    return (
+      <>
+        <div
+          className="preview-panel"
+          data-preview-panel="invite"
+          hidden={preview !== 'invite'}
+        >
           <div className="eyebrow">A moment worth sharing</div>
           <h3>
             Some evenings become
@@ -287,27 +360,28 @@ export default function LandingRedesignPage() {
             type="button"
             className="envelope"
             aria-label="Open sample invitation"
-            onClick={() => setPreview('rsvp')}
+            onClick={() => changePreview('rsvp', true)}
           />
           <button
             type="button"
             className="open-button"
-            onClick={() => setPreview('rsvp')}
+            onClick={() => changePreview('rsvp', true)}
           >
             Open your invitation ↗
           </button>
-        </>
-      )
-    if (preview === 'rsvp')
-      return (
-        <div className="pass">
+        </div>
+        <div
+          className="pass preview-panel"
+          data-preview-panel="rsvp"
+          hidden={preview !== 'rsvp'}
+        >
           <div className="eyebrow">The annual gathering</div>
           <h3>We saved you a place.</h3>
           <p>Amara, will you be joining us?</p>
           <button
             type="button"
             className="btn"
-            onClick={() => setPreview('pass')}
+            onClick={() => changePreview('pass', true)}
           >
             Joyfully accept ↗
           </button>
@@ -315,35 +389,73 @@ export default function LandingRedesignPage() {
             Interactive sample · Nothing is submitted
           </p>
         </div>
-      )
-    return (
-      <div className="pass">
-        <div className="eyebrow">Your personal guest pass</div>
-        <h3>Welcome, Amara.</h3>
-        <p>The annual gathering</p>
-        <div className="qr" aria-hidden="true" />
-        <div>Table 08 · Seat 03</div>
-        <p className="preview-note">Sample pass · Not valid for entry</p>
-      </div>
+        <div
+          className="pass preview-panel"
+          data-preview-panel="pass"
+          hidden={preview !== 'pass'}
+          tabIndex={-1}
+          aria-label="Sample guest pass"
+        >
+          <div className="eyebrow">Your personal guest pass</div>
+          <h3>Welcome, Amara.</h3>
+          <p>The annual gathering</p>
+          <div className="qr" aria-hidden="true" />
+          <div>Table 08 · Seat 03</div>
+          <p className="preview-note">Sample pass · Not valid for entry</p>
+        </div>
+      </>
     )
   }
 
   return (
     <div className="landing-redesign fh-home">
-      <nav className="lr-nav">
+      <nav className="lr-nav" aria-label="Main navigation" ref={navigation}>
         <div className="lr-shell lr-nav-inner">
           <a className="lr-brand" href="#top">
             <span className="lr-brand-mark">F</span>Festio
           </a>
-          <div className="lr-nav-links">
+          <div
+            className={`lr-nav-links${menuOpen ? ' is-open' : ''}`}
+            id="homepage-navigation"
+            onClick={() => setMenuOpen(false)}
+          >
             <a href="#journey">Product</a>
-            <a href="#journey">Design Studio</a>
+            <a href="#design-studio">Design Studio</a>
             <a href="#tools">For organizers</a>
             <a href="#occasions">Your kind of event</a>
             <Link to="/tickets">Find events</Link>
             <Link to="/pricing">Pricing</Link>
           </div>
           <div className="lr-nav-actions">
+            <button
+              type="button"
+              className="fh-menu-toggle"
+              ref={menuToggle}
+              aria-expanded={menuOpen}
+              aria-controls="homepage-navigation"
+              aria-label={
+                menuOpen ? 'Close navigation menu' : 'Open navigation menu'
+              }
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                aria-hidden="true"
+              >
+                <path
+                  d={
+                    menuOpen
+                      ? 'M6 6l12 12M6 18L18 6'
+                      : 'M4 6h16M4 12h16M4 18h16'
+                  }
+                />
+              </svg>
+            </button>
             <button
               type="button"
               className="lr-theme-btn"
@@ -371,7 +483,7 @@ export default function LandingRedesignPage() {
       </nav>
 
       <main className="fh-main">
-        <header className="hero" id="top">
+        <header className="hero" id="top" tabIndex={-1}>
           <div>
             <div className="eyebrow">
               For the moments that bring us together
@@ -410,7 +522,7 @@ export default function LandingRedesignPage() {
                 THE LITTLE DETAILS<strong>One connected journey ↗</strong>Invite
                 · RSVP · Pass · Welcome
               </div>
-              <div className="invitation" id="preview">
+              <div className="invitation" id="preview" tabIndex={-1} ref={previewPanel}>
                 {renderPreview()}
               </div>
             </div>
@@ -429,7 +541,9 @@ export default function LandingRedesignPage() {
                       : ''
                   }
                   aria-pressed={preview === ['invite', 'rsvp', 'pass'][index]}
-                  onClick={() => setPreview(['invite', 'rsvp', 'pass'][index])}
+                  onClick={() =>
+                    changePreview(['invite', 'rsvp', 'pass'][index])
+                  }
                 >
                   0{index + 1} {label}
                 </button>
@@ -448,7 +562,7 @@ export default function LandingRedesignPage() {
           <span>Individual passes</span>
           <span>A warmer welcome</span>
         </div>
-        <section id="journey">
+        <section id="journey" tabIndex={-1}>
           <div className="section-head">
             <div>
               <div className="eyebrow">Every guest. Every little detail.</div>
@@ -487,7 +601,7 @@ export default function LandingRedesignPage() {
                 <a
                   className="text-link"
                   href="#preview"
-                  onClick={() => setPreview('invite')}
+                  onClick={() => changePreview('invite')}
                 >
                   Open an invitation ↗
                 </a>
@@ -519,7 +633,7 @@ export default function LandingRedesignPage() {
                 <a
                   className="text-link"
                   href="#preview"
-                  onClick={() => setPreview('rsvp')}
+                  onClick={() => changePreview('rsvp')}
                 >
                   Try the RSVP preview ↗
                 </a>
@@ -549,7 +663,7 @@ export default function LandingRedesignPage() {
                 <a
                   className="text-link"
                   href="#preview"
-                  onClick={() => setPreview('pass')}
+                  onClick={() => changePreview('pass')}
                 >
                   See a guest pass ↗
                 </a>
@@ -557,7 +671,104 @@ export default function LandingRedesignPage() {
             </article>
           </div>
         </section>
-        <section className="band" id="tools">
+        <section id="design-studio" tabIndex={-1} className="fh-design-section">
+          <div className="section-head">
+            <div>
+              <div className="eyebrow">Your event, unmistakably yours</div>
+              <h2>
+                A little personality.
+                <br />
+                In every detail.
+              </h2>
+            </div>
+            <p>
+              Choose your look, personalize your wording, and preview the
+              experience before you publish.
+            </p>
+          </div>
+          <div className="fh-design-grid">
+            <article className="card">
+              <div
+                className="fh-design-art fh-design-invite"
+                aria-hidden="true"
+              >
+                <span>A PERSONAL INVITATION</span>
+                <strong>
+                  Together,
+                  <br />a beautiful evening.
+                </strong>
+                <i>A & J</i>
+              </div>
+              <div className="card-copy">
+                <h3>Invitation openings</h3>
+                <p>
+                  Set the mood with envelope styles, colours, and personal
+                  wording.
+                </p>
+                <a
+                  className="text-link"
+                  href="#preview"
+                  onClick={() => changePreview('invite')}
+                >
+                  Preview an invitation ↗
+                </a>
+              </div>
+            </article>
+            <article className="card">
+              <div
+                className="fh-design-art fh-design-website"
+                aria-hidden="true"
+              >
+                <span>THE ANNUAL GATHERING</span>
+                <strong>
+                  Meet you
+                  <br />
+                  under the stars.
+                </strong>
+                <i>Your event · Your story</i>
+              </div>
+              <div className="card-copy">
+                <h3>Event websites</h3>
+                <p>
+                  Bring your event details together in a website that reflects
+                  your occasion.
+                </p>
+                <Link
+                  className="text-link"
+                  to={appHome || '/register?redesign=1'}
+                >
+                  Create your event ↗
+                </Link>
+              </div>
+            </article>
+            <article className="card">
+              <div className="fh-design-art fh-design-pass" aria-hidden="true">
+                <span>YOUR FESTIO PASS</span>
+                <strong>
+                  Welcome,
+                  <br />
+                  Amara.
+                </strong>
+                <i>Table 08 · Seat 03</i>
+              </div>
+              <div className="card-copy">
+                <h3>Passes & GuestHub</h3>
+                <p>
+                  Carry your event’s look into the guest pass and personal event
+                  hub.
+                </p>
+                <a
+                  className="text-link"
+                  href="#preview"
+                  onClick={() => changePreview('pass')}
+                >
+                  Preview a guest pass ↗
+                </a>
+              </div>
+            </article>
+          </div>
+        </section>
+        <section className="band" id="tools" tabIndex={-1}>
           <div className="band-copy">
             <div className="eyebrow">
               Beautiful for guests. Powerful for you.
@@ -597,17 +808,79 @@ export default function LandingRedesignPage() {
             </div>
           </div>
         </section>
-        <section id="occasions" className="closing">
-          <div className="eyebrow">Your people. Your occasion.</div>
-          <h2>Whatever brings you together.</h2>
-          <p>Make it feel like your event, from the first hello.</p>
+        <section id="occasions" tabIndex={-1} className="fh-occasions">
+          <div className="closing">
+            <div className="eyebrow">Your people. Your occasion.</div>
+            <h2>Whatever brings you together.</h2>
+            <p>Make it feel like your event, from the first hello.</p>
+          </div>
+          <div className="fh-occasion-grid">
+            {[
+              {
+                name: 'Conferences & conventions',
+                kind: 'conference',
+                heading: 'Ideas worth sharing.',
+                detail: 'Speakers · Programme · Guest passes',
+                body: 'Keep registration, speakers, schedules, and arrivals connected.',
+                cta: 'Plan a conference',
+              },
+              {
+                name: 'Celebrations & weddings',
+                kind: 'celebration',
+                heading: 'A day to remember.',
+                detail: 'Invitations · Families · Seating',
+                body: 'Personal invitations, family RSVPs, meal choices, and thoughtful seating.',
+                cta: 'Plan a celebration',
+              },
+              {
+                name: 'Fundraisers & galas',
+                kind: 'fundraiser',
+                heading: 'Together, for a cause.',
+                detail: 'Event website · Tickets · Giving',
+                body: 'Share your cause, welcome supporters, and coordinate the evening.',
+                cta: 'Plan a fundraiser',
+              },
+              {
+                name: 'Community gatherings',
+                kind: 'community',
+                heading: 'Better, together.',
+                detail: 'Your people · One shared experience',
+                body: 'Bring your group together with clear invitations, updates, and guest passes.',
+                cta: 'Plan a gathering',
+              },
+            ].map((occasion) => (
+              <article className="card" key={occasion.kind}>
+                <div
+                  className={`fh-occasion-art ${occasion.kind}`}
+                  aria-hidden="true"
+                >
+                  <span>{occasion.detail}</span>
+                  <strong>{occasion.heading}</strong>
+                  <div className="fh-art-motif">
+                    {occasion.kind === 'celebration'
+                      ? 'A & J'
+                      : occasion.kind === 'conference'
+                        ? '01 / 02 / 03'
+                        : occasion.kind === 'fundraiser'
+                          ? 'A little kindness. A lasting difference.'
+                          : 'A place for everyone.'}
+                  </div>
+                  <small>Illustrative preview</small>
+                </div>
+                <div className="card-copy">
+                  <h3>{occasion.name}</h3>
+                  <p>{occasion.body}</p>
+                  <Link
+                    className="text-link"
+                    to={appHome || '/register?redesign=1'}
+                  >
+                    {occasion.cta} ↗
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
         </section>
-        <div className="usecases">
-          <span>Conferences & conventions</span>
-          <span>Celebrations & weddings</span>
-          <span>Fundraisers & galas</span>
-          <span>Community gatherings</span>
-        </div>
         <section className="lr-events">
           <div className="lr-shell">
             <div className="lr-events-head">
@@ -668,7 +941,7 @@ export default function LandingRedesignPage() {
           </div>
         </section>
       </main>
-      <section className="lr-section" id="pricing">
+      <section className="lr-section" id="pricing" tabIndex={-1}>
         <div className="lr-shell">
           <div className="lr-section-head center">
             <span className="lr-eyebrow" style={{ justifyContent: 'center' }}>
@@ -687,7 +960,7 @@ export default function LandingRedesignPage() {
                 key={t.tier}
               >
                 {t.featured && (
-                  <span className="lr-price-badge">Most popular</span>
+                  <span className="lr-price-badge">Pay per event</span>
                 )}
                 <span className="lr-price-tier">{t.tier}</span>
                 <h3>{t.title}</h3>
@@ -707,7 +980,7 @@ export default function LandingRedesignPage() {
         </div>
       </section>
 
-      <section className="lr-section tight" id="contact">
+      <section className="lr-section tight" id="contact" tabIndex={-1}>
         <div className="lr-shell lr-contact">
           <div>
             <span className="lr-eyebrow">
@@ -767,7 +1040,7 @@ export default function LandingRedesignPage() {
               <div className="lr-foot-col">
                 <strong>Product</strong>
                 <a href="#journey">Guest journey</a>
-                <a href="#journey">Design Studio</a>
+                <a href="#design-studio">Design Studio</a>
                 <a href="#tools">Organizer tools</a>
                 <Link to="/pricing">Pricing</Link>
               </div>

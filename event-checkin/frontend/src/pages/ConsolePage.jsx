@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Link, Navigate } from 'react-router-dom'
+import { Link, Navigate, useSearchParams } from 'react-router-dom'
+import PlatformOperations from '../components/platform-operations/PlatformOperations'
+import { operationsSection } from '../components/platform-operations/sections.mjs'
 import { api } from '../api'
 import { useAuth } from '../context/AuthContext'
 
@@ -1338,23 +1340,15 @@ function OperatorsTab({ me }) {
   )
 }
 
-export default function ConsolePage() {
+export default function ConsolePage({ operations = false }) {
   const { user } = useAuth()
-  const [tab, setTab] = useState('overview')
+  const [legacyTab, setTab] = useState('overview')
+  const [params] = useSearchParams()
+  const tab = operations ? operationsSection(params.get('section')).id : legacyTab
   if (user === undefined) return null
   if (!user?.is_platform_superadmin) return <Navigate to="/" replace />
 
-  return (
-    <div className="max-w-5xl mx-auto px-4 py-8 space-y-5">
-      <div className="flex items-center justify-between gap-3"><h1 className="text-2xl font-bold dark:text-white">Operator Console</h1><Link to="/marketing" className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-bold text-white">Open Marketing</Link></div>
-      <div className="flex gap-2 border-b dark:border-slate-700">
-        {TABS.map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px ${tab === t.id ? 'border-teal-600 text-teal-700 dark:text-teal-300' : 'border-transparent text-slate-500'}`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+  const content = <>
       {tab === 'overview' && <OverviewTab />}
       {tab === 'accounts' && <AccountsTab me={user} />}
       {tab === 'usage' && <UsageTab />}
@@ -1367,6 +1361,20 @@ export default function ConsolePage() {
       {tab === 'org-plans' && <OrgPlansTab />}
       {tab === 'affiliates' && <AffiliateStoresTab />}
       {tab === 'operators' && <OperatorsTab me={user} />}
+  </>
+  if (operations) return <PlatformOperations active={tab}>{content}</PlatformOperations>
+  return (
+    <div className="max-w-5xl mx-auto px-4 py-8 space-y-5">
+      <div className="flex items-center justify-between gap-3"><h1 className="text-2xl font-bold dark:text-white">Operator Console</h1><Link to="/marketing" className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-bold text-white">Open Marketing</Link></div>
+      <div className="flex gap-2 border-b dark:border-slate-700">
+        {TABS.map((t) => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px ${tab === t.id ? 'border-teal-600 text-teal-700 dark:text-teal-300' : 'border-transparent text-slate-500'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {content}
     </div>
   )
 }

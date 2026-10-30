@@ -3,6 +3,9 @@ import assert from 'node:assert/strict'
 import { marketingGroups, marketingTab, MARKETING_NAV_GROUPS } from '../src/pages/marketingNavigation.mjs'
 test('grouping retains every tool exactly once and does not introduce hidden admin tools', () => {
   const ids = MARKETING_NAV_GROUPS.flatMap(group => group.ids)
+  const legacy=['dashboard','leads','handoffs','tags','segments','sequences','campaigns','content','referrals','tasks','experiments','forms','analytics','preferences','help','social-settings','access','audit']
+  for(const id of legacy) assert.ok(ids.includes(id),`Missing existing tool: ${id}`)
+  assert.deepEqual(MARKETING_NAV_GROUPS.map(group=>group.label),['Today','People','Messages','Follow-ups','Results','Settings'])
   assert.equal(ids.length, new Set(ids).size)
   const tabs = ids.filter(id => !['access','audit','social-settings'].includes(id)).map(id => [id,id])
   const grouped = marketingGroups(tabs).flatMap(group => group.tabs)

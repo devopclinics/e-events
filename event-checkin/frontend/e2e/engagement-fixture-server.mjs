@@ -1,6 +1,7 @@
 // Fully local fixture server. Never loads .env or real Firebase/Chatwoot services.
 import { createServer } from 'vite'
 import react from '@vitejs/plugin-react'
+import { consoleData } from './fixtures/console-data.mjs'
 
 const modules = {
   auth: `import React, { createContext, useContext, useState } from 'react';
@@ -12,20 +13,57 @@ const modules = {
       return React.createElement(Auth.Provider, { value: { user, loading } }, children);
     }
     export const useAuth = () => useContext(Auth);`,
-  api: `const operation = (name, value) => { (window.fixtureOperationCalls ||= []).push(name); return value; };
+  api: `const consoleSeed = ${JSON.stringify(consoleData())};
+    const consoleRead = (key, fallback) => window.fixtureConsolePopulated ? structuredClone((window.fixtureConsoleSeed ||= consoleSeed)[key]) : fallback;
+    const consoleWrite = (name, args, result = {ok:true}) => { (window.fixtureConsoleWrites ||= []).push({name,args}); return result; };
+    const operation = (name, value) => { (window.fixtureOperationCalls ||= []).push(name); return value; };
     export const api = {
     adminAccountsSummary: async () => { if (window.fixtureOperationError) throw new Error('Account snapshot unavailable'); return operation('adminAccountsSummary', [{id:'org-one',name:'Academy',owner_email:'owner@example.test',is_active:true,event_types:[],member_count:1,event_count:3,message_credits_spent:7,created_at:'2026-10-01'}, {id:'org-two',name:'Community',owner_email:'team@example.test',is_active:false,event_types:[],member_count:1,event_count:2,message_credits_spent:1,created_at:'2026-10-02'}]); },
-    adminOverview: async () => operation('adminOverview', []),
-    adminListAccounts: async () => operation('adminListAccounts', []),
-    adminUsageReport: async () => operation('adminUsageReport', {orgs: []}),
-    adminListTrials: async () => operation('adminListTrials', []),
-    qaChecklistSubmissions: async () => operation('qaChecklistSubmissions', []),
-    adminAllReferrals: async () => operation('adminAllReferrals', []),
-    adminListPlans: async () => operation('adminListPlans', []),
-    adminListOrgPlans: async () => operation('adminListOrgPlans', []),
-    adminListAffiliateStores: async () => operation('adminListAffiliateStores', []),
-    adminListOperators: async () => operation('adminListOperators', []),
-    adminListGlobalCreditRates: async () => operation('adminListGlobalCreditRates', []),
+    adminOverview: async () => operation('adminOverview', consoleRead('overview', [])),
+    adminListAccounts: async () => operation('adminListAccounts', consoleRead('accounts', [])),
+    adminUsageReport: async () => operation('adminUsageReport', consoleRead('usage', {orgs: []})),
+    adminListTrials: async () => operation('adminListTrials', consoleRead('trials', [])),
+    qaChecklistSubmissions: async () => operation('qaChecklistSubmissions', consoleRead('qa', [])),
+    adminAllReferrals: async () => operation('adminAllReferrals', consoleRead('referrals', [])),
+    adminListPlans: async () => operation('adminListPlans', consoleRead('plans', [])),
+    adminListOrgPlans: async () => operation('adminListOrgPlans', consoleRead('orgPlans', [])),
+    adminListAffiliateStores: async () => operation('adminListAffiliateStores', consoleRead('stores', [])),
+    adminListOperators: async () => operation('adminListOperators', consoleRead('operators', [])),
+    adminListGlobalCreditRates: async () => operation('adminListGlobalCreditRates', consoleRead('rates', [])),
+    qaChecklistSubmission: async () => consoleRead('qaDetail', {}),
+    adminSavePlan: async (...args) => consoleWrite('adminSavePlan', args),
+    adminSaveOrgPlan: async (...args) => consoleWrite('adminSaveOrgPlan', args),
+    adminDeleteOrgPlan: async (...args) => consoleWrite('adminDeleteOrgPlan', args),
+    adminUpdateAffiliateStore: async (...args) => consoleWrite('adminUpdateAffiliateStore', args),
+    adminCreateAffiliateStore: async (...args) => consoleWrite('adminCreateAffiliateStore', args),
+    adminDeleteAffiliateStore: async (...args) => consoleWrite('adminDeleteAffiliateStore', args),
+    adminOrgAddonOverrides: async () => ({addons:['addon_seating','addon_engagement'],overrides:{addon_seating:true}}),
+    adminEventAddonOverrides: async () => ({addons:['addon_seating','addon_engagement'],overrides:{}}),
+    adminSetOrgAddonOverrides: async (id, overrides) => consoleWrite('adminSetOrgAddonOverrides',[id,overrides],{addons:['addon_seating','addon_engagement'],overrides}),
+    adminSetEventAddonOverrides: async (id, overrides) => consoleWrite('adminSetEventAddonOverrides',[id,overrides],{addons:['addon_seating','addon_engagement'],overrides}),
+    adminEventControls: async () => ({blocked_messaging_channels:[],blocked_comm_features:[]}),
+    adminSetEventControls: async (id, data) => consoleWrite('adminSetEventControls',[id,data],data),
+    adminGrant: async (...args) => consoleWrite('adminGrant',args),
+    adminPreviewReadinessReport: async (...args) => consoleWrite('adminPreviewReadinessReport',args),
+    adminSendReadinessReport: async (...args) => consoleWrite('adminSendReadinessReport',args,{email:'owner@example.test'}),
+    adminSetOrgRedesignCohort: async (...args) => consoleWrite('adminSetOrgRedesignCohort',args),
+    adminSetOrgActive: async (...args) => consoleWrite('adminSetOrgActive',args),
+    adminDeleteOrg: async (...args) => consoleWrite('adminDeleteOrg',args),
+    adminSetMemberRole: async (...args) => consoleWrite('adminSetMemberRole',args),
+    adminRemoveMember: async (...args) => consoleWrite('adminRemoveMember',args),
+    adminSetUserActive: async (...args) => consoleWrite('adminSetUserActive',args),
+    adminDeleteUser: async (...args) => consoleWrite('adminDeleteUser',args),
+    adminGetOrgEventPass: async () => ({tier:'tier300'}),
+    adminUpdateOrgEventPass: async (...args) => consoleWrite('adminUpdateOrgEventPass',args),
+    adminResolveTrial: async (...args) => consoleWrite('adminResolveTrial',args),
+    adminAddOperator: async (...args) => consoleWrite('adminAddOperator',args),
+    adminRemoveOperator: async (...args) => consoleWrite('adminRemoveOperator',args),
+    adminSaveGlobalCreditRate: async (...args) => consoleWrite('adminSaveGlobalCreditRate',args),
+    adminListOrgCreditRates: async () => consoleRead('orgRates',[]),
+    adminSaveOrgCreditRate: async (...args) => consoleWrite('adminSaveOrgCreditRate',args),
+    adminDeleteOrgCreditRate: async (...args) => consoleWrite('adminDeleteOrgCreditRate',args),
+    adminSetAddonPolicy: async (...args) => consoleWrite('adminSetAddonPolicy',args),
+    updatePlatformSettings: async data => consoleWrite('updatePlatformSettings',[data],{support_chat_enabled:data.support_chat_enabled ?? false, addon_promo_until:data.addon_promo_until || null}),
     marketingModule: async () => [{ id: 'sequence-one', name: 'Sample welcome sequence', status: 'draft', payload: { stage: 'registered', steps: [{ subject: 'Welcome to Festio', body: 'Create your first event.', cta: 'Create event', cta_url: 'https://festio.events/setup-redesign' }] } }],
     marketingLeads: async () => [{ id:'client-one',name:'Sample organiser',email:'organiser@example.test',stage:'registered',consent_email:true,automation:{automatic_eligible:false} }],
     marketingSavedViews: async () => [],

@@ -197,7 +197,9 @@ function ExportMenu({ notify, filteredCount, totalCount, eventId, filteredIds })
   function runExport() {
     api.downloadGuestList(eventId, format, [...sections].join(','), onlyFiltered ? filteredIds : null)
       .then(() => notify(`Exported ${onlyFiltered ? filteredCount : totalCount} guests as ${format.toUpperCase()}`))
-      .catch((err) => notify(err.message || 'Export failed'))
+      .catch((err) => notify(err.status === 403 && /permission to manage guests/i.test(err.message || '')
+        ? 'Guest export requires Manage guests permission. Ask the event owner to enable it for your account in Team settings.'
+        : err.message || 'Export failed', true))
     setOpen(false)
   }
 

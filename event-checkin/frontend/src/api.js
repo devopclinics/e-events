@@ -535,7 +535,20 @@ async function downloadFile(path, filename, { withAuth = true } = {}) {
     if (token) headers.Authorization = `Bearer ${token}`
   }
   const res = await fetch(`${BASE}${path}`, { headers })
-  if (!res.ok) throw new Error('Download failed')
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    const detail = body?.detail
+    const explanation = typeof detail === 'string' ? detail : detail?.message
+    const fallback = res.status === 401
+      ? 'Your session has expired. Sign in again, then retry the download.'
+      : res.status === 403
+        ? 'You do not have permission to download this file. Ask the event owner to check your access.'
+        : `Download failed (HTTP ${res.status}). Please try again.`
+    const error = new Error(typeof explanation === 'string' && explanation.trim() ? explanation : fallback)
+    error.status = res.status
+    error.detail = detail
+    throw error
+  }
   const blob = await res.blob()
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

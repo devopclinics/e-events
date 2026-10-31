@@ -963,3 +963,11 @@ test('optional envelope opens automatically and leaves the RSVP form usable', as
   await expect(page.getByLabel('Your name')).toBeVisible()
   await expect(page.getByRole('button',{name:'Send my reply'})).toBeEnabled()
 })
+
+test('an invitation hands off to grown-event registration without creating a free RSVP', async ({ page }) => {
+  await setup(page)
+  await page.evaluate(() => { window.fixtureQuickRegistrationUrl='/tickets/e/quick-one';history.pushState({}, '', '/i/fixture');dispatchEvent(new PopStateEvent('popstate')) })
+  await expect(page.getByRole('link',{name:'Continue to registration'})).toHaveAttribute('href','/tickets/e/quick-one')
+  await expect(page.getByRole('button',{name:'Send my reply'})).toHaveCount(0)
+  expect(await page.evaluate(()=>window.fixtureQuickWrites||[])).toEqual([])
+})

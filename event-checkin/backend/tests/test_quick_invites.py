@@ -164,3 +164,52 @@ async def test_guest_limit_is_not_bypassed_by_shared_replies(ctx, monkeypatch):
     assert 'contact the organizer' in result.json()['detail']
     async with _Session() as db:
         assert await db.scalar(select(func.count()).select_from(Guest).where(Guest.event_id == workspace['id'])) == 25
+
+
+@pytest.mark.parametrize('setting,value,target', [('attendance_mode','ticketed','/tickets/e/'),('attendance_mode','hybrid','/tickets/e/'),('rsvp_capacity',10,'/rsvp/'),('rsvp_require_approval',True,'/rsvp/'),('rsvp_multi_invitee_enabled',True,'/rsvp/')])
+async def test_grown_event_registration_cannot_be_bypassed(ctx, monkeypatch, setting, value, target):
+    workspace, _ = await create(ctx, monkeypatch)
+    async with _Session() as db:
+        event = await db.get(Event, workspace['id']);setattr(event,setting,value);await db.commit()
+    token=workspace['url'].rsplit('/',1)[1]
+    page=await ctx.client.get('/api/quick-invites/public/'+token)
+    assert target in page.json()['registration_url']
+    reply=await ctx.client.post('/api/quick-invites/public/'+token+'/reply',json={'name':'Ada','response':'going','request_id':str(uuid.uuid4())})
+    assert reply.status_code==409
+    async with _Session() as db:
+        assert await db.scalar(select(func.count()).select_from(Guest).where(Guest.event_id==workspace['id']))==0
+
+
+async def test_closed_invites_and_closed_rsvp_are_respected(ctx,monkeypatch):
+    workspace,_=await create(ctx,monkeypatch);token=workspace['url'].rsplit('/',1)[1]
+    async with _Session() as db:
+        event=await db.get(Event,workspace['id']);event.invite_mode='closed';await db.commit()
+    assert (await ctx.client.get('/api/quick-invites/public/'+token)).status_code==403
+    assert (await ctx.client.post('/api/quick-invites/public/'+token+'/reply',json={'name':'Ada','response':'going','request_id':str(uuid.uuid4())})).status_code==403
+    async with _Session() as db:
+        event=await db.get(Event,workspace['id']);event.rsvp_enabled=False;await db.commit()
+    assert (await ctx.client.get('/api/quick-invites/public/'+token)).status_code==410
+
+
+async def test_full_workspace_responses_show_in_simple_dashboard(ctx,monkeypatch):
+    workspace,_=await create(ctx,monkeypatch)
+    async with _Session() as db:
+        db.add(Guest(event_id=workspace['id'],first_name='Registered',last_name='Elsewhere',rsvp_status='confirmed'));await db.commit()
+    page=await ctx.client.get('/api/quick-invites/manage/'+workspace['id'])
+    assert len(page.json()['recipients'])==1 and page.json()['recipients'][0]['response']=='going'
+
+
+@pytest.mark.parametrize('kind',['question','phone','email'])
+async def test_required_information_uses_the_full_registration(ctx,monkeypatch,kind):
+    from app.models import RSVPQuestion
+    workspace,_=await create(ctx,monkeypatch)
+    async with _Session() as db:
+        event=await db.get(Event,workspace['id'])
+        if kind=='question':db.add(RSVPQuestion(event_id=event.id,question='Required information',is_required=True))
+        elif kind=='phone':event.rsvp_collect_phone=True;event.rsvp_phone_required=True
+        else:event.rsvp_collect_email=True;event.rsvp_email_required=True
+        await db.commit()
+    token=workspace['url'].rsplit('/',1)[1]
+    page=await ctx.client.get('/api/quick-invites/public/'+token)
+    assert '/rsvp/' in page.json()['registration_url']
+    assert (await ctx.client.post('/api/quick-invites/public/'+token+'/reply',json={'name':'Ada','response':'going','request_id':str(uuid.uuid4())})).status_code==409

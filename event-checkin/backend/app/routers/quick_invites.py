@@ -17,7 +17,7 @@ from ..auth import get_current_user, require_admin, require_event_admin, require
 from ..config import settings
 from ..database import get_db
 from ..entitlements import assert_within_guest_cap, EMAIL_FREE_QUOTA
-from ..models import Event, Guest, Membership, Organization, QuickInviteRecipient, User
+from ..models import Event, Guest, Membership, Organization, QuickInviteRecipient, User, RSVPQuestion
 from ..ratelimit import rate_limit
 from ..schemas import EventCreate
 from .events import create_event
@@ -109,7 +109,27 @@ async def invitation(token, db, *, lock=False):
         raise HTTPException(410, "This invitation is no longer accepting replies")
     if event.event_date < datetime.utcnow():
         raise HTTPException(410, "Replies closed when this event started")
+    if event.attendance_mode == 'rsvp' and (not event.rsvp_enabled or (event.rsvp_deadline and event.rsvp_deadline <= datetime.utcnow())):
+        raise HTTPException(410, "The organizer has closed replies for this invitation")
     return event
+
+
+async def registration_target(event, db, person=None):
+    """Once an event grows, its established registration gates stay authoritative."""
+    base = (settings.public_base_url or settings.frontend_url).rstrip('/')
+    if event.attendance_mode in {'ticketed', 'hybrid'}:
+        return f'{base}/tickets/e/{event.id}'
+    if event.attendance_mode == 'private':
+        raise HTTPException(403, "This event now requires a personal invitation from the organizer.")
+    required = await db.scalar(select(RSVPQuestion.id).where(RSVPQuestion.event_id == event.id, RSVPQuestion.is_required.is_(True)).limit(1))
+    if event.rsvp_require_approval or event.rsvp_multi_invitee_enabled or event.rsvp_capacity is not None or required or (event.rsvp_collect_email and event.rsvp_email_required) or (event.rsvp_collect_phone and event.rsvp_phone_required):
+        if event.invite_mode == 'closed':
+            guest = await db.get(Guest, person.guest_id) if person and person.guest_id else None
+            if not guest or not guest.invite_token:
+                raise HTTPException(403, "The organizer added private registration steps. Please ask them for your latest personal registration link.")
+            return f'{base}/r/{guest.invite_token}'
+        return f'{base}/rsvp/{event.rsvp_token}'
+    return None
 
 
 async def owned(event_id, user, db, request):
@@ -126,10 +146,23 @@ def share_url(event, recipient=None):
 
 async def workspace(event, db):
     rows = (await db.scalars(select(QuickInviteRecipient).where(QuickInviteRecipient.event_id == event.id).order_by(QuickInviteRecipient.created_at.desc()))).all()
+    guests = (await db.scalars(select(Guest).where(Guest.event_id == event.id))).all()
+    by_id = {g.id: g for g in guests}
+    by_email = {g.email.lower(): g for g in guests if g.email}
+    visible, linked = [], set()
+    states = {'confirmed': 'going', 'maybe': 'maybe', 'declined': 'declined', 'pending': 'approval', 'waitlisted': 'waitlisted'}
+    for row in rows:
+        guest = by_id.get(row.guest_id) or by_email.get((row.email or '').lower())
+        if guest: linked.add(guest.id)
+        visible.append({'id': row.id, 'name': row.name, 'email': row.email, 'response': states.get(guest.rsvp_status) if guest else row.response,
+                        'send_status': row.send_status, 'responded_at': guest.rsvp_responded_at if guest else row.responded_at, 'sent_at': row.sent_at})
+    for guest in guests:
+        if guest.id not in linked:
+            visible.append({'id': 'guest:'+guest.id, 'name': f'{guest.first_name} {guest.last_name}'.strip(), 'email': guest.email,
+                            'response': states.get(guest.rsvp_status), 'send_status': 'draft', 'responded_at': guest.rsvp_responded_at, 'sent_at': None})
     return {"id": event.id, "invitation": public_data(event), "url": share_url(event), "status": event.status,
             "email_limit": min(75, EMAIL_FREE_QUOTA), "email_attempts": sum(r.attempts for r in rows),
-            "recipients": [{"id": r.id, "name": r.name, "email": r.email, "response": r.response, "send_status": r.send_status,
-                            "responded_at": r.responded_at, "sent_at": r.sent_at} for r in rows]}
+            "recipients": visible}
 
 
 @router.post("", status_code=201)
@@ -202,7 +235,10 @@ async def get_public(token: str, response: Response, reply: str | None = None, d
     event = await invitation(token, db)
     person = await db.scalar(select(QuickInviteRecipient).where(QuickInviteRecipient.event_id == event.id, QuickInviteRecipient.token == reply)) if reply else None
     if reply and not person: raise HTTPException(404, "Personal invitation not found")
-    return {"invitation": public_data(event), "recipient": {"name": person.name, "response": person.response} if person else None}
+    if event.invite_mode == 'closed' and not person:
+        raise HTTPException(403, "Please open the personal invitation sent to you by the organizer.")
+    return {"invitation": public_data(event), "registration_url": await registration_target(event, db, person),
+            "recipient": {"name": person.name, "response": person.response} if person else None}
 
 
 @router.post("/public/{token}/reply", dependencies=[Depends(rate_limit(limit=30, window=60, scope="quick-rsvp"))])
@@ -212,6 +248,10 @@ async def respond(token: str, data: Reply, response: Response, db: AsyncSession 
     key = data.reply_token or hashlib.sha256(f"{event.id}:{data.request_id}".encode()).hexdigest()
     person = await db.scalar(select(QuickInviteRecipient).where(QuickInviteRecipient.event_id == event.id, QuickInviteRecipient.token == key))
     if data.reply_token and not person: raise HTTPException(404, "Reply link not found")
+    if event.invite_mode == 'closed' and not person:
+        raise HTTPException(403, "Please use your personal invitation link to respond.")
+    if await registration_target(event, db, person):
+        raise HTTPException(409, "The organizer added registration steps. Reopen the invitation to continue through the event's registration page.")
     email = str(data.email).strip().lower() if data.email else None
     if not person and email and await db.scalar(select(QuickInviteRecipient.id).where(QuickInviteRecipient.event_id == event.id, QuickInviteRecipient.email == email)):
         raise HTTPException(409, "Please use the personal invitation or reply link for this email address.")

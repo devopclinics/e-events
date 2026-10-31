@@ -561,6 +561,7 @@ async function downloadFile(path, filename, { withAuth = true } = {}) {
 }
 
 export const api = {
+  customizeQuickInviteLink: (id, data) => req('POST', `/quick-invites/manage/${encodeURIComponent(id)}/link`, data),
   quickInvites: () => req('GET', '/quick-invites'),
   createQuickInvite: data => req('POST', '/quick-invites', data),
   quickInviteWorkspace: id => req('GET', `/quick-invites/manage/${encodeURIComponent(id)}`),

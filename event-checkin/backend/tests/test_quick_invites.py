@@ -338,3 +338,50 @@ async def test_stabilization_allows_multiple_free_invitations_and_duplicates(ctx
         assert len(events)==3
         assert all(not event.is_paid and not event.paid_channels for event in events)
         assert await db.scalar(select(func.count()).select_from(Guest).where(Guest.event_id.in_([event.id for event in events])))==0
+
+
+async def test_custom_short_links_preserve_originals_private_replies_and_reservations(ctx,monkeypatch):
+    workspace,_=await create(ctx,monkeypatch)
+    shortened=await ctx.client.post('/api/quick-invites/manage/'+workspace['id']+'/link',json={'slug':''})
+    assert shortened.status_code==200
+    old=shortened.json()['url'].rsplit('/',1)[1]
+    assert len(old)==10
+    async with _Session() as db:
+        event=await db.get(Event,workspace['id']);original=event.rsvp_token
+    response=await ctx.client.post('/api/quick-invites/public/'+old+'/reply',json={'name':'Ada','response':'going','party_size':2,'request_id':str(uuid.uuid4())})
+    assert response.status_code==200
+    key=response.json()['reply_token']
+    changed=await ctx.client.post('/api/quick-invites/manage/'+workspace['id']+'/link',json={'slug':'Family-Dinner'})
+    assert changed.status_code==200 and changed.json()['url'].endswith('/i/family-dinner')
+    assert (await ctx.client.post('/api/quick-invites/manage/'+workspace['id']+'/link',json={'slug':'family-evening'})).status_code==200
+    for alias in [old,original,'family-dinner','family-evening']:
+        page=await ctx.client.get('/api/quick-invites/public/'+alias,params={'reply':key})
+        assert page.status_code==200,page.text
+        assert page.json()['recipient']['name']=='Ada' and page.json()['recipient']['party_size']==2
+        assert page.json()['reply_storage_key']==original
+        og=await ctx.client.get('/api/og/i/'+alias)
+        assert og.status_code==200 and 'Ada' not in og.text
+    second,_=await create(ctx,monkeypatch)
+    collision=await ctx.client.post('/api/quick-invites/manage/'+second['id']+'/link',json={'slug':'family-dinner'})
+    assert collision.status_code==409
+    denied=await ctx.client.post('/api/quick-invites/manage/'+workspace['id']+'/link',json={'slug':'take-over'})
+    assert denied.status_code in (403,404)
+    assert (await ctx.client.get('/api/quick-invites/public/family-evening')).json()['recipient'] is None
+
+
+@pytest.mark.parametrize('slug',['abc','../bad','two words','-start','end-','two--hyphens','a'*49,'be65bc06-e8f2-4ca2-b3d2-b4bb4e92b8b8'])
+async def test_invalid_link_names_are_rejected(ctx,monkeypatch,slug):
+    workspace,_=await create(ctx,monkeypatch)
+    result=await ctx.client.post('/api/quick-invites/manage/'+workspace['id']+'/link',json={'slug':slug})
+    assert result.status_code==422,result.text
+
+
+async def test_closed_short_link_keeps_private_invitation_title_out_of_social_cards(ctx,monkeypatch):
+    workspace,_=await create(ctx,monkeypatch)
+    code=workspace['url'].rsplit('/',1)[1]
+    async with _Session() as db:
+        event=await db.get(Event,workspace['id']);event.invite_mode='closed';await db.commit()
+    assert (await ctx.client.get('/api/quick-invites/public/'+code)).status_code==403
+    card=await ctx.client.get('/api/og/i/'+code)
+    assert card.status_code==200 and 'Dinner &amp; good company' not in card.text
+    assert 'Dinner & good company' not in card.text

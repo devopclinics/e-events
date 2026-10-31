@@ -6,6 +6,8 @@ All public edits require the recipient's unguessable reply credential.
 import html
 import hashlib
 import uuid
+import secrets
+import re
 from datetime import datetime, timezone
 from typing import Literal
 from zoneinfo import ZoneInfo
@@ -13,11 +15,12 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request,
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 from ..auth import get_current_user, require_admin, require_event_admin, require_verified_current_email
 from ..config import settings
 from ..database import get_db
 from ..entitlements import assert_within_guest_cap, EMAIL_FREE_QUOTA
-from ..models import Event, Guest, Membership, Organization, QuickInviteRecipient, User, RSVPQuestion
+from ..models import Event, Guest, Membership, Organization, QuickInviteRecipient, QuickInviteAlias, User, RSVPQuestion
 from ..ratelimit import rate_limit
 from ..schemas import EventCreate
 from .events import create_event
@@ -65,6 +68,45 @@ class InviteDraft(BaseModel):
         return value
 
 
+class InvitationLink(BaseModel):
+    slug: str = Field(default="", max_length=48)
+
+    @field_validator("slug")
+    @classmethod
+    def valid_slug(cls, value):
+        value = value.strip().lower()
+        if value and (len(value) < 4 or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", value) or re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", value)):
+            raise ValueError("Use 4–48 lowercase letters, numbers or single hyphens. UUID links are reserved.")
+        return value
+
+
+async def reserve_alias(event, db, slug=""):
+    """The primary key makes reservation atomic across organizations/replicas."""
+    for _ in range(8):
+        code = slug or secrets.token_hex(5)
+        legacy = await db.scalar(select(Event.id).where(Event.rsvp_token == code))
+        if legacy and legacy != event.id:
+            if slug:
+                raise HTTPException(409, "That invitation link is already in use. Choose another name.")
+            continue
+        existing = await db.get(QuickInviteAlias, code)
+        if existing:
+            if existing.event_id == event.id:
+                return code
+            if slug:
+                raise HTTPException(409, "That invitation link is already in use. Choose another name.")
+            continue
+        try:
+            async with db.begin_nested():
+                db.add(QuickInviteAlias(code=code, event_id=event.id))
+                await db.flush()
+            return code
+        except IntegrityError:
+            if slug:
+                raise HTTPException(409, "That invitation link is already in use. Choose another name.")
+    raise HTTPException(503, "Could not reserve a short link. Please try again.")
+
+
 class EmailContact(BaseModel):
     email: EmailStr
     name: str = Field(default="", max_length=200)
@@ -106,7 +148,10 @@ def public_data(event):
 
 
 async def invitation(token, db, *, lock=False):
-    query = select(Event).where(Event.rsvp_token == token)
+    alias = await db.get(QuickInviteAlias, token)
+    if alias and not alias.event_id:
+        raise HTTPException(404, "Invitation not found")
+    query = select(Event).where(Event.id == alias.event_id) if alias and alias.event_id else select(Event).where(Event.rsvp_token == token)
     event = await db.scalar(query.with_for_update() if lock else query)
     org = await db.get(Organization, event.org_id) if event else None
     if not event or not preferences(event) or not org or not org.is_active:
@@ -147,7 +192,7 @@ async def owned(event_id, user, db, request):
 
 def share_url(event, recipient=None):
     base = (settings.public_base_url or settings.frontend_url).rstrip("/")
-    return f"{base}/i/{event.rsvp_token}" + (f"?reply={recipient.token}" if recipient else "")
+    return f"{base}/i/{preferences(event).get('share_slug') or event.rsvp_token}" + (f"?reply={recipient.token}" if recipient else "")
 
 
 async def workspace(event, db):
@@ -173,7 +218,7 @@ async def workspace(event, db):
             visible.append({'id': 'guest:'+guest.id, 'name': f'{guest.first_name} {guest.last_name}'.strip(), 'email': guest.email,
                             'response': states.get(guest.rsvp_status), 'send_status': 'draft', 'responded_at': guest.rsvp_responded_at, 'sent_at': None})
     return {"id": event.id, "invitation": {**public_data(event), "creator_email": preferences(event).get("creator_email", ""), "creator_phone": preferences(event).get("creator_phone", "")}, "url": share_url(event), "status": event.status,
-            "email_limit": min(75, EMAIL_FREE_QUOTA), "email_attempts": sum(r.attempts for r in rows),
+            "link_slug": preferences(event).get("share_slug", ""), "email_limit": min(75, EMAIL_FREE_QUOTA), "email_attempts": sum(r.attempts for r in rows),
             "recipients": visible, "response_totals": {state: sum(row.get('party_counts', {row.get('response'): 1}).get(state, 0) for row in visible) for state in states.values()}}
 
 
@@ -236,6 +281,16 @@ async def edit(event_id: str, request: Request, data: InviteDraft, db: AsyncSess
     return await workspace(event, db)
 
 
+@router.post("/manage/{event_id}/link", dependencies=[Depends(rate_limit(limit=10, window=60, scope="quick-link"))])
+async def customize_link(event_id: str, request: Request, data: InvitationLink, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await owned(event_id, user, db, request)
+    event = await db.scalar(select(Event).where(Event.id == event_id).with_for_update())
+    code = await reserve_alias(event, db, data.slug)
+    event.setup_preferences = {**event.setup_preferences, "quick_invite": {**preferences(event), "share_slug": code}}
+    await db.commit()
+    return await workspace(event, db)
+
+
 @router.get("/manage/{event_id}")
 async def get_workspace(event_id: str, request: Request, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await workspace(await owned(event_id, user, db, request), db)
@@ -249,7 +304,7 @@ async def get_public(token: str, response: Response, reply: str | None = None, d
     if reply and not person: raise HTTPException(404, "Personal invitation not found")
     if event.invite_mode == 'closed' and not person:
         raise HTTPException(403, "Please open the personal invitation sent to you by the organizer.")
-    return {"invitation": public_data(event), "registration_url": await registration_target(event, db, person),
+    return {"reply_storage_key": event.rsvp_token, "invitation": public_data(event), "registration_url": await registration_target(event, db, person),
             "recipient": {"name": person.name, "response": person.response, "message": person.reply_message or "", "party_size": person.party_size or 1} if person else None}
 
 

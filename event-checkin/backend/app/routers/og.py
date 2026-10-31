@@ -36,7 +36,7 @@ router = APIRouter()
 async def og_quick_invitation(token: str, db: AsyncSession = Depends(get_db)):
     from .quick_invites import invitation
     event = await invitation(token, db)
-    response = _render(event, title=event.name, description="You're invited. Open the invitation and send your reply.", canonical_path=f"/i/{token}")
+    response = _render(event, title="You're invited" if event.invite_mode == "closed" or event.attendance_mode == "private" else event.name, description="You're invited. Open the invitation and send your reply.", canonical_path=f"/i/{token}")
     response.headers.update({"Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex, nofollow"})
     return response
 

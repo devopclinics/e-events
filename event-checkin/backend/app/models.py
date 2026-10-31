@@ -5,6 +5,14 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 
 
+class QuickInviteAlias(Base):
+    """Permanent invitation aliases; deleted events leave reserved tombstones."""
+    __tablename__ = "quick_invite_aliases"
+    code: Mapped[str] = mapped_column(String(48), primary_key=True)
+    event_id: Mapped[str | None] = mapped_column(ForeignKey("events.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class QuickInviteRecipient(Base):
     """Invitation contacts are not Guests until they submit an RSVP."""
     __tablename__ = "quick_invite_recipients"

@@ -1048,3 +1048,20 @@ test('Design Studio preserves the invitation and saves drafts before explicit pu
   await page.screenshot({path:'test-results/studio-invitation-mobile.png',fullPage:true})
   expect(errors).toEqual([])
 })
+
+
+test('invitation owners can configure short links and saved replies survive aliases', async ({page}) => {
+  await setup(page)
+  await page.evaluate(()=>{window.fixtureQuickWorkspace={id:'quick-one',invitation:{name:'Family dinner',event_date:'2027-06-20T23:00:00Z',timezone:'America/Chicago'},url:location.origin+'/i/original-code',link_slug:'original-code',status:'active',email_limit:75,email_attempts:0,recipients:[]};window.fixtureSetUser({id:'organizer-1',role:'official'})})
+  await page.waitForFunction(()=>window.fixtureCurrentUser?.id==='organizer-1')
+  await page.evaluate(()=>{history.pushState({},'', '/create-invitation?event=quick-one');dispatchEvent(new PopStateEvent('popstate'))})
+  await page.getByText('Shorten or customize your link',{exact:true}).click()
+  await page.getByLabel('Invitation link name',{exact:true}).fill('family-dinner')
+  await page.getByRole('button',{name:'Save invitation link',exact:true}).click()
+  await expect(page.getByLabel('Shareable link',{exact:true})).toHaveValue(/\/i\/family-dinner$/)
+  await expect(page.getByRole('status')).toContainText('Previous links still work')
+  await page.evaluate(()=>{window.fixtureQuickStorageKey='original-uuid';window.fixtureQuickReply={name:'Ada',response:'going',party_size:2};localStorage.setItem('festio:invitation-reply:original-uuid','private-reply-fixture');history.pushState({},'', '/i/family-dinner');dispatchEvent(new PopStateEvent('popstate'))})
+  await expect(page.getByRole('heading',{name:'Thank you, Ada.'})).toBeVisible()
+  await expect(page.getByRole('status')).toContainText('2 people')
+  expect(await page.evaluate(()=>window.fixtureQuickWrites.map(w=>w.action))).toEqual(['link'])
+})

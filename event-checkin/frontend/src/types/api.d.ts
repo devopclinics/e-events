@@ -1917,6 +1917,10 @@ export interface InboundSenderRule {
   value: string
 }
 
+export interface InvitationLink {
+  slug?: string
+}
+
 export interface InvitationOpeningUpdate {
   continue_mode?: ('auto' | 'manual') | null
   enabled: boolean

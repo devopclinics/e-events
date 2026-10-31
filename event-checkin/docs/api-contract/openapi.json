@@ -12113,6 +12113,18 @@
         "title": "InboundSenderRule",
         "type": "object"
       },
+      "InvitationLink": {
+        "properties": {
+          "slug": {
+            "default": "",
+            "maxLength": 48,
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "title": "InvitationLink",
+        "type": "object"
+      },
       "InvitationOpeningUpdate": {
         "additionalProperties": false,
         "properties": {
@@ -58378,6 +58390,61 @@
           }
         ],
         "summary": "Edit",
+        "tags": [
+          "quick-invites"
+        ]
+      }
+    },
+    "/api/quick-invites/manage/{event_id}/link": {
+      "post": {
+        "operationId": "customize_link_api_quick_invites_manage__event_id__link_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvitationLink"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Customize Link",
         "tags": [
           "quick-invites"
         ]

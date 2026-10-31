@@ -12163,7 +12163,10 @@
             "enum": [
               "mint",
               "lavender",
-              "rose"
+              "rose",
+              "sky",
+              "sand",
+              "midnight"
             ],
             "title": "Colour",
             "type": "string"
@@ -12230,7 +12233,10 @@
             "enum": [
               "editorial",
               "arch",
-              "minimal"
+              "minimal",
+              "botanical",
+              "gala",
+              "postcard"
             ],
             "title": "Style",
             "type": "string"

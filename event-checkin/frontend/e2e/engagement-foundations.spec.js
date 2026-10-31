@@ -990,3 +990,18 @@ test('private invitation management removes guest information on signout', async
   await expect(page).toHaveURL(/\/login/)
   await expect(page.getByText('private@example.test',{exact:true})).toHaveCount(0)
 })
+
+test('free invitation offers six distinct styles and six colours without mobile overflow', async ({ page }) => {
+  await setup(page)
+  await page.setViewportSize({width:390,height:900})
+  await page.evaluate(() => { history.pushState({}, '', '/create-invitation'); dispatchEvent(new PopStateEvent('popstate')) })
+  for (const style of ['Editorial','Arch','Minimal','Botanical','Gala','Postcard']) {
+    await page.getByRole('button',{name:style,exact:true}).click()
+    for (const colour of ['mint','lavender','rose','sky','sand','midnight']) {
+      await page.getByRole('button',{name:colour,exact:true}).click()
+      await expect(page.locator('.qi-invitation')).toHaveClass(new RegExp('qi-'+style.toLowerCase()+' qi-'+colour))
+      expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+    }
+  }
+  await expect(page.getByText('Unlimited link replies',{exact:true})).toBeVisible()
+})

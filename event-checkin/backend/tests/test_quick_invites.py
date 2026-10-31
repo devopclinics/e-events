@@ -152,10 +152,11 @@ async def test_existing_email_requires_its_private_link(ctx, monkeypatch):
         assert await db.scalar(select(func.count()).select_from(Guest).where(Guest.event_id == workspace['id'])) == 0
 
 
-async def test_guest_limit_is_not_bypassed_by_shared_replies(ctx, monkeypatch):
+async def test_emailed_invitation_keeps_guest_limit(ctx, monkeypatch):
     workspace, _ = await create(ctx, monkeypatch)
     async with _Session() as db:
         event = await db.get(Event, workspace['id'])
+        db.add(QuickInviteRecipient(event_id=event.id, email='sent@example.com', attempts=1, send_status='sent'))
         db.add_all([Guest(event_id=event.id, first_name='Existing',last_name=str(i)) for i in range(25)])
         await db.commit()
     token = workspace['url'].rsplit('/',1)[1]
@@ -239,3 +240,26 @@ async def test_creator_contacts_and_guest_message_stay_private(ctx, monkeypatch)
     assert (await ctx.client.get('/api/quick-invites/manage/'+workspace['id'])).json()['recipients'][0]['message'] == ''
     reply['message'] = 'x'*1001
     assert (await ctx.client.post('/api/quick-invites/public/'+token+'/reply', json=reply)).status_code == 422
+
+
+async def test_link_only_replies_exceed_25_but_cannot_switch_to_free_email(ctx, monkeypatch):
+    workspace, _ = await create(ctx, monkeypatch)
+    async with _Session() as db:
+        db.add_all([Guest(event_id=workspace['id'], first_name='Existing', last_name=str(i)) for i in range(25)])
+        await db.commit()
+    token = workspace['url'].rsplit('/',1)[1]
+    result = await ctx.client.post('/api/quick-invites/public/'+token+'/reply', json={'name':'Guest 26', 'response':'going', 'request_id':str(uuid.uuid4())})
+    assert result.status_code == 200, result.text
+    app.dependency_overrides[verified_sender] = lambda: None
+    sent = await ctx.client.post('/api/quick-invites/manage/'+workspace['id']+'/send', json={'recipients':[{'email':'someone@example.com'}], 'confirm':True})
+    assert sent.status_code == 422 and 'more than 25 replies' in sent.json()['detail']
+    async with _Session() as db:
+        assert not await db.scalar(select(QuickInviteRecipient.id).where(QuickInviteRecipient.event_id==workspace['id'], QuickInviteRecipient.attempts>0))
+
+
+async def test_new_styles_and_colours_validate_without_changing_existing_designs():
+    from app.routers.quick_invites import InviteDraft, PALETTES
+    for style in ['editorial', 'arch', 'minimal', 'botanical', 'gala', 'postcard']:
+        for colour in ['mint', 'lavender', 'rose', 'sky', 'sand', 'midnight']:
+            assert InviteDraft(**draft(style=style, colour=colour)).style == style
+            assert colour in PALETTES

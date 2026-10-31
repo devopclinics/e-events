@@ -25,6 +25,7 @@ from .events import create_event
 router = APIRouter()
 PALETTES = {"mint": ("#123b35", "#e5efe8", "#cbdcbd"), "lavender": ("#25243e", "#f0ecf6", "#cfc2ed"), "rose": ("#5c343c", "#faf0eb", "#edc6bb")}
 
+PALETTES.update({"sky": ("#173f5f", "#edf5fa", "#b8d8ed"), "sand": ("#59432d", "#faf3e7", "#dfc8a3"), "midnight": ("#e7e5fa", "#191b32", "#b9abd9")})
 
 class InviteDraft(BaseModel):
     name: str = Field(min_length=1, max_length=160)
@@ -35,8 +36,8 @@ class InviteDraft(BaseModel):
     creator_email: EmailStr | None = None
     creator_phone: str = Field(default="", max_length=40)
     host_name: str = Field(default="", max_length=120)
-    style: Literal["editorial", "arch", "minimal"] = "editorial"
-    colour: Literal["mint", "lavender", "rose"] = "mint"
+    style: Literal["editorial", "arch", "minimal", "botanical", "gala", "postcard"] = "editorial"
+    colour: Literal["mint", "lavender", "rose", "sky", "sand", "midnight"] = "mint"
     cover: str = Field(default="", max_length=2000)
     envelope: bool = False
     request_id: uuid.UUID
@@ -271,7 +272,11 @@ async def respond(token: str, data: Reply, response: Response, db: AsyncSession 
     if not guest:
         count = await db.scalar(select(func.count()).select_from(Guest).where(Guest.event_id == event.id)) or 0
         try:
-            assert_within_guest_cap(event, count)
+            emailed = await db.scalar(select(QuickInviteRecipient.id).where(QuickInviteRecipient.event_id == event.id, QuickInviteRecipient.attempts > 0).limit(1))
+            # Unlimited applies only to this simple public link reply flow.
+            # Full registration and paid services retain their own entitlements.
+            if emailed:
+                assert_within_guest_cap(event, count)
         except HTTPException as exc:
             if exc.status_code == 402:
                 raise HTTPException(409, "This invitation has reached its guest limit. Please contact the organizer.")
@@ -309,8 +314,12 @@ async def send(event_id: str, request: Request, data: SendInvites, db: AsyncSess
     await invitation(event.rsvp_token, db)
     rows = (await db.scalars(select(QuickInviteRecipient).where(QuickInviteRecipient.event_id == event.id))).all()
     addresses = {str(p.email).strip().lower(): p for p in data.recipients}
-    new_count = len(set(addresses)-{r.email for r in rows if r.email})
-    if len(rows)+new_count > 25: raise HTTPException(422, "Quick invitations support 25 contacts. Open the full event workspace for larger lists.")
+    guest_count = await db.scalar(select(func.count()).select_from(Guest).where(Guest.event_id == event.id)) or 0
+    if guest_count > 25:
+        raise HTTPException(422, "This invitation has more than 25 replies. Keep sharing the link for unlimited replies, or use the full event workspace for email invitations.")
+    emailed = {r.email for r in rows if r.email and r.attempts > 0}
+    new_count = len(set(addresses)-emailed)
+    if len(emailed)+new_count > 25: raise HTTPException(422, "Quick invitations support 25 contacts. Open the full event workspace for larger lists.")
     requested = []
     for address, contact in addresses.items():
         person = next((r for r in rows if r.email == address), None)
@@ -326,7 +335,7 @@ async def send(event_id: str, request: Request, data: SendInvites, db: AsyncSess
     for person in requested:
         person.send_status = "queued"
         person.attempts += 1
-        person.email_subject = "You're invited — " + event.name
+        person.email_subject = "You're invited: " + event.name
         person.email_html = email_document(event, person)
     await db.commit()
     return {"queued": len(requested), "skipped": len(addresses)-len(requested)}

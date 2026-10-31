@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     # Organization-scoped Event Pass rollout. Keep false in production until
     # staging migration, reconciliation and acceptance checks have passed.
     organization_entitlements_v2: bool = False
+    # Temporary stabilization policy. Does not grant paid features or credits.
+    unlimited_event_creation: bool = False
     # Extra CORS origins (comma-separated) on top of frontend_url + the Capacitor
     # native WebView origins. Set to add e.g. a staging URL.
     cors_extra_origins: str = ""

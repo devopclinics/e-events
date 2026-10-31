@@ -36,7 +36,7 @@ def guest_cap(org: Organization, now: datetime | None = None) -> int:
 
 
 def assert_can_create_event(org: Organization, existing_event_count: int, *, is_superadmin: bool = False) -> None:
-    if is_superadmin or pass_is_active(org):
+    if settings.unlimited_event_creation or is_superadmin or pass_is_active(org):
         return
     if not org.free_event_used and existing_event_count == 0:
         return

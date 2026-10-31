@@ -313,7 +313,7 @@ async def create_event(
             select(func.count()).select_from(Event).where(Event.org_id == org_id)
         ) or 0
         assert_can_create_event(org, int(existing_event_count), is_superadmin=current_user.is_platform_superadmin)
-    elif not current_user.is_platform_superadmin:
+    elif not current_user.is_platform_superadmin and not settings.unlimited_event_creation:
         has_paid_event = await db.scalar(
             select(Event.id).where(Event.org_id == org_id, Event.is_paid.is_(True)).limit(1)
         )
@@ -493,7 +493,7 @@ async def duplicate_event(
             select(func.count()).select_from(Event).where(Event.org_id == org_id)
         ) or 0
         assert_can_create_event(org, int(existing_event_count), is_superadmin=current_user.is_platform_superadmin)
-    elif not current_user.is_platform_superadmin:
+    elif not current_user.is_platform_superadmin and not settings.unlimited_event_creation:
         has_paid_event = await db.scalar(
             select(Event.id).where(Event.org_id == org_id, Event.is_paid.is_(True)).limit(1)
         )

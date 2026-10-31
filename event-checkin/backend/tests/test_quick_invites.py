@@ -320,3 +320,21 @@ async def test_emailed_invitation_counts_every_party_member_against_limit(ctx,mo
     assert result.status_code==409
     async with _Session() as db:
         assert await db.scalar(select(func.count()).select_from(Guest).where(Guest.event_id==workspace['id']))==24
+
+
+@pytest.mark.parametrize('v2',[False,True])
+async def test_stabilization_allows_multiple_free_invitations_and_duplicates(ctx,monkeypatch,v2):
+    from app.config import settings
+    monkeypatch.setattr(settings,'organization_entitlements_v2',v2)
+    monkeypatch.setattr(settings,'unlimited_event_creation',True)
+    workspace,_=await create(ctx,monkeypatch)
+    second=await ctx.client.post('/api/quick-invites',json=draft(name='Another occasion'))
+    assert second.status_code==201,second.text
+    assert second.json()['id']!=workspace['id']
+    duplicate=await ctx.client.post('/api/events/'+workspace['id']+'/duplicate',json={'name':'A new event','event_date':draft()['event_date']})
+    assert duplicate.status_code==201,duplicate.text
+    async with _Session() as db:
+        events=(await db.scalars(select(Event).where(Event.id.in_([workspace['id'],second.json()['id'],duplicate.json()['id']])))).all()
+        assert len(events)==3
+        assert all(not event.is_paid and not event.paid_channels for event in events)
+        assert await db.scalar(select(func.count()).select_from(Guest).where(Guest.event_id.in_([event.id for event in events])))==0

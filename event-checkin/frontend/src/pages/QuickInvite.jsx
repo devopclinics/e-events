@@ -90,7 +90,7 @@ function QuickInvite() {
       setEmails(''); setWorkspace(await api.quickInviteWorkspace(eventId))
     } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
-  return <Frame><main className="qi-studio"><div className="qi-intro"><span className="qi-eyebrow">CREATE AN INVITATION</span><h1>Your occasion.<br /><em>Your invitation.</em></h1><p>Make it yours. Email it or share a link. Keep every reply in one place.</p><div className="qi-chips"><span>Free first event</span><span>Unlimited link replies</span><span>No guest account needed</span></div></div>
+  return <Frame><main className="qi-studio"><div className="qi-intro"><span className="qi-eyebrow">CREATE AN INVITATION</span><h1>Your occasion.<br /><em>Your invitation.</em></h1><p>Make it yours. Email it or share a link. Keep every reply in one place.</p><div className="qi-chips"><span>Free invitations</span><span>Unlimited link replies</span><span>No guest account needed</span></div></div>
     {error && <div className="qi-alert" role="alert">{error}<button onClick={load}>Retry</button></div>}{notice && <p className="qi-notice" role="status">{notice}</p>}
     {user && !eventId && myInvites.length > 0 && <section className="qi-existing"><h2>Your invitations</h2>{myInvites.map(item => <Link key={item.id} to={`/create-invitation?event=${item.id}`} onClick={() => setEditing(false)}>{item.name} <span>Open →</span></Link>)}</section>}
     <div className="qi-workspace"><section className="qi-controls">

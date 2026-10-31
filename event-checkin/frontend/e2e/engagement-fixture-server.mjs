@@ -9,7 +9,7 @@ const modules = {
     export function AuthProvider({ children }) {
       const [user, setUser] = useState(null);
       const [loading, setLoading] = useState(false);
-      window.fixtureSetUser = setUser; window.fixtureSetLoading = setLoading;
+      window.fixtureSetUser = setUser; window.fixtureSetLoading = setLoading; window.fixtureCurrentUser = user;
       return React.createElement(Auth.Provider, { value: { user, loading } }, children);
     }
     export const useAuth = () => useContext(Auth);`,
@@ -25,7 +25,7 @@ const modules = {
     sendQuickInvite: async (id,body) => { if(window.fixtureQuickSendError)throw new Error('Verify your email before sending');(window.fixtureQuickWrites ||= []).push({action:'send',body});window.fixtureQuickWorkspace.recipients=body.recipients.map((p,i)=>({...p,id:String(i),send_status:'sent'}));window.fixtureQuickWorkspace.email_attempts+=body.recipients.length;return {queued:body.recipients.length,skipped:0}; },
     publicQuickInvite: async (token,reply) => { if(window.fixtureQuickPublicError)throw new Error('This invitation is closed');return {registration_url:window.fixtureQuickRegistrationUrl,invitation:window.fixtureQuickWorkspace?.invitation||{name:'Dinner under the stars',event_date:'2027-06-20T23:00:00Z',timezone:'America/Chicago',message:'An evening together',style:'arch',colour:'lavender',venue_name:'The garden'},recipient:reply?{name:window.fixtureQuickReply?.name||'Ada',response:window.fixtureQuickReply?.response}:null}; },
     replyQuickInvite: async (token,body) => { (window.fixtureQuickWrites ||= []).push({action:'reply',body});window.fixtureQuickReply=body;return {response:body.response,reply_token:'private-reply-fixture'}; },
-    listEvents: async () => [{id:'event-one',name:'Academy fundraiser'},{id:'event-two',name:'Academy next occasion'}],
+    listEvents: async () => [{id:'event-one',name:'Academy fundraiser'},{id:'event-two',name:'Academy next occasion'},...(window.fixtureQuickWorkspace?[{id:'quick-one',name:'Dinner'}]:[])],
     listSharedMedia: async eventId => { if(window.fixtureMediaError)throw new Error('Shared files unavailable');return {organization:{id:'org-one',name:'Academy'},assets:window.fixtureMediaAssets ||= [{id:'media-one',title:'Academy logo',filename:'logo.png',url:'/media/help2-event-setup.png',content_type:'image/png',byte_size:1200,width:80,height:40},{id:'media-pdf',title:'Programme',filename:'programme.pdf',url:'/media/festio-onepager.pdf',content_type:'application/pdf',byte_size:2500}]}; },
     uploadSharedMedia: async (eventId,file) => { (window.fixtureMediaWrites ||= []).push({action:'upload',eventId,name:file.name});const asset={id:'media-uploaded',title:file.name,filename:file.name,url:'/media/help2-org-start.png',content_type:file.type,byte_size:file.size};(window.fixtureMediaAssets ||= []).push(asset);return asset; },
     renameSharedMedia: async (eventId,id,title) => { (window.fixtureMediaWrites ||= []).push({action:'rename',eventId,id,title});const row=window.fixtureMediaAssets.find(a=>a.id===id);row.title=title;return row; },

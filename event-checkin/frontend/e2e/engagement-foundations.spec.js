@@ -916,11 +916,15 @@ test('free invitation drafts start without an account and survive signup navigat
   await expect(page.getByRole('button', { name: 'Copy invitation link', exact: true })).toBeVisible()
   expect(await page.evaluate(() => window.fixtureQuickWrites.filter(w => w.action === 'create').length)).toBe(1)
   await expect(page.getByRole('link', { name: /Full event workspace/ })).toHaveAttribute('href', '/admin-redesign?event=quick-one')
+  await page.locator('.qi-header').getByRole('link',{name:'Create a free invitation'}).click()
+  await expect(page.getByLabel('Invitation title')).toHaveValue('')
 })
 
 test('free invitations send only after review and recover from email verification errors', async ({ page }) => {
   await setup(page)
-  await page.evaluate(() => { window.fixtureQuickWorkspace={id:'quick-one',invitation:{name:'Dinner',event_date:'2027-06-20T23:00:00Z',timezone:'America/Chicago',style:'minimal',colour:'mint'},url:location.origin+'/i/fixture',status:'active',email_limit:75,email_attempts:0,recipients:[]};window.fixtureSetUser({id:'organizer-1',role:'official'});history.pushState({}, '', '/create-invitation?event=quick-one');dispatchEvent(new PopStateEvent('popstate')) })
+  await page.evaluate(() => { window.fixtureQuickWorkspace={id:'quick-one',invitation:{name:'Dinner',event_date:'2027-06-20T23:00:00Z',timezone:'America/Chicago',style:'minimal',colour:'mint'},url:location.origin+'/i/fixture',status:'active',email_limit:75,email_attempts:0,recipients:[]};window.fixtureSetUser({id:'organizer-1',role:'official'}); })
+  await page.waitForFunction(() => window.fixtureCurrentUser?.id === 'organizer-1')
+  await page.evaluate(() => { history.pushState({}, '', '/create-invitation?event=quick-one');dispatchEvent(new PopStateEvent('popstate')) })
   await page.getByLabel('Email addresses').fill('ada@example.com, sam@example.com')
   page.once('dialog', dialog => dialog.dismiss())
   await page.getByRole('button', { name:'Review & send emails' }).click()
@@ -970,4 +974,15 @@ test('an invitation hands off to grown-event registration without creating a fre
   await expect(page.getByRole('link',{name:'Continue to registration'})).toHaveAttribute('href','/tickets/e/quick-one')
   await expect(page.getByRole('button',{name:'Send my reply'})).toHaveCount(0)
   expect(await page.evaluate(()=>window.fixtureQuickWrites||[])).toEqual([])
+})
+
+test('private invitation management removes guest information on signout', async ({ page }) => {
+  await setup(page)
+  await page.evaluate(() => { window.fixtureQuickWorkspace={id:'quick-one',invitation:{name:'Dinner',event_date:'2027-06-20T23:00:00Z',timezone:'America/Chicago',style:'minimal',colour:'mint'},url:location.origin+'/i/fixture',status:'active',email_limit:75,email_attempts:1,recipients:[{id:'ada',name:'Private guest',email:'private@example.test',send_status:'sent'}]};window.fixtureSetUser({id:'organizer-1',role:'official'}); })
+  await page.waitForFunction(() => window.fixtureCurrentUser?.id === 'organizer-1')
+  await page.evaluate(() => { history.pushState({}, '', '/create-invitation?event=quick-one');dispatchEvent(new PopStateEvent('popstate')) })
+  await expect(page.getByText('private@example.test',{exact:true})).toBeVisible()
+  await page.evaluate(()=>window.fixtureSetUser(null))
+  await expect(page).toHaveURL(/\/login/)
+  await expect(page.getByText('private@example.test',{exact:true})).toHaveCount(0)
 })

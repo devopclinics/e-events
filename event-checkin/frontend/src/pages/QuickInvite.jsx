@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../context/AuthContext'
 import { zonedWallTimeToUtcISOString, utcToZonedInput } from '../timeutil'
+import ProtectedRoute from '../components/ProtectedRoute'
 import InvitationOpening from '../components/invitations/InvitationOpening'
 import './QuickInvite.css'
 
@@ -27,13 +28,19 @@ export function InvitationCard({ data, children }) {
 function Frame({ children, publicView = false }) {
   return <div className={`qi-app${publicView ? ' qi-public' : ''}`}><header className="qi-header"><Link to="/" className="qi-brand"><b>F</b> Festio</Link><span>{publicView ? 'A little invitation. A lovely occasion.' : 'Invitations, made easy.'}</span><Link to="/create-invitation">Create a free invitation ↗</Link></header>{children}<footer className="qi-footer"><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link><span>Made for moments that bring people together.</span></footer></div>
 }
-export default function QuickInvite() {
+export default function QuickInviteEntry() {
+  const { user } = useAuth()
+  const [params] = useSearchParams()
+  const editor = <QuickInvite key={user?.id || 'anonymous'} />
+  return params.get('event') ? <ProtectedRoute>{editor}</ProtectedRoute> : editor
+}
+function QuickInvite() {
   const { user } = useAuth(), [params, setParams] = useSearchParams(), navigate = useNavigate()
   const eventId = params.get('event')
   const [draft, setDraft] = useState(initial), [workspace, setWorkspace] = useState(null), [myInvites, setMyInvites] = useState([])
   const [editing, setEditing] = useState(!eventId), [emails, setEmails] = useState(''), [busy, setBusy] = useState(false), [notice, setNotice] = useState(''), [error, setError] = useState('')
   function update(key, value) { setDraft(prev => ({ ...prev, [key]: value })) }
-  useEffect(() => { try { localStorage.setItem('festio:quick-invite-draft', JSON.stringify(draft)) } catch {} }, [draft])
+  useEffect(() => { if (eventId) return; try { localStorage.setItem('festio:quick-invite-draft', JSON.stringify(draft)) } catch {} }, [draft, eventId])
   async function load() {
     if (!user) return
     setError('')
@@ -60,6 +67,7 @@ export default function QuickInvite() {
       const body = { ...draft, event_date: zonedWallTimeToUtcISOString(draft.localDate, draft.timezone) }; delete body.localDate
       if (utcToZonedInput(body.event_date, draft.timezone) !== draft.localDate) throw new Error('That local time does not exist in this timezone. Choose a different time.')
       const result = eventId ? await api.updateQuickInvite(eventId, body) : await api.createQuickInvite(body)
+      if (!eventId) { try { localStorage.removeItem('festio:quick-invite-draft') } catch {} }
       setWorkspace(result); setParams({ event: result.id }); setEditing(false); setNotice('Your invitation is ready to share.')
     } catch (e) { setError(e.message) } finally { setBusy(false) }
   }

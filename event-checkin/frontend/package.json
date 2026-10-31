@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "postbuild": "node scripts/gen-guide-html.mjs",
+    "postbuild": "node scripts/gen-guide-html.mjs && node scripts/gen-invitation-share-html.mjs",
     "preview": "vite preview",
     "test:e2e": "playwright test",
     "test:engagement": "node --test tests/engagement-foundations.test.mjs tests/signup-acquisition.test.mjs",

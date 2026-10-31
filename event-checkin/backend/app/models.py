@@ -16,6 +16,8 @@ class QuickInviteRecipient(Base):
     token: Mapped[str] = mapped_column(String(64), unique=True, default=lambda: uuid.uuid4().hex + uuid.uuid4().hex)
     guest_id: Mapped[str | None] = mapped_column(ForeignKey("guests.id", ondelete="SET NULL"), nullable=True)
     response: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    party_size: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    party_guest_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
     reply_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     send_status: Mapped[str] = mapped_column(String(20), default="draft", index=True)
     attempts: Mapped[int] = mapped_column(Integer, default=0)

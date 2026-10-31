@@ -24975,6 +24975,13 @@
             "title": "Name",
             "type": "string"
           },
+          "party_size": {
+            "default": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Party Size",
+            "type": "integer"
+          },
           "reply_token": {
             "anyOf": [
               {

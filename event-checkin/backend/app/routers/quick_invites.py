@@ -79,6 +79,7 @@ class Reply(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     email: EmailStr | None = None
     response: Literal["going", "maybe", "declined"]
+    party_size: int = Field(default=1, ge=1, le=100, strict=True)
     message: str = Field(default="", max_length=1000)
     reply_token: str | None = Field(default=None, max_length=64)
     request_id: uuid.UUID
@@ -158,16 +159,22 @@ async def workspace(event, db):
     states = {'confirmed': 'going', 'maybe': 'maybe', 'declined': 'declined', 'pending': 'approval', 'waitlisted': 'waitlisted'}
     for row in rows:
         guest = by_id.get(row.guest_id) or by_email.get((row.email or '').lower())
+        party = [by_id[gid] for gid in (row.party_guest_ids or [])[:max(0, (row.party_size or 1)-1)] if gid in by_id]
+        linked.update(row.party_guest_ids or [])
         if guest: linked.add(guest.id)
+        party_counts = {}
+        for member in ([guest] if guest else []) + party:
+            state = states.get(member.rsvp_status)
+            if state: party_counts[state] = party_counts.get(state, 0) + 1
         visible.append({'id': row.id, 'name': row.name, 'email': row.email, 'response': states.get(guest.rsvp_status) if guest else row.response,
-                        'message': row.reply_message or '', 'send_status': row.send_status, 'responded_at': guest.rsvp_responded_at if guest else row.responded_at, 'sent_at': row.sent_at})
+                        'party_size': row.party_size or 1, 'party_counts': party_counts, 'message': row.reply_message or '', 'send_status': row.send_status, 'responded_at': guest.rsvp_responded_at if guest else row.responded_at, 'sent_at': row.sent_at})
     for guest in guests:
         if guest.id not in linked:
             visible.append({'id': 'guest:'+guest.id, 'name': f'{guest.first_name} {guest.last_name}'.strip(), 'email': guest.email,
                             'response': states.get(guest.rsvp_status), 'send_status': 'draft', 'responded_at': guest.rsvp_responded_at, 'sent_at': None})
     return {"id": event.id, "invitation": {**public_data(event), "creator_email": preferences(event).get("creator_email", ""), "creator_phone": preferences(event).get("creator_phone", "")}, "url": share_url(event), "status": event.status,
             "email_limit": min(75, EMAIL_FREE_QUOTA), "email_attempts": sum(r.attempts for r in rows),
-            "recipients": visible}
+            "recipients": visible, "response_totals": {state: sum(row.get('party_counts', {row.get('response'): 1}).get(state, 0) for row in visible) for state in states.values()}}
 
 
 @router.post("", status_code=201)
@@ -243,7 +250,7 @@ async def get_public(token: str, response: Response, reply: str | None = None, d
     if event.invite_mode == 'closed' and not person:
         raise HTTPException(403, "Please open the personal invitation sent to you by the organizer.")
     return {"invitation": public_data(event), "registration_url": await registration_target(event, db, person),
-            "recipient": {"name": person.name, "response": person.response, "message": person.reply_message or ""} if person else None}
+            "recipient": {"name": person.name, "response": person.response, "message": person.reply_message or "", "party_size": person.party_size or 1} if person else None}
 
 
 @router.post("/public/{token}/reply", dependencies=[Depends(rate_limit(limit=30, window=60, scope="quick-rsvp"))])
@@ -266,21 +273,27 @@ async def respond(token: str, data: Reply, response: Response, db: AsyncSession 
         person = QuickInviteRecipient(event_id=event.id, name=data.name.strip(), email=email, token=key)
         db.add(person)
     if not data.name.strip(): raise HTTPException(422, "Enter your name")
+    party_size = data.party_size if "party_size" in data.model_fields_set else (person.party_size or 1)
     guest = await db.get(Guest, person.guest_id) if person.guest_id else None
+    companions = (await db.scalars(select(Guest).where(Guest.event_id == event.id, Guest.id.in_(person.party_guest_ids or [])))).all()
+    by_id = {g.id: g for g in companions if guest and g.rsvp_submitter_guest_id == guest.id}
+    companions = [by_id[gid] for gid in (person.party_guest_ids or []) if gid in by_id]
     if guest and guest.admitted and data.response != "going":
         raise HTTPException(409, "You are already checked in. Please contact the organizer to change your attendance.")
-    if not guest:
+    if any(g.admitted and (data.response != 'going' or index >= party_size-1) for index, g in enumerate(companions)):
+        raise HTTPException(409, "Someone in your party is already checked in. Please contact the organizer to change this reply.")
+    adding = (0 if guest else 1) + max(0, party_size-1-len(companions))
+    if adding:
         count = await db.scalar(select(func.count()).select_from(Guest).where(Guest.event_id == event.id)) or 0
         try:
             emailed = await db.scalar(select(QuickInviteRecipient.id).where(QuickInviteRecipient.event_id == event.id, QuickInviteRecipient.attempts > 0).limit(1))
-            # Unlimited applies only to this simple public link reply flow.
-            # Full registration and paid services retain their own entitlements.
             if emailed:
-                assert_within_guest_cap(event, count)
+                assert_within_guest_cap(event, count, adding=adding)
         except HTTPException as exc:
             if exc.status_code == 402:
                 raise HTTPException(409, "This invitation has reached its guest limit. Please contact the organizer.")
             raise
+    if not guest:
         parts = data.name.strip().split(' ', 1)
         guest = Guest(event_id=event.id, first_name=parts[0][:100], last_name=(parts[1] if len(parts)>1 else '')[:100], email=person.email or email,
                       invite_token=str(uuid.uuid4()), rsvp_status="invited")
@@ -296,8 +309,23 @@ async def respond(token: str, data: Reply, response: Response, db: AsyncSession 
     person.responded_at = datetime.utcnow()
     guest.rsvp_status = {"going": "confirmed", "maybe": "maybe", "declined": "declined"}[data.response]
     guest.rsvp_responded_at = person.responded_at
+    guest.rsvp_submitter_guest_id = guest.id
+    for index in range(max(len(companions), party_size-1)):
+        if index >= len(companions):
+            member = Guest(event_id=event.id, first_name=f"Guest {index+2}", last_name=f"of {data.name.strip()}"[:100],
+                           invite_token=str(uuid.uuid4()), rsvp_submitter_guest_id=guest.id, rsvp_submitter_name=data.name.strip(),
+                           rsvp_relationship="Accompanying guest", sms_consent=False, whatsapp_consent=False)
+            db.add(member)
+            await db.flush()
+            companions.append(member)
+        member = companions[index]
+        member.rsvp_status = guest.rsvp_status if index < party_size-1 else "declined"
+        member.rsvp_responded_at = person.responded_at
+        member.rsvp_submitter_name = data.name.strip()
+    person.party_guest_ids = [g.id for g in companions]
+    person.party_size = party_size
     await db.commit()
-    return {"response": person.response, "reply_token": person.token}
+    return {"response": person.response, "reply_token": person.token, "party_size": person.party_size}
 
 
 def email_document(event, person):

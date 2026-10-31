@@ -263,3 +263,60 @@ async def test_new_styles_and_colours_validate_without_changing_existing_designs
         for colour in ['mint', 'lavender', 'rose', 'sky', 'sand', 'midnight']:
             assert InviteDraft(**draft(style=style, colour=colour)).style == style
             assert colour in PALETTES
+
+
+async def test_party_size_syncs_roster_and_totals_without_duplicates(ctx, monkeypatch):
+    workspace, _ = await create(ctx, monkeypatch)
+    token = workspace['url'].rsplit('/',1)[1]
+    body = {'name':'Ada Guest','response':'going','party_size':3,'request_id':str(uuid.uuid4())}
+    saved = await ctx.client.post('/api/quick-invites/public/'+token+'/reply',json=body)
+    assert saved.status_code==200,saved.text
+    assert (await ctx.client.post('/api/quick-invites/public/'+token+'/reply',json=body)).status_code==200
+    private=(await ctx.client.get('/api/quick-invites/public/'+token,params={'reply':saved.json()['reply_token']})).json()
+    assert private['recipient']['party_size']==3
+    legacy={k:v for k,v in body.items() if k!='party_size'}
+    legacy['reply_token']=saved.json()['reply_token']
+    assert (await ctx.client.post('/api/quick-invites/public/'+token+'/reply',json=legacy)).json()['party_size']==3
+    dashboard=(await ctx.client.get('/api/quick-invites/manage/'+workspace['id'])).json()
+    assert len(dashboard['recipients'])==1 and dashboard['response_totals']['going']==3
+    async with _Session() as db:
+        guests=(await db.scalars(select(Guest).where(Guest.event_id==workspace['id']))).all()
+        assert len(guests)==3
+        ids={g.id for g in guests}
+        lead=next(g for g in guests if g.first_name=='Ada')
+        assert all(g.rsvp_submitter_guest_id==lead.id for g in guests)
+    body.update(reply_token=saved.json()['reply_token'],party_size=2,response='maybe')
+    assert (await ctx.client.post('/api/quick-invites/public/'+token+'/reply',json=body)).status_code==200
+    dashboard=(await ctx.client.get('/api/quick-invites/manage/'+workspace['id'])).json()
+    assert dashboard['response_totals']['going']==0 and dashboard['response_totals']['maybe']==2 and dashboard['response_totals']['declined']==0
+    body.update(party_size=3,response='going')
+    assert (await ctx.client.post('/api/quick-invites/public/'+token+'/reply',json=body)).status_code==200
+    async with _Session() as db:
+        guests=(await db.scalars(select(Guest).where(Guest.event_id==workspace['id']))).all()
+        assert {g.id for g in guests}==ids
+        member=next(g for g in guests if g.id!=lead.id);member.admitted=True
+        await db.commit()
+    body['response']='declined'
+    blocked=await ctx.client.post('/api/quick-invites/public/'+token+'/reply',json=body)
+    assert blocked.status_code==409 and 'already checked in' in blocked.json()['detail']
+
+
+@pytest.mark.parametrize('size',[0,-1,101,1.5,'2',True])
+async def test_invalid_party_size_is_rejected(ctx,monkeypatch,size):
+    workspace,_=await create(ctx,monkeypatch)
+    token=workspace['url'].rsplit('/',1)[1]
+    result=await ctx.client.post('/api/quick-invites/public/'+token+'/reply',json={'name':'Ada','response':'going','party_size':size,'request_id':str(uuid.uuid4())})
+    assert result.status_code==422
+
+
+async def test_emailed_invitation_counts_every_party_member_against_limit(ctx,monkeypatch):
+    workspace,_=await create(ctx,monkeypatch)
+    async with _Session() as db:
+        db.add(QuickInviteRecipient(event_id=workspace['id'],email='sent@example.com',attempts=1,send_status='sent'))
+        db.add_all([Guest(event_id=workspace['id'],first_name='Existing',last_name=str(i)) for i in range(24)])
+        await db.commit()
+    token=workspace['url'].rsplit('/',1)[1]
+    result=await ctx.client.post('/api/quick-invites/public/'+token+'/reply',json={'name':'Ada','response':'going','party_size':2,'request_id':str(uuid.uuid4())})
+    assert result.status_code==409
+    async with _Session() as db:
+        assert await db.scalar(select(func.count()).select_from(Guest).where(Guest.event_id==workspace['id']))==24

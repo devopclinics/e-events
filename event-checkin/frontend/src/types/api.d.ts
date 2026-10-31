@@ -105,6 +105,7 @@ export interface app__routers__quick_invites__Reply {
   email?: (string) | null
   message?: string
   name: string
+  party_size?: number
   reply_token?: (string) | null
   request_id: string
   response: 'going' | 'maybe' | 'declined'
@@ -1924,7 +1925,7 @@ export interface InvitationOpeningUpdate {
 }
 
 export interface InviteDraft {
-  colour?: 'mint' | 'lavender' | 'rose'
+  colour?: 'mint' | 'lavender' | 'rose' | 'sky' | 'sand' | 'midnight'
   cover?: string
   creator_email?: (string) | null
   creator_phone?: string
@@ -1934,7 +1935,7 @@ export interface InviteDraft {
   message?: string
   name: string
   request_id: string
-  style?: 'editorial' | 'arch' | 'minimal'
+  style?: 'editorial' | 'arch' | 'minimal' | 'botanical' | 'gala' | 'postcard'
   timezone: string
   venue_name?: string
 }

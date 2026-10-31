@@ -62,6 +62,7 @@ def _guarded_drop_column(table: str, column: str) -> str:
 
 
 SCHEMA_PATCHES: list[str] = [
+    "ALTER TABLE quick_invite_recipients ADD COLUMN IF NOT EXISTS reply_message TEXT",
     "CREATE INDEX IF NOT EXISTS ix_meetings_send_at ON meetings (send_at)",
     "CREATE INDEX IF NOT EXISTS ix_meetings_start_utc ON meetings (start_utc)",
     "CREATE INDEX IF NOT EXISTS ix_meetings_end_utc ON meetings (end_utc)",

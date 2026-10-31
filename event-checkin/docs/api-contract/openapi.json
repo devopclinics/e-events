@@ -12174,6 +12174,24 @@
             "title": "Cover",
             "type": "string"
           },
+          "creator_email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Creator Email"
+          },
+          "creator_phone": {
+            "default": "",
+            "maxLength": 40,
+            "title": "Creator Phone",
+            "type": "string"
+          },
           "envelope": {
             "default": false,
             "title": "Envelope",
@@ -12182,6 +12200,12 @@
           "event_date": {
             "format": "date-time",
             "title": "Event Date",
+            "type": "string"
+          },
+          "host_name": {
+            "default": "",
+            "maxLength": 120,
+            "title": "Host Name",
             "type": "string"
           },
           "message": {
@@ -24932,6 +24956,12 @@
               }
             ],
             "title": "Email"
+          },
+          "message": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Message",
+            "type": "string"
           },
           "name": {
             "maxLength": 200,

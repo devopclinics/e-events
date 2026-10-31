@@ -103,6 +103,7 @@ export interface app__routers__meetings__Reply {
 
 export interface app__routers__quick_invites__Reply {
   email?: (string) | null
+  message?: string
   name: string
   reply_token?: (string) | null
   request_id: string
@@ -1925,8 +1926,11 @@ export interface InvitationOpeningUpdate {
 export interface InviteDraft {
   colour?: 'mint' | 'lavender' | 'rose'
   cover?: string
+  creator_email?: (string) | null
+  creator_phone?: string
   envelope?: boolean
   event_date: string
+  host_name?: string
   message?: string
   name: string
   request_id: string

@@ -32,6 +32,9 @@ class InviteDraft(BaseModel):
     timezone: str = Field(max_length=80)
     venue_name: str = Field(default="", max_length=300)
     message: str = Field(default="", max_length=2000)
+    creator_email: EmailStr | None = None
+    creator_phone: str = Field(default="", max_length=40)
+    host_name: str = Field(default="", max_length=120)
     style: Literal["editorial", "arch", "minimal"] = "editorial"
     colour: Literal["mint", "lavender", "rose"] = "mint"
     cover: str = Field(default="", max_length=2000)
@@ -75,6 +78,7 @@ class Reply(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     email: EmailStr | None = None
     response: Literal["going", "maybe", "declined"]
+    message: str = Field(default="", max_length=1000)
     reply_token: str | None = Field(default=None, max_length=64)
     request_id: uuid.UUID
 
@@ -95,7 +99,7 @@ def preferences(event):
 def public_data(event):
     prefs = preferences(event)
     return {"name": event.name, "event_date": event.event_date.replace(tzinfo=timezone.utc).isoformat(), "timezone": event.timezone,
-            "venue_name": event.venue_name or "", "message": event.invite_message or "", "style": prefs.get("style", "editorial"),
+            "host_name": prefs.get("host_name", ""), "venue_name": event.venue_name or "", "message": event.invite_message or "", "style": prefs.get("style", "editorial"),
             "colour": prefs.get("colour", "mint"), "cover": prefs.get("cover", ""), "envelope": prefs.get("envelope", False)}
 
 
@@ -155,12 +159,12 @@ async def workspace(event, db):
         guest = by_id.get(row.guest_id) or by_email.get((row.email or '').lower())
         if guest: linked.add(guest.id)
         visible.append({'id': row.id, 'name': row.name, 'email': row.email, 'response': states.get(guest.rsvp_status) if guest else row.response,
-                        'send_status': row.send_status, 'responded_at': guest.rsvp_responded_at if guest else row.responded_at, 'sent_at': row.sent_at})
+                        'message': row.reply_message or '', 'send_status': row.send_status, 'responded_at': guest.rsvp_responded_at if guest else row.responded_at, 'sent_at': row.sent_at})
     for guest in guests:
         if guest.id not in linked:
             visible.append({'id': 'guest:'+guest.id, 'name': f'{guest.first_name} {guest.last_name}'.strip(), 'email': guest.email,
                             'response': states.get(guest.rsvp_status), 'send_status': 'draft', 'responded_at': guest.rsvp_responded_at, 'sent_at': None})
-    return {"id": event.id, "invitation": public_data(event), "url": share_url(event), "status": event.status,
+    return {"id": event.id, "invitation": {**public_data(event), "creator_email": preferences(event).get("creator_email", ""), "creator_phone": preferences(event).get("creator_phone", "")}, "url": share_url(event), "status": event.status,
             "email_limit": min(75, EMAIL_FREE_QUOTA), "email_attempts": sum(r.attempts for r in rows),
             "recipients": visible}
 
@@ -179,7 +183,7 @@ async def create(data: InviteDraft, background_tasks: BackgroundTasks, db: Async
     events = (await db.scalars(select(Event).where(Event.org_id == org_id))).all()
     existing = next((e for e in events if preferences(e).get("request_id") == str(data.request_id)), None)
     if existing: return await workspace(existing, db)
-    prefs = {"quick_invite": {"style": data.style, "colour": data.colour, "cover": data.cover, "envelope": data.envelope, "request_id": str(data.request_id)}}
+    prefs = {"quick_invite": {"style": data.style, "colour": data.colour, "cover": data.cover, "envelope": data.envelope, "request_id": str(data.request_id), "creator_email": str(data.creator_email or user.email), "creator_phone": data.creator_phone.strip(), "host_name": data.host_name.strip()}}
     result = await create_event(EventCreate(name=data.name, event_date=data.event_date, timezone=data.timezone,
                     venue_name=data.venue_name, description=data.message, setup_preferences=prefs,
                     checkin_base_url=settings.public_base_url or settings.frontend_url, notify_sms=False, notify_whatsapp=False),
@@ -219,7 +223,7 @@ async def edit(event_id: str, request: Request, data: InviteDraft, db: AsyncSess
     event.invite_message = data.message
     event.description = data.message
     event.invite_cover_image = data.cover or None
-    event.setup_preferences = {**(event.setup_preferences or {}), "quick_invite": {**preferences(event), "style": data.style, "colour": data.colour, "cover": data.cover, "envelope": data.envelope}}
+    event.setup_preferences = {**(event.setup_preferences or {}), "quick_invite": {**preferences(event), "style": data.style, "colour": data.colour, "cover": data.cover, "envelope": data.envelope, "creator_email": str(data.creator_email or preferences(event).get("creator_email") or user.email), "creator_phone": data.creator_phone.strip(), "host_name": data.host_name.strip()}}
     await db.commit()
     return await workspace(event, db)
 
@@ -238,7 +242,7 @@ async def get_public(token: str, response: Response, reply: str | None = None, d
     if event.invite_mode == 'closed' and not person:
         raise HTTPException(403, "Please open the personal invitation sent to you by the organizer.")
     return {"invitation": public_data(event), "registration_url": await registration_target(event, db, person),
-            "recipient": {"name": person.name, "response": person.response} if person else None}
+            "recipient": {"name": person.name, "response": person.response, "message": person.reply_message or ""} if person else None}
 
 
 @router.post("/public/{token}/reply", dependencies=[Depends(rate_limit(limit=30, window=60, scope="quick-rsvp"))])
@@ -282,6 +286,7 @@ async def respond(token: str, data: Reply, response: Response, db: AsyncSession 
     guest.first_name = parts[0][:100]
     guest.last_name = (parts[1] if len(parts)>1 else '')[:100]
     person.name = data.name.strip()
+    person.reply_message = data.message.strip()
     person.response = data.response
     person.responded_at = datetime.utcnow()
     guest.rsvp_status = {"going": "confirmed", "maybe": "maybe", "declined": "declined"}[data.response]

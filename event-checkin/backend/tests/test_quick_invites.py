@@ -213,3 +213,29 @@ async def test_required_information_uses_the_full_registration(ctx,monkeypatch,k
     page=await ctx.client.get('/api/quick-invites/public/'+token)
     assert '/rsvp/' in page.json()['registration_url']
     assert (await ctx.client.post('/api/quick-invites/public/'+token+'/reply',json={'name':'Ada','response':'going','request_id':str(uuid.uuid4())})).status_code==409
+
+
+async def test_creator_contacts_and_guest_message_stay_private(ctx, monkeypatch):
+    await fresh(ctx, monkeypatch)
+    body = draft(creator_email='host@example.com', creator_phone='+1 555 123 4567', host_name='The family')
+    created = await ctx.client.post('/api/quick-invites', json=body)
+    assert created.status_code == 201
+    workspace = created.json()
+    assert workspace['invitation']['creator_phone'] == body['creator_phone']
+    token = workspace['url'].rsplit('/', 1)[1]
+    public = (await ctx.client.get('/api/quick-invites/public/'+token)).json()
+    assert public['invitation']['host_name'] == 'The family'
+    assert 'creator_email' not in public['invitation'] and 'creator_phone' not in public['invitation']
+    reply = {'name':'Ada', 'response':'going', 'message':'Looking forward to celebrating!', 'request_id':str(uuid.uuid4())}
+    saved = await ctx.client.post('/api/quick-invites/public/'+token+'/reply', json=reply)
+    assert saved.status_code == 200
+    personal = (await ctx.client.get('/api/quick-invites/public/'+token, params={'reply':saved.json()['reply_token']})).json()
+    assert personal['recipient']['message'] == reply['message']
+    private = (await ctx.client.get('/api/quick-invites/manage/'+workspace['id'])).json()
+    assert private['recipients'][0]['message'] == reply['message']
+    assert (await ctx.client.get('/api/quick-invites/public/'+token)).json()['recipient'] is None
+    reply.update(reply_token=saved.json()['reply_token'], message='')
+    assert (await ctx.client.post('/api/quick-invites/public/'+token+'/reply', json=reply)).status_code == 200
+    assert (await ctx.client.get('/api/quick-invites/manage/'+workspace['id'])).json()['recipients'][0]['message'] == ''
+    reply['message'] = 'x'*1001
+    assert (await ctx.client.post('/api/quick-invites/public/'+token+'/reply', json=reply)).status_code == 422

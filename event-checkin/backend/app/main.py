@@ -7,7 +7,8 @@ from fastapi.staticfiles import StaticFiles
 from .database import engine
 from .config import settings
 from .engagement_config import engagement_settings
-from .routers import event_forms, prospect_webhooks, guest_sheets, media_library
+from .routers import event_forms, prospect_webhooks, guest_sheets, media_library, quick_invites
+from .services import quick_invite_outbox
 from .routers import guest_services, events, guests, scanner, dashboard, seating, menu, logistics, registry, speakers, partners, reminders, scheduled_communications, access, trials, demo, classify, messaging, meta_whatsapp, resend_webhooks, templates as templates_router, self_checkin, experience, tasks, public_sites, donations, live_content, conference_center
 from .routers import auth as auth_router
 from .routers import invite as invite_router
@@ -66,6 +67,7 @@ async def lifespan(app: FastAPI):
     # rate changes from a Console save on one pod from going stale on the
     # others until they happen to restart.
     cache_refresh_task = asyncio.create_task(entitlements.run_cache_refresher())
+    quick_invite_task = asyncio.create_task(quick_invite_outbox.run())
     meetings_task = asyncio.create_task(meeting_outbox.run()) if settings.meetings_sending_enabled else None
 
     # Run the guest-list sync poller inside the web process for single-host
@@ -128,6 +130,11 @@ async def lifespan(app: FastAPI):
     finally:
         await routers.stop_sse_subscriber()
         cache_refresh_task.cancel()
+        quick_invite_task.cancel()
+        try:
+            await quick_invite_task
+        except asyncio.CancelledError:
+            pass
         if meetings_task:
             meetings_task.cancel()
             try:
@@ -229,7 +236,7 @@ async def _audit_public_api_requests(request, call_next):
     request.state.api_key_id is already set by the time we get here; skipped
     entirely for the unauthenticated /docs endpoint (no key id to log against)."""
     response = await call_next(request)
-    if request.url.path.startswith(("/api/meeting-responses/", "/api/og/meeting-response/", "/api/og/meeting-invitation/")):
+    if request.url.path.startswith(("/api/meeting-responses/", "/api/og/meeting-response/", "/api/og/meeting-invitation/", "/api/quick-invites/public/", "/api/og/i/")):
         response.headers["Cache-Control"] = "no-store"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-Robots-Tag"] = "noindex, nofollow"
@@ -306,6 +313,7 @@ app.include_router(org_billing_router.router, prefix="/api/organizations/me", ta
 app.include_router(wa_template_submissions_router.router, prefix="/api/organizations/me", tags=["whatsapp-templates"])
 app.include_router(meetings_router.router, prefix="/api/meetings", tags=["meetings"])
 app.include_router(meetings_router.public_router, prefix="/api/meeting-responses", tags=["meeting-responses"])
+app.include_router(quick_invites.router, prefix="/api/quick-invites", tags=["quick-invites"])
 app.include_router(calendars_router.router, prefix="/api/organizations/me", tags=["calendars"])
 app.include_router(calendars_router.public_router, prefix="/api/calendars", tags=["calendars-public"])
 app.include_router(shortlinks_router.router, prefix="/api/s", tags=["shortlinks"])

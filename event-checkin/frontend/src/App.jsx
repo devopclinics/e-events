@@ -10,6 +10,8 @@ import RedesignGate from './pages/redesign/RedesignGate'
 import { setUiPreference } from './pages/redesign/uiPreference'
 
 const SharedGuestSheet = lazy(() => import('./pages/SharedGuestSheet'))
+const QuickInvite = lazy(() => import('./pages/QuickInvite'))
+const QuickInvitePublic = lazy(() => import('./pages/QuickInvite').then(m => ({ default: m.QuickInvitePublic })))
 
 // Route pages are intentionally lazy: declaring both legacy and redesign routes
 // must not make users download both implementations at startup.
@@ -553,6 +555,8 @@ function AppRoutes() {
       <Route path="/festiome-redesign" element={<ProtectedRoute><FestioMeRedesignPage /></ProtectedRoute>} />
       <Route path="/planner-redesign" element={<ProtectedRoute><PlannerRedesignPage /></ProtectedRoute>} />
       <Route path="/meetings" element={<ProtectedRoute><MeetingsPage /></ProtectedRoute>} />
+      <Route path="/create-invitation" element={<QuickInvite />} />
+      <Route path="/i/:token" element={<QuickInvitePublic />} />
       <Route path="/meeting-invitation/:token" element={<MeetingResponsePage reusable />} />
       <Route path="/meeting-response/:token" element={<MeetingResponsePage />} />
       <Route path="/conference-center" element={<ProtectedRoute paidOnly><ConferenceCenterPage /></ProtectedRoute>} />

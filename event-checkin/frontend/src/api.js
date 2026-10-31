@@ -561,6 +561,18 @@ async function downloadFile(path, filename, { withAuth = true } = {}) {
 }
 
 export const api = {
+  quickInvites: () => req('GET', '/quick-invites'),
+  createQuickInvite: data => req('POST', '/quick-invites', data),
+  quickInviteWorkspace: id => req('GET', `/quick-invites/manage/${encodeURIComponent(id)}`),
+  updateQuickInvite: (id, data) => req('PUT', `/quick-invites/manage/${encodeURIComponent(id)}`, data),
+  sendQuickInvite: (id, data) => req('POST', `/quick-invites/manage/${encodeURIComponent(id)}/send`, data),
+  publicQuickInvite: (token, reply) => guestRead(`/quick-invites/public/${encodeURIComponent(token)}${reply ? `?reply=${encodeURIComponent(reply)}` : ''}`, 'Invitation unavailable'),
+  replyQuickInvite: async (token, body) => {
+    const res = await fetch(`${BASE}/quick-invites/public/${encodeURIComponent(token)}/reply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Your reply could not be saved. Please try again.')
+    return data
+  },
   syncGuestServiceAction: (eventId, body) => req('POST', `/events/${eventId}/guest-services/offline-actions`, body, 15000),
   searchGuestServiceGuests: (eventId, q) => req('GET', `/events/${eventId}/guest-services/guest-search?${new URLSearchParams({q})}`),
   guestServiceActivity: (eventId, params) => req('GET', `/events/${eventId}/guest-services/activity?${new URLSearchParams(params)}`),

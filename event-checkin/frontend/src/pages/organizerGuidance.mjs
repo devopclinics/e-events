@@ -1,6 +1,6 @@
 import {CHECKLISTS} from './guideChecklists.mjs'
 
-const WORKSPACES = new Set(['/guest-services','/marketing','/setup-redesign','/admin-redesign','/guests-redesign','/tickets-redesign',
+const WORKSPACES = new Set(['/create-invitation','/guest-services','/marketing','/setup-redesign','/admin-redesign','/guests-redesign','/tickets-redesign',
   '/ticketing-redesign','/messaging-redesign','/design-redesign','/addons-redesign','/kitchen-redesign',
   '/planner-redesign','/team-redesign','/live-redesign','/results-redesign','/experience-redesign',
   '/festiome-redesign','/guesthub-redesign','/checkin-redesign','/integrations-redesign',

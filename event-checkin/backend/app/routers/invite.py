@@ -70,7 +70,7 @@ async def _get_public_event_by_rsvp_token(rsvp_token: str, db: AsyncSession) -> 
 # Statuses that hold (or may still be granted) a real spot against capacity.
 # "declined" freed their spot; "waitlisted" never held one — both are excluded
 # so a decline/removal actually reopens capacity for promotion/new RSVPs.
-_ACTIVE_RSVP_STATUSES = ("invited", "confirmed", "pending")
+_ACTIVE_RSVP_STATUSES = ("invited", "confirmed", "pending", "maybe")
 
 
 async def _rsvp_count(event_id: str, db: AsyncSession) -> int:

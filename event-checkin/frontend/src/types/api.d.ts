@@ -97,6 +97,18 @@ export interface ApiKeyOut {
   scope: string
 }
 
+export interface app__routers__meetings__Reply {
+  response: 'accepted' | 'maybe' | 'declined'
+}
+
+export interface app__routers__quick_invites__Reply {
+  email?: (string) | null
+  name: string
+  reply_token?: (string) | null
+  request_id: string
+  response: 'going' | 'maybe' | 'declined'
+}
+
 export interface ApprovedWhatsAppTemplateOut {
   body: string
   category: string
@@ -830,6 +842,11 @@ export interface Edit {
   title: string
   video_url?: string
   whatsapp_template_id?: (string) | null
+}
+
+export interface EmailContact {
+  email: string
+  name?: string
 }
 
 export interface EventBrief {
@@ -1903,6 +1920,19 @@ export interface InvitationOpeningUpdate {
   enabled: boolean
   frequency?: 'once' | 'always'
   use_default?: boolean
+}
+
+export interface InviteDraft {
+  colour?: 'mint' | 'lavender' | 'rose'
+  cover?: string
+  envelope?: boolean
+  event_date: string
+  message?: string
+  name: string
+  request_id: string
+  style?: 'editorial' | 'arch' | 'minimal'
+  timezone: string
+  venue_name?: string
 }
 
 export interface InviteGuestPrefill {
@@ -3080,10 +3110,6 @@ export interface ReminderTestSendRequest {
   whatsapp_template_vars?: (Record<string, string>) | null
 }
 
-export interface Reply {
-  response: 'accepted' | 'maybe' | 'declined'
-}
-
 export interface RequestIn {
   assignee_user_id?: (string) | null
   assignment_id?: (string) | null
@@ -3388,6 +3414,11 @@ export interface SelfCheckinSearch {
 export interface SendConsentCopyOut {
   ok: boolean
   sent_to: string
+}
+
+export interface SendInvites {
+  confirm: boolean
+  recipients: (EmailContact)[]
 }
 
 export interface SessionEntryOverride {

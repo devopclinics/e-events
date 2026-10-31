@@ -5,6 +5,27 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 
 
+class QuickInviteRecipient(Base):
+    """Invitation contacts are not Guests until they submit an RSVP."""
+    __tablename__ = "quick_invite_recipients"
+    __table_args__ = (UniqueConstraint("event_id", "email", name="uq_quick_invite_email"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"), index=True)
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    name: Mapped[str] = mapped_column(String(200), default="")
+    token: Mapped[str] = mapped_column(String(64), unique=True, default=lambda: uuid.uuid4().hex + uuid.uuid4().hex)
+    guest_id: Mapped[str | None] = mapped_column(ForeignKey("guests.id", ondelete="SET NULL"), nullable=True)
+    response: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    send_status: Mapped[str] = mapped_column(String(20), default="draft", index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    email_subject: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    email_html: Mapped[str | None] = mapped_column(Text, nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class Meeting(Base):
     __tablename__ = "meetings"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))

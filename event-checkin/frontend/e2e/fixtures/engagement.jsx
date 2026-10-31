@@ -6,6 +6,7 @@ import { ThemeProvider } from '../../src/context/ThemeContext'
 import SupportWidget from '../../src/components/SupportWidget'
 import MarketingPage from '../../src/pages/MarketingPage'
 import RegisterPage from '../../src/pages/RegisterPage'
+import QuickInvite, { QuickInvitePublic } from '../../src/pages/QuickInvite'
 import LandingPage from '../../src/pages/LandingPage'
 import LandingRedesignPage from '../../src/pages/LandingRedesignPage'
 import PublicTicketsPage from '../../src/pages/PublicTicketsPage'
@@ -38,6 +39,8 @@ function Fixture() {
       {[['/', 'Home'], ['/pricing', 'Pricing'], ['/admin-redesign', 'Admin'], ['/register', 'Signup'], ['/marketing', 'Marketing'], ['/scan/private-token', 'Guest'], ['/landing-legacy', 'Legacy'], ['/tickets', 'Discover'], ['/platform-operations', 'Operations'], ['/media-studio', 'Media']].map(([to, text]) => <Link key={to} to={to} style={{ margin: 6 }}>{text}</Link>)}
     </nav>
     <Routes>
+      <Route path="/create-invitation" element={<QuickInvite />} />
+      <Route path="/i/:token" element={<QuickInvitePublic />} />
       <Route path="/" element={<LandingRedesignPage />} />
       <Route path="/invitation-document" element={<InvitationDocumentFixture />} />
       <Route path="/meeting-share" element={<MeetingShareFixture />} />

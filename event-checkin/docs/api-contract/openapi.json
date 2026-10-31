@@ -4878,6 +4878,26 @@
         "title": "Edit",
         "type": "object"
       },
+      "EmailContact": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "name": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "EmailContact",
+        "type": "object"
+      },
       "EventBrief": {
         "properties": {
           "checkout_enabled": {
@@ -12134,6 +12154,82 @@
           "enabled"
         ],
         "title": "InvitationOpeningUpdate",
+        "type": "object"
+      },
+      "InviteDraft": {
+        "properties": {
+          "colour": {
+            "default": "mint",
+            "enum": [
+              "mint",
+              "lavender",
+              "rose"
+            ],
+            "title": "Colour",
+            "type": "string"
+          },
+          "cover": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Cover",
+            "type": "string"
+          },
+          "envelope": {
+            "default": false,
+            "title": "Envelope",
+            "type": "boolean"
+          },
+          "event_date": {
+            "format": "date-time",
+            "title": "Event Date",
+            "type": "string"
+          },
+          "message": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Message",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "style": {
+            "default": "editorial",
+            "enum": [
+              "editorial",
+              "arch",
+              "minimal"
+            ],
+            "title": "Style",
+            "type": "string"
+          },
+          "timezone": {
+            "maxLength": 80,
+            "title": "Timezone",
+            "type": "string"
+          },
+          "venue_name": {
+            "default": "",
+            "maxLength": 300,
+            "title": "Venue Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "event_date",
+          "timezone",
+          "request_id"
+        ],
+        "title": "InviteDraft",
         "type": "object"
       },
       "InviteGuestPrefill": {
@@ -19899,24 +19995,6 @@
         "title": "ReminderTestSendRequest",
         "type": "object"
       },
-      "Reply": {
-        "properties": {
-          "response": {
-            "enum": [
-              "accepted",
-              "maybe",
-              "declined"
-            ],
-            "title": "Response",
-            "type": "string"
-          }
-        },
-        "required": [
-          "response"
-        ],
-        "title": "Reply",
-        "type": "object"
-      },
       "RequestIn": {
         "properties": {
           "assignee_user_id": {
@@ -21688,6 +21766,30 @@
           "sent_to"
         ],
         "title": "SendConsentCopyOut",
+        "type": "object"
+      },
+      "SendInvites": {
+        "properties": {
+          "confirm": {
+            "const": true,
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "recipients": {
+            "items": {
+              "$ref": "#/components/schemas/EmailContact"
+            },
+            "maxItems": 25,
+            "minItems": 1,
+            "title": "Recipients",
+            "type": "array"
+          }
+        },
+        "required": [
+          "recipients",
+          "confirm"
+        ],
+        "title": "SendInvites",
         "type": "object"
       },
       "SessionEntryOverride": {
@@ -24797,6 +24899,79 @@
           }
         },
         "title": "ZoneUpdate",
+        "type": "object"
+      },
+      "app__routers__meetings__Reply": {
+        "properties": {
+          "response": {
+            "enum": [
+              "accepted",
+              "maybe",
+              "declined"
+            ],
+            "title": "Response",
+            "type": "string"
+          }
+        },
+        "required": [
+          "response"
+        ],
+        "title": "Reply",
+        "type": "object"
+      },
+      "app__routers__quick_invites__Reply": {
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "reply_token": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply Token"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "response": {
+            "enum": [
+              "going",
+              "maybe",
+              "declined"
+            ],
+            "title": "Response",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "response",
+          "request_id"
+        ],
+        "title": "Reply",
         "type": "object"
       }
     },
@@ -52966,7 +53141,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Reply"
+                "$ref": "#/components/schemas/app__routers__meetings__Reply"
               }
             }
           },
@@ -54199,6 +54374,48 @@
         "summary": "Twilio Status Callback",
         "tags": [
           "messaging"
+        ]
+      }
+    },
+    "/api/og/i/{token}": {
+      "get": {
+        "operationId": "og_quick_invitation_api_og_i__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Og Quick Invitation",
+        "tags": [
+          "og"
         ]
       }
     },
@@ -57956,6 +58173,331 @@
         "summary": "Get Qa Checklist Submission",
         "tags": [
           "qa-checklist"
+        ]
+      }
+    },
+    "/api/quick-invites": {
+      "get": {
+        "operationId": "list_invites_api_quick_invites_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Invites",
+        "tags": [
+          "quick-invites"
+        ]
+      },
+      "post": {
+        "operationId": "create_api_quick_invites_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create",
+        "tags": [
+          "quick-invites"
+        ]
+      }
+    },
+    "/api/quick-invites/manage/{event_id}": {
+      "get": {
+        "operationId": "get_workspace_api_quick_invites_manage__event_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Workspace",
+        "tags": [
+          "quick-invites"
+        ]
+      },
+      "put": {
+        "operationId": "edit_api_quick_invites_manage__event_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Edit",
+        "tags": [
+          "quick-invites"
+        ]
+      }
+    },
+    "/api/quick-invites/manage/{event_id}/send": {
+      "post": {
+        "operationId": "send_api_quick_invites_manage__event_id__send_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendInvites"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Send",
+        "tags": [
+          "quick-invites"
+        ]
+      }
+    },
+    "/api/quick-invites/public/{token}": {
+      "get": {
+        "operationId": "get_public_api_quick_invites_public__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "reply",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reply"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Public",
+        "tags": [
+          "quick-invites"
+        ]
+      }
+    },
+    "/api/quick-invites/public/{token}/reply": {
+      "post": {
+        "operationId": "respond_api_quick_invites_public__token__reply_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__routers__quick_invites__Reply"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Respond",
+        "tags": [
+          "quick-invites"
         ]
       }
     },

@@ -53,6 +53,7 @@ export default function RegisterPage() {
   // orgs default to legacy_only). Every other entry point into /register
   // omits this and keeps today's behavior.
   const goToRedesign = params.get('redesign') === '1'
+  const quickReturn = params.get('next') === '/create-invitation'
   const [form, setForm] = useState({ name: '', email: '', password: '' })
   const [marketingEmail, setMarketingEmail] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -61,10 +62,14 @@ export default function RegisterPage() {
   const [verificationNotice, setVerificationNotice] = useState('')
 
   useEffect(() => {
+    if (user && !loading && quickReturn) {
+      navigate('/create-invitation', { replace: true })
+      return
+    }
     if (user && !pickerRole && !loading) {
       navigate(goToRedesign ? `/setup-redesign${setupQuery}` : `/setup${setupQuery}`, { replace: true })
     }
-  }, [user, pickerRole, loading, navigate, setupQuery, goToRedesign])
+  }, [user, pickerRole, loading, navigate, setupQuery, goToRedesign, quickReturn])
 
   // Partner referral: remember the code through the Firebase signup redirect
   // so AuthContext can attribute this org once the account exists.
@@ -99,7 +104,8 @@ export default function RegisterPage() {
       } })
       if (!response.ok) throw new Error('Account sync failed')
       if (cred.user.emailVerified) clearSignupConsent(cred.user.uid)
-      setPickerRole('official')
+      if (quickReturn) navigate('/create-invitation', { replace: true })
+      else setPickerRole('official')
     } catch (err) {
       setError(friendlyError(err.code))
     } finally {
@@ -119,7 +125,8 @@ export default function RegisterPage() {
       } })
       if (!response.ok) throw new Error('Account sync failed')
       if (cred.user.emailVerified) clearSignupConsent(cred.user.uid)
-      setPickerRole('official')
+      if (quickReturn) navigate('/create-invitation', { replace: true })
+      else setPickerRole('official')
     } catch (err) {
       if (err.code !== 'auth/popup-closed-by-user') setError(friendlyError(err.code))
     } finally {

@@ -31,6 +31,15 @@ from ..config import settings
 
 router = APIRouter()
 
+
+@router.get("/i/{token}", response_class=HTMLResponse)
+async def og_quick_invitation(token: str, db: AsyncSession = Depends(get_db)):
+    from .quick_invites import invitation
+    event = await invitation(token, db)
+    response = _render(event, title=event.name, description="You're invited. Open the invitation and send your reply.", canonical_path=f"/i/{token}")
+    response.headers.update({"Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex, nofollow"})
+    return response
+
 # Default social card shipped with the frontend (frontend/public/media/).
 _DEFAULT_IMAGE = "/media/og-image.png"
 _SITE_NAME = "Festio"

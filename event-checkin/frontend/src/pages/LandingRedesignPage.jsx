@@ -506,9 +506,10 @@ export default function LandingRedesignPage() {
               people, your plans, and your entire event together.
             </p>
             <div className="cta">
-              <Link className="btn" to={appHome || '/register?redesign=1'}>
-                {user ? 'Open your workspace ↗' : 'Create your event free ↗'}
+              <Link className="btn" to="/create-invitation">
+                Create a free invitation ↗
               </Link>
+              <Link className="btn light" to={appHome || '/register?redesign=1'}>{user ? 'Open your workspace ↗' : 'Plan a full event ↗'}</Link>
               <a className="btn light" href="#journey">
                 Explore the experience
               </a>

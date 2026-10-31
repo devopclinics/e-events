@@ -207,7 +207,7 @@ export default function LoginPage() {
 
         <p className="text-center text-sm text-gray-500 dark:text-slate-400 mt-6">
           Don't have an account?{' '}
-          <Link to="/register" className="text-indigo-600 font-medium hover:underline">Create one</Link>
+          <Link to={requestedReturn === "/create-invitation" ? "/register?redesign=1&next=/create-invitation" : "/register"} className="text-indigo-600 font-medium hover:underline">Create one</Link>
         </p>
       </div>
     </div>

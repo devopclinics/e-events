@@ -1005,3 +1005,36 @@ test('free invitation offers six distinct styles and six colours without mobile 
   }
   await expect(page.getByText('Unlimited link replies',{exact:true})).toBeVisible()
 })
+
+
+test('Design Studio preserves the invitation and saves drafts before explicit publication', async ({ page }) => {
+  await setup(page)
+  const errors=[];page.on('pageerror',e=>errors.push(e.message))
+  await page.evaluate(() => {
+    window.fixtureQuickWorkspace={id:'quick-one',invitation:{name:'Family dinner'},recipients:[]}
+    window.fixtureStudioDesign={revision:0,selected_template_id:'modern',theme_config:{fontPairing:'classic-serif',colors:{primary:'#25243e',text:'#25243e',background:'#f0ecf6',surface:'#f0ecf6',accent:'#cfc2ed'},quickInvitation:{name:'Family dinner',event_date:'2027-06-20T23:00:00Z',timezone:'America/Chicago',venue_name:'Our garden',style:'arch',colour:'lavender',envelope:true,host_name:'The family'}},wording_config:{eventTitle:'Family dinner',customMessage:'Please join us'},asset_config:{cover_image_url:''},page_config:{}}
+    window.fixtureSetUser({id:'organizer-1',role:'official'})
+  })
+  await page.waitForFunction(()=>window.fixtureCurrentUser?.id==='organizer-1')
+  await page.evaluate(() => { localStorage.setItem('eq.currentEventId','quick-one');history.pushState({},'', '/design-studio-redesign?event=quick-one&surface=invitation');dispatchEvent(new PopStateEvent('popstate')) })
+  await expect(page.getByRole('heading',{name:'Your invitation, preserved.'})).toBeVisible()
+  await expect(page.locator('.studio-invitation-preview .qi-invitation')).toHaveClass(/qi-arch qi-lavender/)
+  await expect(page.locator('.studio-invitation-preview')).toContainText('The family')
+  expect(await page.evaluate(()=>window.fixtureStudioWrites||[])).toEqual([])
+  await page.getByRole('button',{name:'gala',exact:true}).click()
+  await page.getByLabel('Invitation message',{exact:true}).fill('A new message for our guests')
+  await expect.poll(()=>page.evaluate(()=>window.fixtureStudioWrites?.filter(w=>w.action==='save').length||0)).toBeGreaterThan(0)
+  expect(await page.evaluate(()=>window.fixtureStudioWrites.filter(w=>w.action==='publish'))).toEqual([])
+  await page.getByRole('button',{name:/Review & publish/}).click()
+  await page.getByRole('button',{name:'Publish new version'}).click()
+  await page.getByRole('button',{name:'Confirm publication'}).click()
+  await expect(page.getByText('Published version 1. Guest-facing design verified.')).toBeVisible()
+  await page.getByRole('button',{name:/1 Theme/}).click()
+  await page.screenshot({path:'test-results/studio-invitation-desktop.png',fullPage:true})
+  await page.setViewportSize({width:390,height:900})
+  await page.locator('.studio-mobile-switch').getByRole('button',{name:'See preview'}).click()
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+  await expect(page.locator('.studio-invitation-preview')).toBeVisible()
+  await page.screenshot({path:'test-results/studio-invitation-mobile.png',fullPage:true})
+  expect(errors).toEqual([])
+})

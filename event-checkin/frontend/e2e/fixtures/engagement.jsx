@@ -1,11 +1,13 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Link, Route, Routes } from 'react-router-dom'
+import ProtectedRoute from '../../src/components/ProtectedRoute'
 import { AuthProvider } from 'fixture-auth'
 import { ThemeProvider } from '../../src/context/ThemeContext'
 import SupportWidget from '../../src/components/SupportWidget'
 import MarketingPage from '../../src/pages/MarketingPage'
 import RegisterPage from '../../src/pages/RegisterPage'
+const DesignStudio = React.lazy(() => import('../../src/pages/DesignStudioWorkspace'))
 import QuickInvite, { QuickInvitePublic } from '../../src/pages/QuickInvite'
 import LandingPage from '../../src/pages/LandingPage'
 import LandingRedesignPage from '../../src/pages/LandingRedesignPage'
@@ -45,6 +47,7 @@ function Fixture() {
       <Route path="/invitation-document" element={<InvitationDocumentFixture />} />
       <Route path="/meeting-share" element={<MeetingShareFixture />} />
       <Route path="/shared-media-picker" element={<SharedPickerFixture />} />
+      <Route path="/design-studio-redesign" element={<React.Suspense fallback={<p>Loading Studio…</p>}><ProtectedRoute><DesignStudio /></ProtectedRoute></React.Suspense>} />
       <Route path="/media-studio" element={<MediaLibrary />} />
       <Route path="/platform-operations" element={<ConsolePage operations />} />
       <Route path="/tickets" element={<PublicTicketsPage />} />

@@ -100,7 +100,7 @@ def preferences(event):
 def public_data(event):
     prefs = preferences(event)
     return {"name": event.name, "event_date": event.event_date.replace(tzinfo=timezone.utc).isoformat(), "timezone": event.timezone,
-            "host_name": prefs.get("host_name", ""), "venue_name": event.venue_name or "", "message": event.invite_message or "", "style": prefs.get("style", "editorial"),
+            "source_revision": prefs.get("invitation_revision", 0), "colors": prefs.get("custom_colors") or {}, "host_name": prefs.get("host_name", ""), "venue_name": event.venue_name or "", "message": event.invite_message or "", "style": prefs.get("style", "editorial"),
             "colour": prefs.get("colour", "mint"), "cover": prefs.get("cover", ""), "envelope": prefs.get("envelope", False)}
 
 
@@ -224,7 +224,7 @@ async def edit(event_id: str, request: Request, data: InviteDraft, db: AsyncSess
     event.invite_message = data.message
     event.description = data.message
     event.invite_cover_image = data.cover or None
-    event.setup_preferences = {**(event.setup_preferences or {}), "quick_invite": {**preferences(event), "style": data.style, "colour": data.colour, "cover": data.cover, "envelope": data.envelope, "creator_email": str(data.creator_email or preferences(event).get("creator_email") or user.email), "creator_phone": data.creator_phone.strip(), "host_name": data.host_name.strip()}}
+    event.setup_preferences = {**(event.setup_preferences or {}), "quick_invite": {**preferences(event), "invitation_revision": preferences(event).get("invitation_revision", 0) + 1, "custom_colors": preferences(event).get("custom_colors", {}) if data.colour == preferences(event).get("colour") else {}, "style": data.style, "colour": data.colour, "cover": data.cover, "envelope": data.envelope, "creator_email": str(data.creator_email or preferences(event).get("creator_email") or user.email), "creator_phone": data.creator_phone.strip(), "host_name": data.host_name.strip()}}
     await db.commit()
     return await workspace(event, db)
 

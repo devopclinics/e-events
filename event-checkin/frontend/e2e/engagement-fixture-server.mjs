@@ -20,6 +20,11 @@ const modules = {
     export const api = {
     quickInvites: async () => [],
     createQuickInvite: async body => { (window.fixtureQuickWrites ||= []).push({action:'create',body});return window.fixtureQuickWorkspace={id:'quick-one',invitation:body,url:location.origin+'/i/fixture',status:'active',email_limit:75,email_attempts:0,recipients:[]}; },
+    getEventDesign: async () => window.fixtureStudioDesign,
+    designTemplates: async () => ({templates:[{id:'modern',name:'Modern',defaultColors:{},layout:{},fontPairing:'classic-serif'}]}),
+    saveEventDesign: async (id,body) => { (window.fixtureStudioWrites ||= []).push({action:'save',body}); window.fixtureStudioDesign={...window.fixtureStudioDesign,...body,revision:(window.fixtureStudioDesign.revision||0)+1}; return structuredClone(window.fixtureStudioDesign); },
+    publishEventDesign: async () => { (window.fixtureStudioWrites ||= []).push({action:'publish'}); const d=window.fixtureStudioDesign;d.published_snapshot=structuredClone(d);d.published_version=1;d.is_published=true;return {published_version:1}; },
+    publicDesignTheme: async () => { const d=window.fixtureStudioDesign.published_snapshot;return {template_id:d.selected_template_id,layout:{},colors:d.theme_config.colors,font_pairing:d.theme_config.fontPairing,wording:d.wording_config,page_config:d.page_config||{},pass_options:{},logo_image_url:d.asset_config.logo_image_url||null,cover_image_url:d.asset_config.cover_image_url||null,image_settings:{}}; },
     quickInviteWorkspace: async () => window.fixtureQuickWorkspace,
     updateQuickInvite: async (id,body) => { (window.fixtureQuickWrites ||= []).push({action:'edit',body});window.fixtureQuickWorkspace.invitation=body;return window.fixtureQuickWorkspace; },
     sendQuickInvite: async (id,body) => { if(window.fixtureQuickSendError)throw new Error('Verify your email before sending');(window.fixtureQuickWrites ||= []).push({action:'send',body});window.fixtureQuickWorkspace.recipients=body.recipients.map((p,i)=>({...p,id:String(i),send_status:'sent'}));window.fixtureQuickWorkspace.email_attempts+=body.recipients.length;return {queued:body.recipients.length,skipped:0}; },

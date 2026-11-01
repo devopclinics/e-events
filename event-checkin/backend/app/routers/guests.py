@@ -1127,6 +1127,12 @@ async def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, gues
         background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_mms, phone=guest.phone, body=mms_text, media_url=card_url)
         dispatched = True
 
+    # Sending an entry pass is the organizer's confirmation. Closed-mode RSVP
+    # invitations return above and never reach this transition. Keep arrival
+    # and the guest's own RSVP-response timestamp independent.
+    if dispatched and guest.rsvp_status != "confirmed":
+        guest.rsvp_status = "confirmed"
+        queue_guest_sync(db, guest, event=event)
     return dispatched
 
 

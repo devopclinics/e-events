@@ -2521,6 +2521,9 @@ class ScanResult(BaseModel):
 
 
 class EventBrief(BaseModel):
+    timezone: Optional[str] = None
+    venue_name: Optional[str] = None
+    venue_address: Optional[str] = None
     external_website_url: Optional[str] = Field(default=None, max_length=2000)
     guest_hub_layout: Optional[str] = None
     rsvp_landing_layout: Optional[Literal["current", "welcome"]] = None

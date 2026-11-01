@@ -875,6 +875,9 @@ export interface EventBrief {
   seating_enabled?: boolean
   seating_term?: (string) | null
   status: string
+  timezone?: (string) | null
+  venue_address?: (string) | null
+  venue_name?: (string) | null
 }
 
 export interface EventCodeUpdate {

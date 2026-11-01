@@ -35,7 +35,7 @@ def intercept(route):
  if path=='/api/invite/link/public-conference':data=event
  elif path.startswith('/api/invite/token/'):data=dict(event=event,guest=guest,already_responded=True,deadline_passed=False)
  elif path.endswith('/guest-hub'):data=hub
- elif path.endswith('/public-theme'):data=dict(colors=dict(background='#330540',surface='#4A0A5D',primary='#FFB400',accent='#FF7900',text='#FFFFFF'),wording={},hub_layout={})
+ elif path.endswith('/public-theme'):data=dict(colors=dict(background='#330540',surface='#4A0A5D',primary='#FFB400',accent='#FF7900',text='#FFFFFF'),wording={},hub_layout={},pass_options=dict(schedule=dict(heading='Your day at PAMCON',timezoneLabel='All times are Lagos time (WAT).',items=[dict(label='Conference',time='10:00 AM to 3:00 PM'),dict(label='Gala dinner',time='From 4:00 PM',note='Finish time to be announced.',tone='gold')])))
  elif path.endswith('/experience/me'):data=journey
  elif path.endswith('/experience/me/feedback'):data=dict(forms=[])
  elif path.endswith('/app-party'):data=dict(viewer_id='attendee',members=[guest,other])
@@ -72,6 +72,11 @@ try:
    expect(contacts.get_by_role('link',name=f'WhatsApp organizer {number}',exact=True)).to_have_attribute('href',f'https://wa.me/{number[1:]}')
   assert "Message Host isn't enabled" not in page.locator('body').inner_text()
   checks.append('organizer contacts remain available without messaging capability')
+  page.goto(BASE+'/rsvp/public-conference#/pass')
+  expect(page.get_by_role('region',name='Event schedule')).to_contain_text('10:00 AM to 3:00 PM')
+  expect(page.get_by_role('region',name='Event schedule')).to_contain_text('From 4:00 PM')
+  expect(page.locator('.app-pass-qr')).to_be_visible()
+  checks.append('GuestHub pass shows the same configured conference and gala times')
   assert not errors,errors;assert not writes,writes
   (OUT/'validation.json').write_text(json.dumps(dict(checks=checks,errors=errors,mutations=writes,isolated_from_production=True),indent=2));print(json.dumps(dict(passed=len(checks),errors=errors)));browser.close()
 finally:server.shutdown()

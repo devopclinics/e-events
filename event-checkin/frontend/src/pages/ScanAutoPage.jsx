@@ -1,3 +1,4 @@
+import PassSchedule, { passScheduleItems } from '../components/invite/PassSchedule';
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../api'
@@ -441,6 +442,8 @@ export default function ScanAutoPage() {
   const wording = designTheme?.wording || {}
   const paidPass = guest?.paid_ticket_pass_design || {}
   const passOpts = { showTable: true, showSeat: true, showHubButton: true, ...(designTheme?.pass_options || {}) }
+  const schedule = passOpts.schedule
+  const hasSchedule = passScheduleItems(schedule).length > 0
   const guestHubToken = guest?.invite_token || guest?.qr_token || token
   const showGuestHubButton = Boolean(guestHubToken && (passOpts.showHubButton || event?.experience_enabled || event?.guest_hub_layout === 'app'))
   const logoImage = designTheme?.logo_image_url || event?.logo_url
@@ -499,6 +502,8 @@ export default function ScanAutoPage() {
             </p>
           </div>
 
+          <PassSchedule schedule={schedule} />
+
           {/* QR code */}
           <div className="flex justify-center">
             <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4 inline-block">
@@ -522,7 +527,7 @@ export default function ScanAutoPage() {
           </p>
 
           <section className="pass-facts rounded-xl border p-4 space-y-3" aria-label="Event details">
-            {eventDate && <div><h2 className="text-xs font-bold uppercase tracking-wide">When</h2><p>{eventDate.toLocaleTimeString([], {hour:'numeric',minute:'2-digit',...(event?.timezone && {timeZone:event.timezone})})}{event?.timezone ? ` · ${event.timezone.replaceAll('_',' ')}` : ''}</p></div>}
+            {eventDate && !hasSchedule && <div><h2 className="text-xs font-bold uppercase tracking-wide">When</h2><p>{eventDate.toLocaleTimeString([], {hour:'numeric',minute:'2-digit',...(event?.timezone && {timeZone:event.timezone})})}{event?.timezone ? ` · ${event.timezone.replaceAll('_',' ')}` : ''}</p></div>}
             {(event?.venue_name || event?.venue_address) && <div><h2 className="text-xs font-bold uppercase tracking-wide">Where</h2><p className="font-semibold">{event.venue_name}</p><p className="text-sm">{event.venue_address}</p></div>}
           </section>
 

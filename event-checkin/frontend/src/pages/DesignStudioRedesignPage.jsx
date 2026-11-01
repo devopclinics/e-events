@@ -1,3 +1,4 @@
+import PassSchedule from '../components/invite/PassSchedule';
 import {flyerRequest, FLYER_LAYOUTS} from '../components/design-studio/flyerModel.mjs';
 import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -1715,6 +1716,7 @@ export default function DesignStudioRedesignPage() {
                   {(passOptions.showTable || passOptions.showSeat) && (
                     <div className="ds-pass-card-pill">{[passOptions.showTable && 'Table VIP-2', passOptions.showSeat && 'Seat 4'].filter(Boolean).join(' · ')}</div>
                   )}
+                  <PassSchedule schedule={passOptions.schedule} />
                   <div className="ds-pass-qr-block">
                     <div className="ds-pass-qr-grid">
                       {QR_SAMPLE_PATTERN.map((on, i) => <span key={i} className={on ? 'on' : ''} />)}

@@ -1,0 +1,12 @@
+.festio-pass-schedule {width:100%;text-align:left;margin:20px 0 24px;color:var(--ink,#330540)}
+.festio-pass-schedule .pass-schedule-card {border:1px solid var(--line,#e3d6e8);border-radius:14px;overflow:hidden;background:var(--bg,#f6f0f8)}
+.festio-pass-schedule .pass-schedule-card h3 {margin:0;padding:15px 17px;background:var(--mint,#eee4f2);font:700 12px/1.5 Arial,sans-serif;color:var(--green,#5a396a);border-bottom:1px solid var(--line,#e3d6e8)}
+.festio-pass-schedule .pass-schedule-row {display:flex;align-items:center;gap:13px;padding:18px 17px}
+.festio-pass-schedule .pass-schedule-row+.pass-schedule-row {border-top:1px solid var(--line,#e3d6e8)}
+.festio-pass-schedule .pass-schedule-row>div {min-width:0}
+.festio-pass-schedule .pass-schedule-icon {width:34px;height:34px;flex-shrink:0;border-radius:10px;display:grid;place-items:center;background:var(--mint,#e9ddf0);color:var(--green,#5b2c73);font-size:17px}
+.festio-pass-schedule .pass-schedule-icon.gold {background:#fff0c4;color:#76520d}
+.festio-pass-schedule .pass-schedule-label {font-size:11px;letter-spacing:.7px;text-transform:uppercase;color:var(--muted,#72547f);font-weight:700}
+.festio-pass-schedule .pass-schedule-row strong {display:block;font-size:18px;line-height:1.5;margin-top:3px;color:var(--ink,#330540)}
+.festio-pass-schedule .pass-schedule-row p {font-size:11px;color:var(--muted,#75677b);margin:4px 0 0}
+.festio-pass-schedule .pass-schedule-zone {text-align:center;font-size:12px;color:var(--muted,#6b5b74);margin:12px 0 0}

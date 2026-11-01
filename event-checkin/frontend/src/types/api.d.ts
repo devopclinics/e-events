@@ -1682,12 +1682,12 @@ export interface GuestProgramSegmentOut {
   audience_guest_ids?: ((string)[]) | null
   category?: (string) | null
   description?: (string) | null
-  ends_at: string
+  ends_at?: (string) | null
   key: string
   room?: (string) | null
   speaker?: (string) | null
   starts_at: string
-  state?: 'ended' | 'ongoing' | 'upcoming'
+  state?: 'ended' | 'ongoing' | 'upcoming' | 'scheduled'
   step_id: string
   title: string
 }

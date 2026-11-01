@@ -14,7 +14,8 @@ export function dayHighlights(sessions, now) {
   const sorted = [...sessions].sort((a,b)=>asTime(a.starts_at)-asTime(b.starts_at));
   const current = sorted.filter(s=>sessionLive(s,now));
   const future = sorted.filter(s=>asTime(s.starts_at)>now);
-  const featured=current[0] || future[0] || sorted[0];
+  const announced=sorted.filter(s=>!Number.isFinite(asTime(s.ends_at))&&asTime(s.starts_at)<=now);
+  const featured=current[0] || future[0] || announced.at(-1) || sorted[0];
   const next=future.find(s=>asTime(s.starts_at)>asTime(featured?.starts_at));
   return {current,featured,next};
 }

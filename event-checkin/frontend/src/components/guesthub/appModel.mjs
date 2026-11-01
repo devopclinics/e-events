@@ -26,8 +26,15 @@ export function upcomingProgramme(program, now = Date.now()) {
   const unique = [...new Map(source.map(s => [s.step_id || `${s.starts_at}:${s.title}`, s])).values()];
   return unique.filter(s => Number.isFinite(asTime(s.starts_at)) && (Number.isFinite(asTime(s.ends_at)) ? asTime(s.ends_at) > now : asTime(s.starts_at) > now)).sort((a, b) => asTime(a.starts_at) - asTime(b.starts_at));
 }
-export function appPhase(event, guest, now = Date.now()) {
-  if (event?.status === 'ended' || Number.isFinite(asTime(event?.event_end_date)) && asTime(event.event_end_date) <= now) return 'after';
+export function isProfessionalEvent(event) {
+  return /conference|convention|summit|seminar|workshop|business/i.test(event?.event_type || '');
+}
+export function appPhase(event, guest, now = Date.now(), program) {
+  const end = asTime(event?.event_end_date);
+  const sessions = (program?.days || []).flatMap(day => day.segments || []);
+  const laterUnfinished = sessions.some(s => asTime(s.starts_at) >= end && !Number.isFinite(asTime(s.ends_at)));
+  const latestEnd = sessions.reduce((last, s) => Number.isFinite(asTime(s.ends_at)) ? Math.max(last, asTime(s.ends_at)) : last, end);
+  if (event?.status === 'ended' || !laterUnfinished && Number.isFinite(latestEnd) && latestEnd <= now) return 'after';
   return guest?.admitted && !guest?.checked_out ? 'during' : 'before';
 }
 export function requiredActions(journey, guest) {

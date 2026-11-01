@@ -143,3 +143,21 @@ test('embedded live routes retain activity scope and explicit guided follow with
   assert.equal(hash.includes('SECRET'),false);
   assert.equal(readAppRoute('#/live?follow=unexpected').follow,undefined);
 });
+
+import {isProfessionalEvent} from '../src/components/guesthub/appModel.mjs';
+test('conference presentation does not change family events',()=>{
+ assert.equal(isProfessionalEvent({event_type:'Conference'}),true);
+ assert.equal(isProfessionalEvent({event_type:'Wedding'}),false);
+ assert.equal(isProfessionalEvent({}),false);
+});
+test('later programme activity prevents a premature event-ended screen',()=>{
+ const event={event_end_date:'2026-11-11T15:00:00+01:00'};
+ const gala={starts_at:'2026-11-11T16:00:00+01:00',ends_at:null};
+ const program={days:[{segments:[gala]}]};const now=Date.parse('2026-11-11T16:30:00+01:00');
+ assert.equal(appPhase(event,{admitted:true},now,program),'during');
+ assert.equal(appPhase({...event,status:'ended'},{admitted:true},now,program),'after');
+ assert.equal(appPhase(event,{},now),'after');
+ gala.ends_at='2026-11-11T20:00:00+01:00';
+ assert.equal(appPhase(event,{},now,program),'before');
+ assert.equal(appPhase(event,{},Date.parse('2026-11-11T21:00:00+01:00'),program),'after');
+});

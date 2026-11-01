@@ -16,7 +16,7 @@ from ..timeutil import event_tz, to_event_local
 from .experience import active_workflow, step_applies_to_guest
 from .program_audience import programme_audiences
 from .festiome_outbox import queue_announcement
-from .engagement_sync_outbox import _snapshot
+from .engagement_sync_outbox import _snapshot, _session_source
 
 
 def now_local() -> datetime:
@@ -122,16 +122,21 @@ async def program_state(event: Event, workflow: ExperienceWorkflow | None, db: A
         if not step.enabled or not (step.is_segment or step.type == "session_attendance"):
             continue
         snapshot = _snapshot(event, workflow, step, workflow.status)
-        if not snapshot["starts_at"] or not snapshot["ends_at"]:
+        if not snapshot["starts_at"]:
+            continue
+        if not snapshot["ends_at"] and any(_session_source(step).get(key) for key in ("end_time", "endTime", "end")):
+            # A malformed supplied finish is not an intentionally open finish.
             continue
         start = datetime.fromisoformat(snapshot["starts_at"])
-        end = datetime.fromisoformat(snapshot["ends_at"])
-        if end <= start:
+        end = datetime.fromisoformat(snapshot["ends_at"]) if snapshot["ends_at"] else None
+        if end is not None and end <= start:
             continue
         scheduled.append((start, end, step, snapshot))
     scheduled.sort(key=lambda item: (item[0], item[2].sort_order or 0, item[2].title))
     for start, end, step, snapshot in scheduled:
-        active = start <= moment < end
+        # An announced start is useful without a finish time. It must not
+        # become an indefinitely live session or trigger timed automation.
+        active = end is not None and start <= moment < end
         conditions = step.conditions or {}
         groups = conditions.get("age_groups_include") or []
         segment = {
@@ -141,7 +146,7 @@ async def program_state(event: Event, workflow: ExperienceWorkflow | None, db: A
             "speaker": snapshot.get("speaker"),
             "age_groups": [str(group) for group in groups] if isinstance(groups, list) else [str(groups)],
             "audience_guest_ids": [p.id for p in people if await step_applies_to_guest(step, p, db, audience_context=contexts[p.id])] if guest else None,
-            "active": active, "state": "ongoing" if active else "ended" if end <= moment else "upcoming",
+            "active": active, "state": "ongoing" if active else "ended" if end is not None and end <= moment else "upcoming" if start > moment else "scheduled",
         }
         day_key = start.date().isoformat()
         if day_key not in days:

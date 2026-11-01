@@ -10456,9 +10456,16 @@
             "title": "Description"
           },
           "ends_at": {
-            "format": "date-time",
-            "title": "Ends At",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
           },
           "key": {
             "title": "Key",
@@ -10496,7 +10503,8 @@
             "enum": [
               "ended",
               "ongoing",
-              "upcoming"
+              "upcoming",
+              "scheduled"
             ],
             "title": "State",
             "type": "string"
@@ -10514,8 +10522,7 @@
           "step_id",
           "key",
           "title",
-          "starts_at",
-          "ends_at"
+          "starts_at"
         ],
         "title": "GuestProgramSegmentOut",
         "type": "object"

@@ -28,3 +28,18 @@ test('visual periods preserve every parallel session in chronological time group
  assert.deepEqual(periods.map(p=>p.label),['Morning','Afternoon']);
  assert.equal(periods[0].groups[0].sessions.length,5);
 });
+
+import {sessionLive} from '../src/components/guesthub/programmeView.mjs';
+test('start-only sessions stay in the programme without being marked live',()=>{
+ const gala={step_id:'gala',starts_at:'2026-11-11T16:00:00+01:00',ends_at:null};
+ assert.equal(sessionLive(gala,Date.parse('2026-11-11T17:00:00+01:00')),false);
+ assert.equal(dayHighlights([gala],Date.parse('2026-11-11T17:00:00+01:00')).featured,gala);
+ assert.equal(dayHighlights([gala],Date.parse('2026-11-11T17:00:00+01:00')).current.length,0);
+});
+
+test('after the conference, the announced gala is featured without claiming it is live',()=>{
+ const ended={step_id:'conference',starts_at:'2026-11-11T10:00:00+01:00',ends_at:'2026-11-11T15:00:00+01:00'};
+ const gala={step_id:'gala',starts_at:'2026-11-11T16:00:00+01:00',ends_at:null};
+ const result=dayHighlights([ended,gala],Date.parse('2026-11-11T17:00:00+01:00'));
+ assert.equal(result.featured,gala);assert.equal(result.current.length,0);
+});

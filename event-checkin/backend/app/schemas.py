@@ -1143,14 +1143,14 @@ class GuestProgramSegmentOut(BaseModel):
     title: str
     description: Optional[str] = None
     starts_at: datetime
-    ends_at: datetime
+    ends_at: Optional[datetime] = None
     category: Optional[str] = None
     room: Optional[str] = None
     speaker: Optional[str] = None
     age_groups: list[str] = Field(default_factory=list)
     audience_guest_ids: Optional[list[str]] = None
     active: bool = False
-    state: Literal["ended", "ongoing", "upcoming"] = "upcoming"
+    state: Literal["ended", "ongoing", "upcoming", "scheduled"] = "upcoming"
 
 
 class GuestProgramDayOut(BaseModel):

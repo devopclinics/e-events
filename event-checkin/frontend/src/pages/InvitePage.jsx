@@ -19,6 +19,7 @@ import PublicTicketCheckout from '../components/PublicTicketCheckout'
 import EventApp from '../components/guesthub/EventApp'
 import WelcomeLanding from '../components/invite/WelcomeLanding'
 import GuestHubRecovery from '../components/invite/GuestHubRecovery'
+import PublicProgrammeEntry from '../components/invite/PublicProgrammeEntry'
 
 // ── Invite page helpers ───────────────────────────────────────────────────────
 
@@ -180,9 +181,9 @@ function fmtLocalDateTime(value, tz) {
 }
 
 function programSegmentState(segment, now = Date.now()) {
-  if (['ended', 'ongoing', 'upcoming'].includes(segment?.state)) return segment.state
+  if (['ended', 'ongoing', 'upcoming', 'scheduled'].includes(segment?.state)) return segment.state
   const startsAt = new Date(segment?.starts_at).getTime()
-  const endsAt = new Date(segment?.ends_at).getTime()
+  const endsAt = segment?.ends_at ? new Date(segment.ends_at).getTime() : NaN
   if (Number.isFinite(endsAt) && endsAt <= now) return 'ended'
   if (segment?.active || (Number.isFinite(startsAt) && Number.isFinite(endsAt) && startsAt <= now && now < endsAt)) return 'ongoing'
   return 'upcoming'
@@ -1675,7 +1676,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   const [programmeAudience, setProgrammeAudience] = useState('self')
   useEffect(() => setProgrammeAudience('self'), [accessToken, event?.id])
   const journey = rawJourney ? { ...rawJourney, program: filterProgramme(rawJourney.program, programmeAudience) } : null
-  const programmeControl = <ProgrammeAudience program={rawJourney?.program} value={programmeAudience} onChange={setProgrammeAudience} />
+  const programmeControl = <ProgrammeAudience event={event} program={rawJourney?.program} value={programmeAudience} onChange={setProgrammeAudience} />
   const [journeyError, setJourneyError] = useState('')
   const [liveParticipation, setLiveParticipation] = useState({})
   const [guestContent, setGuestContent] = useState({ materials: [], certificates: [] })
@@ -2387,7 +2388,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
                   {visibleProgramSegments.map((segment) => {
                     const state = programSegmentState(segment)
                     const isNext = state === 'upcoming' && journey.program.next_segments?.[0]?.step_id === segment.step_id
-                    const label = state === 'ongoing' ? 'Ongoing' : isNext ? 'Next' : state === 'ended' ? 'Ended' : 'Upcoming'
+                    const label = state === 'ongoing' ? 'Ongoing' : isNext ? 'Next' : state === 'ended' ? 'Ended' : state === 'scheduled' ? 'Start announced' : 'Upcoming'
                     return <div key={segment.step_id} className={`flex gap-3 py-2.5 first:pt-0 ${state === 'ended' ? 'opacity-55' : ''}`}>
                       <div className="w-20 shrink-0 text-xs font-extrabold" style={{ color: state === 'ongoing' || isNext ? tone.accent : tone.label }}>{fmtTime(segment.starts_at, event?.timezone)}</div>
                       <div className="min-w-0 flex-1">
@@ -2722,7 +2723,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
             </div>
             <div className="mt-3 text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>{selectedProgramDay.label} programme</div>{programSearchControl}
             <div className="mt-2 divide-y" style={{ borderColor: tone.border }}>
-              {visibleProgramSegments.map((segment) => <div key={segment.step_id} className="py-3 first:pt-0 last:pb-0"><div className="flex gap-3"><div className="w-24 shrink-0 text-xs font-extrabold" style={{ color: segment.active ? tone.accent : tone.label }}>{fmtTime(segment.starts_at, event?.timezone)}–{fmtTime(segment.ends_at, event?.timezone)}</div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2 font-bold">{segment.title}{segment.active && <span className="rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase" style={{ background: `${tone.accent}22`, color: tone.accent }}>Now</span>}</div><div className="mt-1 text-xs" style={{ color: tone.muted }}>{[segment.room, segment.speaker, ...(segment.age_groups || [])].filter(Boolean).join(" · ")}</div>{segment.description && <p className="mt-1 text-sm" style={{ color: tone.muted }}>{segment.description}</p>}</div></div></div>)}
+              {visibleProgramSegments.map((segment) => <div key={segment.step_id} className="py-3 first:pt-0 last:pb-0"><div className="flex gap-3"><div className="w-24 shrink-0 text-xs font-extrabold" style={{ color: segment.active ? tone.accent : tone.label }}>{!segment.ends_at&&'Starts at '}{fmtTime(segment.starts_at, event?.timezone)}{segment.ends_at&&<>–{fmtTime(segment.ends_at, event?.timezone)}</>}</div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2 font-bold">{segment.title}{segment.active && <span className="rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase" style={{ background: `${tone.accent}22`, color: tone.accent }}>Now</span>}</div><div className="mt-1 text-xs" style={{ color: tone.muted }}>{[segment.room, segment.speaker, ...(segment.age_groups || [])].filter(Boolean).join(" · ")}</div>{segment.description && <p className="mt-1 text-sm" style={{ color: tone.muted }}>{segment.description}</p>}</div></div></div>)}
             </div>
           </div>}
         </div>}
@@ -3342,6 +3343,13 @@ export default function InvitePage() {
   const [confirmed, setConfirmed] = useState(null)
   const [paidTicketsAvailable, setPaidTicketsAvailable] = useState(null)
   const isStudioPreview = new URLSearchParams(window.location.search).get('studio-preview') === '1'
+  const [requestedHash, setRequestedHash] = useState(() => window.location.hash)
+  useEffect(() => {
+    const update = () => setRequestedHash(window.location.hash)
+    window.addEventListener('hashchange', update)
+    return () => window.removeEventListener('hashchange', update)
+  }, [])
+  const programmeRequested = /^#\/programme(?:\?|$)/.test(requestedHash)
 
   const previewSurface = new URLSearchParams(window.location.search).get('studio-surface') || 'hub'
   const experience = designTheme?.page_config?.experience || {}
@@ -3475,7 +3483,7 @@ export default function InvitePage() {
   // Ticket delivery explicitly opts into a first-visit opening after payment.
   // Ordinary returning invitation links still go straight to their pass/hub.
   const ticketOpening = tokenMode && guest?.rsvp_status === 'confirmed' && new URLSearchParams(window.location.search).get('ticket-opening') === '1'
-  if ((!isStudioPreview || explicitEnvelopePreview) && (ticketOpening || (!confirmed && !prior && !tokenMeta.already_responded)) && completedEnvelope !== openingKey && shouldShowEnvelope(event?.id, openingConfig, openingPreview, envelopeScope)) {
+  if ((!programmeRequested || tokenMode || openingPreview) && (!isStudioPreview || explicitEnvelopePreview) && (ticketOpening || (!confirmed && !prior && !tokenMeta.already_responded)) && completedEnvelope !== openingKey && shouldShowEnvelope(event?.id, openingConfig, openingPreview, envelopeScope)) {
     return <InvitationOpening key={openingKey} appearance={openingConfig.appearance} continueMode={openingConfig.continue_mode} event={event} guest={tokenMode ? guest : null} onDone={() => {
       if (!openingPreview) rememberEnvelope(event.id, openingConfig, envelopeScope)
       setCompletedEnvelope(openingKey)
@@ -3544,6 +3552,9 @@ export default function InvitePage() {
   // token from — show the Hub anyway, with GuestHub's own preview-mock data,
   // so a hub_style choice is actually visible before publishing.
   const hasGuestHub = isStudioPreview ? previewSurface !== 'rsvp' : !!guestHubToken
+  if (programmeRequested && !tokenMode && !hasGuestHub && !isStudioPreview && new URLSearchParams(location.search).get('recover') !== '1') {
+    return <PublicProgrammeEntry event={event} />
+  }
   const primaryTarget = hasGuestHub ? 'guest-hub' : paidTicketsAvailable ? 'tickets' : 'rsvp'
   const primaryLabel = hasGuestHub ? 'Open FestioHub' : paidTicketsAvailable ? 'Get Tickets' : 'Confirm My RSVP'
 

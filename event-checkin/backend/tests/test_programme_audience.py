@@ -85,11 +85,40 @@ async def test_guest_endpoint_includes_personal_audiences(ctx):
         event=await db.get(Event,ctx.ids['event_a']);event.live_program_enabled=True
         guest=await db.get(Guest,guest_id);guest.rsvp_notes='Age group: Adults'
         wf=await db.scalar(select(ExperienceWorkflow).where(ExperienceWorkflow.event_id==event.id))
-        for title, groups in [('Shared',None),('Adults',['Adults']),('Juniors',['Juniors'])]:
-            db.add(ExperienceStep(workflow_id=wf.id,key=title,title=title,type='session_attendance',enabled=True,required=False,conditions={'age_groups_include':groups} if groups else {},config={'session':{'date':'2026-12-24','start_time':'10:00','end_time':'11:00'}}))
+        for title, groups in [('Shared',None),('Adults',['Adults']),('Juniors',['Juniors']),('Gala Night',None)]:
+            db.add(ExperienceStep(workflow_id=wf.id,key=title,title=title,type='session_attendance',enabled=True,required=False,conditions={'age_groups_include':groups} if groups else {},config={'session':{'date':'2026-12-24','start_time':'16:00' if title=='Gala Night' else '10:00','end_time':None if title=='Gala Night' else '11:00'}}))
         await db.commit()
     response=await ctx.client.get(f"/api/events/{ctx.ids['event_a']}/experience/me?token={TOKEN}")
     assert response.status_code==200, response.text
     timetable=response.json()['program']
     assert timetable['viewer_id']==guest_id
-    assert {s['title']:s['audience_guest_ids'] for s in timetable['days'][0]['segments']}=={'Shared':[guest_id],'Adults':[guest_id],'Juniors':[]}
+    assert {s['title']:s['audience_guest_ids'] for s in timetable['days'][0]['segments']}=={'Shared':[guest_id],'Adults':[guest_id],'Juniors':[],'Gala Night':[guest_id]}
+    assert next(s for s in timetable['days'][0]['segments'] if s['title']=='Gala Night')['ends_at'] is None
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('hour,state,in_next', [(8,'upcoming',True),(15,'scheduled',False),(22,'scheduled',False)])
+async def test_start_only_programme_is_visible_without_becoming_live(monkeypatch,hour,state,in_next):
+    monkeypatch.setattr(program,'_feedback_windows',AsyncMock(return_value=[]))
+    event=NS(id='event',name='Conference',event_date=datetime(2026,11,11,9),timezone='Africa/Lagos',live_program_enabled=True)
+    step=NS(id='gala',key='gala',title='Gala Night',description=None,enabled=True,type='session_attendance',is_segment=False,starts_offset_seconds=21600,duration_seconds=None,sort_order=1,conditions={},config={'session':{'room':'The Event Center'}})
+    workflow=NS(id='workflow',status='published',steps=[step]);db=AsyncMock()
+    result=GuestProgramOut.model_validate(await program.program_state(event,workflow,db,now=datetime(2026,11,11,hour,tzinfo=timezone.utc)))
+    assert len(result.days)==1 and result.days[0].date=='2026-11-11'
+    segment=result.days[0].segments[0]
+    assert segment.title=='Gala Night' and segment.starts_at.hour==16
+    assert segment.ends_at is None and not segment.active and segment.state==state
+    assert not result.current_segments
+    assert bool(result.next_segments)==in_next
+    assert program.segment_steps(workflow)==[]  # no timed announcements or feedback
+    db.commit.assert_not_called();db.execute.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_start_only_preserves_timed_and_overnight_sessions(monkeypatch):
+    monkeypatch.setattr(program,'_feedback_windows',AsyncMock(return_value=[]))
+    event=NS(id='event',name='Conference',event_date=datetime(2026,11,11,9),timezone='Africa/Lagos',live_program_enabled=True)
+    def step(key,start,end):
+        return NS(id=key,key=key,title=key,description=None,enabled=True,type='session_attendance',is_segment=False,starts_offset_seconds=None,duration_seconds=None,sort_order=0,conditions={},config={'session':{'date':'2026-11-11','start_time':start,'end_time':end}})
+    workflow=NS(id='workflow',status='published',steps=[step('gala','16:00',None),step('conference','10:00','15:00'),step('overnight','12:00','11:00'),step('invalid','13:00','not-a-time')])
+    result=GuestProgramOut.model_validate(await program.program_state(event,workflow,AsyncMock(),now=datetime(2026,11,11,10,tzinfo=timezone.utc)))
+    assert [s.title for s in result.days[0].segments]==['conference','overnight','gala']
+    assert [s.title for s in result.current_segments]==['conference']

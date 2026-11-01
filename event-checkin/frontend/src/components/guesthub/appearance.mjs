@@ -27,6 +27,13 @@ export function appearanceTokens(id, colors = {}) {
   if (id === 'ocean') Object.assign(tokens, {'--green':'#235c87','--deep':'#15374f','--mint':'#e1eff8','--gold':'#e1c17b','--ink':'#18354c','--muted':'#546e82','--line':'#d0e0eb','--bg':'#f0f6fa','--white':'#ffffff','--canvas':'#e1edf5','--sidebar-muted':'#bfd6e6','--hero-muted':'#d1e4f2'});
   if (id === 'event') {
     const hex = value => /^#[0-9a-f]{6}$/i.test(value || '');
+    // Custom dark event palettes need dark reading surfaces and light muted
+    // copy too, even though the guest selected "Event colours", not "Dark".
+    if (hex(colors.background) && contrastText(colors.background) === '#ffffff') {
+      Object.assign(tokens, appearanceTokens('dark'), {
+        '--mint': hex(colors.surface) ? colors.surface : '#263e33',
+      });
+    }
     if (hex(colors.primary)) tokens['--green'] = tokens['--deep'] = colors.primary;
     if (hex(colors.accent)) tokens['--gold'] = colors.accent;
     if (hex(colors.background)) tokens['--bg'] = tokens['--canvas'] = colors.background;

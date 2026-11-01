@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import RedesignShell, { Icon, ConfirmDialog } from './redesign/RedesignShell'
 import { EmptyState, ErrorRetryState, LoadingSkeleton } from './redesign/RedesignPrimitives'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
+import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import './EventsListRedesignPage.css'
 
@@ -18,13 +19,16 @@ const STATUS_BADGE = { draft: 'warn', active: 'ok', ended: 'bl-chip-neutral', ar
 
 export default function EventsListRedesignPage() {
   const navigate = useNavigate()
-  const [, setCurrentEventId] = useCurrentEvent()
+  const [currentEventId, setCurrentEventId] = useCurrentEvent()
+  const { user } = useAuth()
   const [tab, setTab] = useState('All')
   const [counts, setCounts] = useState({})
   const [events, setEvents] = useState(null)
   const [error, setError] = useState('')
   const [openMenuId, setOpenMenuId] = useState('')
   const [archiveTarget, setArchiveTarget] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleteError, setDeleteError] = useState('')
   const [busy, setBusy] = useState(false)
 
   async function loadCounts() {
@@ -70,6 +74,22 @@ export default function EventsListRedesignPage() {
       await Promise.all([load(), loadCounts()])
     } catch (e) {
       setError(e.message || 'Event could not be unarchived')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function deleteEvent(event) {
+    if (busy) return
+    setBusy(true)
+    setDeleteError('')
+    try {
+      await api.deleteEvent(event.id)
+      if (currentEventId === event.id) setCurrentEventId('')
+      setDeleteTarget(null)
+      await Promise.all([load(), loadCounts()])
+    } catch (e) {
+      setDeleteError(e.message || 'Event could not be deleted. Please try again.')
     } finally {
       setBusy(false)
     }
@@ -122,12 +142,25 @@ export default function EventsListRedesignPage() {
                     {event.status === 'archived'
                       ? <button onClick={() => { setOpenMenuId(''); unarchiveEvent(event) }}>Unarchive</button>
                       : <button className="ev-danger" onClick={() => { setOpenMenuId(''); setArchiveTarget(event) }}>Archive</button>}
+                    {user?.is_platform_superadmin && <button className="ev-danger" onClick={() => { setOpenMenuId(''); setDeleteError(''); setDeleteTarget(event) }}>Delete event</button>}
                   </div>
                 )}
               </div>
             </div>
           ))}
         </div>
+      )}
+
+      {deleteTarget && (
+        <ConfirmDialog
+          title={`Delete "${deleteTarget.name}"?`}
+          message={<><span>This permanently deletes the event and its event data. Its invitation and RSVP links will stop working. This cannot be undone.</span>{deleteError && <p role="alert">{deleteError}</p>}</>}
+          danger
+          requireTypedWord="DELETE"
+          confirmLabel={busy ? 'Deleting…' : 'Delete event'}
+          onCancel={() => { if (!busy) setDeleteTarget(null) }}
+          onConfirm={() => deleteEvent(deleteTarget)}
+        />
       )}
 
       {archiveTarget && (

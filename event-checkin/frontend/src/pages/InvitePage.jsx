@@ -1,3 +1,4 @@
+import OrganizerContacts from '../components/invite/OrganizerContacts';
 import { personalEnvelopeScope } from '../components/invitations/envelopePersonalization.mjs'
 import EventWebsiteLink from '../components/guesthub/EventWebsiteLink'
 import GuestSpeakers from '../components/guesthub/GuestSpeakers'
@@ -2486,8 +2487,9 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
                 </form>
               </>
             ) : (
-              <div className="mt-2 text-sm" style={{ color: tone.label }}><p>Message Host isn't enabled for this event.</p>{helpEmail && <a className="mt-2 inline-block font-bold underline" href={`mailto:${helpEmail}`}>Email the event organizer →</a>}</div>
+              <div className="mt-2 text-sm" style={{ color: tone.label }}><p>{event?.organizer_phones?.length ? 'You can contact the organizer directly below.' : "Message Host isn't enabled for this event."}</p>{helpEmail && <a className="mt-2 inline-block font-bold underline" href={`mailto:${helpEmail}`}>Email the event organizer →</a>}</div>
             )}
+            <OrganizerContacts phones={event?.organizer_phones} />
             {hub?.capabilities?.guest_chat && (
               <>
                 <div className="mt-4 border-t pt-3" style={{ borderColor: tone.border }}>

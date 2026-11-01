@@ -9,6 +9,7 @@ Endpoints:
   POST /api/invite/token/{invite_token}/rsvp — invited guest confirms / declines
 """
 import logging
+import re
 import uuid
 from datetime import datetime
 
@@ -198,6 +199,14 @@ async def _save_shipping(
             db.add(GuestShipment(shipment_id=s.id, guest_id=guest.id, size=chosen))
 
 
+def _public_organizer_phones(preferences):
+    """Expose explicitly public numbers, never account or billing contacts."""
+    values = preferences.get("public_organizer_phones", []) if isinstance(preferences, dict) else []
+    if not isinstance(values, list):
+        return []
+    return list(dict.fromkeys(value for value in values if isinstance(value, str) and re.fullmatch(r"\+[1-9]\d{7,14}", value)))[:5]
+
+
 async def _invite_page_out(event: Event, db: AsyncSession) -> InvitePageOut:
     questions = (await db.execute(
         select(RSVPQuestion)
@@ -208,6 +217,7 @@ async def _invite_page_out(event: Event, db: AsyncSession) -> InvitePageOut:
     return InvitePageOut(
         id=event.id,
         external_website_url=event.external_website_url,
+        organizer_phones=_public_organizer_phones(event.setup_preferences),
         name=event.name,
         couples_name=event.couples_name,
         event_type=event.event_type,

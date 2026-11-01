@@ -12568,6 +12568,14 @@
             "title": "Name",
             "type": "string"
           },
+          "organizer_phones": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 5,
+            "title": "Organizer Phones",
+            "type": "array"
+          },
           "partner_enabled": {
             "default": false,
             "title": "Partner Enabled",

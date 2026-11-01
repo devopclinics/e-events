@@ -13,7 +13,7 @@ class Handler(SimpleHTTPRequestHandler):
   super().do_GET()
  def log_message(self,*a):pass
 server=ThreadingHTTPServer(('127.0.0.1',0),Handler);threading.Thread(target=server.serve_forever,daemon=True).start();BASE=f'http://127.0.0.1:{server.server_port}'
-event=dict(id='conference-fixture',name='PAMCON 6.0 Conference',event_type='Conference',guest_hub_layout='app',rsvp_landing_layout='welcome',event_date='2026-11-11T09:00:00',event_end_date='2026-11-11T14:00:00',timezone='Africa/Lagos',venue_name='The Event Center',status='active',experience_enabled=True,live_program_enabled=True,rsvp_enabled=True,rsvp_token='public-conference',speaker_enabled=True,speaker_token='fixture-speakers',engagement_enabled=False,festiome_enabled=False,rsvp_deadline=None)
+event=dict(id='conference-fixture',name='PAMCON 6.0 Conference',event_type='Conference',guest_hub_layout='app',rsvp_landing_layout='welcome',event_date='2026-11-11T09:00:00',event_end_date='2026-11-11T14:00:00',timezone='Africa/Lagos',venue_name='The Event Center',status='active',experience_enabled=True,live_program_enabled=True,rsvp_enabled=True,rsvp_token='public-conference',organizer_phones=['+2348028518837','+2348132326304'],speaker_enabled=True,speaker_token='fixture-speakers',engagement_enabled=False,festiome_enabled=False,rsvp_deadline=None)
 guest=dict(id='attendee',name='Ada Guest',qr_token='fixture-pass',rsvp_status='confirmed',admitted=True,checked_out=False)
 other=dict(id='colleague',name='Sam Guest',qr_token='fixture-colleague',rsvp_status='confirmed',admitted=False)
 hub=dict(guest=guest,party=[guest,{k:v for k,v in other.items() if k!='qr_token'}],capabilities={},announcements=[],direct_messages=[],chat_messages=[])
@@ -65,6 +65,13 @@ try:
   page.goto(BASE+'/rsvp/public-conference#/speakers');expect(page.get_by_text('Mr. Ayodeji Olonilua',exact=True)).to_be_visible()
   assert page.locator('.speaker-card').evaluate('(el)=>getComputedStyle(el).color')=='rgb(23, 32, 51)'
   checks.append('speaker name has explicit dark foreground on white card')
+  page.goto(BASE+'/rsvp/public-conference#/communications')
+  contacts=page.get_by_role('region',name='Organizer phone numbers');expect(contacts).to_be_visible()
+  for number in event['organizer_phones']:
+   expect(contacts.get_by_role('link',name=f'Call organizer {number}',exact=True)).to_have_attribute('href',f'tel:{number}')
+   expect(contacts.get_by_role('link',name=f'WhatsApp organizer {number}',exact=True)).to_have_attribute('href',f'https://wa.me/{number[1:]}')
+  assert "Message Host isn't enabled" not in page.locator('body').inner_text()
+  checks.append('organizer contacts remain available without messaging capability')
   assert not errors,errors;assert not writes,writes
   (OUT/'validation.json').write_text(json.dumps(dict(checks=checks,errors=errors,mutations=writes,isolated_from_production=True),indent=2));print(json.dumps(dict(passed=len(checks),errors=errors)));browser.close()
 finally:server.shutdown()

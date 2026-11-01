@@ -1988,6 +1988,7 @@ export interface InvitePageOut {
   live_program_enabled?: boolean
   logo_url?: (string) | null
   name: string
+  organizer_phones?: (string)[]
   partner_enabled?: boolean
   partner_token?: (string) | null
   questions?: (RSVPQuestionOut)[]

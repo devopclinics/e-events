@@ -2840,6 +2840,7 @@ class GuestHubRecoveryResponse(BaseModel):
 
 
 class InvitePageOut(BaseModel):
+    organizer_phones: list[str] = Field(default_factory=list, max_length=5)
     external_website_url: Optional[str] = Field(default=None, max_length=2000)
     event_type: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)

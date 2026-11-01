@@ -53,7 +53,7 @@ try:
   state['site_status']=503;page.reload();page.get_by_role('button',name='Try again',exact=True).wait_for();state['site_status']=200;page.get_by_role('button',name='Try again',exact=True).click();expect(page.get_by_role('heading',name='Published conference programme')).to_be_visible();checks.append('failed public programme retries')
   page.evaluate("localStorage.setItem('eqr_rsvp:public-conference',JSON.stringify({rsvp_status:'confirmed',qr_token:'fixture-pass'}))")
   page.goto(BASE+'/rsvp/public-conference#/programme');expect(page.get_by_role('heading',name='Your conference programme')).to_be_visible();assert '/rsvp/public-conference' in page.url
-  expect(page.locator('.pg-title').filter(has_text='Gala Night')).to_be_visible();expect(page.locator('.pg-time-note')).to_have_text('Finish time to be announced.');assert 'Invalid Date' not in page.locator('body').inner_text();assert 'My family' not in page.locator('body').inner_text();assert 'My group' in page.locator('body').inner_text();assert page.locator('.fh-event-app').get_attribute('data-scheme')=='dark';checks.append('returning attendee keeps personal hub and start-only gala')
+  expect(page.locator('.pg-title').filter(has_text='Gala Night')).to_be_visible();expect(page.locator('.pg-time-note')).to_have_text('Finish time to be announced.');assert 'Invalid Date' not in page.locator('body').inner_text();assert 'My family' not in page.locator('body').inner_text();assert 'My group' in page.locator('body').inner_text();assert page.locator('.fh-event-app').get_attribute('data-scheme')=='light';checks.append('returning attendee keeps personal hub and start-only gala')
   primary=page.get_by_role('navigation',name='GuestHub',exact=True)
   for label in ['Programme','My Pass','Speakers','Venue','Help']:expect(primary.get_by_role('button',name=label,exact=True)).to_have_count(1)
   checks.append('conference navigation prioritizes pass speakers venue help')
@@ -62,6 +62,9 @@ try:
   checks.append('desktop and narrow mobile fit')
   page.locator('.pg-title').filter(has_text='Gala Night').click();expect(page.locator('dialog[open]')).to_be_visible();expect(page.locator('dialog[open]').get_by_text('Finish time to be announced.',exact=True)).to_be_visible();assert 'Happening now' not in page.locator('dialog[open]').inner_text();page.keyboard.press('Escape');checks.append('gala details never invent finish or live status')
   page.goto(BASE+'/rsvp/public-conference#/home');expect(page.get_by_role('heading',name='Welcome, Ada')).to_be_visible();assert 'Event ended' not in page.locator('.greeting').inner_text();checks.append('later gala prevents premature event-ended screen')
+  page.goto(BASE+'/rsvp/public-conference#/speakers');expect(page.get_by_text('Mr. Ayodeji Olonilua',exact=True)).to_be_visible()
+  assert page.locator('.speaker-card').evaluate('(el)=>getComputedStyle(el).color')=='rgb(23, 32, 51)'
+  checks.append('speaker name has explicit dark foreground on white card')
   assert not errors,errors;assert not writes,writes
   (OUT/'validation.json').write_text(json.dumps(dict(checks=checks,errors=errors,mutations=writes,isolated_from_production=True),indent=2));print(json.dumps(dict(passed=len(checks),errors=errors)));browser.close()
 finally:server.shutdown()

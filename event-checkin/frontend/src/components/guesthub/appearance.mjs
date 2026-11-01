@@ -16,7 +16,7 @@ export function contrastText(hex) {
   const l = c.map(v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4).reduce((a, v, i) => a + v * [.2126,.7152,.0722][i],0);
   return l > .18 ? '#142d25' : '#ffffff';
 }
-export function appearanceTokens(id, colors = {}) {
+export function appearanceTokens(id, colors = {}, options = {}) {
   const tokens = {
     '--green':'#124b3c','--deep':'#10372e','--mint':'#e5f3ec','--gold':'#d6b45e','--ink':'#18372f','--muted':'#60736b','--line':'#dce6df','--bg':'#f4f6f2','--white':'#ffffff','--canvas':'#e9eeea',
     '--warm-bg':'#faf0d6','--warm-ink':'#755714','--blue-bg':'#e8eff9','--blue-ink':'#365b88','--lilac-bg':'#eeeafa','--lilac-ink':'#65538b','--error-bg':'#fff0ed','--error-ink':'#9c2525',
@@ -40,6 +40,19 @@ export function appearanceTokens(id, colors = {}) {
     if (hex(colors.surface)) tokens['--white'] = colors.surface;
     if (hex(colors.text)) tokens['--ink'] = colors.text;
     tokens['--on-sidebar'] = tokens['--sidebar-muted'] = contrastText(tokens['--deep']);
+  }
+  // Conference reading surfaces stay quiet even when the invitation palette
+  // uses bright gold as its primary. Keep that gold for the principal action.
+  if (id === 'event' && options.professional && tokens['--scheme'] === 'dark') {
+    const action = contrastText(colors.primary || '#000000') !== '#ffffff' ? colors.primary : tokens['--gold'];
+    Object.assign(tokens, {'--deep': colors.background, '--green': colors.background,
+      '--bg':'#f7f4f8', '--canvas':'#eee9f0', '--white':'#fffdfa',
+      '--ink':'#291d30', '--muted':'#66596d', '--line':'#dfd5e3', '--mint':'#eee6f2',
+      '--warm-bg':'#fff4dc', '--warm-ink':'#785512', '--blue-bg':'#e9eff8', '--blue-ink':'#345680',
+      '--lilac-bg':'#eee6f5', '--lilac-ink':'#604278', '--error-bg':'#fff0ed', '--error-ink':'#9c2525',
+      '--gold':action, '--action':action, '--on-action':contrastText(action),
+      '--on-sidebar':'#ffffff', '--sidebar-muted':'#ded0e5', '--hero-muted':'#e8dced',
+      '--scheme':'light', '--brand-reading':'conference'});
   }
   tokens['--on-primary'] = contrastText(tokens['--green']);
   tokens['--hero-bg'] = id === 'dark' ? '#234535' : tokens['--green'];

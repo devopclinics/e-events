@@ -1705,3 +1705,20 @@
 .fh-event-app h1,.fh-event-app h2{font-family:var(--app-font,Georgia,serif)}
 .fh-event-app .studio-event-cover{display:block;width:100%;height:230px;object-fit:cover;border-radius:17px;background:var(--white);margin-bottom:22px}
 @media(max-width:700px){.fh-event-app .studio-event-cover{height:180px}}
+
+/* Event branding supplies identity; semantic surfaces supply reading contrast. */
+.fh-event-app .speaker-card { color: #172033; }
+.fh-event-app .help-card h2,.fh-event-app .help-card h3 { color: var(--ink); }
+.fh-event-app[data-brand-reading="conference"] .primary,
+.fh-event-app[data-brand-reading="conference"] .hero.attention .primary {
+  background:var(--action);color:var(--on-action);
+}
+.fh-event-app[data-brand-reading="conference"] .hero.attention {
+  background:var(--white);border:1px solid var(--line);border-left:4px solid #b98524;color:var(--ink);
+}
+.fh-event-app[data-brand-reading="conference"] .hero.attention p {color:var(--muted)}
+.fh-event-app[data-brand-reading="conference"] .hero.attention .eyebrow {color:var(--warm-ink)}
+.fh-event-app[data-brand-reading="conference"] .help-card {background:var(--white)!important}
+.fh-event-app[data-brand-reading="conference"] .date-art {background:var(--mint);color:var(--ink)}
+.fh-event-app .greeting>.status[data-registration="pending"] {background:var(--warm-bg);color:var(--warm-ink)}
+.fh-event-app .greeting>.status[data-registration="confirmed"] {background:#e5f3ec;color:#20553d}

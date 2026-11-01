@@ -10,13 +10,13 @@ const PLATFORM_ICON = { LinkedIn: '💼', 'Twitter/X': '𝕏', Instagram: '📷'
 export function SpeakerCard({ speaker, compact = false }) {
   const size = compact ? 56 : 80
   return (
-    <div className={`bg-white border border-slate-200 rounded-xl text-center shadow-sm ${compact ? 'p-4' : 'p-5'}`}>
+    <div className={`speaker-card bg-white text-slate-900 border border-slate-200 rounded-xl text-center shadow-sm ${compact ? 'p-4' : 'p-5'}`}>
       {speaker.photo_url
         ? <img src={speaker.photo_url} alt="" className="rounded-full object-cover mx-auto mb-3" style={{ width: size, height: size }} />
         : <div className="rounded-full bg-slate-100 grid place-items-center text-2xl mx-auto mb-3" style={{ width: size, height: size }}>🎤</div>}
       <div className="font-semibold text-sm">{speaker.name}</div>
-      {speaker.title && <div className="text-xs text-slate-500 mt-0.5">{speaker.title}</div>}
-      {!compact && speaker.bio && <p className="text-xs text-slate-500 mt-2 leading-relaxed">{speaker.bio}</p>}
+      {speaker.title && <div className="text-xs text-slate-600 mt-0.5">{speaker.title}</div>}
+      {!compact && speaker.bio && <p className="text-xs text-slate-600 mt-2 leading-relaxed">{speaker.bio}</p>}
       {speaker.social_links?.length > 0 && (
         <div className="flex justify-center gap-2 mt-3">
           {speaker.social_links.map((l, i) => (

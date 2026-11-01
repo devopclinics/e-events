@@ -16,3 +16,10 @@ test('PAMCON dark event colours retain readable captions, surfaces and actions',
  for(const [fg,bg] of [['--ink','--bg'],['--muted','--bg'],['--muted','--white'],['--green','--white'],['--on-primary','--green'],['--on-sidebar','--deep']])assert.ok(contrast(t[fg],t[bg])>=4.5,`${fg} on ${bg}`);
  assert.equal(t['--bg'],'#330540');assert.equal(t['--white'],'#4A0A5D');
 });
+
+test('conference branding separates purple identity, gold actions and reading surfaces',()=>{
+ const t=appearanceTokens('event',{background:'#330540',surface:'#4A0A5D',primary:'#FFB400',accent:'#FF7900',text:'#FFFFFF'},{professional:true});
+ assert.equal(t['--deep'],'#330540');assert.equal(t['--action'],'#FFB400');
+ for(const [fg,bg] of [['--ink','--white'],['--muted','--white'],['--green','--white'],['--on-sidebar','--deep'],['--on-action','--action'],['--warm-ink','--warm-bg']])assert.ok(contrast(t[fg],t[bg])>=4.5,`${fg} on ${bg}`);
+ assert.equal(appearanceTokens('dark',{}, {professional:true})['--scheme'],'dark');
+});

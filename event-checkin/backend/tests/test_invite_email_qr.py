@@ -228,3 +228,20 @@ async def test_custom_pass_uses_event_brand_and_free_event_footer_without_losing
 def test_email_header_foreground_is_readable_for_light_and_dark_event_palettes():
     assert email_service._theme_colors({"background_color":"#330540"})['primary']=='#ffffff'
     assert email_service._theme_colors({"background_color":"#fffdfa"})['primary']=='#172033'
+
+@pytest.mark.asyncio
+async def test_complete_pass_layout_survives_editor_and_is_not_wrapped_twice(monkeypatch):
+    from services import templates
+    sent = _capture(monkeypatch)
+    body = templates.sanitize_html('<table role="document" width="100%"><tr><td><h1>My complete pass</h1>{{qr_code}}<a href="{{ticket_link}}">Open pass</a></td></tr></table>')
+    await email_service.send_invite_email(
+        {"first_name":"Ada", "last_name":"Guest", "email":"ada@example.invalid", "qr_token":"fixture-pass"},
+        "Conference", "Hosts", "https://events.example", datetime(2026,11,11,9), override_body=body,
+    )
+    html = _part_text(sent['msg'], 'text/html')
+    assert html.count('<html>') == 1 and html.count('<body') == 1
+    assert 'My complete pass' in html and 'cid:qrcode' in html
+    assert 'Powered by' not in html and _qr_part(sent['msg']) is not None
+    preview = email_service.render_simple_email_preview('Preview', body)
+    assert 'My complete pass' in preview and 'Powered by' not in preview
+    assert not email_service._is_complete_email('<table role="presentation"><tr><td>Just a fragment</td></tr></table>')

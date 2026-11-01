@@ -497,6 +497,20 @@ def _plain_text_from_html(html_body: str) -> str:
     return _html.unescape(text).strip()
 
 
+def _is_complete_email(body: str) -> bool:
+    # role=document survives the template editor's safe HTML sanitizer and
+    # explicitly marks a complete, inline-styled email layout.
+    return bool(re.match(r"^\s*(?:<(!doctype\s+html|html\b)|<table\b[^>]*\brole=[\"']document[\"'])", body or "", re.IGNORECASE))
+
+
+def _complete_email_document(body: str) -> str:
+    if re.match(r"^\s*<(!doctype\s+html|html\b)", body, re.IGNORECASE):
+        return body
+    return ('<!doctype html><html><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            '</head><body style="margin:0;padding:0;">' + body + '</body></html>')
+
+
 def _festio_email_shell(inner: str, *, title: str | None = None,
                         preheader: str | None = None,
                         footer_reason: str | None = None,
@@ -600,8 +614,8 @@ async def send_simple_email(
     # sending a redesigned post-event thank-you/feedback email, where the
     # stale pre-event flyer ("Scan to Register", dates, speakers) kept
     # showing above the new content.
-    if re.match(r"^\s*<(!doctype\s+html|html\b)", html_body, re.IGNORECASE):
-        wrapped = html_body
+    if _is_complete_email(html_body):
+        wrapped = _complete_email_document(html_body)
     else:
         theme = await _design_email_theme(event_id)
         wrapped = _festio_email_shell(
@@ -639,8 +653,8 @@ async def send_simple_email(
 def render_simple_email_preview(subject: str, html_body: str) -> str:
     # Mirror send_simple_email's shell bypass so Preview shows exactly what
     # actually gets sent for a full-document template override.
-    if re.match(r"^\s*<(!doctype\s+html|html\b)", html_body, re.IGNORECASE):
-        return html_body
+    if _is_complete_email(html_body):
+        return _complete_email_document(html_body)
     return _festio_email_shell(
         html_body,
         title=subject,
@@ -908,7 +922,9 @@ def _ticket_plain_text(ctx: dict) -> str:
 
 
 def _custom_email_shell(inner: str, title: str | None = None, theme: dict | None = None) -> str:
-    """Keep older organizer-customized full-body templates readable."""
+    """Respect complete layouts; wrap older fragment templates."""
+    if _is_complete_email(inner):
+        return _complete_email_document(inner)
     return _festio_email_shell(inner, title=title or "Event update", theme={**(theme or {}), "cover_image_url": None, "flyer_image_url": None}, show_create_event=True)
 
 

@@ -68,14 +68,23 @@ async def _design_email_theme(event_id: str | None) -> dict | None:
 
 
 def _theme_colors(theme: dict | None) -> dict:
-    return {
-        "background": (theme or {}).get("background_color") or "#f4f7fb",
-        "surface": "#ffffff",
-        "header": (theme or {}).get("background_color") or "#0f172a",
-        "primary": (theme or {}).get("primary_color") or "#ffffff",
-        "accent": (theme or {}).get("accent_color") or "#2dd4bf",
-        "button_text": "#05111f",
-    }
+    theme = theme or {}
+    def color(value, fallback):
+        return value if isinstance(value, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", value) else fallback
+    def on_color(value):
+        rgb = [int(value[i:i+2], 16) / 255 for i in (1, 3, 5)]
+        lum = sum((v / 12.92 if v <= .04045 else ((v + .055) / 1.055) ** 2.4) * w for v, w in zip(rgb, [.2126, .7152, .0722]))
+        return "#172033" if lum > .18 else "#ffffff"
+    background = color(theme.get("background_color"), "#f4f7fb")
+    header = color(theme.get("background_color"), "#0f172a")
+    primary = color(theme.get("primary_color"), "#ffffff")
+    accent = color(theme.get("accent_color"), "#2dd4bf")
+    # Bright invitation primaries become highlights, not reading backgrounds.
+    if on_color(header) == "#ffffff" and on_color(primary) != "#ffffff" and primary != "#ffffff":
+        accent = primary
+    return {"background": background, "surface": "#ffffff", "header": header,
+            "primary": on_color(header), "accent": accent, "button_text": on_color(accent),
+            "link": header if on_color(header) == "#ffffff" else "#124b3c"}
 
 
 def _theme_cover_url(theme: dict | None) -> str:
@@ -94,7 +103,7 @@ def _apply_design_theme_to_html(html_body: str, theme: dict | None) -> str:
         "#0d1b2f": c["header"],
         "#2dd4bf": c["accent"],
         "#76fff0": c["accent"],
-        "#0f766e": c["accent"],
+        "#0f766e": c["link"],
         "#ecfeff": f'{c["accent"]}18',
         "#99f6e4": f'{c["accent"]}55',
         "#115e59": c["header"],
@@ -491,12 +500,14 @@ def _plain_text_from_html(html_body: str) -> str:
 def _festio_email_shell(inner: str, *, title: str | None = None,
                         preheader: str | None = None,
                         footer_reason: str | None = None,
-                        theme: dict | None = None) -> str:
+                        theme: dict | None = None,
+                        show_create_event: bool = False) -> str:
     """Shared email-client-safe shell for transactional non-ticket emails."""
     safe_title = _html.escape(title or "Festio")
     safe_preheader = _html.escape(preheader or safe_title)
     footer = _html.escape(footer_reason or "You are receiving this email because you are connected to this event.")
     c = _theme_colors(theme)
+    create_event = ('<p style="margin:12px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:22px;"><a href="https://festio.events/create-invitation?share=invite" style="color:#334155;font-weight:700;text-decoration:underline;">Create a free event</a></p>') if show_create_event else ""
     cover = _theme_cover_url(theme)
     logo = (theme or {}).get("logo_image_url")
     logo_block = ('<tr><td style="padding:18px 28px;"><img src="' + _html.escape(logo, quote=True) + '" alt="Event logo" width="72" style="max-height:64px;width:auto;max-width:140px;" /></td></tr>') if logo else ""
@@ -511,7 +522,9 @@ def _festio_email_shell(inner: str, *, title: str | None = None,
         '<!doctype html><html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
         '<style>@media only screen and (max-width: 620px) {'
-        'table[width="600"]{width:100% !important;}'
+        'table[width="600"]{width:100% !important;table-layout:fixed;}'
+        'img[width="240"]{max-width:100% !important;height:auto !important;}'
+        '.festio-email-content{padding:24px 20px !important;}'
         'h1{font-size:24px !important;line-height:30px !important;}'
         '}</style></head>'
         f'<body style="margin:0;padding:0;background:{c["background"]};font-family:Arial,Helvetica,sans-serif;">'
@@ -530,7 +543,7 @@ def _festio_email_shell(inner: str, *, title: str | None = None,
         f'line-height:34px;margin:8px 0 0 0;font-weight:800;">{safe_title}</h1>'
         '</td></tr>'
         f'{logo_block}{cover_block}'
-        '<tr><td style="font-family:Arial,Helvetica,sans-serif;color:#172033;'
+        '<tr><td class="festio-email-content" style="font-family:Arial,Helvetica,sans-serif;color:#172033;'
         'font-size:15px;line-height:24px;padding:28px;">'
         f'{inner}'
         '</td></tr>'
@@ -541,7 +554,7 @@ def _festio_email_shell(inner: str, *, title: str | None = None,
         '<a href="mailto:events@festio.events" style="color:#0f766e;text-decoration:underline;">events@festio.events</a></p>'
         '<p style="font-family:Arial,Helvetica,sans-serif;color:#64748b;font-size:11px;line-height:17px;margin:0 0 5px 0;">'
         'Invites, RSVP, QR check-in, seating, guest messaging, Experience workflows and event insights.</p>'
-        f'<p style="font-family:Arial,Helvetica,sans-serif;color:#94a3b8;font-size:11px;line-height:17px;margin:0;">{footer}</p>'
+        f'<p style="font-family:Arial,Helvetica,sans-serif;color:#64748b;font-size:11px;line-height:17px;margin:0;">{footer}</p>{create_event}'
         '</td></tr>'
         '</table></td></tr></table></body></html>'
     )
@@ -596,6 +609,7 @@ async def send_simple_email(
             title=subject,
             preheader=_plain_text_from_html(html_body)[:140],
             theme=theme,
+            show_create_event=message_kind in {"ticket_qr", "experience_invitation"},
         )
     body_part = MIMEMultipart("alternative") if attachments or inline_images else msg
     body_part.attach(MIMEText(_plain_text_from_html(html_body), "plain", "utf-8"))
@@ -893,9 +907,9 @@ def _ticket_plain_text(ctx: dict) -> str:
     return "\n".join(parts)
 
 
-def _custom_email_shell(inner: str, title: str | None = None) -> str:
+def _custom_email_shell(inner: str, title: str | None = None, theme: dict | None = None) -> str:
     """Keep older organizer-customized full-body templates readable."""
-    return _festio_email_shell(inner, title=title or "Event update")
+    return _festio_email_shell(inner, title=title or "Event update", theme={**(theme or {}), "cover_image_url": None, "flyer_image_url": None}, show_create_event=True)
 
 
 async def send_invite_email(
@@ -997,13 +1011,15 @@ async def send_invite_email(
     subject = tpl.render(subject_tmpl, ctx) or f"You're invited to {event_name}"
     inner = tpl.render(body_tmpl, ctx)
     if override_body:
-        inner = _custom_email_shell(inner, title=subject)
+        inner = _custom_email_shell(inner, title=subject, theme=theme)
     text_body = _ticket_plain_text(ctx)
     body = (
         '<!doctype html><html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
         '<style>@media only screen and (max-width: 620px) {'
-        'table[width="600"]{width:100% !important;}'
+        'table[width="600"]{width:100% !important;table-layout:fixed;}'
+        'img[width="240"]{max-width:100% !important;height:auto !important;}'
+        '.festio-email-content{padding:24px 20px !important;}'
         'h1{font-size:28px !important;line-height:34px !important;}'
         '}</style></head>'
         '<body style="margin:0;padding:0;background:#f4f7fb;font-family:Arial,Helvetica,sans-serif;">'
@@ -1014,6 +1030,8 @@ async def send_invite_email(
         f'{inner}'
         '</body></html>'
     )
+    if override_body:
+        body = inner
     body = _apply_design_theme_to_html(body, theme)
 
     msg["Subject"] = subject

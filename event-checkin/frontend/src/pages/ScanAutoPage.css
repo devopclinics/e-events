@@ -1,0 +1,15 @@
+.festio-pass {color-scheme:light; background:#f3edf5; min-width:0}
+.festio-pass .pass-card {flex:none;background:#fffdfa;color:#291d30;min-width:0}
+.festio-pass .pass-header {background:var(--pass-brand);color:var(--pass-on-brand);border-top:4px solid var(--pass-gold)}
+.festio-pass .pass-header h1 {font-size:clamp(1.4rem,5vw,1.85rem);overflow-wrap:anywhere;text-wrap:balance}
+.festio-pass .pass-header p {color:var(--pass-on-brand);opacity:.9;overflow-wrap:anywhere}
+.festio-pass .pass-header p:first-child {opacity:1}
+.festio-pass .pass-body {background:#fffdfa;color:#291d30;overflow-wrap:anywhere}
+.festio-pass .pass-guest-name {color:#291d30}
+.festio-pass .pass-body .text-slate-400,.festio-pass .pass-body .text-slate-500 {color:#66596d}
+.festio-pass .pass-facts {background:#f7f3f9;border-color:#e2d8e7;line-height:1.6}
+.festio-pass .pass-facts h2 {color:#66596d}
+.festio-pass .pass-qr {max-width:100%;height:auto;aspect-ratio:1;background:#fff}
+.festio-pass .pass-footer {position:static;color:var(--pass-footer-ink);padding-bottom:env(safe-area-inset-bottom,0px)}
+.festio-pass .pass-footer a {color:inherit;border-color:currentColor}
+@media(max-width:360px){.festio-pass .pass-body{padding-left:16px;padding-right:16px}.festio-pass .pass-header{padding-left:16px;padding-right:16px}}

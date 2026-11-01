@@ -5,6 +5,8 @@ import { parseUtc } from '../timeutil'
 import { seatingTerm, seatTerm } from '../seatingTerm'
 import MenuSelection from '../components/MenuSelection'
 import FeedbackForms from '../components/FeedbackForms'
+import { contrastText } from '../components/guesthub/appearance.mjs'
+import './ScanAutoPage.css'
 
 function passThemeColors(theme) {
   return theme?.colors || {}
@@ -442,14 +444,15 @@ export default function ScanAutoPage() {
   const guestHubToken = guest?.invite_token || guest?.qr_token || token
   const showGuestHubButton = Boolean(guestHubToken && (passOpts.showHubButton || event?.experience_enabled || event?.guest_hub_layout === 'app'))
   const logoImage = designTheme?.logo_image_url || event?.logo_url
-  const coverImage = designTheme?.flyer_image_url || designTheme?.cover_image_url || ''
+  const brandBackground = colors.background || '#10372e'
+  const brandGold = colors.primary && contrastText(colors.primary) !== '#ffffff' ? colors.primary : colors.accent || '#d6b45e'
   const qrImageUrl = `/api/scan/${token}/qr.png`
   const checkoutQrImageUrl = `/api/scan/${token}/checkout-qr.png`
   const eventDate = parseUtc(event?.event_date)
   const eventName = wording.eventTitle || event?.name || 'Event'
   const hostName = wording.hostName || event?.couples_name || ''
   const isConsentView = window.location.hash === '#consent'
-  const headerEyebrow = isConsentView ? 'Review and sign' : (paidPass.eyebrow || "You're invited to")
+  const headerEyebrow = isConsentView ? 'Review and sign' : (paidPass.eyebrow || 'YOUR EVENT PASS')
   const headerTitle = isConsentView ? 'Event consent' : eventName
   const headerSubtitle = isConsentView ? eventName : hostName
   const admissionText = paidPass.qr_instruction || wording.admissionNote || (status === 'admitted'
@@ -457,40 +460,23 @@ export default function ScanAutoPage() {
     : 'Show this code to the check-in official at the entrance.')
 
   return (
-    <div className="app-shell min-h-screen flex items-center justify-center p-4 py-10" style={passBackground(colors)}>
+    <div className="app-shell festio-pass min-h-screen flex flex-col items-center justify-center gap-6 p-4 py-6" style={{background:brandBackground,...passBackground(colors), '--pass-footer-ink':contrastText(colors.surface || brandBackground), '--pass-brand':brandBackground, '--pass-on-brand':contrastText(brandBackground), '--pass-gold':brandGold, '--pass-on-gold':contrastText(brandGold)}}>
       {/* Ticket card */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-sm overflow-hidden">
+      <div className="pass-card bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden">
         {logoImage && <div className="bg-white p-3"><img src={logoImage} alt={`${eventName} logo`} style={{height:42,maxWidth:160,objectFit:"contain",margin:"auto"}} /></div>}
 
         {/* Header strip */}
-        <div
-          className="bg-slate-950 px-6 pt-8 pb-10 text-center relative overflow-hidden"
-          style={{ background: coverImage ? undefined : `linear-gradient(145deg, ${colors.background || '#020617'}, ${colors.surface || '#0f172a'})` }}
-        >
-          {coverImage && (
-            // Blurred, not just faded — cover photos are frequently flyers with
-            // the event title already baked into the artwork (as text), and at
-            // this card's width that text lands right behind the real <h1>
-            // title below, creating a confusing double-exposure that reads as
-            // a cut-off or garbled name even though the actual title text is
-            // complete. Blur removes the competing text while keeping the
-            // photo's color/mood as a backdrop.
-            <div
-              className="absolute inset-0 bg-cover bg-center opacity-45"
-              style={{ backgroundImage: `url(${coverImage})`, filter: 'blur(10px)', transform: 'scale(1.15)' }}
-            />
-          )}
-          <div className="absolute inset-0 bg-slate-950/55" />
+        <div className="pass-header px-6 pt-8 pb-10 text-center relative overflow-hidden">
           <div className="absolute top-4 right-4 left-4 flex justify-center">
             <StatusBadge status={status} />
           </div>
           <div className="relative mt-8">
-            <p className="text-teal-200 text-xs uppercase font-semibold mb-1" style={{ color: colors.accent || undefined }}>{headerEyebrow}</p>
-            <h1 className="text-white text-2xl font-bold leading-tight" style={{ color: colors.primary || undefined }}>{headerTitle}</h1>
+            <p className="text-teal-200 text-xs uppercase font-semibold mb-1" style={{ color: brandGold }}>{headerEyebrow}</p>
+            <h1 className="text-white text-2xl font-bold leading-tight" style={{ color: contrastText(brandBackground) }}>{headerTitle}</h1>
             <p className="text-slate-300 text-sm mt-1 italic">{headerSubtitle}</p>
             {eventDate && (
               <p className="text-slate-400 text-xs mt-2 font-medium">
-                {eventDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                {eventDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', ...(event?.timezone && { timeZone:event.timezone }) })}
               </p>
             )}
           </div>
@@ -504,11 +490,11 @@ export default function ScanAutoPage() {
         </div>
 
         {/* Body */}
-        <div className="px-6 pb-8 pt-2 space-y-5">
+        <div className="pass-body px-6 pb-6 pt-2 space-y-5">
           {/* Guest name */}
           <div className="text-center">
             <p className="text-xs uppercase tracking-widest text-slate-400 font-medium mb-0.5">{paidPass.attendee_label || 'Guest'}</p>
-            <p className="text-slate-800 dark:text-white text-xl font-bold">
+            <p className="pass-guest-name text-xl font-bold">
               {guest?.first_name} {guest?.last_name}
             </p>
           </div>
@@ -520,7 +506,7 @@ export default function ScanAutoPage() {
                 <img
                   src={qrImageUrl}
                   alt="Your QR code"
-                  className="w-44 h-44 object-contain"
+                  className="pass-qr w-44 h-44 object-contain"
                   onError={(e) => { e.target.style.display = 'none' }}
                 />
               ) : (
@@ -534,6 +520,11 @@ export default function ScanAutoPage() {
           <p className="text-center text-slate-400 text-xs">
             {admissionText}
           </p>
+
+          <section className="pass-facts rounded-xl border p-4 space-y-3" aria-label="Event details">
+            {eventDate && <div><h2 className="text-xs font-bold uppercase tracking-wide">When</h2><p>{eventDate.toLocaleTimeString([], {hour:'numeric',minute:'2-digit',...(event?.timezone && {timeZone:event.timezone})})}{event?.timezone ? ` · ${event.timezone.replaceAll('_',' ')}` : ''}</p></div>}
+            {(event?.venue_name || event?.venue_address) && <div><h2 className="text-xs font-bold uppercase tracking-wide">Where</h2><p className="font-semibold">{event.venue_name}</p><p className="text-sm">{event.venue_address}</p></div>}
+          </section>
 
           {/* Admitted banner */}
           {status === 'admitted' && <AdmittedBanner guest={guest} event={event} />}
@@ -580,7 +571,7 @@ export default function ScanAutoPage() {
                 <a
                   href={`/r/${guestHubToken}#guest-hub`}
                   className="inline-flex min-h-11 w-full max-w-xs items-center justify-center rounded-lg px-5 py-2.5 text-sm font-bold text-slate-950"
-                  style={{ background: paidPass.accent_color || colors.accent || '#14b8a6' }}
+                  style={{ background: paidPass.accent_color || brandGold, color:contrastText(paidPass.accent_color || brandGold) }}
                 >
                   {event?.guest_hub_layout === 'app' ? 'Back to GuestHub' : paidPass.button_label || (event?.live_program_enabled ? 'Open Live Program' : event?.experience_enabled ? 'Track my activity' : 'Open FestioHub')}
                 </a>
@@ -653,17 +644,9 @@ export default function ScanAutoPage() {
         </div>
       </div>
 
-      <footer className="fixed inset-x-0 bottom-4 px-4 text-center text-[11px] leading-5 text-slate-400">
-        <p>
-          Powered by <span className="font-semibold text-slate-300">Festio</span>
-          {' · '}
-          <a href="https://festio.events" className="text-teal-300 hover:text-teal-200 underline underline-offset-2">festio.events</a>
-          {' · '}
-          <a href="mailto:events@festio.events" className="text-teal-300 hover:text-teal-200 underline underline-offset-2">events@festio.events</a>
-        </p>
-        <p className="hidden sm:block text-slate-500">
-          Invites, RSVP, QR check-in, seating, guest messaging, Experience workflows and event insights.
-        </p>
+      <footer className="pass-footer w-full max-w-md text-center text-sm leading-6">
+        <p>Powered by <a href="https://festio.events" className="font-semibold underline underline-offset-2">Festio</a></p>
+        <a href="https://festio.events/create-invitation?share=invite" className="mt-2 inline-flex min-h-11 items-center justify-center rounded-full border px-5 font-semibold">Create a free event ↗</a>
       </footer>
     </div>
   )

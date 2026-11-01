@@ -168,6 +168,7 @@ _TICKET_QR_EMAIL_BODY = """
             <p style="font-family:Arial,Helvetica,sans-serif;color:#64748b;font-size:12px;line-height:18px;margin:0 0 6px 0;">Powered by <strong style="color:#0f172a;">Festio</strong> · <a href="https://festio.events" style="color:#0f766e;text-decoration:underline;">festio.events</a> · <a href="mailto:events@festio.events" style="color:#0f766e;text-decoration:underline;">events@festio.events</a></p>
             <p style="font-family:Arial,Helvetica,sans-serif;color:#64748b;font-size:11px;line-height:17px;margin:0 0 5px 0;">Invites, RSVP, QR check-in, seating, guest messaging, Experience workflows and event insights.</p>
             <p style="font-family:Arial,Helvetica,sans-serif;color:#94a3b8;font-size:11px;line-height:17px;margin:0;">You are receiving this email because you were invited to {{event_name}}.</p>
+            <p style="margin:12px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:22px;"><a href="https://festio.events/create-invitation?share=invite" style="color:#334155;font-weight:700;text-decoration:underline;">Create a free event</a></p>
           </td>
         </tr>
       </table>

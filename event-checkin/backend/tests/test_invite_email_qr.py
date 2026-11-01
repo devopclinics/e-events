@@ -201,3 +201,30 @@ def test_build_calendar_attachment_returns_ics_tuple():
     assert filename == "invite.ics"
     assert mimetype == "text/calendar"
     assert "UID:event-evt-3-guest-9@festio.events" in content.decode()
+
+
+@pytest.mark.asyncio
+async def test_custom_pass_uses_event_brand_and_free_event_footer_without_losing_qr(monkeypatch):
+    sent = _capture(monkeypatch)
+    async def theme(_):
+        return {"background_color":"#330540", "primary_color":"#FFB400", "accent_color":"#FF7900", "cover_image_url":"https://example.com/giant-flyer.png"}
+    monkeypatch.setattr(email_service, "_design_email_theme", theme)
+    await email_service.send_invite_email(
+        {"event_id":"event-1", "first_name":"Ada", "last_name":"Guest", "email":"ada@example.com", "qr_token":"fixture-qr"},
+        "PAMCON 6.0 Conference", "PAMAN", "https://events.example", datetime(2026,11,11,9),
+        override_body='<p>Keep your pass private.</p>{{qr_code}}<a href="{{ticket_link}}">Open pass</a>',
+        event_timezone="Africa/Lagos",
+    )
+    html = _part_text(sent["msg"], "text/html")
+    assert 'background:#330540' in html
+    assert 'color:#FFB400' in html
+    assert 'https://festio.events/create-invitation?share=invite' in html
+    assert 'Create a free event' in html
+    assert 'giant-flyer.png' not in html
+    assert 'cid:qrcode' in html and _qr_part(sent['msg']) is not None
+    assert '/scan/fixture-qr' in html and 'Keep your pass private' in html
+
+
+def test_email_header_foreground_is_readable_for_light_and_dark_event_palettes():
+    assert email_service._theme_colors({"background_color":"#330540"})['primary']=='#ffffff'
+    assert email_service._theme_colors({"background_color":"#fffdfa"})['primary']=='#172033'

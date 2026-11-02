@@ -60,6 +60,8 @@ SAMPLE_VALUES = {
     "greetings": "Asalam Alaykum",
     "consentLink": "https://festio.events/api/s/mbfwaiver",
     "feedbackLink": "https://festio.events/live/join/8CZH52",
+    "eventSchedule": "Conference: 10:00 AM; Gala Night: 4:00 PM (WAT)",
+    "organizerName": "Party Managers Association of Nigeria (PAMAN)",
 }
 
 
@@ -74,6 +76,38 @@ class TemplateDef:
 
 
 TEMPLATES: list[TemplateDef] = [
+    TemplateDef(
+        "Event pass with schedule",
+        "festio_event_pass_schedule",
+        "Hi {{firstName}}, your pass for {{eventName}} is ready!\n\n"
+        "Date: {{eventDate}}\n"
+        "Schedule: {{eventSchedule}}\n"
+        "Venue: {{eventLocation}}\n\n"
+        "Open your pass: {{ticketUrl}}\n\n"
+        "Keep your QR code handy for check-in. Your GuestHub includes the programme and event updates.\n\n"
+        "We look forward to welcoming you!\n"
+        "Organizer: {{organizerName}}\n"
+        "Sent via Festio.",
+        ("firstName", "eventName", "eventDate", "eventSchedule", "eventLocation", "ticketUrl", "organizerName"),
+        category="UTILITY",
+        group="pass_schedule",
+    ),
+    TemplateDef(
+        "PAMCON 6.0 Conference pass invite",
+        "festio_pamcon_2026_pass_invite",
+        "Hi {{firstName}}, your pass for PAMCON 6.0 Conference is ready!\n\n"
+        "Wednesday, 11 November 2026\n"
+        "Conference: 10:00 AM\n"
+        "Gala Night: 4:00 PM\n"
+        "Venue: The Event Center, Agidingbi, Lagos\n\n"
+        "Open your pass: {{ticketUrl}}\n\n"
+        "Keep your QR code handy for check-in. Your GuestHub includes the programme, speakers and event updates.\n\n"
+        "We look forward to welcoming you!\n"
+        "Party Managers Association of Nigeria (PAMAN)",
+        ("firstName", "ticketUrl"),
+        category="UTILITY",
+        group="pamcon",
+    ),
     TemplateDef(
         "Ticket/pass invitation",
         "festio_ticket_pass_invite",
@@ -667,7 +701,7 @@ def main() -> int:
     parser.add_argument("--workspace-id", default=os.getenv("BIRD_WORKSPACE_ID") or os.getenv("bird_workspace_id", ""))
     parser.add_argument("--access-key", default=os.getenv("BIRD_ACCESS_KEY") or os.getenv("bird_access_key", ""))
     parser.add_argument("--platform", choices=["whatsapp", "rcs"], default="whatsapp")
-    parser.add_argument("--groups", choices=["standard", "experience", "mbf_summit", "all"], default="all")
+    parser.add_argument("--groups", choices=["standard", "experience", "mbf_summit", "pamcon", "pass_schedule", "all"], default="all")
     parser.add_argument("--channel-group-id", default=os.getenv("BIRD_WHATSAPP_CHANNEL_GROUP_ID", ""))
     parser.add_argument("--submit", action="store_true", help="Actually call Bird. Omit for dry-run.")
     args = parser.parse_args()

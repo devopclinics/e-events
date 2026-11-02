@@ -57,3 +57,33 @@ async def test_rsvp_invitation_and_unreachable_pass_do_not_confirm(ctx,monkeypat
         guest=await db.get(Guest,g['guest_id'])
         assert guest.rsvp_status=='invited' and not guest.admitted
         assert guest.invite_status==('sent' if reachable else 'failed')
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('experience', [False, True])
+async def test_pass_uses_saved_approved_whatsapp_template(ctx, monkeypatch, experience):
+    from types import SimpleNamespace
+    from starlette.background import BackgroundTasks
+    g = await prepare(ctx, monkeypatch)
+    monkeypatch.setattr(routes, 'channels_for_flow', lambda *a, **k: ['whatsapp'])
+    async def reserve(*a, **k):
+        return True
+    monkeypatch.setattr(routes, 'reserve_message_credit', reserve)
+    async with _Session() as db:
+        event = await db.get(Event, g['event_id'])
+        guest = await db.get(Guest, g['guest_id'])
+        event.experience_enabled = experience
+        ov = SimpleNamespace(whatsapp_template_ref='approved-project:approved-version',
+                             whatsapp_template_vars={'firstName': '{{guest_first_name}}', 'ticketUrl': '{{ticket_link}}'})
+        tasks = BackgroundTasks()
+        ok = await routes._dispatch_invite(tasks, event, guest, db,
+                     {'experience_invitation' if experience else 'ticket_qr': ov})
+        assert ok and guest.rsvp_status == 'confirmed'
+        assert len(tasks.tasks) == 1
+        task = tasks.tasks[0]
+        assert task.args[1] is routes.messaging.send_custom_template_whatsapp
+        assert task.kwargs['template_ref'] == ov.whatsapp_template_ref
+        assert task.kwargs['var_keys'] == ['firstName', 'ticketUrl']
+        assert task.kwargs['params'] == [guest.first_name,
+                     f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}"]
+        # Do not execute provider tasks.

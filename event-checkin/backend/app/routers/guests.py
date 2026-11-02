@@ -61,7 +61,7 @@ from services.qr_service import generate_qr_bytes
 from services.email_service import send_invite_email, send_manual_invite_email, send_simple_email, build_calendar_attachment
 from services.outbound_safety import recipient_allowed
 from ..template_resolve import load_overrides, channel_text as template_channel_text, email_override as template_email_override, channel_text_or_default as template_channel_or_default, email_or_default as template_email_or_default
-from services.templates import TEMPLATE_DEFS, build_context as build_template_context
+from services.templates import TEMPLATE_DEFS, build_context as build_template_context, render as render_message_template
 from .scanner import (
     _experience_session_text,
     _experience_step_email_html,
@@ -1097,7 +1097,19 @@ async def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, gues
         # WhatsApp can only OPEN a conversation with an approved template — free
         # text 15003s with "no active session". So the invite always goes via a
         # template; a rendered/custom override can't initiate and is not used here.
-        if event.experience_enabled:
+        wa_override = overrides.get("experience_invitation" if event.experience_enabled else "ticket_qr")
+        if wa_override and wa_override.whatsapp_template_ref and wa_override.whatsapp_template_vars:
+            var_keys = list(wa_override.whatsapp_template_vars)
+            background_tasks.add_task(
+                send_with_credit_ledger,
+                last_credit_ledger_id(event),
+                messaging.send_custom_template_whatsapp,
+                phone=guest.phone,
+                template_ref=wa_override.whatsapp_template_ref,
+                params=[render_message_template(wa_override.whatsapp_template_vars[k], ctx) for k in var_keys],
+                var_keys=var_keys,
+            )
+        elif event.experience_enabled:
             background_tasks.add_task(
                 send_with_credit_ledger,
                 last_credit_ledger_id(event),

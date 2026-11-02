@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
-import {CUSTOMER_TOOLS} from '../src/pages/customerJourneyModel.mjs'
+import {CUSTOMER_TOOLS,toolAccess} from '../src/pages/customerJourneyModel.mjs'
 import {TOOL_GUIDES,toolForLocation,toolWorkspaceHref} from '../src/components/setup/toolGuides.mjs'
 import {toolChecks,toolPreviewUrl,safePreviewUrl,toolRevision} from '../src/components/setup/toolReadiness.mjs'
 const origin='https://staging.festio.events',api=readFileSync(new URL('../src/api.js',import.meta.url),'utf8')
@@ -15,3 +15,5 @@ test('giving uses saved enabled state and durable token',()=>{const t={preview:'
 test('private preview needs selected credential',()=>{assert.equal(toolPreviewUrl({preview:'guest'},{id:'event'},{},null,origin),'');assert.equal(toolPreviewUrl({preview:'guest',guestTab:'pass'},{},{},{invite_token:'personal'},origin),origin+'/r/personal#/pass')})
 test('unsafe preview URLs rejected',()=>{for(const u of ['javascript:alert(1)','data:text/html,x','http://external.example/x','https://user:secret@example.com'])assert.equal(safePreviewUrl(u,origin),'');assert.equal(safePreviewUrl('/published',origin),origin+'/published')})
 test('revision detects configuration change and excludes private credentials',()=>{const tool={id:'seating'},event={id:'event'};assert.notEqual(toolRevision(tool,event,{tables:[{capacity:10}]}),toolRevision(tool,event,{tables:[{capacity:12}]}));assert.equal(toolRevision(tool,event,{email:'a',qr_token:'one'}),toolRevision(tool,event,{email:'b',qr_token:'two'}))})
+
+test('restricted workspaces never claim generally available access',()=>{for(const id of ['marketing','academy'])assert.equal(toolAccess(CUSTOMER_TOOLS.find(t=>t.id===id),{},{}).state,'Approved access required')})

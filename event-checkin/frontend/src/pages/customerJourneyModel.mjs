@@ -344,6 +344,7 @@ export const CUSTOMER_TOOLS = [
   },
   {
     "id": "academy",
+    "scope": "Approval required",
     "title": "Learn what to do next",
     "description": "Use Festio Academy guides for setup, event operations and the guest journey.",
     "route": "/training",
@@ -362,7 +363,7 @@ export function registrationReadiness(event, now = Date.now()) {
  return {ready:true,reason:'Registration is open. Check the guest destination before sharing.'}
 }
 export function toolAccess(tool, event, billing) {
- if (!tool.flag) return {state:'Open workspace',included:null}
+ if (!tool.flag) return {state:tool.scope==='Approval required'?'Approved access required':'Open workspace',included:null}
  const enabled=!!event?.[tool.flag]
  const included=Array.isArray(billing?.available_addons) ? billing.available_addons.includes(tool.addon) : null
  return {state:enabled?'Enabled · review setup':included===true?'Included · not enabled':included===false?'Review access':'Checking access',included}

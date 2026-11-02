@@ -1,3 +1,7 @@
+import {useNavigate} from 'react-router-dom'
+import CustomerLaunch from './CustomerLaunch'
+import CustomerSetupGuide from './CustomerSetupGuide'
+import {CUSTOMER_JOURNEY_ENABLED} from './customerJourneyModel.mjs'
 import {useSearchParams} from 'react-router-dom'
 import {useAuth} from '../context/AuthContext'
 import {SETUP_STAGES,readGuideResume,saveGuideResume} from './guideNavigation.mjs'
@@ -334,11 +338,12 @@ function WizardPhase({ onComplete, notify }) {
 
 export default function SetupRedesignPage() {
   const [eventId, setCurrentEvent] = useCurrentEvent()
+  const navigate = useNavigate()
   const {user}=useAuth()
   const [params,setParams]=useSearchParams()
   const previousEvent=useRef(eventId)
   const requested=params.get('view') || readGuideResume(eventId,user?.id)?.view || (eventId?'guide':'wizard')
-  const phase=SETUP_STAGES.some(([id])=>id===requested)?requested:'guide'
+  const phase=!eventId?'wizard':SETUP_STAGES.some(([id])=>id===requested)?requested:'guide'
   const [toast,setToast]=useState(null)
   const stageIndex=SETUP_STAGES.findIndex(([id])=>id===phase)
   function setPhase(next){setParams({view:next})}
@@ -362,6 +367,8 @@ export default function SetupRedesignPage() {
     setToast({ message, error })
     window.setTimeout(() => setToast(null), 3000)
   }
+
+  if(CUSTOMER_JOURNEY_ENABLED && ((phase==='wizard'||phase==='guide')&&params.get('detail')!=='1'))return <RedesignShell topActive="guide" eventScoped>{phase==='wizard'?<CustomerLaunch onComplete={event=>{previousEvent.current=event.id;setCurrentEvent(event.id);navigate('/admin-redesign')}}/>:<CustomerSetupGuide key={eventId} eventId={eventId} onDetailed={()=>setParams({view:'guide',detail:'1'})}/>}</RedesignShell>
 
   return (
     <RedesignShell topActive="guide" eventScoped>

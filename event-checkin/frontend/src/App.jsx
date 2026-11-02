@@ -1,3 +1,4 @@
+import {CUSTOMER_JOURNEY_ENABLED} from './pages/customerJourneyModel.mjs'
 import FestioLogo from './components/branding/FestioLogo'
 import { Component, lazy, Suspense, useState, useEffect } from 'react'
 import { Routes, Route, NavLink, useNavigate, Navigate, useParams } from 'react-router-dom'
@@ -58,6 +59,7 @@ const OrgSettingsPage = lazy(() => import('./pages/OrgSettingsPage'))
 const ApiDocsPage = lazy(() => import('./pages/ApiDocsPage'))
 const ApiExplorerPage = lazy(() => import('./pages/ApiExplorerPage'))
 
+const CustomerWorkspace = lazy(() => import('./pages/CustomerWorkspace'))
 const AdminRedesignPage = lazy(() => import('./pages/AdminRedesignPage'))
 const EventsListRedesignPage = lazy(() => import('./pages/EventsListRedesignPage'))
 const GuestsRedesignPage = lazy(() => import('./pages/GuestsRedesignPage'))
@@ -536,7 +538,7 @@ function AppRoutes() {
       {/* Admin redesign routes must not mount until Firebase has restored the
           session; otherwise their initial API reads receive 401 and bounce a
           valid user back through /login to the legacy admin. */}
-      <Route path="/admin-redesign" element={<ProtectedRoute><AdminRedesignPage /></ProtectedRoute>} />
+      <Route path="/admin-redesign" element={<ProtectedRoute>{CUSTOMER_JOURNEY_ENABLED ? <CustomerWorkspace /> : <AdminRedesignPage />}</ProtectedRoute>} />
       <Route path="/events-redesign" element={<ProtectedRoute><EventsListRedesignPage /></ProtectedRoute>} />
       <Route path="/guests-redesign" element={<ProtectedRoute><GuestsRedesignPage /></ProtectedRoute>} />
       <Route path="/communications-redesign" element={<ProtectedRoute><CommunicationsRedesignPage /></ProtectedRoute>} />

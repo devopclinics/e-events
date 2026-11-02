@@ -99,7 +99,7 @@ export default function EventsListRedesignPage() {
     <RedesignShell topActive="events">
       <div className="rr-pagehead">
         <div><div className="rr-title-row"><h1>Events</h1></div></div>
-        <button className="rr-btn primary" onClick={() => navigate('/setup-redesign')}>
+        <button className="rr-btn primary" onClick={() => navigate('/setup-redesign?view=wizard')}>
           <Icon name="plus" size={14} /> New event
         </button>
       </div>

@@ -371,7 +371,7 @@ export default function AdminRedesignPage() {
           <div className="rr-meta"><Icon name="calendar" size={13}/> {event?.event_date ? new Date(event.event_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'} {event?.venue_name && <><span className="rr-dot">·</span> <Icon name="grid" size={13}/> {event.venue_name}</>}</div>
         </div>
         <div className="rr-head-actions">
-          <button className="rr-btn secondary" onClick={() => navigate('/setup-redesign')}><Icon name="plus" size={14}/> New event</button>
+          <button className="rr-btn secondary" onClick={() => navigate('/setup-redesign?view=wizard')}><Icon name="plus" size={14}/> New event</button>
           <button className="rr-btn secondary" disabled={!event?.id}
             onClick={() => navigate(`/invite/${event.id}`)}><Icon name="eye" size={15}/> Preview event</button>
           <div style={{ position: 'relative' }} ref={manageRef}>

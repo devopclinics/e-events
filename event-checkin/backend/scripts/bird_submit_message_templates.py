@@ -109,6 +109,23 @@ TEMPLATES: list[TemplateDef] = [
         group="pamcon",
     ),
     TemplateDef(
+        "PAMCON 6.0 Conference pass invite v2",
+        "festio_pamcon_2026_pass_invite_v2",
+        "Hi {{firstName}}, your pass for PAMCON 6.0 Conference is ready!\n\n"
+        "Wednesday, 11 November 2026\n"
+        "Conference: 10:00 AM\n"
+        "Gala Night: 4:00 PM\n"
+        "Venue: The Event Center\n"
+        "Plot 1, Block B, Hakeem Balogun Street, off Cadbury Road, Agidingbi, Lagos.\n\n"
+        "Open your pass: {{ticketUrl}}\n\n"
+        "Keep your QR code handy for check-in. Your GuestHub includes the programme, speakers and event updates.\n\n"
+        "We look forward to welcoming you!\n"
+        "Party Managers Association of Nigeria (PAMAN)",
+        ("firstName", "ticketUrl"),
+        category="UTILITY",
+        group="pamcon",
+    ),
+    TemplateDef(
         "Ticket/pass invitation",
         "festio_ticket_pass_invite",
         "Hi {{firstName}}, your ticket for {{eventName}} on {{eventDate}} is ready. "

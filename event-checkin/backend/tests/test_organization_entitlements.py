@@ -75,3 +75,25 @@ def test_stabilization_flag_allows_more_events_without_granting_paid_features(mo
     monkeypatch.setattr(settings, 'unlimited_event_creation', False)
     with pytest.raises(HTTPException):
         assert_can_create_event(account, 10000)
+
+
+def test_new_paid_events_use_addon_ledger_without_legacy_fallback():
+    from app.models import Event
+    from app.organization_entitlements import snapshot_new_event
+    from app.entitlements import event_allows
+    account = org()
+    activate_pass(account, 'tier300')
+    event = Event(name='New paid event')
+    snapshot_new_event(event, account)
+    assert event.is_paid is True
+    assert event.purchased_addons == []
+    for feature in ('engagement_enabled', 'speaker_enabled', 'partner_enabled', 'reminders_enabled'):
+        assert event_allows(event, feature), feature
+
+
+def test_existing_legacy_event_access_is_not_rewritten():
+    from app.models import Event
+    from app.entitlements import event_allows
+    event = Event(name='Existing legacy event', is_paid=True, plan_tier='tier300', purchased_addons=None, seating_enabled=True)
+    assert event_allows(event, 'seating_enabled')
+    assert event.purchased_addons is None

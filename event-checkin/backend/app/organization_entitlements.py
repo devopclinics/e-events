@@ -50,6 +50,8 @@ def assert_can_create_event(org: Organization, existing_event_count: int, *, is_
 def snapshot_new_event(event: Event, org: Organization, now: datetime | None = None) -> None:
     """Populate legacy event fields so existing feature gates remain compatible."""
     now = now or datetime.utcnow()
+    # NULL is reserved for legacy events. New paid events use the add-on ledger.
+    event.purchased_addons = []
     if pass_is_active(org, now):
         event.is_paid = True
         event.paid_channels = True

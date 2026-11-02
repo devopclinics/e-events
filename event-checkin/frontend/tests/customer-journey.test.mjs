@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {registrationReadiness,toolAccess,invitationPath,destinationFingerprint,CUSTOMER_TOOLS} from '../src/pages/customerJourneyModel.mjs'
+import {registrationReadiness,toolAccess,invitationPath,destinationFingerprint,CUSTOMER_TOOLS,EVENT_RECIPES,FESTIO_ADVANTAGES,searchCustomerTools,recommendedRecipe} from '../src/pages/customerJourneyModel.mjs'
 const base={id:'event-1',status:'active',rsvp_enabled:true,invite_mode:'open',rsvp_token:'unguessable'}
 test('draft design is not open registration',()=>assert.equal(registrationReadiness({...base,status:'draft'}).ready,false))
 test('ended and archived events are not silently reopened',()=>{for(const status of ['ended','archived'])assert.equal(registrationReadiness({...base,status}).ready,false)})
@@ -16,3 +16,9 @@ test('ordinary workspaces are not advertised as paid add-ons',()=>assert.equal(t
 test('quick invitation paths preserve custom aliases and old links',()=>{assert.equal(invitationPath({...base,setup_preferences:{quick_invite:{share_slug:'my-event'}}}),'/i/my-event');assert.equal(invitationPath({...base,setup_preferences:{quick_invite:{}}}),'/i/unguessable');assert.equal(invitationPath(base),'/rsvp/unguessable')})
 test('link validation invalidates on event change and registration changes',()=>{for(const patch of [{id:'other'},{status:'draft'},{rsvp_enabled:false},{rsvp_deadline:'2027-01-01'},{rsvp_token:'rotated'},{invite_mode:'closed'},{external_registration_url:'https://example.com'}])assert.notEqual(destinationFingerprint(base),destinationFingerprint({...base,...patch}))})
 test('unrelated design does not overwrite link state',()=>assert.equal(destinationFingerprint(base),destinationFingerprint({...base,setup_preferences:{quick_invite:{style:'arch',colour:'mint'}}})))
+
+test('all twelve billable add-ons are represented in discovery',()=>assert.deepEqual([...new Set(CUSTOMER_TOOLS.map(t=>t.addon).filter(Boolean))].sort(),['addon_seating','addon_menu','addon_logistics','addon_registry','addon_venue_access','addon_experience','addon_festiome','addon_planner','addon_engagement','addon_speakers','addon_partners','addon_reminders'].sort()))
+test('recipes and selling points only reference existing tools',()=>{const ids=new Set(CUSTOMER_TOOLS.map(t=>t.id));for(const r of EVENT_RECIPES)for(const id of r.tools)assert.ok(ids.has(id));for(const item of FESTIO_ADVANTAGES)assert.ok(ids.has(item.tool))})
+test('catalog search finds services previously hidden behind a catch-all',()=>{for(const q of ['meals','deliveries','venue','partners','certificates','vendors','contacts','webhooks'])assert.ok(searchCustomerTools(CUSTOMER_TOOLS,'All',q).length,q)})
+test('search respects category and provides real empty results',()=>{assert.equal(searchCustomerTools(CUSTOMER_TOOLS,'Run a conference','seating').length,0);assert.equal(searchCustomerTools(CUSTOMER_TOOLS,'All','does-not-exist').length,0);assert.equal(searchCustomerTools(CUSTOMER_TOOLS,'All','').length,34)})
+test('occasion suggestions derive from the event without changing it',()=>{const ev={event_type:'Conference / seminar'};assert.equal(recommendedRecipe(ev),'conference');assert.equal(ev.event_type,'Conference / seminar');assert.equal(recommendedRecipe({event_type:'Nikkah / Aqd'}),'wedding')})

@@ -1,3 +1,4 @@
+import FestioLogo from '../components/branding/FestioLogo'
 import { useEffect, useMemo, useState } from 'react'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
@@ -159,7 +160,7 @@ export default function FinanceReconciliationPage() {
 
   if (!currentEventId) return <div className="fr-page">
     <header className="fr-top"><div className="fr-top-inner">
-      <div className="fr-brand"><div className="fr-mark">F</div><div><b>Festio Finance</b><small>No event selected</small></div></div>
+      <div className="fr-brand"><FestioLogo markOnly size={36} /><div><b>Festio Finance</b><small>No event selected</small></div></div>
       {eventSwitcher}
     </div></header>
     <div className="fr-loading">Choose an event above to open its finance ledger.</div>
@@ -171,7 +172,7 @@ export default function FinanceReconciliationPage() {
 
   return <div className="fr-page">
     <header className="fr-top"><div className="fr-top-inner">
-      <div className="fr-brand"><div className="fr-mark">F</div><div><b>Festio Finance</b><small>{event?.name || campaign.event_name}</small></div></div>
+      <div className="fr-brand"><FestioLogo markOnly size={36} /><div><b>Festio Finance</b><small>{event?.name || campaign.event_name}</small></div></div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>{eventSwitcher}<div className="fr-secure"><i></i><span>Restricted finance access</span></div></div>
     </div></header>
     <main className="fr-shell">

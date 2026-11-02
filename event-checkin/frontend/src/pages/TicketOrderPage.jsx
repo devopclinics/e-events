@@ -1,3 +1,4 @@
+import FestioLogo from '../components/branding/FestioLogo'
 import { useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import './TicketOrderPage.css'
@@ -69,7 +70,7 @@ export default function TicketOrderPage() {
     }catch(e){setError(e.message)}
   }
   return <main className="to-page">
-    <header className="to-header"><a href="/">F <b>Festio</b></a><span>Secure ticket wallet</span></header>
+    <header className="to-header"><a href="/"><FestioLogo size={32} /></a><span>Secure ticket wallet</span></header>
     <section className="to-shell">
       {error ? <div className="to-message error" role="alert"><h1>We couldn’t open these tickets</h1><p>{error}</p></div> : !order ? <div className="to-message" role="status" aria-live="polite"><div className="to-spinner" aria-hidden="true"/><h1>Loading your order…</h1></div> : <>
         <div className={`to-status ${cancelled?'cancelled':ready?'ready':'waiting'}`}><span>{cancelled?'×':ready?'✓':'…'}</span><div><small>Order {order.id.slice(0,8).toUpperCase()}</small><h1>{cancelled?'This order was refunded':!ready?'Payment received — preparing your passes':hasPasses?'Your tickets are ready':'Thank you for your contribution'}</h1><p>{cancelled?'The QR passes below are cancelled and cannot be used.':!ready?'This page updates automatically after payment confirmation.':hasPasses?`${order.passes.length} unique pass${order.passes.length===1?'':'es'} · ${money(order.total,order.currency)} · Sent to ${order.buyer_email}`:`${money(order.total,order.currency)} · Receipt sent to ${order.buyer_email}`}</p></div></div>

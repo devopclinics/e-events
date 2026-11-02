@@ -1,3 +1,4 @@
+import FestioLogo from '../components/branding/FestioLogo'
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import RedesignShell, { Icon } from './redesign/RedesignShell'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
@@ -965,7 +966,7 @@ function UnifiedControlRoom({ activities, displays, selected, loadingActivityId,
 
   return <section className="fl-control-room" aria-label="Unified Control Room">
     <header className="fl-control-room-appbar">
-      <div className="fl-control-brand"><span aria-hidden="true">F</span><div><strong>Festio Live</strong><small>Live control desk</small></div></div>
+      <div className="fl-control-brand"><FestioLogo markOnly size={36} /><div><strong>Festio Live</strong><small>Live control desk</small></div></div>
       <div className="fl-control-breadcrumb"><span>Live desk</span><b>/ Unified Control Room</b></div>
       <div className="fl-control-room-presence"><span>{connectedScreenCount} of {configuredScreenCapacity || 0} screen{configuredScreenCapacity === 1 ? '' : 's'} connected</span><button className="rr-btn secondary" onClick={() => onManageDisplay(null)}>Channels &amp; devices</button></div>
     </header>

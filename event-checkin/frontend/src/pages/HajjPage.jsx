@@ -1,3 +1,4 @@
+import FestioLogo from '../components/branding/FestioLogo'
 import { useEffect, useState } from 'react'
 import PublicTicketCheckout from '../components/PublicTicketCheckout'
 import './PilgrimagePage.css'
@@ -39,7 +40,7 @@ export default function HajjPage() {
     <main className="hj-page">
       <div className="hj-wrap">
         <div className="hj-topbar">
-          <div className="hj-brand"><span className="hj-mark">F</span> Festio Hajj &amp; Umrah</div>
+          <div className="hj-brand"><FestioLogo size={32} /> <span>Hajj &amp; Umrah</span></div>
           <a className="hj-findevents" href="/tickets">Find events</a>
         </div>
       </div>

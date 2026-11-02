@@ -1,3 +1,4 @@
+import FestioLogo from '../components/branding/FestioLogo'
 import MarketingEmailConsent from '../components/MarketingEmailConsent'
 import { marketingConsent, DEMO_REQUEST_RECEIVED, demoRequestAttempt } from '../lib/marketingConsent.mjs'
 import { useEffect, useRef, useState } from 'react'
@@ -102,12 +103,8 @@ function SecondaryCta({ children = 'Book a Demo', className = '', tone = 'light'
   )
 }
 
-function LogoMark({ size = 'h-9 w-9', text = 'text-sm' }) {
-  return (
-    <span className={`${size} ${text} grid place-items-center rounded-xl bg-gradient-to-br from-teal-400 via-emerald-400 to-amber-300 font-black text-slate-950 shadow-sm`}>
-      F
-    </span>
-  )
+function LogoMark({ size = 'h-9 w-9' }) {
+  return <FestioLogo markOnly size={36} className={size} />
 }
 
 const ACCENT_GRADIENT = 'from-teal-500 to-emerald-500'
@@ -833,8 +830,7 @@ export default function LandingPage() {
       <header className="sticky top-0 z-50 border-b border-white/10 bg-slate-950/85 text-white backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:px-6">
           <a href="#top" className="mr-auto flex items-center gap-2 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 focus:ring-offset-slate-950" aria-label="Festio home">
-            <LogoMark />
-            <span className="text-lg font-black tracking-tight">Festio</span>
+            <FestioLogo inverse size={36} />
           </a>
           <nav className="hidden items-center gap-6 lg:flex" aria-label="Primary">
             <a href="#features" className="text-sm font-bold text-slate-300 transition hover:text-white">Features</a>

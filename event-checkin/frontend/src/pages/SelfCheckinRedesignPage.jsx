@@ -1,3 +1,4 @@
+import FestioLogo from '../components/branding/FestioLogo'
 import { useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
@@ -37,7 +38,7 @@ function SearchStep({ eventName, code, onFound }) {
   }
 
   return <div className="ki-search-step">
-    <div className="ki-logo">F</div>
+    <FestioLogo markOnly size={48} style={{marginBottom:16}} />
     <h1 className="ki-title">{eventName || 'Welcome!'}</h1>
     <p className="ki-subtitle">Enter your name or phone number to find your registration.</p>
     <div className="ki-form">
@@ -60,7 +61,7 @@ function SearchStep({ eventName, code, onFound }) {
 
 function ConfirmStep({ guest, busy, error, onConfirm, onBack }) {
   return <div className="ki-confirm-step">
-    <div className="ki-logo">F</div><p className="ki-confirm-prompt">Is this you?</p>
+    <FestioLogo markOnly size={48} style={{marginBottom:16}} /><p className="ki-confirm-prompt">Is this you?</p>
     <div className="ki-confirm-card"><div className="ki-confirm-avatar">{guest.name?.[0] || '?'}</div><strong className="ki-confirm-name">{guest.name}</strong></div>
     {error && <p className="ki-outcome-sub" role="alert">{error}</p>}
     <div className="ki-confirm-actions">
@@ -114,7 +115,7 @@ export default function SelfCheckinRedesignPage() {
 
   return <div className="ki-kiosk"><div className="ki-card">
     {bootstrapError ? <PublicError title="Connection problem" message={bootstrapError} onRetry={load}/> :
-      !bootstrap ? <div className="ki-search-step"><div className="ki-logo">F</div><p className="ki-subtitle">Loading check-in…</p></div> :
+      !bootstrap ? <div className="ki-search-step"><FestioLogo markOnly size={48} style={{marginBottom:16}} /><p className="ki-subtitle">Loading check-in…</p></div> :
       bootstrap.status !== 'ok' ? <PublicError title={bootstrap.status === 'not_active' ? 'Check-in is not open' : 'Invalid check-in link'} message={bootstrap.message}/> :
       result ? <OutcomeStep result={result} onReset={reset}/> :
       pending ? <ConfirmStep guest={pending} busy={busy} error={admitError} onConfirm={confirm} onBack={reset}/> :

@@ -1,3 +1,4 @@
+import FestioLogo from '../components/branding/FestioLogo'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useTheme } from '../context/ThemeContext'
@@ -152,7 +153,7 @@ export default function PricingRedesignPage() {
     <div className="pricing-redesign">
       <nav className="pr-nav">
         <div className="pr-nav-inner">
-          <Link className="pr-brand" to="/"><span className="pr-brand-mark">F</span>Festio</Link>
+          <Link className="pr-brand" to="/"><FestioLogo size={34} /></Link>
           <div className="pr-nav-links">
             <Link to="/#journey">Product</Link>
             <Link to="/#configurable">Design Studio</Link>

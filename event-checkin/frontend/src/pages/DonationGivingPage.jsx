@@ -1,3 +1,4 @@
+import FestioLogo from '../components/branding/FestioLogo'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
@@ -369,6 +370,6 @@ export default function DonationGivingPage() {
       {pledgeOption&&(<form className="dg-pledge-form" hidden={!showPledge} id="dg-pledge-panel" aria-label="Pledge later" onSubmit={(e) => submit(e, 'pledge')}><div className="dg-pledge-banner"><b>This is a pledge</b><span>No payment is collected now.</span></div><AmountPicker amount={amount} setAmount={setAmount} currency={campaign.currency}/><div className="dg-pledge-fields"><label><span>Expected payment method</span><select required value={form.expected_payment_channel} onChange={(e) => setForm({...form, expected_payment_channel:e.target.value})}>{pledgeChannels.map((item)=><option value={item.type} key={item.type}>{item.label}</option>)}</select></label><label><span>Expected payment date</span><input required type="date" value={form.expected_payment_date} onChange={(e) => setForm({...form, expected_payment_date:e.target.value})}/></label></div><DonorFields form={form} setForm={setForm}/><PrivacyOptions form={form} setForm={setForm}/>{error && <p className="dg-form-error" role="alert">{error}</p>}<button className="dg-pledge-submit" disabled={busy || !pledgeValid}>{busy ? 'Saving…' : `Record ${money(amountMinor, campaign.currency)} pledge`}</button></form>)}
       {!directChannels.length&&!pledgeOption&&<div className="dg-unavailable"><h2>Giving will be available soon.</h2><p>The organizer has not made a giving method available yet. Please check back or contact the organizer.</p></div>}
     </section></div>
-    <footer className="dg-footer"><a href="https://festio.events" aria-label="Festio home"><b>F</b> Festio</a><span>Your public name and amount follow your privacy choices.</span></footer>
+    <footer className="dg-footer"><a href="https://festio.events" aria-label="Festio home"><FestioLogo size={30} inverse /></a><span>Your public name and amount follow your privacy choices.</span></footer>
   </main>
 }

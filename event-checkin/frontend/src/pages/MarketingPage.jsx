@@ -1,3 +1,4 @@
+import FestioLogo from '../components/branding/FestioLogo'
 import { leadAutomationStatus, onboardingPreviewLeads } from "../lib/marketingConsent.mjs";
 import React, { Component, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -4103,7 +4104,7 @@ export default function MarketingPage() {
           Close navigation
         </button>
         <Link className="mk-brand" to="/admin-redesign">
-          <b>F</b>
+          <FestioLogo markOnly size={36} />
           <span>
             Festio<small>Marketing</small>
           </span>

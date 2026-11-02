@@ -1,3 +1,4 @@
+import FestioLogo from '../components/branding/FestioLogo'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import RedesignShell, { Icon, Modal } from './redesign/RedesignShell'
@@ -336,7 +337,7 @@ function ResultsHero({ event, events, eventId, connected, now, updatedAt, onEven
 
   return (
     <header className="er-ops-hero">
-      <div className="er-ops-brandmark">F</div>
+      <FestioLogo markOnly size={36} />
       <div className="er-ops-identity">
         <div className="er-ops-event-title">
           <span className="er-ops-live"><i /> {connected ? 'LIVE' : 'POLLING'}</span>

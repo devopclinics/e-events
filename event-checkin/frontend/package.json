@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/gen-brand-assets.mjs",
     "build": "vite build",
     "postbuild": "node scripts/gen-guide-html.mjs && node scripts/gen-invitation-share-html.mjs",
     "preview": "vite preview",

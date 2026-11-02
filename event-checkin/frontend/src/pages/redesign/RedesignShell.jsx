@@ -1,3 +1,4 @@
+import FestioLogo from '../../components/branding/FestioLogo'
 import {guideHref,readGuideResume,SETUP_STAGES} from '../guideNavigation.mjs'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
@@ -591,7 +592,7 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
       <header className="rr-topbar" ref={headerRef}>
         <div className="rr-topbar-inner">
           <Link to="/admin-redesign" className="rr-topbar-brand">
-            <span className="rr-topbar-mark">F</span> Festio
+            <FestioLogo size={32} />
           </Link>
 
           <nav className="rr-topbar-links rr-workspaces" aria-label="Main workspaces">

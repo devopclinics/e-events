@@ -1,3 +1,4 @@
+import FestioLogo from '../components/branding/FestioLogo'
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from 'firebase/auth'
@@ -19,7 +20,7 @@ function ViewPicker({ role, onPick, verificationNotice }) {
     <div className="app-shell min-h-screen flex items-center justify-center p-4">
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl w-full max-w-md p-8">
         <div className="text-center mb-6">
-          <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-lg bg-teal-600 text-white font-bold">F</div>
+          <FestioLogo markOnly size={48} style={{display:'block',margin:'0 auto 16px'}} />
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Welcome to Festio!</h1>
           {verificationNotice && <p role="status" className="mt-3 text-sm text-teal-800 dark:text-teal-200">{verificationNotice}</p>}
           <p className="text-gray-500 dark:text-slate-400 text-sm mt-2">Choose the view you want to open by default when you sign in.</p>

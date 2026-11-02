@@ -1,3 +1,4 @@
+import FestioLogo from './branding/FestioLogo'
 import { useEffect, useMemo, useState } from 'react'
 import './LiveBroadcastCanvas.css'
 import './LiveGuidedShow.css'
@@ -70,7 +71,7 @@ function displayJoinCode(state, settings) {
 function Brand({ state, settings }) {
   const joinCode = displayJoinCode(state, settings)
   return <div className="flb-top">
-    <div className="flb-brand"><span className="flb-mark">F</span>Festio Live</div>
+    <div className="flb-brand"><FestioLogo size={32} inverse /> Live</div>
     <div className="flb-event-name"><small>Live event</small><strong>{settings.event_name || state.display_config?.event_name || state.title}</strong></div>
     <div className="flb-join-dock">
       <img src={`/api/events/${encodeURIComponent(state.event_id || '')}/live/join-qr.png`} alt="QR code to join Festio Live"/>
@@ -485,7 +486,7 @@ function SurveyInsightsScene({ state, settings }) {
 
   return <div className="flb-survey-insights-scene">
     <header className="flb-si-header">
-      <div className="flb-si-brand"><span className="flb-si-mark">F</span><b>FESTIO LIVE</b></div>
+      <div className="flb-si-brand"><FestioLogo markOnly size={32} /><b>FESTIO LIVE</b></div>
       <div className="flb-si-title"><h1>{title}</h1><p>{settings.subtitle || 'Live audience insights'}</p></div>
       <div className="flb-si-live"><span>● LIVE</span><b>◎ {state.participant_count || 0} connected</b></div>
       <div className="flb-si-join"><img src={`/api/events/${encodeURIComponent(state.event_id || '')}/live/join-qr.png`} alt="QR code to join Festio Live"/><div><small>JOIN CODE</small><strong>{joinCode}</strong></div></div>
@@ -603,7 +604,7 @@ function PhotoMosaicScene({ state, settings }) {
   const entries = [...configured, ...safeLeaders]
   const count = Math.max(entries.length, Math.min(72, state.participant_count || 0))
   const tiles = Array.from({ length: count }, (_, index) => entries[index % Math.max(1, entries.length)] || { name: 'Guest' })
-  return <><Brand state={state} settings={settings}/><div className="flb-content"><div className="flb-mosaic-layout"><div className="flb-photo-mosaic flb-glass"><span>F</span>{tiles.map((entry, index) => <i key={index} style={entry.image_url ? { backgroundImage: `url("${entry.image_url}")`, '--delay': `${index * .01}s` } : { '--delay': `${index * .01}s` }}>{entry.image_url ? '' : (entry.name || 'Guest').split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}</i>)}</div><div className="flb-mosaic-copy"><Kicker>Every face builds the picture</Kicker><strong>{state.participant_count || configured.length || 0}</strong><p>{configured.length ? 'consent-verified portraits have joined the living event mosaic.' : 'privacy-safe participant tiles are assembling live.'}</p><div><span>{configured.length ? 'Consent verified' : 'Private by design'}</span><span>Updating live</span></div></div></div></div><Footer left="Only consented portraits or privacy-safe aliases" right="Living mosaic" live/></>
+  return <><Brand state={state} settings={settings}/><div className="flb-content"><div className="flb-mosaic-layout"><div className="flb-photo-mosaic flb-glass"><FestioLogo markOnly size={90} />{tiles.map((entry, index) => <i key={index} style={entry.image_url ? { backgroundImage: `url("${entry.image_url}")`, '--delay': `${index * .01}s` } : { '--delay': `${index * .01}s` }}>{entry.image_url ? '' : (entry.name || 'Guest').split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}</i>)}</div><div className="flb-mosaic-copy"><Kicker>Every face builds the picture</Kicker><strong>{state.participant_count || configured.length || 0}</strong><p>{configured.length ? 'consent-verified portraits have joined the living event mosaic.' : 'privacy-safe participant tiles are assembling live.'}</p><div><span>{configured.length ? 'Consent verified' : 'Private by design'}</span><span>Updating live</span></div></div></div></div><Footer left="Only consented portraits or privacy-safe aliases" right="Living mosaic" live/></>
 }
 
 function LocationMapScene({ state, settings }) {

@@ -1,3 +1,4 @@
+import FestioLogo from '../components/branding/FestioLogo'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTheme } from '../context/ThemeContext'
@@ -89,7 +90,7 @@ function Artwork({ event, priority = false }) {
     />
   ) : (
     <div className="ptd-art-fallback" aria-hidden="true">
-      <span>F</span>
+      <FestioLogo markOnly size={52} />
       <i>A moment to look forward to.</i>
     </div>
   )
@@ -231,7 +232,7 @@ export default function EventDiscovery({ events, loadError, onRetry }) {
       <nav className="ptd-nav" aria-label="Event discovery navigation">
         <div className="ptd-shell ptd-nav-inner">
           <Link className="ptd-brand" to="/" aria-label="Festio home">
-            <span>F</span>Festio <small>Discover</small>
+            <FestioLogo size={34} /> <small>Discover</small>
           </Link>
           <div className="ptd-nav-actions">
             <button
@@ -457,7 +458,7 @@ export default function EventDiscovery({ events, loadError, onRetry }) {
         </section>
         <footer className="ptd-footer">
           <Link className="ptd-brand" to="/">
-            <span>F</span>Festio
+            <FestioLogo size={34} />
           </Link>
           <p>A little more thoughtful. A lot more connected.</p>
           <div>

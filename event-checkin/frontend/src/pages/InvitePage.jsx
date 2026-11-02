@@ -1,3 +1,4 @@
+import FestioLogo from '../components/branding/FestioLogo'
 import OrganizerContacts from '../components/invite/OrganizerContacts';
 import { personalEnvelopeScope } from '../components/invitations/envelopePersonalization.mjs'
 import EventWebsiteLink from '../components/guesthub/EventWebsiteLink'
@@ -2679,7 +2680,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
 
         {tabActive('pass') && showInstallDialog && (
           <div role="dialog" aria-modal="true" aria-labelledby="install-guest-hub" className="mt-5 rounded-2xl border p-5 shadow-xl" style={{ background: tone.panelStrong, borderColor: tone.accent }}>
-            <div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-xl" style={{ background: tone.accent, color: tone.background }}>F</span><div><h3 id="install-guest-hub" className="text-lg font-extrabold">Install FestioHub</h3><p className="mt-1 text-sm leading-6" style={{ color: tone.muted }}>Keep your Festio Pass on your home screen for quick access to your QR code and event updates.</p></div></div>
+            <div className="flex items-start gap-3"><FestioLogo markOnly size={44} /><div><h3 id="install-guest-hub" className="text-lg font-extrabold">Install FestioHub</h3><p className="mt-1 text-sm leading-6" style={{ color: tone.muted }}>Keep your Festio Pass on your home screen for quick access to your QR code and event updates.</p></div></div>
             <div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={installPass} className="min-h-11 rounded-xl px-4 py-2 text-sm font-extrabold text-slate-950" style={{ background: tone.accent }}>Install Festio</button><button type="button" onClick={dismissInstall} className="min-h-11 rounded-xl border px-4 py-2 text-sm font-bold" style={{ borderColor: tone.border, color: tone.text }}>Not now</button></div>
           </div>
         )}
@@ -4006,7 +4007,7 @@ export default function InvitePage() {
 
       {!event.is_paid && (
         <footer className="pb-6 text-center text-xs font-semibold" style={{ color: tone.label }}>
-          Powered by <a href="https://festio.events" className="underline underline-offset-2 hover:opacity-80">Festio</a>
+          Powered by <a href="https://festio.events" className="underline underline-offset-2 hover:opacity-80"><FestioLogo size={24} /></a>
         </footer>
       )}
     </div>

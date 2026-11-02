@@ -1,3 +1,4 @@
+import FestioLogo from '../components/branding/FestioLogo'
 import MarketingEmailConsent from '../components/MarketingEmailConsent'
 import {
   marketingConsent,
@@ -418,7 +419,7 @@ export default function LandingRedesignPage() {
       <nav className="lr-nav" aria-label="Main navigation" ref={navigation}>
         <div className="lr-shell lr-nav-inner">
           <a className="lr-brand" href="#top">
-            <span className="lr-brand-mark">F</span>Festio
+            <FestioLogo size={34} />
           </a>
           <div
             className={`lr-nav-links${menuOpen ? ' is-open' : ''}`}
@@ -1025,7 +1026,7 @@ export default function LandingRedesignPage() {
           <div className="lr-foot-grid">
             <div className="lr-foot-brand">
               <a className="lr-brand" href="#top">
-                <span className="lr-brand-mark">F</span>Festio
+                <FestioLogo size={34} />
               </a>
               <p>
                 Thoughtful tools for planning events, welcoming guests, and

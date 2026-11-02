@@ -1,3 +1,4 @@
+import FestioLogo from '../components/branding/FestioLogo'
 import PassSchedule, { passScheduleItems } from '../components/invite/PassSchedule';
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
@@ -650,7 +651,7 @@ export default function ScanAutoPage() {
       </div>
 
       <footer className="pass-footer w-full max-w-md text-center text-sm leading-6">
-        <p>Powered by <a href="https://festio.events" className="font-semibold underline underline-offset-2">Festio</a></p>
+        <p>Powered by <a href="https://festio.events" className="font-semibold underline underline-offset-2"><FestioLogo size={24} /></a></p>
         <a href="https://festio.events/create-invitation?share=invite" className="mt-2 inline-flex min-h-11 items-center justify-center rounded-full border px-5 font-semibold">Create a free event ↗</a>
       </footer>
     </div>

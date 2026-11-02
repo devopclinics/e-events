@@ -1,3 +1,4 @@
+import FestioLogo from '../components/branding/FestioLogo'
 import { useEffect, useState, useRef } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
@@ -26,7 +27,7 @@ export function InvitationCard({ data, children }) {
   </article>
 }
 function Frame({ children, publicView = false }) {
-  return <div className={`qi-app${publicView ? ' qi-public' : ''}`}><header className="qi-header"><Link to="/" className="qi-brand"><b>F</b> Festio</Link><span>{publicView ? 'A little invitation. A lovely occasion.' : 'Invitations, made easy.'}</span><Link to="/create-invitation">Create a free invitation ↗</Link></header>{children}<footer className="qi-footer"><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link><span>Made for moments that bring people together.</span></footer></div>
+  return <div className={`qi-app${publicView ? ' qi-public' : ''}`}><header className="qi-header"><Link to="/" className="qi-brand"><FestioLogo size={34} /></Link><span>{publicView ? 'A little invitation. A lovely occasion.' : 'Invitations, made easy.'}</span><Link to="/create-invitation">Create a free invitation ↗</Link></header>{children}<footer className="qi-footer"><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link><span>Made for moments that bring people together.</span></footer></div>
 }
 export default function QuickInviteEntry() {
   const { user } = useAuth()

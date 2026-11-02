@@ -1,3 +1,4 @@
+import FestioLogo from '../components/branding/FestioLogo'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -135,8 +136,7 @@ export default function HelpPage({ publicMode = false }) {
       {publicMode && (
         <div className="flex items-center justify-between mb-6">
           <Link to="/" className="flex items-center gap-2 font-bold text-lg text-slate-900 dark:text-white tracking-tight">
-            <span className="grid h-8 w-8 place-items-center rounded-md bg-teal-600 text-white text-sm">F</span>
-            Festio
+            <FestioLogo size={32} />
           </Link>
           <div className="flex items-center gap-1 text-sm">
             <Link to="/pricing" className="px-3 py-2 rounded-md text-slate-600 dark:text-slate-300 hover:text-teal-700 dark:hover:text-teal-300">Pricing</Link>

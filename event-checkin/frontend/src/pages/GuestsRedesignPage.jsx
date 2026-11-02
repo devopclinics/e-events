@@ -1441,7 +1441,7 @@ export default function GuestsRedesignPage() {
   const [householdTarget, setHouseholdTarget] = useState(null)
   const [householdDeleteTarget, setHouseholdDeleteTarget] = useState(null)
   const [householdForm, setHouseholdForm] = useState({ name: '', description: '', default_table_group_id: '', default_table_id: '' })
-  const [editForm, setEditForm] = useState({ first_name: '', last_name: '', email: '', phone: '', is_vip: false, table_id: '', seat_number: '', ticket_type_id: '', messaging_consent: false })
+  const [editForm, setEditForm] = useState({ first_name: '', last_name: '', email: '', phone: '', is_vip: false, table_id: '', seat_number: '', ticket_type_id: '', sms_consent: false, whatsapp_consent: false })
   const [mutationBusy, setMutationBusy] = useState(false)
   const tab = searchParams.get('tab') === 'invite' ? 'invite' : 'guests'
   const [addOpen, setAddOpen] = useState(false)
@@ -1561,7 +1561,8 @@ export default function GuestsRedesignPage() {
       table_id: editTarget.raw.table_id || '',
       seat_number: editTarget.raw.seat_number || '',
       ticket_type_id: editTarget.raw.ticket_type_id || '',
-      messaging_consent: !!editTarget.raw.sms_consent && !!editTarget.raw.whatsapp_consent,
+      sms_consent: !!editTarget.raw.sms_consent,
+      whatsapp_consent: !!editTarget.raw.whatsapp_consent,
     })
     let alive = true
     setEditAnswers(null)
@@ -1859,7 +1860,8 @@ export default function GuestsRedesignPage() {
       )}
 
       {editTarget && (
-        <Modal title={`Edit: ${editTarget.name}`} onClose={() => setEditTarget(null)} width={520}>
+        <Modal title={`Edit guest: ${editTarget.name}`} onClose={() => setEditTarget(null)} width={520}>
+          <p className="rd-hint" role="note">Update this existing guest. Their registration status, personal pass and check-in record are preserved. No invitation is sent when you save.</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div><label className="rd-field-label">First name</label><input className="rd-field" value={editForm.first_name} onChange={(e) => setEditForm((v) => ({ ...v, first_name: e.target.value }))} /></div>
@@ -1875,7 +1877,8 @@ export default function GuestsRedesignPage() {
               <div><label className="rd-field-label">Seat</label><input className="rd-field" disabled={!editForm.table_id} value={editForm.seat_number} onChange={(e) => setEditForm((v) => ({ ...v, seat_number: e.target.value }))} placeholder="e.g. 4" /></div>
             </div>
             <label className="gr-required-check"><input type="checkbox" checked={editForm.is_vip} onChange={(e) => setEditForm((v) => ({ ...v, is_vip: e.target.checked }))} /> VIP</label>
-            <label className="gr-required-check"><input type="checkbox" checked={editForm.messaging_consent} onChange={(e) => setEditForm((v) => ({ ...v, messaging_consent: e.target.checked }))} /> SMS/WhatsApp opt-in confirmed</label>
+            <label className="gr-required-check"><input type="checkbox" checked={!!editForm.sms_consent} onChange={e=>setEditForm(v=>({...v,sms_consent:e.target.checked}))}/> SMS opt-in confirmed</label>
+            <label className="gr-required-check"><input type="checkbox" checked={!!editForm.whatsapp_consent} onChange={e=>setEditForm(v=>({...v,whatsapp_consent:e.target.checked}))}/> WhatsApp opt-in confirmed</label>
             {rsvpQuestions.length > 0 && (
               <div className="gr-rsvp-answers">
                 <strong className="rd-field-label">RSVP answers (read-only)</strong>
@@ -1902,13 +1905,13 @@ export default function GuestsRedesignPage() {
                     is_junior: !!editForm.is_junior,
                     first_name: editForm.first_name.trim(),
                     last_name: editForm.last_name.trim(),
-                    email: editForm.email.trim() || null,
-                    phone: editForm.phone.trim() || null,
+                    email: editForm.email.trim(),
+                    phone: editForm.phone.trim(),
                     is_vip: editForm.is_vip,
                     table_id: editForm.table_id,
                     seat_number: editForm.seat_number.trim(),
-                    sms_consent: editForm.messaging_consent,
-                    whatsapp_consent: editForm.messaging_consent,
+                    sms_consent: editForm.sms_consent,
+                    whatsapp_consent: editForm.whatsapp_consent,
                   }, editTarget.raw.updated_at)
                   if ((editTarget.raw.ticket_type_id || '') !== editForm.ticket_type_id) {
                     await api.assignTicketType(eventId, editTarget.id, editForm.ticket_type_id || null)
@@ -1926,7 +1929,7 @@ export default function GuestsRedesignPage() {
                     notify(e.message || 'Guest could not be updated', true)
                   }
                 } finally { setMutationBusy(false) }
-              }}>{mutationBusy ? 'Saving…' : 'Save'}</button>
+              }}>{mutationBusy ? 'Saving…' : 'Save changes'}</button>
             </div>
           </div>
         </Modal>

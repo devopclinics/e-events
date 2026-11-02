@@ -11,6 +11,7 @@ Endpoints:
 import logging
 import re
 import uuid
+from urllib.parse import urlsplit
 from datetime import datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
@@ -207,6 +208,18 @@ def _public_organizer_phones(preferences):
     return list(dict.fromkeys(value for value in values if isinstance(value, str) and re.fullmatch(r"\+[1-9]\d{7,14}", value)))[:5]
 
 
+def _external_registration_url(event):
+    preferences = event.setup_preferences or {}
+    value = preferences.get("external_registration_url") if isinstance(preferences, dict) else None
+    if not isinstance(value, str) or len(value) > 2000 or any(ord(c) < 32 for c in value) or "\\" in value:
+        return None
+    try:
+        parsed = urlsplit(value)
+        return value if parsed.scheme in {"https", "http"} and parsed.hostname and not parsed.username and not parsed.password else None
+    except ValueError:
+        return None
+
+
 async def _invite_page_out(event: Event, db: AsyncSession) -> InvitePageOut:
     questions = (await db.execute(
         select(RSVPQuestion)
@@ -217,6 +230,7 @@ async def _invite_page_out(event: Event, db: AsyncSession) -> InvitePageOut:
     return InvitePageOut(
         id=event.id,
         external_website_url=event.external_website_url,
+        external_registration_url=_external_registration_url(event),
         organizer_phones=_public_organizer_phones(event.setup_preferences),
         name=event.name,
         couples_name=event.couples_name,
@@ -826,6 +840,8 @@ async def submit_rsvp(
 
     if event.status != "active":
         raise HTTPException(409, "Registration is not open yet. Please return when the organizer activates this event.")
+    if _external_registration_url(event):
+        raise HTTPException(409, detail={"message": "Register on the organizer’s website.", "registration_url": _external_registration_url(event)})
     if not event.rsvp_enabled:
         raise HTTPException(400, "RSVP is not open for this event")
 

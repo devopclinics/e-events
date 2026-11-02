@@ -122,3 +122,14 @@ async def test_start_only_preserves_timed_and_overnight_sessions(monkeypatch):
     result=GuestProgramOut.model_validate(await program.program_state(event,workflow,AsyncMock(),now=datetime(2026,11,11,10,tzinfo=timezone.utc)))
     assert [s.title for s in result.days[0].segments]==['conference','overnight','gala']
     assert [s.title for s in result.current_segments]==['conference']
+
+@pytest.mark.asyncio
+async def test_hidden_finish_keeps_internal_duration(monkeypatch):
+    monkeypatch.setattr(program,'_feedback_windows',AsyncMock(return_value=[]))
+    event=NS(id='event',name='Conference',event_date=datetime(2026,11,11,9),timezone='Africa/Lagos',live_program_enabled=True)
+    step=NS(id='conference',key='conference',title='Conference',description=None,enabled=True,type='session_attendance',is_segment=False,starts_offset_seconds=None,duration_seconds=None,sort_order=0,conditions={},config={'session':{'date':'2026-11-11','start_time':'10:00','end_time':'15:00'},'program':{'show_end_time':False}})
+    workflow=NS(id='workflow',status='published',steps=[step])
+    result=GuestProgramOut.model_validate(await program.program_state(event,workflow,AsyncMock(),now=datetime(2026,11,11,10,tzinfo=timezone.utc)))
+    s=result.days[0].segments[0]
+    assert not s.show_end_time and s.ends_at.hour==15 and s.active
+    assert result.current_segments[0].step_id=='conference'

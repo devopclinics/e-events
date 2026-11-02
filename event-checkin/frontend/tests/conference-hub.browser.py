@@ -17,7 +17,7 @@ event=dict(id='conference-fixture',name='PAMCON 6.0 Conference',event_type='Conf
 guest=dict(id='attendee',name='Ada Guest',qr_token='fixture-pass',rsvp_status='confirmed',admitted=True,checked_out=False)
 other=dict(id='colleague',name='Sam Guest',qr_token='fixture-colleague',rsvp_status='confirmed',admitted=False)
 hub=dict(guest=guest,party=[guest,{k:v for k,v in other.items() if k!='qr_token'}],capabilities={},announcements=[],direct_messages=[],chat_messages=[])
-conference=dict(step_id='conference',title='PAMCON 6.0 Conference',category='Conference',starts_at='2026-11-11T10:00:00+01:00',ends_at='2026-11-11T15:00:00+01:00',state='ended',room='The Event Center',description='Technology, Creativity and Profitability.',audience_guest_ids=['attendee','colleague'])
+conference=dict(step_id='conference',title='PAMCON 6.0 Conference',category='Conference',show_end_time=False,starts_at='2026-11-11T10:00:00+01:00',ends_at='2026-11-11T15:00:00+01:00',state='ended',room='The Event Center',description='Technology, Creativity and Profitability.',audience_guest_ids=['attendee','colleague'])
 gala=dict(step_id='gala',title='Gala Night',category='Gala Night',starts_at='2026-11-11T16:00:00+01:00',ends_at=None,state='scheduled',room='The Event Center',audience_guest_ids=['attendee','colleague'])
 program=dict(enabled=True,viewer_id='attendee',audiences=[dict(guest_id='attendee',name='Ada Guest',is_self=True),dict(guest_id='colleague',name='Sam Guest')],days=[dict(date='2026-11-11',label='Wednesday, November 11',segments=[conference,gala])],current_segments=[],next_segments=[])
 journey=dict(experience_enabled=True,steps=[],next_steps=[],total_count=0,completed_count=0,consent=dict(required=False),program=program)
@@ -35,7 +35,7 @@ def intercept(route):
  if path=='/api/invite/link/public-conference':data=event
  elif path.startswith('/api/invite/token/'):data=dict(event=event,guest=guest,already_responded=True,deadline_passed=False)
  elif path.endswith('/guest-hub'):data=hub
- elif path.endswith('/public-theme'):data=dict(colors=dict(background='#330540',surface='#4A0A5D',primary='#FFB400',accent='#FF7900',text='#FFFFFF'),wording={},hub_layout={},pass_options=dict(schedule=dict(heading='Your day at PAMCON',timezoneLabel='All times are Lagos time (WAT).',items=[dict(label='Conference',time='10:00 AM to 3:00 PM'),dict(label='Gala dinner',time='From 4:00 PM',note='Finish time to be announced.',tone='gold')])))
+ elif path.endswith('/public-theme'):data=dict(colors=dict(background='#330540',surface='#4A0A5D',primary='#FFB400',accent='#FF7900',text='#FFFFFF'),wording={},hub_layout={},pass_options=dict(schedule=dict(heading='Your day at PAMCON',timezoneLabel='All times are Lagos time (WAT).',items=[dict(label='Conference',time='10:00 AM'),dict(label='Gala dinner',time='From 4:00 PM',note='Finish time to be announced.',tone='gold')])))
  elif path.endswith('/experience/me'):data=journey
  elif path.endswith('/experience/me/feedback'):data=dict(forms=[])
  elif path.endswith('/app-party'):data=dict(viewer_id='attendee',members=[guest,other])
@@ -51,9 +51,17 @@ try:
   page.goto(BASE+'/rsvp/public-conference#/programme');expect(page.get_by_role('heading',name='Published conference programme')).to_be_visible();assert page.url==BASE+'/site/conference-fixture#programme';assert not any(p.endswith('/guest-hub') or p.endswith('/experience/me') for p in requests);checks.append('anonymous shared link opens only published programme')
   state['site_status']=404;page.goto(BASE+'/rsvp/public-conference#/programme');expect(page.get_by_role('link',name='Already registered? Open my GuestHub')).to_have_attribute('href','/rsvp/public-conference?recover=1&destination=programme');assert 'not been published yet' in page.locator('body').inner_text();checks.append('unpublished website offers private recovery')
   state['site_status']=503;page.reload();page.get_by_role('button',name='Try again',exact=True).wait_for();state['site_status']=200;page.get_by_role('button',name='Try again',exact=True).click();expect(page.get_by_role('heading',name='Published conference programme')).to_be_visible();checks.append('failed public programme retries')
+  event['external_registration_url']='https://www.pamannigeria.com.ng/contact/'
+  page.goto(BASE+'/rsvp/public-conference#/rsvp/register')
+  expect(page.get_by_role('link',name='Register on the organizer’s website ↗')).to_have_attribute('href',event['external_registration_url'])
+  assert not page.locator('input[name="first_name"]').count()
+  checks.append('new registration points to organizer instead of creating guests')
+  page.goto(BASE+'/site/conference-fixture')
   page.evaluate("localStorage.setItem('eqr_rsvp:public-conference',JSON.stringify({rsvp_status:'confirmed',qr_token:'fixture-pass'}))")
   page.goto(BASE+'/rsvp/public-conference#/programme');expect(page.get_by_role('heading',name='Your conference programme')).to_be_visible();assert '/rsvp/public-conference' in page.url
   expect(page.locator('.pg-title').filter(has_text='Gala Night')).to_be_visible();expect(page.locator('.pg-time-note')).to_have_text('Finish time to be announced.');assert 'Invalid Date' not in page.locator('body').inner_text();assert 'My family' not in page.locator('body').inner_text();assert 'My group' in page.locator('body').inner_text();assert page.locator('.fh-event-app').get_attribute('data-scheme')=='light';checks.append('returning attendee keeps personal hub and start-only gala')
+  assert '3:00' not in page.locator('.pg-view').inner_text() and '15:00' not in page.locator('.pg-view').inner_text()
+  checks.append('conference finish hidden while underlying duration remains available')
   primary=page.get_by_role('navigation',name='GuestHub',exact=True)
   for label in ['Programme','My Pass','Speakers','Venue','Help']:expect(primary.get_by_role('button',name=label,exact=True)).to_have_count(1)
   checks.append('conference navigation prioritizes pass speakers venue help')
@@ -73,7 +81,7 @@ try:
   assert "Message Host isn't enabled" not in page.locator('body').inner_text()
   checks.append('organizer contacts remain available without messaging capability')
   page.goto(BASE+'/rsvp/public-conference#/pass')
-  expect(page.get_by_role('region',name='Event schedule')).to_contain_text('10:00 AM to 3:00 PM')
+  expect(page.get_by_role('region',name='Event schedule')).to_contain_text('10:00 AM')
   expect(page.get_by_role('region',name='Event schedule')).to_contain_text('From 4:00 PM')
   expect(page.locator('.app-pass-qr')).to_be_visible()
   checks.append('GuestHub pass shows the same configured conference and gala times')

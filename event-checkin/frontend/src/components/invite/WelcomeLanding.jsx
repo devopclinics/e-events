@@ -56,7 +56,7 @@ export default function WelcomeLanding({ event, title, dateLabel, timeLabel, ven
   const colors = designTheme?.colors || {}
   const heroStyle = sectionStyle(settings, 'hero')
   const style = { ...welcomeColors(colors), ...(heroStyle.background ? {'--rw-custom-hero-bg':heroStyle.background,'--rw-custom-hero-ink':heroStyle.color} : {}), '--rw-heading-font': FONTS[designTheme?.font_pairing] || 'Georgia,serif' }
-  const registerLabel = returningGuest ? 'View my RSVP →' : 'Register / RSVP Now →'
+  const registerLabel = event.external_registration_url ? 'Register with organizer ↗' : returningGuest ? 'View my RSVP →' : 'Register / RSVP Now →'
   const showAbout = config.about?.show !== false
   const showVenue = config.details?.showVenue !== false && venue
   const showHotel = config.details?.showHotel !== false && hotelUrl

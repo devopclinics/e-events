@@ -3591,6 +3591,13 @@ export default function InvitePage() {
         <TokenRSVPForm event={event} prefill={guest} token={token} theme={theme} onDone={setConfirmed} tone={tone} dWording={dWording} />
       </div>
     )
+  } else if (event.external_registration_url && !hasGuestHub) {
+    rsvpPanel = <section className="rounded-3xl border bg-white p-6 text-center" aria-label="Organizer registration">
+      <h2 className="text-xl font-bold">Register with the organizer</h2>
+      <p className="my-3">New registrations for this event are handled on the organizer’s website.</p>
+      <a className="inline-block rounded-xl bg-slate-900 px-5 py-3 font-bold text-white" href={event.external_registration_url}>Register on the organizer’s website ↗</a>
+      <p className="mt-4 text-sm">Already on the guest list? Use the personal pass or GuestHub link sent to you.</p>
+    </section>
   } else if (!event.rsvp_enabled) {
     rsvpPanel = (
       <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-center text-sm font-semibold text-slate-600">

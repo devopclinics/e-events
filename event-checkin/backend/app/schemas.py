@@ -1138,6 +1138,7 @@ class GuestConsentStateOut(BaseModel):
 
 
 class GuestProgramSegmentOut(BaseModel):
+    show_end_time: bool = True
     step_id: str
     key: str
     title: str
@@ -2843,6 +2844,7 @@ class GuestHubRecoveryResponse(BaseModel):
 
 
 class InvitePageOut(BaseModel):
+    external_registration_url: Optional[str] = Field(default=None, max_length=2000)
     organizer_phones: list[str] = Field(default_factory=list, max_length=5)
     external_website_url: Optional[str] = Field(default=None, max_length=2000)
     event_type: Optional[str] = None

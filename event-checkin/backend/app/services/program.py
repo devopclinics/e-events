@@ -142,6 +142,7 @@ async def program_state(event: Event, workflow: ExperienceWorkflow | None, db: A
         segment = {
             "step_id": step.id, "key": step.key, "title": step.title,
             "description": step.description, "starts_at": start, "ends_at": end,
+            "show_end_time": ((step.config or {}).get("program") or {}).get("show_end_time", True) is not False,
             "category": snapshot.get("category"), "room": snapshot.get("room"),
             "speaker": snapshot.get("speaker"),
             "age_groups": [str(group) for group in groups] if isinstance(groups, list) else [str(groups)],

@@ -16,8 +16,7 @@ export const TOOL_GUIDES = {
   },
   "programme": {
     "methods": [
-      "listExperienceWorkflows",
-      "liveProgramSessions"
+      "listExperienceWorkflows"
     ],
     "steps": [
       "Add sessions with dates, rooms and speakers in Workflow.",

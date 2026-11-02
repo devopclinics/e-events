@@ -11,7 +11,7 @@ const ACCOUNT_METHODS=new Set(['listMeetings','listContactLists','listCalendars'
 export default function ToolSetupJourney({eventId}){
  const location=useLocation(),{user}=useAuth(),tool=toolForLocation(location.pathname,location.search)
  if(!CUSTOMER_JOURNEY_ENABLED||!tool||!['admin','event_manager'].includes(user?.role)&&!user?.is_platform_superadmin)return null
- return <Journey key={`${eventId}:${tool.id}`} tool={tool} eventId={eventId}/>
+ return <Journey key={`${user?.id||user?.email||user?.role}:${eventId}:${tool.id}`} tool={tool} eventId={eventId}/>
 }
 function Journey({tool,eventId}) {
  const guide=TOOL_GUIDES[tool.id],generation=useRef(0)

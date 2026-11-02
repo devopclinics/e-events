@@ -762,7 +762,7 @@ export const api = {
       force,
     }),
   updateGuest: (eventId, guestId, data, ifUnmodifiedSince) =>
-    req('PATCH', `/events/${eventId}/guests/${guestId}${ifUnmodifiedSince || protectAssigned ? `?${new URLSearchParams({...ifUnmodifiedSince && {if_unmodified_since:ifUnmodifiedSince},...protectAssigned && {protect_assigned:'true'}})}` : ''}`, data),
+    req('PATCH', `/events/${eventId}/guests/${guestId}${ifUnmodifiedSince ? `?if_unmodified_since=${encodeURIComponent(ifUnmodifiedSince)}` : ''}`, data),
   guestRsvpAnswers: (eventId, guestId) => req('GET', `/events/${eventId}/guests/${guestId}/rsvp-answers`),
   deleteGuest: (eventId, guestId) => req('DELETE', `/events/${eventId}/guests/${guestId}`),
   resendInvite: (eventId, guestId) => req('POST', `/events/${eventId}/guests/${guestId}/resend-invite`),
@@ -868,7 +868,7 @@ export const api = {
   listTables: (eventId) => req('GET', `/events/${eventId}/tables`),
   createTable: (eventId, data) => req('POST', `/events/${eventId}/tables`, data),
   updateTable: (eventId, tableId, data, ifUnmodifiedSince, protectAssigned = false) =>
-    req('PUT', `/events/${eventId}/tables/${tableId}${ifUnmodifiedSince ? `?if_unmodified_since=${encodeURIComponent(ifUnmodifiedSince)}` : ''}`, data),
+    req('PUT', `/events/${eventId}/tables/${tableId}${ifUnmodifiedSince || protectAssigned ? `?${new URLSearchParams({...ifUnmodifiedSince && {if_unmodified_since:ifUnmodifiedSince},...protectAssigned && {protect_assigned:'true'}})}` : ''}`, data),
   deleteTable: (eventId, tableId, requireEmpty = false) => req('DELETE', `/events/${eventId}/tables/${tableId}${requireEmpty ? '?require_empty=true' : ''}`),
 
   // Floor-plan designer (admin, logged-in)
@@ -1859,7 +1859,6 @@ export const api = {
   liveDisplays: (eventId) => liveReq(eventId, 'GET', '/v1/displays'),
   liveCreateDisplay: (eventId, body) => liveReq(eventId, 'POST', '/v1/displays', body),
   liveUpdateDisplay: (eventId, displayId, body) => liveReq(eventId, 'PATCH', `/v1/displays/${displayId}`, body),
-  liveDownloadSurveyReport: (eventId, activityId, displayName) => downloadLiveSurveyReport(eventId, activityId, displayName),
   liveBulkUpdateDisplays: (eventId, body) => liveReq(eventId, 'PATCH', '/v1/displays/bulk', body),
   livePresentDisplayResults: (eventId, displayId, body) => liveReq(eventId, 'PUT', `/v1/control/displays/${displayId}/results`, body),
   liveSetDisplayRehearsal: (eventId, displayId, body) => liveReq(eventId, 'PUT', `/v1/control/displays/${displayId}/rehearsal`, body),

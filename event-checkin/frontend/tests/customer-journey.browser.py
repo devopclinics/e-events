@@ -19,7 +19,7 @@ with tempfile.TemporaryDirectory(prefix='customer-journey-browser-') as tmp:
    super().do_GET()
  server=ThreadingHTTPServer(('127.0.0.1',0),Handler);threading.Thread(target=server.serve_forever,daemon=True).start()
  ev={'id':'qa-event','name':'QA Customer Journey','event_date':'2027-02-15T09:00:00','timezone':'Africa/Lagos','venue_name':'QA Hall','status':'draft','rsvp_enabled':False,'rsvp_token':'qa-token','invite_mode':'open','description':'Fictional test data','updated_at':'2026-11-02T00:00:00','setup_preferences':{'quick_invite':{'style':'arch','colour':'lavender'}},'seating_enabled':False,'guest_cap':25,'is_paid':False,'message_credits':100}
- events=[ev];writes=[];tables=[];checks=[];errors=[];fail_check=False;fail_enable=False
+ events=[ev];writes=[];tables=[];checks=[];errors=[];fail_check=False;fail_enable=False;fail_status=True
  def check(s,ok=True):assert ok,s;checks.append(s)
  def intercept(route):
   nonlocal_dummy=None
@@ -38,8 +38,11 @@ with tempfile.TemporaryDirectory(prefix='customer-journey-browser-') as tmp:
   elif p.endswith('/features'):
    if fail_enable:return route.fulfill(status=402,content_type='application/json',body=json.dumps({'detail':'Event Pass required'}))
    ev.update(body);data=copy.deepcopy(ev)
-  elif p.endswith('/invite-settings'):ev.update(body);data=copy.deepcopy(ev)
-  elif p.endswith('/status'):ev['status']=body['status'];data=copy.deepcopy(ev)
+  elif p.endswith('/invite-settings'):ev.update(body);ev['updated_at']='2026-11-02T01:00:00';data=copy.deepcopy(ev)
+  elif p.endswith('/status'):
+   if fail_status:return route.fulfill(status=409,content_type='application/json',body=json.dumps({'detail':'Event changed; review and retry'}))
+   assert body.get('if_unmodified_since')==ev['updated_at'],'Activation used a stale event version after saving RSVP'
+   ev['status']=body['status'];data=copy.deepcopy(ev)
   elif p.endswith('/tables'):
    if m=='POST':tables.append({**body,'id':'table-qa'})
    data=tables[-1] if m=='POST' else tables
@@ -57,7 +60,7 @@ with tempfile.TemporaryDirectory(prefix='customer-journey-browser-') as tmp:
   base=f'http://127.0.0.1:{server.server_port}'
   page.goto(base+'/setup-redesign?view=guide');page.get_by_role('button',name='Free invitation',exact=False).wait_for();check('empty-account guide opens creation rather than not-found')
   page.evaluate('localStorage.setItem("eq.currentEventId","qa-event")');page.goto(base+'/admin-redesign');page.get_by_role('heading',name='QA Customer Journey',exact=True).wait_for();check('real event dashboard renders');page.screenshot(path=str(OUT/'dashboard-desktop.png'),full_page=True)
-  page.get_by_role('link',name='Review registration',exact=False).click();page.get_by_role('button',name='Review opening registration').click();page.get_by_role('button',name='Confirm & open registration').click();page.get_by_role('button',name='Check invitation link').wait_for();check('explicit confirmation uses lifecycle API with concurrency token',any(p.endswith('/status') and body.get('if_unmodified_since') for p,m,body in writes if body))
+  page.get_by_role('link',name='Review registration',exact=False).click();page.get_by_role('button',name='Review opening registration').click();page.get_by_role('button',name='Confirm & open registration').click();page.get_by_role('alert').filter(has_text='Event changed; review and retry').wait_for();check('partial opening failure is visible and retryable',ev['rsvp_enabled'] and ev['status']=='draft');fail_status=False;page.get_by_role('button',name='Review opening registration').click();page.get_by_role('button',name='Confirm & open registration').click();page.get_by_role('button',name='Check invitation link').wait_for();check('explicit confirmation uses lifecycle API with concurrency token',any(p.endswith('/status') and body.get('if_unmodified_since') for p,m,body in writes if body))
   fail_check=True;page.get_by_role('button',name='Check invitation link').click();page.get_by_role('alert').filter(has_text='could not be opened').wait_for();check('failed destination never enables copying',page.get_by_role('button',name='Copy link').count()==0)
   fail_check=False;page.get_by_role('button',name='Check invitation link').click();page.get_by_role('button',name='Copy link').wait_for();check('destination is read before sharing and quick alias preserved','/i/qa-token' in page.get_by_label('Invitation link').input_value());page.screenshot(path=str(OUT/'share-desktop.png'),full_page=True)
   page.goto(base+'/admin-redesign?view=tools');seat=page.locator('.cj-tool').filter(has=page.get_by_role('heading',name='Give everyone a seat',exact=True));seat.get_by_role('button',name='Enable & set up').wait_for();check('included access avoids upgrade detour')

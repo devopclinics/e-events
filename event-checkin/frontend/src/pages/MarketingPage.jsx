@@ -1,3 +1,5 @@
+import ToolSetupJourney from '../components/setup/ToolSetupJourney'
+import {CUSTOMER_JOURNEY_ENABLED} from './customerJourneyModel.mjs'
 import FestioLogo from '../components/branding/FestioLogo'
 import { leadAutomationStatus, onboardingPreviewLeads } from "../lib/marketingConsent.mjs";
 import React, { Component, useEffect, useMemo, useState } from "react";
@@ -4146,6 +4148,7 @@ export default function MarketingPage() {
         </div>
       </aside>
       <main className="mk-main">
+{CUSTOMER_JOURNEY_ENABLED&&<><ToolSetupJourney/><div id="tool-editor-start" className="tool-editor-start" tabIndex={-1}/></>}
         <header className="mk-topbar">
           <div>
             <span>Workspace</span>

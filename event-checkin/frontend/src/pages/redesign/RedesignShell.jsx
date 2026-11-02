@@ -1,3 +1,5 @@
+import {CUSTOMER_JOURNEY_ENABLED} from '../customerJourneyModel.mjs'
+import ToolSetupJourney from '../../components/setup/ToolSetupJourney'
 import FestioLogo from '../../components/branding/FestioLogo'
 import {guideHref,readGuideResume,SETUP_STAGES} from '../guideNavigation.mjs'
 import { useEffect, useRef, useState } from 'react'
@@ -674,6 +676,7 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
         <main className={`rr-main ${withEventSidebar ? '' : 'rr-main-wide'}`}>
           {resume?.task && location.pathname!=='/setup-redesign' && <Link className="guide-return" to={setupHref} style={{display:'block',padding:12,marginBottom:12}}>← Return to {SETUP_STAGES.find(([id])=>id===resume.view)?.[1] || 'Setup Guide'}</Link>}
           <RedesignRouteBoundary onError={handleRouteError}>
+            {CUSTOMER_JOURNEY_ENABLED&&<><ToolSetupJourney eventId={currentEventId}/><div id="tool-editor-start" className="tool-editor-start" tabIndex={-1}/></>}
             {children}
           </RedesignRouteBoundary>
         </main>

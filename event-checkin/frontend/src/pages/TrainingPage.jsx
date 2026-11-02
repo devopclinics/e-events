@@ -1,3 +1,5 @@
+import ToolSetupJourney from '../components/setup/ToolSetupJourney'
+import {CUSTOMER_JOURNEY_ENABLED} from './customerJourneyModel.mjs'
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
 import { useAuth } from '../context/AuthContext'
@@ -126,6 +128,7 @@ export default function TrainingPage() {
   if (!data) return <main className="training-loading">Loading Festio Academy…{message && <p>{message}</p>}</main>
   if (!selected) return <main className="training-loading">No lessons are published yet. Check back soon.</main>
   return <main className="training-page">
+{CUSTOMER_JOURNEY_ENABLED&&<><ToolSetupJourney/><div id="tool-editor-start" className="tool-editor-start" tabIndex={-1}/></>}
     <header className="training-hero">
       <div><span className="training-kicker">FESTIO ACADEMY · VERSION {data.course.version}</span><h1>{data.course.title}</h1><p>{data.course.description}</p></div>
       <div className="training-score"><strong>{percent}%</strong><span>{completed} of {data.course.lesson_count} lessons</span><span>~{data.course.estimated_minutes} min total</span></div>

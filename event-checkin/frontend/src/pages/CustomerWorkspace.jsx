@@ -1,3 +1,4 @@
+import {toolWorkspaceHref} from '../components/setup/toolGuides.mjs'
 import {useEffect,useRef,useState} from 'react'
 import {Link,useNavigate,useSearchParams} from 'react-router-dom'
 import RedesignShell,{Icon} from './redesign/RedesignShell'
@@ -62,9 +63,9 @@ function Workspace(){
  }
  async function configureTool(tool){
   const access=toolAccess(tool,event,billing)
-  if(!tool.flag||event[tool.flag]){if(tool.id==='seating')setDialog(tool);else navigate(tool.route);return}
+  if(!tool.flag||event[tool.flag]){if(tool.id==='seating')setDialog(tool);else navigate(toolWorkspaceHref(tool));return}
   if(access.included!==true){navigate('/billing-redesign?tab=billing');return}
-  await run(tool.id,async target=>{await api.toggleFeatures(target,{[tool.flag]:true});if(eventIdentity.current!==target)return;await refresh();if(eventIdentity.current!==target)return;if(tool.id==='seating')setDialog(tool);else navigate(tool.route)})
+  await run(tool.id,async target=>{await api.toggleFeatures(target,{[tool.flag]:true});if(eventIdentity.current!==target)return;await refresh();if(eventIdentity.current!==target)return;if(tool.id==='seating')setDialog(tool);else navigate(toolWorkspaceHref(tool))})
  }
  function ToolCard({tool}){const access=toolAccess(tool,event,billing);return <article className="cj-card cj-tool"><div className="cj-tool-top"><span className="cj-icon"><Icon name={tool.icon} size={18}/></span><small>{access.included===true?'Included':tool.flag?(billingError?'Access unavailable':access.included===false?'Review plan':'Checking access'):(tool.scope||'Existing workspace')}</small></div><h3>{tool.title}</h3><p>{tool.description}</p><span className="cj-chip" style={{marginBottom:16}}>{access.state}</span><button className="rr-btn secondary" disabled={!!busy||!!tool.flag&&!billing&&!event[tool.flag]} onClick={()=>configureTool(tool)}>{busy===tool.id?'Enabling…':!tool.flag||event[tool.flag]?'Continue setup →':access.included===true?'Enable & set up →':'Review access →'}</button></article>}
  const summary=()=> <div className="cj-metrics"><div><strong>{guestData.loading?'…':guestData.error?'—':guestData.guests.length}</strong><small>Guests in your list</small></div><div><strong>{readiness.ready?'Open':'Review'}</strong><small>Registration</small></div><div><strong>{CUSTOMER_TOOLS.filter(t=>t.flag&&event?.[t.flag]).length}</strong><small>Enabled tool areas</small></div></div>

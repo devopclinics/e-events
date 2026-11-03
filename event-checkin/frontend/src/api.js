@@ -2094,6 +2094,10 @@ export const api = {
   listSharedMedia: (eventId) => req('GET', `/events/${encodeURIComponent(eventId)}/media-library`),
   renameSharedMedia: (eventId, assetId, title) => req('PATCH', `/events/${encodeURIComponent(eventId)}/media-library/${encodeURIComponent(assetId)}`, {title}),
   removeSharedMedia: (eventId, assetId) => req('DELETE', `/events/${encodeURIComponent(eventId)}/media-library/${encodeURIComponent(assetId)}`),
+  emailProposal: async (data, file) => {
+    const token=await getToken(),body=new FormData();for(const [key,value] of Object.entries(data))if(value!==null&&value!==undefined&&value!=='')body.append(key,String(value));body.append('file',file,'Festio-Event-Proposal.pdf')
+    const response=await fetch(`${BASE}/events/proposals/email`,{method:'POST',headers:token?{Authorization:`Bearer ${token}`}:{},body});const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(typeof result.detail==='string'?result.detail:'Proposal email could not be processed. Check the recipient and try again.');return result
+  },
   uploadSharedMedia: async (eventId, file) => {
     const token = await getToken(); const body = new FormData(); body.append('file',file)
     const response = await fetch(`${BASE}/events/${encodeURIComponent(eventId)}/media-library`, {method:'POST',headers:token?{Authorization:`Bearer ${token}`}:{},body})

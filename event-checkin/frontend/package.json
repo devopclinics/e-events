@@ -21,14 +21,16 @@
     "check:api-contract": "./scripts/check-api-contract-drift.sh"
   },
   "dependencies": {
-    "canvas-confetti": "^1.9.3",
     "@capacitor-firebase/authentication": "^7.0.0",
     "@capacitor-firebase/messaging": "^7.0.0",
     "@capacitor-mlkit/barcode-scanning": "^7.0.0",
     "@capacitor/app": "^7.0.0",
     "@capacitor/core": "^7.0.0",
+    "canvas-confetti": "^1.9.3",
     "firebase": "^10.12.0",
+    "html2canvas": "^1.4.1",
     "html5-qrcode": "^2.3.8",
+    "jspdf": "^4.2.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.22.0"

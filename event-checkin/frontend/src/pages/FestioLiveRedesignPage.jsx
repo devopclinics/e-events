@@ -1,3 +1,5 @@
+import { QuestionCard } from './LiveGuestPage'
+import { formatEventMoment, parseUtc } from '../timeutil'
 import FestioLogo from '../components/branding/FestioLogo'
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import RedesignShell, { Icon } from './redesign/RedesignShell'
@@ -1076,6 +1078,7 @@ function FestioLiveEventPage({ eventId }) {
   const [responseDetails, setResponseDetails] = useState(null)
   const [analyticsOverlayOpen, setAnalyticsOverlayOpen] = useState(false)
   const [participantPreviewOpen, setParticipantPreviewOpen] = useState(false)
+  const [questionPreviewOpen, setQuestionPreviewOpen] = useState(false)
   const [busy, setBusy] = useState(false)
 
   const [bank, setBank] = useState(null)
@@ -1719,7 +1722,7 @@ function FestioLiveEventPage({ eventId }) {
   // program order rather than creation order.
   const sessionStartMs = (activity) => {
     const session = programSessionById.get(activity.session_id)
-    return session?.starts_at ? new Date(session.starts_at).getTime() : Infinity
+    return session?.starts_at ? parseUtc(session.starts_at)?.getTime() : Infinity
   }
   const sortByProgram = (list) => [...list].sort((a, b) => sessionStartMs(a) - sessionStartMs(b))
   const visibleActivities = sortByProgram((programFilter === 'event-wide'
@@ -1731,7 +1734,7 @@ function FestioLiveEventPage({ eventId }) {
     : programFilter ? (displays || []).filter((display) => display.assigned_session_id === programFilter) : (displays || [])
   const currentProgramSession = (programSessions || []).find((session) => {
     const now = Date.now()
-    return session.starts_at && new Date(session.starts_at).getTime() <= now && (!session.ends_at || now < new Date(session.ends_at).getTime())
+    return session.starts_at && parseUtc(session.starts_at)?.getTime() <= now && (!session.ends_at || now < parseUtc(session.ends_at)?.getTime())
   })
   const suggestedActivity = currentProgramSession && (activities || []).find((activity) => activity.session_id === currentProgramSession.source_step_id && ['draft', 'scheduled', 'paused'].includes(activity.status))
 
@@ -1895,7 +1898,7 @@ function FestioLiveEventPage({ eventId }) {
             {activities === null ? <p className="rd-hint">Loading…</p> : activities.length === 0 ? (
               <p className="rd-hint">No activities yet — create your first quiz, poll, or feedback form above.</p>
             ) : <div className="fl-program-groups">
-              {groupedActivities.filter((group) => group.activities.length || (!isFiltering && group.session.status === 'published')).map((group) => <section className="fl-program-group" key={group.session.source_step_id}><header><div><strong>{group.session.title}</strong><small>{group.session.starts_at ? new Date(group.session.starts_at).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : 'Program session'}{group.session.room ? ` · ${group.session.room}` : ''}{group.session.speaker ? ` · ${group.session.speaker}` : ''}</small></div><a className="fl-experience-return" href={`/experience-redesign?step=${encodeURIComponent(group.session.source_step_id)}`}>Open in Experience ↗</a><span className={`fl-sync-chip ${group.session.status}`}>{group.session.status === 'published' ? '✓ Synchronized' : group.session.status}</span></header>{group.activities.length ? group.activities.map((activity) => <ActivityListRow key={activity.id} activity={activity}/>) : <button className="fl-add-session-activity" onClick={() => { setNewActivity((value) => ({ ...value, session_id: group.session.source_step_id, title: `${group.session.title} Pulse` })); setCreating(true) }}>+ Add Live moment</button>}</section>)}
+              {groupedActivities.filter((group) => group.activities.length || (!isFiltering && group.session.status === 'published')).map((group) => <section className="fl-program-group" key={group.session.source_step_id}><header><div><strong>{group.session.title}</strong><small>{group.session.starts_at ? formatEventMoment(group.session.starts_at, event?.timezone) : 'Program session'}{group.session.room ? ` · ${group.session.room}` : ''}{group.session.speaker ? ` · ${group.session.speaker}` : ''}</small></div><a className="fl-experience-return" href={`/experience-redesign?step=${encodeURIComponent(group.session.source_step_id)}`}>Open in Experience ↗</a><span className={`fl-sync-chip ${group.session.status}`}>{group.session.status === 'published' ? '✓ Synchronized' : group.session.status}</span></header>{group.activities.length ? group.activities.map((activity) => <ActivityListRow key={activity.id} activity={activity}/>) : <button className="fl-add-session-activity" onClick={() => { setNewActivity((value) => ({ ...value, session_id: group.session.source_step_id, title: `${group.session.title} Pulse` })); setCreating(true) }}>+ Add Live moment</button>}</section>)}
               {(!programFilter || programFilter === 'event-wide') && eventWideActivities.length > 0 && <section className="fl-program-group"><header><div><strong>Event-wide activities</strong><small>Not linked to an Experience program session</small></div></header>{eventWideActivities.map((activity) => <ActivityListRow key={activity.id} activity={activity}/>)}</section>}
               {isFiltering && !groupedActivities.some((group) => group.activities.length) && !eventWideActivities.length && <p className="rd-hint">No activities match "{activitySearch}"{activityStatusFilter ? ` with status "${activityStatusFilter}"` : ''}.</p>}
             </div>}
@@ -1984,7 +1987,7 @@ function FestioLiveEventPage({ eventId }) {
                 ) : (
                   <p className="rd-hint" style={{ marginTop: -6, marginBottom: 12 }}>
                     Closes automatically {selected.config?.auto_close_grace_minutes ?? 20} min after its linked session ends
-                    {selected.config?.extended_until ? `, extended to ${new Date(selected.config.extended_until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''} — running long? Use Extend above.
+                    {selected.config?.extended_until ? `, extended to ${formatEventMoment(selected.config.extended_until, event?.timezone)}` : ''} — running long? Use Extend above.
                   </p>
                 )
               )}
@@ -2001,7 +2004,7 @@ function FestioLiveEventPage({ eventId }) {
               )}
 
 </details>
-              {selected.type==='poll'&&<section className="fl-simple-poll"><h3>Question → Preview → Open voting</h3><p>Add your question below, preview it, then open voting when you are ready.</p><button className="rr-btn primary" disabled={busy||!['draft','live','paused','scheduled'].includes(selected.status)||!selected.questions?.some(q=>q.status!=='archived')} onClick={openSimpleVoting}>Open voting</button><button className="rr-btn secondary" onClick={openParticipantPreview}>Preview question</button><span role="status">{selected.status==='live'&&selected.questions?.some(q=>q.live_state==='open')?'Voting open':'Voting closed'}</span></section>}
+              {selected.type==='poll'&&<section className="fl-simple-poll"><h3>Question → Preview → Open voting</h3><p>Add your question below, preview it, then open voting when you are ready.</p><button className="rr-btn primary" disabled={busy||!['draft','live','paused','scheduled'].includes(selected.status)||!selected.questions?.some(q=>q.status!=='archived')} onClick={openSimpleVoting}>Open voting</button><button className="rr-btn secondary" onClick={() => setQuestionPreviewOpen(true)}>Preview question</button><span role="status">{selected.status==='live'&&selected.questions?.some(q=>q.live_state==='open')?'Voting open':'Voting closed'}</span></section>}
               {selected.type !== 'q_and_a' && (
                 <>
                   <h4 style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: '.05em', color: '#5b6a5c', margin: '0 0 10px' }}>Questions</h4>
@@ -2616,6 +2619,7 @@ function FestioLiveEventPage({ eventId }) {
           displayUrl={selected.short_code ? `/d/${selected.short_code}` : selected.config?.display_token ? `/live-display/${selected.id}?token=${selected.config.display_token}` : null}
         />
       )}
+      {questionPreviewOpen && selected && <div className="fl-participant-preview-backdrop" role="dialog" aria-modal="true" aria-label="Participant question preview"><div className="fl-participant-preview-shell"><header><h3>Preview question</h3><button aria-label="Close question preview" onClick={() => setQuestionPreviewOpen(false)}>×</button></header><p>Practice only. Your selections are not submitted or counted.</p><div className="fl-participant-phone">{selected.questions?.filter(q => q.status !== 'archived').map((q,index) => <QuestionCard key={q.id} question={q} index={index} draftMode onDraftChange={() => {}}/>)}</div></div></div>}
       {participantPreviewOpen && results && selected && <ParticipantReviewPreview activity={selected} results={results} onClose={() => setParticipantPreviewOpen(false)}/>}
     </RedesignShell>
   )

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { drainOfflineAdmissions, offlineAdmissionItems, offlineManifestStatus } from '../offlineExperienceQueue'
 
-export default function OfflineScannerPanel({ eventId, manifest, online, onPrepare, onSynced }) {
+export default function OfflineScannerPanel({ accessStation = false, eventId, manifest, online, onPrepare, onSynced }) {
   const [now, setNow] = useState(Date.now())
   const [items, setItems] = useState(() => offlineAdmissionItems(eventId))
   const [busy, setBusy] = useState(false)
@@ -37,7 +37,7 @@ export default function OfflineScannerPanel({ eventId, manifest, online, onPrepa
   return <section className="sc-command-panel sc-offline-panel" aria-label="Offline preparation">
     <div className="sc-command-panel-head"><div><span>Before losing connectivity</span><strong>Offline check-in readiness</strong></div><button type="button" className="rr-btn secondary" onClick={prepare} disabled={!online || busy}>{busy ? 'Working…' : 'Prepare this scanner'}</button></div>
     <div className="sc-offline-body">
-      <p role="status"><strong>{status.message}</strong></p>
+      <p role="status"><strong>{accessStation ? 'Zone and gate scanning requires an online connection. Offline general admission is not available at this access station.' : status.message}</strong></p>
       {manifest?.generated_at && <p>Last downloaded: {new Date(manifest.generated_at).toLocaleString()} · {manifest.guests?.length || 0} saved passes{status.ready ? ` · Valid until ${new Date(status.expiresAt).toLocaleTimeString()}` : ''}</p>}
       <p>Keep this scanner open. Offline mode supports QR and manual convention admission. Guardian handoffs, check-out and daily attendance need a connection. Other scanners cannot see these local check-ins until they sync.</p>
       <div className="sc-offline-actions"><button type="button" className="rr-btn primary" onClick={sync} disabled={!online || busy || !items.length}>Sync / retry saved check-ins ({items.length})</button></div>

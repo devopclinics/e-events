@@ -500,7 +500,7 @@ function SurveyForm({ activity, rules, draftAnswersFromServer, completedAt, onAu
   )
 }
 
-function QuestionCard({ question, index, onAnswer, busy, alreadyAnswered, draftMode, draftValue, onDraftChange, missing, deadlineAt }) {
+export function QuestionCard({ question, index, onAnswer, busy, alreadyAnswered, draftMode, draftValue, onDraftChange, missing, deadlineAt }) {
   const [expired, setExpired] = useState(false)
   const isOptionType = ['single_choice', 'true_false', 'yes_no', 'multiple_choice'].includes(question.question_type)
   const isRating = ['rating_5', 'rating_10', 'nps'].includes(question.question_type)

@@ -1,0 +1,18 @@
+import subprocess,tempfile,threading,json,os
+from pathlib import Path
+from http.server import ThreadingHTTPServer,SimpleHTTPRequestHandler
+from playwright.sync_api import sync_playwright
+root=Path(__file__).resolve().parents[1];out=Path(os.environ.get('FESTIO_RECHECK_ARTIFACTS',tempfile.mkdtemp(prefix='recheck2-')));out.mkdir(parents=True,exist_ok=True)
+with tempfile.TemporaryDirectory() as tmp:
+ d=Path(tmp)
+ js=r'''import {build} from 'esbuild';await build({stdin:{contents:`import React from 'react';import {createRoot} from 'react-dom/client';import {TokenScanner} from './src/pages/ScannerRedesignPage.jsx';import {QuestionCard} from './src/pages/LiveGuestPage.jsx';import {formatEventMoment} from './src/timeutil.js';window.calls=[];const r=createRoot(document.getElementById('root'));window.draw=(mode)=>r.render(mode==='scan'?<TokenScanner event={{id:'qa',venue_access_enabled:true}} zones={[]} gates={[]} sections={[]} mode="camera" onResult={v=>window.calls.push(v)}/>:<QuestionCard question={{id:'q',prompt:'Choose your answer',question_type:'single_choice',options:[{id:'y',label:'Yes'},{id:'n',label:'No'}]}} index={0} draftMode onDraftChange={v=>window.calls.push(v)}/>);window.time=formatEventMoment('2027-02-15T09:00:00','Africa/Lagos');window.draw('scan');`,resolveDir:process.cwd(),loader:'jsx'},bundle:true,jsx:'automatic',outfile:process.argv[1],define:{'import.meta.env':'{}','process.env.NODE_ENV':'"production"'},loader:{'.css':'css'},plugins:[{name:'fixture',setup(b){b.onResolve({filter:/\/api$/},()=>({path:'api',namespace:'fixture'}));b.onResolve({filter:/context\/AuthContext$/},()=>({path:'auth',namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},a=>({contents:a.path==='api'?'export const api=new Proxy({},{get:()=>()=>{throw Error("Unexpected API call")}})':'export const useAuth=()=>({user:{id:"qa",role:"admin"}})',loader:'js'}))}}]});'''
+ subprocess.run(['/tmp/mumineen-node/node-v22.16.0-linux-x64/bin/node','--input-type=module','-e',js,str(d/'app.js')],cwd=root,check=True,stdout=subprocess.DEVNULL)
+ (d/'index.html').write_text('<div id="root"></div><script src="/app.js"></script>')
+ class H(SimpleHTTPRequestHandler):
+  def __init__(self,*a,**k):super().__init__(*a,directory=tmp,**k)
+  def log_message(self,*a):pass
+ server=ThreadingHTTPServer(('127.0.0.1',0),H);threading.Thread(target=server.serve_forever,daemon=True).start()
+ with sync_playwright() as p:
+  b=p.chromium.launch(executable_path='/home/dev/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome');page=b.new_page(timezone_id='America/Los_Angeles');errors=[];page.on('pageerror',lambda e:errors.append(str(e)));page.goto(f'http://127.0.0.1:{server.server_port}');page.get_by_label('Pass token',exact=True).fill('synthetic-token');assert page.get_by_role('button',name='Record scan',exact=True).is_disabled();assert page.evaluate('calls.length')==0;assert '10:00' in page.evaluate('window.time') and 'Africa/Lagos' in page.evaluate('window.time');page.screenshot(path=str(out/'unconfigured-scanner.png'));page.evaluate("draw('question')");page.get_by_role('button',name='Yes',exact=True).click();assert page.get_by_role('button',name='Yes',exact=True).get_attribute('aria-pressed')=='true';assert not page.get_by_role('button',name='Submit answer',exact=True).count();assert page.evaluate('calls[0].selected_option_ids[0]')=='y';assert not errors,errors;page.screenshot(path=str(out/'practice-question.png'));b.close()
+ server.shutdown();(out/'focused-browser.json').write_text(json.dumps({'checks':6,'passed':6,'browser_timezone':'America/Los_Angeles','event_timezone':'Africa/Lagos','network_writes':0},indent=2))
+print('6 focused browser checks passed')

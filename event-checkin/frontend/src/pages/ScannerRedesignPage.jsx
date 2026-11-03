@@ -145,7 +145,7 @@ function GuardianCandidate({ candidate, manualEnabled, busy, action, onSelect })
   </button>
 }
 
-function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, onManifestChange, onQueueChange, onRefreshManifest, onResult }) {
+export function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, onManifestChange, onQueueChange, onRefreshManifest, onResult }) {
   const [token, setToken] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -189,6 +189,7 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
 
   async function recordGuestScan(value, action, guardianPass = null, guardianGuestId = null) {
     if (!value || busy) return
+    if (accessMode && mode !== 'checkout' && !gateId && !zoneId) { setError('Scanner setup required: select a configured gate or zone.'); return }
     setBusy(true); setError(''); onResult(null)
     const scanAction = action || (mode === 'checkout' ? 'checkout' : 'checkin')
     const admissionFeedback = scanAction === 'checkin' && !accessMode
@@ -294,7 +295,7 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
           <div className="sc-search-row sc-token-row"><input className="sc-search-input" aria-label="Guardian pass token" value={guardianToken} onChange={(e) => setGuardianToken(e.target.value)} placeholder="Guardian pass URL or QR token"/><button className="rr-btn primary" disabled={!guardianToken.trim() || busy}>{busy ? 'Verifying…' : 'Verify guardian QR'}</button></div>
           <button type="button" className="rr-btn secondary" onClick={cancelGuardianStep} disabled={busy}>Cancel and scan another guest</button>
         </section>
-      ) : <div className="sc-search-row sc-token-row"><input className="sc-search-input" aria-label="Pass token" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Guest pass URL or QR token"/><button className="rr-btn primary" disabled={!token.trim() || busy}>{busy ? 'Recording…' : mode === 'checkout' ? 'Check out' : 'Record scan'}</button></div>}
+      ) : <div className="sc-search-row sc-token-row"><input className="sc-search-input" aria-label="Pass token" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Guest pass URL or QR token"/><button className="rr-btn primary" disabled={!token.trim() || busy || (accessMode && mode !== 'checkout' && !gateId && !zoneId)}>{busy ? 'Recording…' : mode === 'checkout' ? 'Check out' : 'Record scan'}</button></div>}
       {error && <p className="sc-empty">{error}</p>}
     </form>
   )
@@ -670,7 +671,7 @@ function DailyAttendanceMode({ event, onResult }) {
       </div>
       <form className="sc-search-row sc-token-row" onSubmit={(e) => { e.preventDefault(); record(token) }}>
         <input className="sc-search-input" aria-label="Daily attendance pass token" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Or paste a guest pass URL or QR token"/>
-        <button className="rr-btn primary" disabled={!token.trim() || busy}>{busy ? 'Recording…' : 'Record daily attendance'}</button>
+        <button className="rr-btn primary" disabled={!token.trim() || busy || (accessMode && mode !== 'checkout' && !gateId && !zoneId)}>{busy ? 'Recording…' : 'Record daily attendance'}</button>
       </form>
     </>}
     {tool === 'manual' && <DailyGuestLookup event={event} onSelect={recordGuest} busyId={busyGuestId} actionLabel="Record daily attendance"/>}
@@ -897,6 +898,8 @@ function LiveScannerCommandCenter({
   const progress = expected ? Math.round((checkedIn / expected) * 100) : 0
   const pendingSync = queuedAdmissions + queuedActions
   const manifestCount = Number(offlineManifest?.guests?.length || 0)
+  const accessStation = !!event?.venue_access_enabled && (!event?.separate_admission_access_enabled || mode === 'access') && mode !== 'checkout'
+  const needsZoneSetup = accessStation && !zones.some(z => z.is_active !== false) && !gates.some(g => g.is_active !== false)
   const modeMeta = {
     camera: ['Convention entrance', 'Ready to check in'],
     access: ['Zone station', 'Ready for zone movement'],
@@ -921,6 +924,7 @@ function LiveScannerCommandCenter({
         </div>
       </section>
 
+      {needsZoneSetup && <div className="sc-command-alert" role="status"><strong>Needs zone setup</strong><p>Venue Access requires an active zone or gate before scanning. No guest credential has been checked.</p><a href="/checkin-redesign?tab=zones">Configure venue zones →</a></div>}
       {event?.status !== 'active' && <div className="sc-command-alert">Scanning is available only while this event is active.</div>}
 
       <div className="sc-command-metrics">
@@ -942,7 +946,7 @@ function LiveScannerCommandCenter({
       <div className="sc-command-workspace">
         <section className={`sc-command-panel sc-command-capture sc-command-mode-${mode}`}>
           <div className="sc-command-panel-head">
-            <div><span>{modeMeta[0]}</span><strong>{modeMeta[1]}</strong></div>
+            <div><span>{modeMeta[0]}</span><strong>{needsZoneSetup ? 'Needs zone setup' : modeMeta[1]}</strong></div>
             <a href="/checkin-redesign"><Icon name="settings" size={13}/> Station settings</a>
           </div>
           <div className="sc-command-mode-body">
@@ -977,7 +981,7 @@ function LiveScannerCommandCenter({
           </div>
         </section>
       </div>
-      <OfflineScannerPanel eventId={event.id} manifest={offlineManifest} online={online} onPrepare={onRefreshManifest} onSynced={onRefreshManifest}/>
+      <OfflineScannerPanel accessStation={accessStation} eventId={event.id} manifest={offlineManifest} online={online} onPrepare={onRefreshManifest} onSynced={onRefreshManifest}/>
     </div>
   )
 }

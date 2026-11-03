@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import ProposalGenerator from '../proposals/ProposalGenerator'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import {
@@ -324,6 +325,7 @@ function FileCard({ asset, onPreview, onCopy, archived = false }) {
 }
 export default function MediaLibrary() {
   const { user } = useAuth()
+  const [proposalOpen, setProposalOpen] = useState(false)
   const [collection, setCollection] = useState('templates')
   const [query, setQuery] = useState('')
   const [format, setFormat] = useState('all')
@@ -381,6 +383,7 @@ export default function MediaLibrary() {
   }
   return (
     <main className="ml-library">
+      {proposalOpen&&<ProposalGenerator onClose={()=>setProposalOpen(false)}/>}
       <header className="ml-hero">
         <div>
           <p className="ml-eyebrow">FESTIO / THE MEDIA COLLECTION</p>
@@ -396,6 +399,7 @@ export default function MediaLibrary() {
         </div>
         <div className="ml-hero-note">
           <span className="ml-badge">Platform team</span>
+          <button className="ml-button primary" onClick={()=>setProposalOpen(true)}>Generate proposal</button>
           <p>
             A considered collection.
             <br />

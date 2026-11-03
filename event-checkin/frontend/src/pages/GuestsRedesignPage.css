@@ -222,3 +222,5 @@
 .gr-import-drop strong { font-size: 0.92rem; }
 .gr-import-drop span { font-size: 0.8rem; color: var(--rr-sub); }
 .gr-import-map-table td code { background: #f3f4f6; border-radius: 3px; padding: 1px 5px; font-size: 0.78rem; }
+
+.gr-channel-dot.pending { background: var(--warning-soft, #fbefd8); color: var(--warning, #805c18); }

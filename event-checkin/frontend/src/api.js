@@ -755,6 +755,9 @@ export const api = {
     return { outputUrl, blob }
   },
   generateQR: (eventId) => req('POST', `/events/${eventId}/guests/generate-qr`),
+  guestDeliverySummary: eventId => req('GET', `/events/${eventId}/guests/delivery-summary`),
+  guestDeliveryHistory: (eventId,guestId) => req('GET', `/events/${eventId}/guests/${guestId}/delivery-history`),
+  retryGuestChannel: (eventId,guestId,channel,preview=true) => req('POST', `/events/${eventId}/guests/${guestId}/retry-channel`, {channel,preview}),
   sendInvites: (eventId) => req('POST', `/events/${eventId}/guests/send-invites`),
   sendInvitesBatch: (eventId, guestIds, force = false) =>
     req('POST', `/events/${eventId}/guests/send-batch`, {

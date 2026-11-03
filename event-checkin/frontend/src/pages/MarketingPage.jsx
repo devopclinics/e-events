@@ -1,3 +1,4 @@
+import AccessRecovery from '../components/setup/AccessRecovery'
 import ToolSetupJourney from '../components/setup/ToolSetupJourney'
 import {CUSTOMER_JOURNEY_ENABLED} from './customerJourneyModel.mjs'
 import FestioLogo from '../components/branding/FestioLogo'
@@ -4073,7 +4074,7 @@ export default function MarketingPage() {
       <main className="mk-app mk-access-error">
         <section className="mk-panel">
           <h1 className="text-xl font-bold">Marketing</h1>
-          <p className="mt-3 text-slate-500">{error}</p>
+          <p className="mt-3 text-slate-500">{error}</p><AccessRecovery/>
           <Link className="mt-5 inline-block text-teal-700" to="/">
             Return to Festio
           </Link>

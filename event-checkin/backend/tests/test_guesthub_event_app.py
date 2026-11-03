@@ -77,8 +77,8 @@ async def test_status_uses_latest_allowed_scan_and_confirmed_handoff(ctx):
 
 
 @pytest.mark.asyncio
-async def test_unconfirmed_member_has_no_pass_and_other_layouts_do_not_expose_endpoint(ctx):
-    _,child,_=await setup(ctx)
+async def test_unconfirmed_member_has_no_pass_and_layout_changes_preserve_authorized_party(ctx):
+    parent,child,_=await setup(ctx)
     async with _Session() as db:
         event=await db.get(Event,ctx.ids['event_a']);event.rsvp_enabled=True
         row=await db.get(Guest,child);row.rsvp_status='pending';row.admitted=False
@@ -87,7 +87,9 @@ async def test_unconfirmed_member_has_no_pass_and_other_layouts_do_not_expose_en
     assert row['qr_token'] is None
     async with _Session() as db:
         event=await db.get(Event,ctx.ids['event_a']);event.guest_hub_layout='classic';await db.commit()
-    assert (await ctx.client.get('/api/invite/token/app-parent/app-party')).status_code==404
+    response=await ctx.client.get('/api/invite/token/app-parent/app-party')
+    assert response.status_code==200
+    assert {r['id'] for r in response.json()['members']}=={parent,child}
 
 
 @pytest.mark.asyncio

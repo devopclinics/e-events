@@ -1,3 +1,4 @@
+import AccessRecovery from '../components/setup/AccessRecovery'
 import ToolSetupJourney from '../components/setup/ToolSetupJourney'
 import {CUSTOMER_JOURNEY_ENABLED} from './customerJourneyModel.mjs'
 import { useEffect, useMemo, useState } from 'react'
@@ -125,7 +126,7 @@ export default function TrainingPage() {
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'festio-training-progress.csv'; a.click(); URL.revokeObjectURL(a.href)
   }
 
-  if (!data) return <main className="training-loading">Loading Festio Academy…{message && <p>{message}</p>}</main>
+  if (!data) return <main className="training-loading">{message?'Academy access needs attention':'Loading Festio Academy…'}{message && <><p>{message}</p><AccessRecovery/></>}</main>
   if (!selected) return <main className="training-loading">No lessons are published yet. Check back soon.</main>
   return <main className="training-page">
 {CUSTOMER_JOURNEY_ENABLED&&<><ToolSetupJourney/><div id="tool-editor-start" className="tool-editor-start" tabIndex={-1}/></>}

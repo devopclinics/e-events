@@ -1,3 +1,4 @@
+import {formatEventMoment} from '../timeutil'
 import FestioLogo from '../components/branding/FestioLogo'
 import PassSchedule, { passScheduleItems } from '../components/invite/PassSchedule';
 import { useEffect, useState } from 'react'
@@ -214,7 +215,7 @@ function AdmittedBanner({ guest, event }) {
       </p>
       {guest.admitted_at && (
         <p className="text-teal-100 text-sm mt-0.5">
-          Admitted at {parseUtc(guest.admitted_at)?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', ...(event?.timezone && { timeZone: event.timezone }) })}
+          Admitted at {formatEventMoment(guest.admitted_at,event?.timezone)}
         </p>
       )}
     </div>

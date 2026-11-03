@@ -1391,8 +1391,9 @@ async def app_party(invite_token: str, response: Response, db: AsyncSession = De
     Existing scanner authorization still controls every admission and handoff.
     """
     guest, event = await _get_guest_by_token(invite_token, db)
-    if event.guest_hub_layout != "app":
-        raise HTTPException(404, "Event App is not enabled")
+    # A published Studio layout can override the legacy event layout.
+    # Authorization below is based on the personal credential and trusted relationships,
+    # never on the presentation chosen for the GuestHub.
     response.headers["Cache-Control"] = "no-store, private"
     authorizations = event.guardian_authorizations or {}
     trusted_children = [child for child, entries in authorizations.items()

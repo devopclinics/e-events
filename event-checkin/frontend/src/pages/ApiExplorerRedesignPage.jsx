@@ -295,8 +295,8 @@ export default function ApiExplorerRedesignPage() {
           <div className="ae-gate">
             <div className="ae-gate-icon"><Icon name="lock" size={40} /></div>
             <h3>API access requires a paid plan</h3>
-            <p>Upgrade to Festio Business or higher to get your API key and start integrating.</p>
-            <Link to="/org-settings" className="rr-btn primary">Upgrade now</Link>
+            <p>API Access is a separate organization subscription. An Event Pass does not include API keys or webhooks.</p>
+            <Link to="/billing-redesign?tab=org&accessFor=integrations" className="rr-btn primary">Review API Access subscription</Link>
           </div>
         )}
 

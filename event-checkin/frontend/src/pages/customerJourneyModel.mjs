@@ -96,7 +96,7 @@ export const CUSTOMER_TOOLS = [
     "id": "forms",
     "title": "Collect information & consent",
     "description": "Prepare guest questions, forms and consent steps. Review signing and eligibility rules in the editor.",
-    "route": "/experience-redesign?tab=setup",
+    "route": "/experience-redesign?tab=consent",
     "group": "Welcome guests",
     "icon": "check",
     "keywords": "registration answers guardian information waivers",
@@ -374,7 +374,7 @@ export function invitationPath(event) {
  return event?.rsvp_token?`/rsvp/${encodeURIComponent(event.rsvp_token)}`:`/invite/${encodeURIComponent(event?.id || '')}`
 }
 export function destinationFingerprint(event) {
- return JSON.stringify([event?.id,event?.status,event?.rsvp_enabled,event?.invite_mode,event?.rsvp_token,event?.rsvp_deadline,event?.external_registration_url])
+ return JSON.stringify([event?.id,event?.status,event?.rsvp_enabled,event?.invite_mode,event?.rsvp_token,event?.rsvp_deadline,event?.external_registration_url,event?.setup_preferences?.quick_invite?.share_slug,event?.rsvp_capacity,event?.rsvp_require_approval,event?.event_date,event?.timezone])
 }
 
 export const EVENT_RECIPES = [

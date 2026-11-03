@@ -33,7 +33,7 @@ with tempfile.TemporaryDirectory(prefix='festio-forms-editor-') as temp:
             elif m=='DELETE':f['archived']=True
             data=f
         elif p.endswith('/form-options'):data={'zones':[{'id':'sports','name':'Sports'}],'sessions':[],'tickets':[]}
-        elif p.endswith('/form-people'):data=[{'id':'child','name':'Sara Demo'},{'id':'adult','name':'Amina Demo'}]
+        elif p.endswith('/form-people'):data=[{'id':'child','name':'Sara Demo','is_junior':True},{'id':'adult','name':'Amina Demo','is_junior':False}]
         elif p.endswith('/consent-authorities'):
             if m=='PUT':grants[:]=[{**body,'id':'grant1'}]
             data=grants

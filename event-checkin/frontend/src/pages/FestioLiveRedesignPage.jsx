@@ -1428,6 +1428,10 @@ function FestioLiveEventPage({ eventId }) {
     } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
 
+  async function openSimpleVoting(){
+    const question=selected?.questions?.find(q=>q.status!=='archived');if(!question)return
+    setBusy(true);setError('');try{if(selected.status!=='live')await api.liveUpdateActivity(eventId,selected.id,{status:'live'});await api.liveQuestionState(eventId,question.id,'open');await openActivity(selected.id)}catch(e){setError('Voting could not open: '+e.message)}finally{setBusy(false)}
+  }
   async function addQuestion() {
     if (!selected || !newQuestion.prompt.trim()) return
     setBusy(true); setError('')
@@ -1939,7 +1943,7 @@ function FestioLiveEventPage({ eventId }) {
                 </label>
                 <div><button className="rr-btn primary" disabled={busy || !activityDraft.title.trim()} onClick={saveActivityDetails}>{busy ? 'Saving…' : 'Save details'}</button></div>
               </div>}
-              <div className="fl-guided-console">
+              <details className="fl-advanced-show" open={selected.type!=='poll'}><summary>Advanced display & show controls</summary>              <div className="fl-guided-console">
                 <div><span>GUIDED SHOW MODE</span><h3>{selected.type === 'q_and_a' && selected.config?.show_phase === 'answering' ? 'Q&A open' : selected.type === 'q_and_a' && selected.config?.show_phase === 'results' ? 'Questions on screen' : SHOW_PHASE_LABELS[selected.config?.show_phase] || 'Ready to begin'}</h3><p>One presenter action keeps the main screen, guest phones, timer, voting and results synchronized.</p></div>
                 <div className="fl-guided-buttons"><button className="rr-btn secondary" disabled={busy || selected.config?.show_mode !== 'guided' || !selected.config?.show_phase || selected.config?.show_phase === 'lobby'} onClick={previousGuidedShow}>← Previous slide</button><button className="rr-btn primary" disabled={busy} onClick={selected.config?.show_mode === 'guided' && selected.config?.show_phase !== 'complete' ? advanceGuidedShow : startGuidedShow}>{busy ? 'Updating every screen…' : guidedActionLabel(selected)}</button></div>
                 <small>{(displays || []).some((display) => display.assigned_activity_id === selected.id) ? `${(displays || []).filter((display) => display.assigned_activity_id === selected.id).length} assigned display(s) will follow this show.` : 'Choose a target display above and send this activity to the screen.'} Going back pauses automation and keeps all responses.</small>
@@ -1996,6 +2000,8 @@ function FestioLiveEventPage({ eventId }) {
                 )
               )}
 
+</details>
+              {selected.type==='poll'&&<section className="fl-simple-poll"><h3>Question → Preview → Open voting</h3><p>Add your question below, preview it, then open voting when you are ready.</p><button className="rr-btn primary" disabled={busy||!['draft','live','paused','scheduled'].includes(selected.status)||!selected.questions?.some(q=>q.status!=='archived')} onClick={openSimpleVoting}>Open voting</button><button className="rr-btn secondary" onClick={openParticipantPreview}>Preview question</button><span role="status">{selected.status==='live'&&selected.questions?.some(q=>q.live_state==='open')?'Voting open':'Voting closed'}</span></section>}
               {selected.type !== 'q_and_a' && (
                 <>
                   <h4 style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: '.05em', color: '#5b6a5c', margin: '0 0 10px' }}>Questions</h4>

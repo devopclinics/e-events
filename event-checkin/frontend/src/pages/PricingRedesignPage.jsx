@@ -1,3 +1,4 @@
+import {pricingComparison} from '../lib/pricingComparison.mjs'
 import FestioLogo from '../components/branding/FestioLogo'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
@@ -36,8 +37,8 @@ function money(amount, currency) {
 
 const INCLUDED_IN_EVERY_PLAN = [
   'Guest communication', 'QR check-in', 'RSVP & invite management', 'Guest list management',
-  'Reports dashboard', 'Team & task management', 'FestioHub', 'FestioPass',
-  'Design Studio', 'SMS & WhatsApp sending', 'Festio branding removed',
+  'Reports dashboard', 'Team & task management', 'GuestHub', 'Festio Pass',
+  'Design Studio', 'SMS & WhatsApp sending access · credits apply', 'Festio branding removed',
 ]
 
 const ADDON_ICON = {
@@ -79,22 +80,9 @@ function AddonCard({ addon, unlocked, eventId, promoActive }) {
 
 // Same real comparison/FAQ copy as the legacy PricingPage. The plan cards and
 // packs below come from the live api.getPricing() contract, not hardcoded.
-const compareRows = [
-  ['Events per free account', '1', 'Unlimited', 'Unlimited', 'Unlimited', 'Unlimited', 'Unlimited'],
-  ['Guest limit', '25', '50', '150', '300', '500', 'Custom'],
-  ['Email invitations', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes'],
-  ['SMS/WhatsApp', 'No', 'Yes', 'Yes', 'Yes', 'Yes', 'Custom'],
-  ['QR check-in', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes'],
-  ['Design Studio', 'No', 'Standard templates', 'Expanded templates', 'Expanded templates', 'Expanded templates', 'Custom'],
-  ['Seating/table groups', 'Preview', 'Basic', 'Advanced', 'Advanced', 'Advanced', 'Custom'],
-  ['Access zones/gates', 'No', 'No', 'Yes', 'Yes', 'Yes', 'Custom'],
-  ['Experience workflows', 'Preview', 'No', 'No', 'Yes', 'Yes', 'Custom'],
-  ['Consent/scanner confirmations', 'No', 'No', 'No', 'Yes', 'Yes', 'Custom'],
-  ['Support', 'Self-serve', 'Self-serve', 'Self-serve', 'Priority queue', 'Priority', 'Dedicated'],
-]
 
 const faqs = [
-  ['Can I create before paying?', 'Yes. Create a draft event and use the free RSVP/email workflow for up to 25 guests, including QR check-in. Paid modules like Design Studio, seating, access, logistics, registry, and Experience activate after an Event Pass. Free accounts can create 1 event; additional events need an Event Pass on an existing one first.'],
+  ['Can I create before paying?', 'Yes. Create a draft event and use the free RSVP/email workflow for up to 25 guests, including QR check-in. Paid modules like Design Studio, seating, access, logistics, registry, and Experience activate after an Event Pass. The creator shows your current event limits before you save.'],
   ['What counts as a message credit?', 'SMS/WhatsApp/MMS/RCS usage consumes credits. Email is included for normal RSVP and invitation flows.'],
   ['Do failed messages count?', 'Failed messages should not permanently consume credits. Full reserve/refund ledger behavior is planned as the next messaging phase.'],
   ['Can I buy more credits?', 'Yes. Paid events can buy top-ups from Event Setup.'],
@@ -182,7 +170,7 @@ export default function PricingRedesignPage() {
           <div className="pr-head-copy">
             <span className="pr-eyebrow"><i /> Pay once per event</span>
             <h1>Pricing for event operations</h1>
-            <p>Start free for RSVP and email invites, then pay only when you activate premium tools like SMS/WhatsApp, QR check-in, Design Studio, seating, access control, logistics, registry, or Experience workflows.</p>
+            <p>Start free for RSVP and email invites, then pay only when you activate paid messaging and optional tools like SMS/WhatsApp, Design Studio, seating, access control, logistics, registry, or Experience workflows.</p>
           </div>
           <div className="pr-currency">
             {['USD', 'NGN'].map((c) => (
@@ -198,7 +186,7 @@ export default function PricingRedesignPage() {
             <div>
               <span>Limited-time offer for paid events</span>
               <strong>All add-ons are included at no extra charge for six months.</strong>
-              <p>Activate an Event Pass and use Seating, Venue Access, Orders, Logistics, Registry, Experience, Planner, and FestioMe through {promoUntil.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}.</p>
+              <p>Activate an Event Pass and use all available event add-ons through {promoUntil.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}.</p>
             </div>
             <Link className="pr-btn primary" to="/register?redesign=1">Create a paid event</Link>
           </div>
@@ -245,7 +233,7 @@ export default function PricingRedesignPage() {
             <div className="pr-included">
               <div className="pr-included-head">
                 <span className="pr-eyebrow"><i /> Included in every paid plan</span>
-                <h2>Starter, Standard, Pro, and Scale all include this. No exceptions, no upsell.</h2>
+                <h2>Core tools included with every paid Event Pass. Optional add-ons are listed separately.</h2>
               </div>
               <div className="pr-included-grid">
                 {INCLUDED_IN_EVERY_PLAN.map((item) => (
@@ -292,13 +280,13 @@ export default function PricingRedesignPage() {
                 <table className="pr-compare">
                   <thead>
                     <tr>
-                      {['Feature', 'Free', 'Starter', 'Standard', 'Pro', 'Scale', 'Enterprise'].map((h) => (
+                      {['Feature', 'Free', ...tiers.map(t=>t.label||t.name||t.key), 'Enterprise'].map((h) => (
                         <th key={h}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {compareRows.map((row) => (
+                    {pricingComparison(data,addonPromoActive).map((row) => (
                       <tr key={row[0]}>
                         {row.map((cell, i) => <td key={`${row[0]}-${i}`}>{cell}</td>)}
                       </tr>

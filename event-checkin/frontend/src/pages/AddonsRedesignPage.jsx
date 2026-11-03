@@ -914,7 +914,7 @@ function ReminderPreviewFrame({ channel, preview }) {
 function RealRemindersContent({ eventId, event, notify }) {
   const blank = {
     label: '7 days before', offset_days: 7, send_time_local: '09:00',
-    channels: ['email', 'sms'], audience: 'non-responders',
+    channels: event?.notify_email===false?[]:['email'], audience: 'non-responders',
     subject: 'Reminder: {{event_name}}', email_body: '', sms_body: '', whatsapp_body: '',
     whatsapp_use_approved: false, whatsapp_template_ref: '', whatsapp_template_vars: {},
   }
@@ -923,6 +923,7 @@ function RealRemindersContent({ eventId, event, notify }) {
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(blank)
   const [waApprovedTemplates, setWaApprovedTemplates] = useState([])
+  const [audienceGuests,setAudienceGuests]=useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [busy, setBusy] = useState(false)
   const [preview, setPreview] = useState(null)
@@ -934,6 +935,7 @@ function RealRemindersContent({ eventId, event, notify }) {
   async function load() {
     if (!eventId) { setReminders([]); return }
     setError('')
+    api.listGuests(eventId).then(setAudienceGuests).catch(()=>setAudienceGuests(null))
     try { setReminders(await api.listReminders(eventId)) }
     catch (e) { setError(e.message || 'Reminders could not be loaded') }
     try { setWaApprovedTemplates(await api.listApprovedWhatsAppTemplates(eventId)) }
@@ -1080,13 +1082,13 @@ function RealRemindersContent({ eventId, event, notify }) {
       <div className="rd-row2" style={{ flexWrap: 'wrap' }}>
         {REMINDER_CHANNELS.map((c) => (
           <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600 }}>
-            <input type="checkbox" checked={form.channels.includes(c.id)} onChange={() => toggleChannel(c.id)} />
-            <Icon name={c.icon} size={13} /> {c.label}
+            <input type="checkbox" checked={form.channels.includes(c.id)} disabled={!form.channels.includes(c.id)&&(c.id==='sms'?!event?.notify_sms:c.id==='whatsapp'?!event?.notify_whatsapp:event?.notify_email===false)} onChange={() => toggleChannel(c.id)} />
+            <Icon name={c.icon} size={13} /> {c.label}{(c.id==='sms'&&!event?.notify_sms||c.id==='whatsapp'&&!event?.notify_whatsapp)&&' · Enable in invitation channels first'}
           </label>
         ))}
       </div>
 
-      <label className="rd-field-label" style={{ marginTop: 12 }}>Audience</label>
+      <p className="rd-hint" role="status">{audienceGuests?(()=>{const rule=REMINDER_AUDIENCE_PRESETS.find(r=>r.id===form.audience);const rows=audienceGuests.filter(g=>!rule?.statuses||rule.statuses.includes(g.rsvp_status));return 'Estimated eligible recipients: '+form.channels.map(c=>c+': '+rows.filter(g=>c==='email'?!!g.email:!!g.phone&&(c==='sms'?g.sms_consent:g.whatsapp_consent)).length).join(' · ')})():'Recipient estimate unavailable; refresh before scheduling.'} Email is included; SMS and WhatsApp use message credits. Final cost depends on destination, message length and consent at send time.</p><label className="rd-field-label" style={{ marginTop: 12 }}>Audience</label>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {REMINDER_AUDIENCE_PRESETS.map((p) => (
           <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600 }}>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import {formatEventMoment} from '../timeutil'
 import { api } from '../api'
 import { seatingTerm } from '../seatingTerm'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
@@ -1098,7 +1099,7 @@ export default function ScannerRedesignPage() {
     const guest = nextResult?.guest || {}
     const name = nextResult?.guest_name || [guest.first_name, guest.last_name].filter(Boolean).join(' ')
     if (!name) return
-    const recordedAt = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date())
+    const recordedAt = formatEventMoment(new Date(), event?.timezone)
     setRecentResults((items) => [{ ...nextResult, recordedAt, sessionKey: `${Date.now()}-${Math.random()}` }, ...items].slice(0, 5))
   }
 

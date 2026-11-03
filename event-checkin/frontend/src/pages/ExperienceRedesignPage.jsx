@@ -218,10 +218,10 @@ function ExperienceStepEditor({ form, setForm, steps, busy, onClose, onSave, spe
         <section className="ex-editor-section">
           <div className="ex-editor-section-title"><strong>Identity &amp; order</strong><span>How this step is stored and shown</span></div>
           <div className="ex-editor-grid">
-            <StepField label="Key"><input className="rr-input" aria-label="Step key" value={form.key} onChange={(event) => patch({ key: event.target.value })} placeholder="main_checkin"/></StepField>
+            <details className="ex-advanced-field"><summary>Advanced step key</summary><StepField label="Key"><input className="rr-input" aria-label="Step key" value={form.key} onChange={(event) => patch({ key: event.target.value })} placeholder="main_checkin"/></StepField></details>
             <StepField label="Type"><select className="rr-select" aria-label="Step type" value={form.type} onChange={(event) => patch({ type: event.target.value })}>{STEP_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></StepField>
             <StepField label="Title"><input className="rr-input" aria-label="Step title" value={form.title} onChange={(event) => patch({ title: event.target.value })}/></StepField>
-            <StepField label="Sort order"><input className="rr-input" aria-label="Sort order" type="number" value={form.sort_order} onChange={(event) => patch({ sort_order: event.target.value })}/></StepField>
+            <details className="ex-advanced-field"><summary>Advanced ordering</summary><StepField label="Sort order"><input className="rr-input" aria-label="Sort order" type="number" value={form.sort_order} onChange={(event) => patch({ sort_order: event.target.value })}/></StepField></details>
             <StepField label="Description" wide><textarea className="rr-textarea" rows={2} value={form.description} onChange={(event) => patch({ description: event.target.value })}/></StepField>
           </div>
           <div className="ex-editor-toggle-row">
@@ -347,11 +347,11 @@ function ExperienceStepEditor({ form, setForm, steps, busy, onClose, onSave, spe
           </div>
         </section>}
 
-        <section className="ex-editor-section advanced">
+        <details className="ex-editor-section advanced"><summary>Advanced configuration (JSON)</summary>
           <div className="ex-editor-section-title"><strong>Advanced JSON</strong><span>Preserves custom legacy configuration</span></div>
           <StepField label="Conditions JSON"><textarea className="rr-textarea mono" rows={5} value={form.conditions} onChange={(event) => patch({ conditions: event.target.value })} placeholder='{"ticket_type":"vip"}'/></StepField>
           <StepField label="Config JSON"><textarea className="rr-textarea mono" rows={7} value={form.config} onChange={(event) => patch({ config: event.target.value })} placeholder='{"station":"north"}'/></StepField>
-        </section>
+        </details>
       </div>
       <div className="ex-step-editor-footer">
         <button type="button" className="rr-btn secondary" onClick={onClose}>Cancel</button>
@@ -911,7 +911,7 @@ export default function ExperienceRedesignPage() {
   }
 
   function stepFormPayload() {
-    if (!stepForm.key.trim() || !stepForm.title.trim()) throw new Error('Step key and title are required')
+    if (!stepForm.title.trim()) throw new Error('Step title is required')
     const config = parseJsonMaybe(stepForm.config, 'Config') || {}
     const dependencies = listValue(stepForm.depends_on)
     if (dependencies.length) config.depends_on = dependencies
@@ -1042,7 +1042,7 @@ export default function ExperienceRedesignPage() {
     }
 
     return {
-      key: stepForm.key.trim(),
+      key: stepForm.key.trim()||`step_${Date.now().toString(36)}`,
       type: stepForm.type,
       title: stepForm.title.trim(),
       description: stepForm.description.trim() || null,

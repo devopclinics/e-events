@@ -272,7 +272,7 @@ function inviteTheme(event) {
 
 // font_pairing has been a real, saveable field since the original template
 // catalog (design-service/app/catalog.py), and Design Studio's "Apply
-// palette" (FestioHub styles) already writes it — but until now nothing on
+// palette" (GuestHub styles) already writes it — but until now nothing on
 // this page ever read it back: it only ever reached design-service's flyer
 // PNG renderer. Ten new visual themes with the same generic system font
 // would have looked identical to each other beyond color, so this is a real
@@ -1079,13 +1079,13 @@ function ConfirmView({ confirm, event }) {
       </div>
       {hubUrl && (
         <div className="rounded-3xl border border-cyan-200 bg-cyan-50 p-5">
-          <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-cyan-700">Your FestioHub</div>
+          <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-cyan-700">Your GuestHub</div>
           <div className="mt-2 text-sm font-semibold text-slate-600">
             Message the host, read announcements, and see your table — from any device. Save this personal link to come back anytime:
           </div>
           <div className="mt-2 text-xs font-bold text-amber-700">Keep this link private—it opens your personal pass and assignments.</div>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-            <a href={hubPath} className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-cyan-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-cyan-500">Open my FestioHub</a>
+            <a href={hubPath} className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-cyan-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-cyan-500">Open my GuestHub</a>
             <button type="button" onClick={copyHub} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-cyan-300 bg-white px-4 py-2 text-sm font-bold text-cyan-700 transition hover:bg-cyan-100">
               {copied ? 'Link copied ✓' : 'Copy link'}
             </button>
@@ -1323,7 +1323,7 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone, tone, dWording = 
   )
 }
 
-// FestioHub layout styles, chosen in Design Studio and saved as
+// GuestHub layout styles, chosen in Design Studio and saved as
 // theme_config.hubStyle → design-service's public-theme hub_style field.
 // Two axes distinguish them, reusing the SAME real modules/data rather than
 // inventing per-style content: (1) tabbed vs. all-sections-stacked — reusing
@@ -1346,7 +1346,7 @@ const HUB_TABBED_STYLES = new Set([
   'wallet-pass', 'story-feed',
   // new tabbed themes
   'noir-couture', 'electric-rave', 'celestial-midnight', 'haze',
-  // The side-card hero (HUB_SIDECARD_STYLES) and tabbed FestioHub navigation
+  // The side-card hero (HUB_SIDECARD_STYLES) and tabbed GuestHub navigation
   // are independent choices -- nothing about a side-card hero requires
   // stacked, non-tabbed sections. Every side-card style gets tabs too.
   'heritage-navy', 'ivory-ledger', 'graphite-tech', 'meadow-community', 'parchment-classic',
@@ -1761,7 +1761,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   // it always misses and the iframe is stuck showing the hero/flyer instead.
   // Scroll it into view ourselves once this component actually mounts. This
   // is the default/intended behavior for a studio-preview link generally
-  // (direct link, FestioHub tab, GuestHub tab) — but the Event Page tab's
+  // (direct link, GuestHub tab, GuestHub tab) — but the Event Page tab's
   // iframe also sets previewMock (isStudioPreview forces hasGuestHub true so
   // the card renders at all there) and every edit on that tab (e.g. the
   // hero photo sliders) reloaded the iframe, yanking the preview straight
@@ -2029,7 +2029,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   const passStatus = hub?.guest?.checked_out
     ? { label: 'Checked out', icon: '↩' }
     : hub?.guest?.admitted
-      ? { label: 'Ready for entry', icon: '✓' }
+      ? { label: 'Checked in', icon: '✓' }
       : { label: 'Not checked in yet', icon: '◷' }
   const passCells = [
     hub?.guest?.table_name && { l: seatingTerm(event), v: hub.guest.table_name, ic: '🪑' },
@@ -2207,7 +2207,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
           )}
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-2xl font-extrabold">{completeLayout ? 'Your event home' : journeyLayout ? 'Your journey' : 'FestioHub'}</h2>
+              <h2 className="text-2xl font-extrabold">{completeLayout ? 'Your event home' : journeyLayout ? 'Your journey' : 'GuestHub'}</h2>
               {hasRsvp && hub?.guest?.rsvp_status && (
                 <span className="mt-1 inline-block rounded-full px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wide" style={{ background: `${tone.accent}22`, color: tone.text }}>
                   {hub.guest.rsvp_status === 'confirmed' ? 'Attending' : hub.guest.rsvp_status}
@@ -2511,7 +2511,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
             )}
             {showInstallDialog && (
               <div className="mt-4 rounded-xl border p-3" style={{ background: tone.panelStrong, borderColor: tone.accent }}>
-                <div className="text-sm font-extrabold">Install FestioHub</div>
+                <div className="text-sm font-extrabold">Install GuestHub</div>
                 <p className="mt-1 text-xs" style={{ color: tone.muted }}>Keep your Pass on your home screen for quick access.</p>
                 <div className="mt-2 flex gap-2"><button type="button" onClick={installPass} className="min-h-9 rounded-lg px-3 py-1.5 text-xs font-extrabold text-slate-950" style={{ background: tone.accent }}>Install</button><button type="button" onClick={dismissInstall} className="min-h-9 rounded-lg border px-3 py-1.5 text-xs font-bold" style={{ borderColor: tone.border, color: tone.text }}>Not now</button></div>
               </div>
@@ -2605,7 +2605,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
       >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-3xl font-extrabold">FestioHub</h2>
+            <h2 className="text-3xl font-extrabold">GuestHub</h2>
             <p className="mt-2 text-sm leading-6" style={{ color: tone.muted }}>Your event updates, QR pass, and messages in one place.</p>
           </div>
           {hasRsvp && hub?.guest?.rsvp_status && (
@@ -2616,7 +2616,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
         </div>
 
         {tabbed && (
-          <div className={`mt-5 flex gap-1 rounded-2xl border p-1 fh-hub-tabs fh-hub-tabs-${hubStyle}`} style={{ background: tone.panel, borderColor: tone.border }} role="tablist" aria-label="FestioHub sections">
+          <div className={`mt-5 flex gap-1 rounded-2xl border p-1 fh-hub-tabs fh-hub-tabs-${hubStyle}`} style={{ background: tone.panel, borderColor: tone.border }} role="tablist" aria-label="GuestHub sections">
             {hubTabOrder.map((key) => HUB_TAB_META[key])
               .filter(([key]) => key !== 'program' || (journey?.program?.enabled && hubModuleVisible('live_program')))
               .filter(([key]) => key !== 'speakers' || speakersVisible)
@@ -2680,7 +2680,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
 
         {tabActive('pass') && showInstallDialog && (
           <div role="dialog" aria-modal="true" aria-labelledby="install-guest-hub" className="mt-5 rounded-2xl border p-5 shadow-xl" style={{ background: tone.panelStrong, borderColor: tone.accent }}>
-            <div className="flex items-start gap-3"><FestioLogo markOnly size={44} /><div><h3 id="install-guest-hub" className="text-lg font-extrabold">Install FestioHub</h3><p className="mt-1 text-sm leading-6" style={{ color: tone.muted }}>Keep your Festio Pass on your home screen for quick access to your QR code and event updates.</p></div></div>
+            <div className="flex items-start gap-3"><FestioLogo markOnly size={44} /><div><h3 id="install-guest-hub" className="text-lg font-extrabold">Install GuestHub</h3><p className="mt-1 text-sm leading-6" style={{ color: tone.muted }}>Keep your Festio Pass on your home screen for quick access to your QR code and event updates.</p></div></div>
             <div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={installPass} className="min-h-11 rounded-xl px-4 py-2 text-sm font-extrabold text-slate-950" style={{ background: tone.accent }}>Install Festio</button><button type="button" onClick={dismissInstall} className="min-h-11 rounded-xl border px-4 py-2 text-sm font-bold" style={{ borderColor: tone.border, color: tone.text }}>Not now</button></div>
           </div>
         )}
@@ -2689,7 +2689,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-sm font-extrabold">Add your Festio Pass to this phone</div>
-              <p className="mt-1 text-sm" style={{ color: tone.muted }}>Open FestioHub like an app and keep your QR pass available when venue internet is weak.</p>
+              <p className="mt-1 text-sm" style={{ color: tone.muted }}>Open GuestHub like an app and keep your QR pass available when venue internet is weak.</p>
             </div>
             {installPrompt ? (
               <button type="button" onClick={installPass} className="min-h-11 shrink-0 rounded-xl px-4 py-2 text-sm font-extrabold text-slate-950" style={{ background: tone.accent }}>Add to Home Screen</button>
@@ -3452,7 +3452,7 @@ export default function InvitePage() {
         // is_default only means "no Event Page template family selected" —
         // it doesn't mean nothing was customized. Discarding the whole
         // payload here threw away real colors/font/hub_style/wording any
-        // event had saved (e.g. via the FestioHub tab's "Apply palette")
+        // event had saved (e.g. via the GuestHub tab's "Apply palette")
         // whenever the organizer hadn't separately picked a template too,
         // silently reverting the live page to hardcoded defaults.
         if (!cancelled) setDesignTheme(themePayload)
@@ -3551,7 +3551,7 @@ export default function InvitePage() {
       : prior?.rsvp_status === 'confirmed' && prior?.qr_token
         ? prior.qr_token
       : ''
-  // Design Studio's FestioHub preview has no real guest/RSVP to derive a
+  // Design Studio's GuestHub preview has no real guest/RSVP to derive a
   // token from — show the Hub anyway, with GuestHub's own preview-mock data,
   // so a hub_style choice is actually visible before publishing.
   const hasGuestHub = isStudioPreview ? previewSurface !== 'rsvp' : !!guestHubToken
@@ -3559,7 +3559,7 @@ export default function InvitePage() {
     return <PublicProgrammeEntry event={event} />
   }
   const primaryTarget = hasGuestHub ? 'guest-hub' : paidTicketsAvailable ? 'tickets' : 'rsvp'
-  const primaryLabel = hasGuestHub ? 'Open FestioHub' : paidTicketsAvailable ? 'Get Tickets' : 'Confirm My RSVP'
+  const primaryLabel = hasGuestHub ? 'Open GuestHub' : paidTicketsAvailable ? 'Get Tickets' : 'Confirm My RSVP'
 
   let rsvpPanel
   if (confirmed) {
@@ -3630,7 +3630,7 @@ export default function InvitePage() {
               : prior.rsvp_status === 'waitlisted'
                 ? "You're on the waitlist — we'll email you if a spot opens up."
                 : prior.qr_token
-                  ? 'You are on the guest list. Your FestioHub is available below.'
+                  ? 'You are on the guest list. Your GuestHub is available below.'
                   : 'You are on the guest list. Your ticket was sent to you.'}
         </div>
         <div className="mt-4 text-sm font-semibold text-slate-500">Need to change it? Contact the host.</div>
@@ -3859,7 +3859,7 @@ export default function InvitePage() {
       <main className="mx-auto max-w-[1180px] px-5 pb-16 sm:px-6">
         <section className="py-8">
           <p className="mx-auto max-w-2xl whitespace-pre-line text-center text-lg leading-8" style={{ color: tone.muted }}>
-            {dWording.rsvpNote || event.invite_message || 'Join us for a beautiful evening of celebration, food, memories, and good company.'}
+            {dWording.rsvpNote || event.invite_message || 'You’re invited. Review the event details and let us know if you can attend.'}
           </p>
         </section>
 

@@ -1200,7 +1200,8 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
             guest=GuestOut.model_validate(guest),
         )
     if guest.admitted:
-        admitted_time = local_hhmm(guest.admitted_at, event_tz(event)) or "unknown"
+        admitted_local = to_event_local(guest.admitted_at, event_tz(event))
+        admitted_time = admitted_local.strftime("%d %b %Y, %I:%M %p %Z") if admitted_local else "unknown"
         table_name = None
         if guest.table_id:
             tbl = await db.get(SeatingTable, guest.table_id)

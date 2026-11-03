@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import {useAuth} from '../context/AuthContext'
 import { useSearchParams } from 'react-router-dom'
 import RedesignShell, { Icon, ConfirmDialog } from './redesign/RedesignShell'
 import { LoadingSkeleton, ErrorRetryState, EmptyState } from './redesign/RedesignPrimitives'
@@ -256,6 +257,7 @@ function TaskTable({ tasks, showEvent, onOpen, onStatusChange, onEdit, onDelete,
 }
 
 function TeamTab({ eventId, notify, onRequestDelete }) {
+  const {user}=useAuth()
   const [members, setMembers] = useState(null)
   const [membersError, setMembersError] = useState('')
   const [orgMembers, setOrgMembers] = useState(null)
@@ -448,16 +450,17 @@ function TeamTab({ eventId, notify, onRequestDelete }) {
               <div className="tm-member-grid">
                 {filteredMembers.map((member) => {
                   const eventRole = member.event_role || 'staff'
-                  const guestAccess = guestAccessOf(member)
+                  const effectiveOrgAdmin=member.user.id===user?.id&&(user?.is_org_admin||user?.is_platform_superadmin)
+                  const guestAccess = effectiveOrgAdmin?'manage':guestAccessOf(member)
                   const sections = member.section_group_ids || []
                   const enabledPerms = PERMS.filter((permission) => permOn(member, permission.key))
                   return <article className={`rr-panel tm-member-card ${editingMember?.id === member.id ? 'active' : ''}`} key={member.id}>
                     <div className="tm-member-card-head">
                       <span className="tm-member-avatar">{initialsOf(member.user.name)}</span>
                       <div><h3>{member.user.name}</h3><span>{member.user.email}</span></div>
-                      <span className={`tm-role ${eventRole}`}>{eventRole === 'manager' ? 'Admin' : 'Staff'}</span>
+                      <span className={`tm-role ${eventRole}`}>{effectiveOrgAdmin?'Organization admin':eventRole === 'manager' ? 'Event admin' : 'Event staff'}</span>
                     </div>
-                    <div className="tm-member-access">
+                    {effectiveOrgAdmin&&<p className="rd-hint">Organization role grants full event access. Event assignment: {eventRole==='manager'?'Admin':'Staff'}.</p>}<div className="tm-member-access">
                       <span><Icon name="users" size={11}/> Guests: <b>{guestAccess === 'none' ? 'No access' : guestAccess === 'view' ? 'View' : 'Manage'}</b></span>
                       <span><Icon name="grid" size={11}/> Scanner: <b>{sections.length ? `${sections.length} section${sections.length === 1 ? '' : 's'}` : 'All sections'}</b></span>
                     </div>

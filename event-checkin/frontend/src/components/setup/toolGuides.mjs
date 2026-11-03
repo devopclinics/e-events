@@ -32,7 +32,7 @@ export const TOOL_GUIDES = {
       "listEventForms"
     ],
     "steps": [
-      "Create the information or consent form and its audience.",
+      "In Forms & consent, choose Create form and set its audience.",
       "Save the version, publish it and review who may complete or sign it.",
       "The intended guest can submit once and their completion is recorded."
     ],
@@ -47,7 +47,7 @@ export const TOOL_GUIDES = {
       "festiomeAccessPolicy"
     ],
     "steps": [
-      "Configure the community, channels and moderation.",
+      "Create your community with Enable FestioMe, then configure channels and moderation.",
       "Review adult eligibility and approval policy before enabling guest access.",
       "An approved adult can enter; an ineligible or unapproved guest stays blocked."
     ],
@@ -464,9 +464,10 @@ export const TOOL_GUIDES = {
 }
 export function toolWorkspaceHref(tool) {const [path,search='']=tool.route.split('?');const params=new URLSearchParams(search);params.set('toolGuide',tool.id);return `${path}?${params}`}
 export function toolForLocation(pathname,search) {
- const query=new URLSearchParams(search),explicit=CUSTOMER_TOOLS.find(t=>t.id===query.get('toolGuide')&&t.route.split('?')[0]===pathname)
+ const query=new URLSearchParams(search),explicit=CUSTOMER_TOOLS.find(t=>t.id===query.get('toolGuide')&&t.route.split('?')[0]===pathname&&[...new URLSearchParams(t.route.split('?')[1])].every(([k,v])=>(query.get(k)||'').toLowerCase()===v.toLowerCase()))
  if(explicit)return explicit
+ if(pathname==='/billing-redesign')return null
  const candidates=CUSTOMER_TOOLS.filter(t=>t.route.split('?')[0]===pathname)
  const exact=candidates.filter(t=>{const qs=new URLSearchParams(t.route.split('?')[1]);return [...qs].every(([k,v])=>(query.get(k)||'').toLowerCase()===v.toLowerCase())}).sort((a,b)=>b.route.length-a.route.length)
- return exact[0]||candidates[0]||null
+ return exact[0]||null
 }

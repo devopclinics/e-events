@@ -336,7 +336,7 @@ export default function FestioMeRedesignPage() {
                 await loadGroups()
                 notify('FestioMe enabled')
               } catch (e) { setError(e.message || 'FestioMe could not be enabled') }
-            }}>Enable FestioMe</button>
+            }}>Create community · Enable FestioMe</button>
           </div>
         </div>
       )}

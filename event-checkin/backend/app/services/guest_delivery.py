@@ -9,7 +9,8 @@ def state(value):
     if value in ('delivered','opened','clicked'): return 'delivered'
     if value in ('failed', 'rejected', 'undelivered', 'expired', 'bounced', 'complained', 'suppressed'): return 'failed'
     if value in ('queued', 'pending', 'reserved', 'requested', 'delayed', 'deferred'): return 'pending'
-    if value in ('sent', 'submitted', 'accepted', 'posted'): return 'accepted'
+    if value in ('sent', 'submitted', 'accepted'): return 'accepted'
+    if value == 'not_selected': return 'not_selected'
     if value == 'skipped': return 'skipped'
     return 'unknown'
 

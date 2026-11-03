@@ -2759,7 +2759,7 @@ async def guest_delivery_summary(event_id: str, db: AsyncSession = Depends(get_d
     grouped = defaultdict(list)
     for r in records: grouped[r['guest_id']].append(r)
     rows = [guest_summary(event,g,grouped[g.id]) for g in guests]
-    counts = {c: {s: sum(g['channels'][c]['status'] == s for g in rows) for s in ('delivered','read','accepted','pending','failed','skipped','not_attempted','unknown')} for c in CHANNELS}
+    counts = {c: {s: sum(g['channels'][c]['status'] == s for g in rows) for s in ('delivered','read','accepted','pending','failed','skipped','not_selected','not_attempted','unknown')} for c in CHANNELS}
     return dict(guests=rows,counts=counts,total=len(rows),timezone=event.timezone or 'UTC',scope='Latest recorded state per guest per channel, across all message types. Counts overlap across channels; they are not unique deliveries or batch totals.')
 
 @router.get("/{event_id}/guests/{guest_id}/delivery-history")
@@ -2773,11 +2773,16 @@ async def guest_delivery_history(event_id: str, guest_id: str, db: AsyncSession 
 async def _dispatch_invite(background_tasks, event, guest, db, overrides=None, rsvp_template_key="rsvp_invitation", selected_channel=None):
     from ..services.guest_delivery import CHANNELS, contact_reason
     watched = [selected_channel] if selected_channel else [c for c in CHANNELS if getattr(event, 'notify_'+c, False)]
+    flow = 'reminder' if event.invite_mode == 'closed' and rsvp_template_key != 'rsvp_invitation' else 'invite'
+    chosen = channels_for_flow(event,guest,flow,paid_ok=can_use_paid_channels(event))
     for channel in watched:
         reason = contact_reason(event, guest, channel)
+        status = 'skipped' if reason else 'requested'
+        if not reason and channel not in chosen:
+            status, reason = 'not_selected', 'Not selected by channel policy or paid-channel entitlement'
         db.add(EventMessageDeliveryLog(event_id=event.id,guest_id=guest.id,channel=channel,
             recipient=guest.email if channel == 'email' else guest.phone,
-            status='skipped' if reason else 'requested',error_message=reason))
+            status=status,error_message=reason))
     return await _dispatch_invite_impl(background_tasks,event,guest,db,overrides,rsvp_template_key,selected_channel)
 
 @router.post("/{event_id}/guests/{guest_id}/retry-channel")

@@ -95,3 +95,10 @@ export function fmtEventDateRange(startIso, endIso, timeZone, opts = {}) {
   const endLabel = end.toLocaleDateString(undefined, { ...dayOpts, year: 'numeric' })
   return `${startLabel} – ${endLabel}`
 }
+
+export function formatEventMoment(value, timeZone='UTC') {
+ const date=parseUtc(value);if(!date)return 'Time unavailable'
+ const zone=timeZone||'UTC'
+ try{return new Intl.DateTimeFormat('en-US',{timeZone:zone,month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'}).format(date)+' · '+zone}
+ catch{return new Intl.DateTimeFormat('en-US',{timeZone:'UTC',dateStyle:'medium',timeStyle:'short'}).format(date)+' · UTC'}
+}

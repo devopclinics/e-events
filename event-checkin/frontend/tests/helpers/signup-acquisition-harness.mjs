@@ -67,6 +67,8 @@ export function createAcquisitionHarness({
       define: { 'import.meta.env': '{}' },
     })
     const require = id => {
+      if (id.endsWith('.css')) return {}
+      if (/\.(svg|png|jpg)$/.test(id)) return 'fixture-asset'
       if (id === 'react') return react
       if (id === 'react/jsx-runtime') return { jsx, jsxs: jsx, Fragment: 'Fragment' }
       if (id === 'react-router-dom') return {

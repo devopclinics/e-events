@@ -2493,6 +2493,7 @@ async def preview_invites(event_id: str, body: dict = Body(default={}), db: Asyn
             reason = 'Eligible' if c in chosen else (contact_reason(event,guest,c) or 'Not selected by channel policy or entitlement')
             if c == 'mms' and c in chosen and (event.invite_mode == 'closed' or not messaging.mms_ready()): reason = 'MMS unavailable for this configuration'
             breakdown[c][reason] = breakdown[c].get(reason,0)+1
+        if event.invite_mode == 'closed' or not messaging.mms_ready(): chosen = set(chosen) - {'mms'}
         if not chosen:
             unreachable += 1
         for channel in chosen:
@@ -2777,6 +2778,8 @@ async def _dispatch_invite(background_tasks, event, guest, db, overrides=None, r
     chosen = channels_for_flow(event,guest,flow,paid_ok=can_use_paid_channels(event))
     for channel in watched:
         reason = contact_reason(event, guest, channel)
+        if not reason and channel == 'mms' and (event.invite_mode == 'closed' or not messaging.mms_ready()):
+            reason = 'MMS unavailable for this configuration'
         status = 'skipped' if reason else 'requested'
         if not reason and channel not in chosen:
             status, reason = 'not_selected', 'Not selected by channel policy or paid-channel entitlement'

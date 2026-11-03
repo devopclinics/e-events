@@ -84,3 +84,14 @@ async def test_priority_policy_does_not_create_false_pending_channel(ctx,monkeyp
  row=next(r for r in result.json()['guests'] if r['id']==g)
  assert row['channels']['whatsapp']['status']=='not_selected'
  assert row['channels']['email']['prior_delivery_at']
+
+@pytest.mark.asyncio
+async def test_mms_unavailable_is_not_counted_as_eligible(ctx,monkeypatch):
+ e,g=await fixture(ctx)
+ monkeypatch.setattr(routes,'channels_for_flow',lambda *a,**kw:{'mms'})
+ monkeypatch.setattr(routes,'_invite_recipients_allowed',lambda *a,**kw:True)
+ monkeypatch.setattr(routes.messaging,'mms_ready',lambda:False)
+ response=await ctx.client.post(f'/api/events/{e}/guests/send-preview',json={'guest_ids':[g],'force':True})
+ assert response.status_code==200,response.text
+ assert response.json()['channels']['mms']==0
+ assert response.json()['breakdown']['mms']['MMS unavailable for this configuration']==1

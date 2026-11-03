@@ -6,7 +6,7 @@ from app.routers import guests as routes
 from app.services.guest_delivery import state
 from conftest import _Session
 
-@pytest.mark.parametrize('raw,expected',[('sent','accepted'),('posted','accepted'),('delivered','delivered'),('read','read'),('queued','pending'),('failed','failed'),('refunded','unknown')])
+@pytest.mark.parametrize('raw,expected',[('sent','accepted'),('posted','unknown'),('delivered','delivered'),('read','read'),('queued','pending'),('failed','failed'),('refunded','unknown')])
 def test_status_is_evidence_not_assumed_delivery(raw,expected): assert state(raw)==expected
 
 async def fixture(ctx):
@@ -68,3 +68,19 @@ async def test_other_organization_access_denied(ctx):
  e,g=await fixture(ctx);ctx.login(ctx.ids['user_b'])
  for path in [f'/api/events/{e}/guests/delivery-summary',f'/api/events/{e}/guests/{g}/delivery-history']:
   response=await ctx.client.get(path);assert response.status_code in (401,403,404)
+
+@pytest.mark.asyncio
+async def test_priority_policy_does_not_create_false_pending_channel(ctx,monkeypatch):
+ from fastapi import BackgroundTasks
+ e,g=await fixture(ctx)
+ async def dispatch(*args,**kwargs):return True
+ monkeypatch.setattr(routes,'_dispatch_invite_impl',dispatch)
+ monkeypatch.setattr(routes,'channels_for_flow',lambda *a,**kw:{'email'})
+ async with _Session() as db:
+  event=await db.get(Event,e);guest=await db.get(Guest,g);guest.phone='+15555550111';guest.whatsapp_consent=True
+  await routes._dispatch_invite(BackgroundTasks(),event,guest,db)
+  await db.commit()
+ result=await ctx.client.get(f'/api/events/{e}/guests/delivery-summary')
+ row=next(r for r in result.json()['guests'] if r['id']==g)
+ assert row['channels']['whatsapp']['status']=='not_selected'
+ assert row['channels']['email']['prior_delivery_at']

@@ -501,9 +501,9 @@ export default function AdminRedesignPage() {
         </div>
         <div className="rr-panel rr-quick highlight">
           <div className="rr-quick-head"><span className="rr-quick-icon amber"><Icon name="send" size={16}/></span><h3>Invitations</h3></div>
-          <div className="rr-quick-big">{stats ? stats.invited : '—'}<small>Invitation{stats?.invited === 1 ? '' : 's'} sent</small></div>
-          <div className="rr-quick-sub amber">{stats ? `${stats.total - stats.invited} without an invitation send (includes self-registration)` : ''}</div>
-          <button onClick={() => navigate('/guests-redesign?tab=invite')}>Send more invites <Icon name="arrow" size={13}/></button>
+          <div className="rr-quick-big">{stats ? stats.invited : '—'}<small>Last dispatch successful</small></div>
+          <div className="rr-quick-sub amber">{stats ? `${guests.filter(g=>g.invite_status==='failed').length} last dispatches unsuccessful · ${guests.filter(g=>!g.invite_sent_at).length} never attempted` : ''}</div>
+          <button onClick={() => navigate('/guests-redesign?tab=delivery')}>Review channel results <Icon name="arrow" size={13}/></button>
         </div>
         <div className="rr-panel rr-quick">
           <div className="rr-quick-head"><span className="rr-quick-icon teal"><Icon name="ticket" size={16}/></span><h3>Check-in setup</h3></div>

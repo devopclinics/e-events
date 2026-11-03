@@ -1022,9 +1022,9 @@ async def upload_guests(event_id: str, file: UploadFile = File(...), mapping: st
     return await _process_csv(buf.getvalue(), event_id, db)
 
 
-async def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest, db: AsyncSession,
+async def _dispatch_invite_impl(background_tasks: BackgroundTasks, event: Event, guest: Guest, db: AsyncSession,
                      overrides: dict | None = None,
-                     rsvp_template_key: str = "rsvp_invitation") -> bool:
+                     rsvp_template_key: str = "rsvp_invitation", selected_channel: str | None = None) -> bool:
     """Fan out an invite across enabled channels for this event. Channel modules
     no-op silently when contact info is missing or creds aren't configured.
 
@@ -1039,7 +1039,7 @@ async def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, gues
     reachable channel (used to set invite_status sent/failed)."""
     messaging.set_event_context(event.id)
     if event.invite_mode == "closed":
-        return await _dispatch_rsvp_invite(background_tasks, event, guest, db, overrides, rsvp_template_key)
+        return await _dispatch_rsvp_invite(background_tasks, event, guest, db, overrides, rsvp_template_key, selected_channel)
 
     ticket_url = f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}"
     paid_channels = can_use_paid_channels(event)
@@ -1049,6 +1049,7 @@ async def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, gues
     # Cost control: the event's channel policy narrows "invite" to the first
     # deliverable channel; with no policy this is every enabled+available channel.
     chosen = channels_for_flow(event, guest, "invite", paid_ok=paid_channels)
+    if selected_channel: chosen &= {selected_channel}
 
     if "email" in chosen:
         invite_key = "experience_invitation" if event.experience_enabled else "ticket_qr"
@@ -1161,7 +1162,7 @@ def _invite_recipients_allowed(event: Event, guest: Guest, *, reminder: bool = F
 
 async def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest, db: AsyncSession,
                           overrides: dict | None = None,
-                          template_key: str = "rsvp_invitation") -> bool:
+                          template_key: str = "rsvp_invitation", selected_channel: str | None = None) -> bool:
     """Closed-mode invite: send the guest their personal RSVP link. Generates a
     one-per-guest invite_token on first send (mutation persisted by the caller's
     commit). No ticket/QR yet — that's issued when they confirm. Returns True if
@@ -1186,6 +1187,7 @@ async def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event,
     ctx = build_template_context(event, guest, extras={"rsvp_link": invite_url, "qr_code": qr_img})
     dispatched = False
     chosen = channels_for_flow(event, guest, "invite" if template_key == "rsvp_invitation" else "reminder", paid_ok=paid_channels)
+    if selected_channel: chosen &= {selected_channel}
 
     if "email" in chosen:
         if template_key == "rsvp_invitation":
@@ -2477,18 +2479,25 @@ async def preview_invites(event_id: str, body: dict = Body(default={}), db: Asyn
         query = query.where(Guest.invite_sent_at.is_(None))
     guests = list((await db.scalars(query)).all())
     counts = {c: 0 for c in ("email", "sms", "whatsapp", "mms")}
+    from ..services.guest_delivery import CHANNELS, contact_reason
+    breakdown = {c: {} for c in CHANNELS}
     blocked = unreachable = 0
     for guest in guests:
         reminder = event.invite_mode == "closed" and body.get("force") and guest.invite_sent_at and guest.rsvp_status == "invited"
         if not _invite_recipients_allowed(event, guest, reminder=bool(reminder)):
             blocked += 1
+            for c in CHANNELS: breakdown[c]['Safety blocked'] = breakdown[c].get('Safety blocked',0)+1
             continue
         chosen = channels_for_flow(event, guest, "reminder" if reminder else "invite", paid_ok=can_use_paid_channels(event))
+        for c in CHANNELS:
+            reason = 'Eligible' if c in chosen else (contact_reason(event,guest,c) or 'Not selected by channel policy or entitlement')
+            if c == 'mms' and c in chosen and (event.invite_mode == 'closed' or not messaging.mms_ready()): reason = 'MMS unavailable for this configuration'
+            breakdown[c][reason] = breakdown[c].get(reason,0)+1
         if not chosen:
             unreachable += 1
         for channel in chosen:
             counts[channel] += 1
-    return {"recipients": len(guests), "channels": counts, "blocked": blocked, "unreachable": unreachable,
+    return {"recipients": len(guests), "channels": counts, "breakdown": breakdown, "blocked": blocked, "unreachable": unreachable,
             "estimated_credits": round(sum(count * channel_weight(channel, org_id=event.org_id) for channel, count in counts.items()), 2),
             "balance": await available_credits(db, event), "balance_scope": credit_scope(),
             "note": "Estimate before delivery. Provider readiness, message length and available credits are rechecked when sending."}
@@ -2739,3 +2748,61 @@ async def get_guest_qr(event_id: str, guest_id: str, db: AsyncSession = Depends(
     event = await db.get(Event, event_id)
     qr_bytes = generate_qr_bytes(guest.qr_token, event.checkin_base_url)
     return Response(content=qr_bytes, media_type="image/png")
+
+@router.get("/{event_id}/guests/delivery-summary")
+async def guest_delivery_summary(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_view_access)):
+    from ..services.guest_delivery import CHANNELS, evidence, guest_summary
+    event = await db.get(Event, event_id)
+    if not event: raise HTTPException(404, "Event not found")
+    guests = list((await db.scalars(select(Guest).where(Guest.event_id == event_id))).all())
+    records = await evidence(db, event_id, [g.id for g in guests])
+    grouped = defaultdict(list)
+    for r in records: grouped[r['guest_id']].append(r)
+    rows = [guest_summary(event,g,grouped[g.id]) for g in guests]
+    counts = {c: {s: sum(g['channels'][c]['status'] == s for g in rows) for s in ('delivered','read','accepted','pending','failed','skipped','not_attempted','unknown')} for c in CHANNELS}
+    return dict(guests=rows,counts=counts,total=len(rows),timezone=event.timezone or 'UTC',scope='Latest recorded state per guest per channel, across all message types. Counts overlap across channels; they are not unique deliveries or batch totals.')
+
+@router.get("/{event_id}/guests/{guest_id}/delivery-history")
+async def guest_delivery_history(event_id: str, guest_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_view_access)):
+    from ..services.guest_delivery import evidence
+    guest = await db.get(Guest,guest_id)
+    if not guest or guest.event_id != event_id: raise HTTPException(404, "Guest not found")
+    return dict(records=await evidence(db,event_id,[guest_id]),note='Only stored evidence is shown. Credit-ledger entries are not proof of delivery. Historical skipped sends may not have been recorded.')
+
+
+async def _dispatch_invite(background_tasks, event, guest, db, overrides=None, rsvp_template_key="rsvp_invitation", selected_channel=None):
+    from ..services.guest_delivery import CHANNELS, contact_reason
+    watched = [selected_channel] if selected_channel else [c for c in CHANNELS if getattr(event, 'notify_'+c, False)]
+    for channel in watched:
+        reason = contact_reason(event, guest, channel)
+        db.add(EventMessageDeliveryLog(event_id=event.id,guest_id=guest.id,channel=channel,
+            recipient=guest.email if channel == 'email' else guest.phone,
+            status='skipped' if reason else 'requested',error_message=reason))
+    return await _dispatch_invite_impl(background_tasks,event,guest,db,overrides,rsvp_template_key,selected_channel)
+
+@router.post("/{event_id}/guests/{guest_id}/retry-channel")
+async def retry_guest_channel(event_id: str, guest_id: str, background_tasks: BackgroundTasks, body: dict = Body(default={}), db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_manage_access)):
+    from ..services.guest_delivery import CHANNELS, contact_reason
+    from ..services.credit_balance import available_credits
+    from ..entitlements import channel_weight
+    channel = body.get('channel')
+    if channel not in CHANNELS: raise HTTPException(400,'Choose email, WhatsApp, SMS or MMS')
+    event = await db.get(Event,event_id)
+    guest = await db.get(Guest,guest_id)
+    if not event or not guest or guest.event_id != event_id: raise HTTPException(404,'Guest not found')
+    reason = contact_reason(event,guest,channel)
+    allowed = _invite_recipients_allowed(event,guest)
+    chosen = channels_for_flow(event,guest,'invite',paid_ok=can_use_paid_channels(event))
+    if not reason and not allowed: reason = 'Recipient blocked by environment safety policy'
+    if not reason and channel not in chosen: reason = 'Not selected by event channel policy or paid-channel entitlement'
+    if not reason and channel == 'mms' and (event.invite_mode == 'closed' or not messaging.mms_ready()): reason = 'MMS invitation delivery is unavailable for this configuration'
+    if not reason and channel != 'email' and await available_credits(db,event) < channel_weight(channel,org_id=event.org_id): reason = 'Insufficient messaging credits'
+    if not reason and event.invite_mode != 'closed' and not guest.qr_generated_at: reason = 'Generate the guest pass first'
+    if body.get('preview',True) is not False: return dict(channel=channel,eligible=not reason,reason=reason,note='Only this channel is retried. Provider readiness, credits and safety are rechecked at submission; SMS length may require additional credits.')
+    if reason: raise HTTPException(409,reason)
+    ok = await _dispatch_invite(background_tasks,event,guest,db,await load_overrides(event_id,db),selected_channel=channel)
+    if ok:
+        guest.invite_sent_at = datetime.utcnow()
+        guest.invite_status = 'sent'
+    await db.commit()
+    return dict(requested=ok,channel=channel,note='Request processed; delivery is not confirmed. Review channel history for provider evidence.' if ok else 'No delivery task was queued. Check credits and provider configuration before retrying.')

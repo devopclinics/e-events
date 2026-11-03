@@ -1,3 +1,4 @@
+import GuestDeliveryTracking from '../components/GuestDeliveryTracking'
 import FestioLogo from '../components/branding/FestioLogo'
 import EnvelopeSettings from '../components/invitations/EnvelopeSettings'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -17,12 +18,13 @@ import './InviteWorkspace.css'
 const STAT_TILES = [
   { key: 'total', label: 'Total Guests', icon: 'users', tone: 'teal' },
   { key: 'qr', label: 'QR Generated', icon: 'ticket', tone: 'teal' },
-  { key: 'invited', label: 'Invites Sent', icon: 'send', tone: 'amber' },
+  { key: 'invited', label: 'Last dispatch successful', icon: 'send', tone: 'amber' },
   { key: 'admitted', label: 'Admitted', icon: 'check', tone: 'success' },
 ]
 
 const FILTER_CHIPS = [
   { key: 'delivered', label: 'Delivered' },
+  { key: 'pending_delivery', label: 'Awaiting delivery' },
   { key: 'failed', label: 'Failed' },
   { key: 'notsent', label: 'Not sent' },
   { key: 'admitted', label: 'Admitted' },
@@ -42,8 +44,9 @@ function adaptGuest(g) {
   const initials = (g.first_name?.[0] || '') + (g.last_name?.[0] || '') || name.slice(0, 2).toUpperCase()
   function channelState(sentAt, status) {
     const normalized = String(status || '').toLowerCase()
-    if (['failed', 'rejected', 'undelivered', 'expired'].includes(normalized)) return 'fail'
-    if (sentAt || ['sent', 'submitted', 'delivered', 'read', 'queued'].includes(normalized)) return 'ok'
+    if (['failed', 'rejected', 'undelivered', 'expired','bounced','complained','suppressed'].includes(normalized)) return 'fail'
+    if (['delivered','read','opened','clicked'].includes(normalized)) return 'ok'
+    if (sentAt || ['sent','submitted','accepted','queued','reserved','posted'].includes(normalized)) return 'pending'
     return 'dash'
   }
   return {
@@ -107,6 +110,7 @@ const SEND_AUDIENCE = [
 function deliveryStatus(g) {
   const vals = Object.values(g.channels)
   if (vals.some((v) => v === 'ok')) return 'ok'
+  if (vals.some((v) => v === 'pending')) return 'pending'
   // Per-channel status (email/sms/whatsapp/mms) only ever gets set once a
   // provider actually attempted a send. A guest with no reachable channel at
   // all (no email/phone, or the event's channel policy excludes what they
@@ -123,6 +127,7 @@ function matchesFilter(g, active) {
   if (active.size === 0) return true
   return (
     (active.has('delivered') && delivery === 'ok') ||
+    (active.has('pending_delivery') && delivery === 'pending') ||
     (active.has('failed') && delivery === 'fail') ||
     (active.has('notsent') && delivery === 'notsent') ||
     (active.has('admitted') && g.admitted) ||
@@ -429,7 +434,7 @@ function GuestsTab({ notify, onView, onEdit, onRemove, onUnadmit, onApproveRsvp,
                   <td>
                     <div className="gr-channel-row">
                       {['email', 'sms', 'whatsapp', 'mms'].map((ch) => (
-                        <span key={ch} className={`gr-channel-dot ${g.channels[ch]}`} title={`${ch}: ${g.channels[ch] === 'ok' ? 'delivered' : g.channels[ch] === 'fail' ? 'failed' : 'not sent'}`}>
+                        <span key={ch} className={`gr-channel-dot ${g.channels[ch]}`} title={`${ch}: ${g.channels[ch] === 'ok' ? 'delivered' : g.channels[ch] === 'fail' ? 'failed' : g.channels[ch] === 'pending' ? 'awaiting delivery confirmation' : 'not attempted'}`}>
                           <Icon name={CHANNEL_ICON[ch]} size={11} />
                         </span>
                       ))}
@@ -1444,7 +1449,7 @@ export default function GuestsRedesignPage() {
   const [householdForm, setHouseholdForm] = useState({ name: '', description: '', default_table_group_id: '', default_table_id: '' })
   const [editForm, setEditForm] = useState({ first_name: '', last_name: '', email: '', phone: '', is_vip: false, table_id: '', seat_number: '', ticket_type_id: '', sms_consent: false, whatsapp_consent: false })
   const [mutationBusy, setMutationBusy] = useState(false)
-  const tab = searchParams.get('tab') === 'invite' ? 'invite' : 'guests'
+  const tab = ['invite','delivery'].includes(searchParams.get('tab')) ? searchParams.get('tab') : 'guests'
   const [addOpen, setAddOpen] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [viewTarget, setViewTarget] = useState(null)
@@ -1611,13 +1616,13 @@ export default function GuestsRedesignPage() {
     return [
       { ...STAT_TILES[0], value: total, caption: 'Imported + self-registered' },
       { ...STAT_TILES[1], value: qr, caption: `${Math.max(0, total - qr)} waiting on QR` },
-      { ...STAT_TILES[2], value: invited, caption: `${Math.max(0, total - invited)} without an invitation send` },
+      { ...STAT_TILES[2], value: invited, caption: `${guests.filter(g=>g.raw.invite_status==='failed').length} last dispatches unsuccessful · see Delivery & results` },
       { ...STAT_TILES[3], value: admitted, caption: total ? `${Math.round((admitted / total) * 100)}% of total guests` : 'No guests yet' },
     ]
   }, [guests])
 
   function goTab(next) {
-    setSearchParams(next === 'invite' ? { tab: 'invite' } : { tab: 'guests' })
+    setSearchParams({tab: next})
   }
 
   async function startImport() {
@@ -1758,9 +1763,10 @@ export default function GuestsRedesignPage() {
       <div className="rr-tabs">
         <button className={tab === 'guests' ? 'active' : ''} onClick={() => goTab('guests')}>Guests</button>
         <button className={tab === 'invite' ? 'active' : ''} onClick={() => goTab('invite')}>Invites &amp; RSVP</button>
+        <button className={tab === 'delivery' ? 'active' : ''} onClick={() => goTab('delivery')}>Delivery & results</button>
       </div>
 
-      {tab === 'guests'
+      {tab === 'delivery' ? <GuestDeliveryTracking key={eventId} eventId={eventId} onEdit={id=>{const g=guests.find(g=>g.id===id);if(g)setEditTarget(g)}} onSend={()=>{setSendGuestIds(guests.map(g=>g.id));setSendResult(null);setSendCount(guests.length);setSendStep('audience')}}/> : tab === 'guests'
         ? <GuestsTab notify={notify} onView={setViewTarget} onEdit={setEditTarget} onRemove={setRemoveTarget} onUnadmit={setUnadmitTarget} onApproveRsvp={setApproveTarget} onRejectRsvp={setRejectTarget} onApproveAll={(n) => setApproveAllCount(n)} onSendSelected={(ids) => { setSendGuestIds(ids); setSendResult(null); setSendCount(ids.length); setSendStep('audience') }} eventId={eventId} guests={guests} guestsLoading={guestsLoading} guestsError={guestsError} onRetryGuests={loadGuests} households={households} householdsLoading={householdsLoading} tableGroups={tableGroups} onAddHousehold={() => { setHouseholdTarget('new'); setHouseholdForm({ name: '', description: '', default_table_group_id: '', default_table_id: '' }) }} onEditHousehold={(h) => { setHouseholdTarget(h); setHouseholdForm({ name: h.raw.name, description: h.raw.description || '', default_table_group_id: h.raw.default_table_group_id || '', default_table_id: h.raw.default_table_id || '' }) }} onDeleteHousehold={setHouseholdDeleteTarget} onBulkAssignHousehold={async (guestIds, householdId) => {
           try { await api.bulkAssignHousehold(eventId, guestIds, householdId); await Promise.all([loadGuests(), loadHouseholds()]); notify('Household assignment updated') }
           catch (e) { notify(e.message || 'Household assignment could not be updated', true) }
@@ -2126,7 +2132,7 @@ export default function GuestsRedesignPage() {
         >
           {sendStep === 'audience' && (
             <div>
-              <p style={{ fontSize: '0.85rem', marginBottom: 14 }}>About to send invitations to <strong>{sendCount} guests</strong> using the configured channel policy:</p>{sendPreviewError ? <p role="alert">{sendPreviewError}</p> : !sendPreview ? <p role="status">Checking recipients and credits…</p> : <div><ul>{Object.entries(sendPreview.channels).map(([channel,count])=><li key={channel}>{channel}: {count} eligible recipients</li>)}</ul><p>{sendPreview.unreachable} unreachable · {sendPreview.blocked} blocked</p><p>Estimated credits: {sendPreview.estimated_credits} · Available {sendPreview.balance_scope} balance: {sendPreview.balance}</p><small>{sendPreview.note}</small></div>}
+              <p style={{ fontSize: '0.85rem', marginBottom: 14 }}>About to send invitations to <strong>{sendCount} guests</strong> using the configured channel policy:</p>{sendPreviewError ? <p role="alert">{sendPreviewError}</p> : !sendPreview ? <p role="status">Checking recipients and credits…</p> : <div><ul>{Object.entries(sendPreview.channels).map(([channel,count])=><li key={channel}>{channel}: {count} eligible recipients</li>)}</ul><p>{sendPreview.unreachable} unreachable · {sendPreview.blocked} blocked</p><p>Estimated credits: {sendPreview.estimated_credits} · Available {sendPreview.balance_scope} balance: {sendPreview.balance}</p>{sendPreview.breakdown&&<div className="gdt-scroll"><table><thead><tr><th>Channel</th><th>Recipient checks</th></tr></thead><tbody>{Object.entries(sendPreview.breakdown).map(([c,reasons])=><tr key={c}><th>{c==='whatsapp'?'WhatsApp':c==='email'?'Email':c.toUpperCase()}</th><td>{Object.entries(reasons).map(([reason,n])=><div key={reason}>{n} · {reason}</div>)}</td></tr>)}</tbody></table></div>}<small>{sendPreview.note} MMS uses the generated pass card where supported. SMS and MMS use the current SMS consent setting; no permission is inferred from a phone number.</small></div>}
               <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 6, padding: '8px 12px', fontSize: '0.82rem', marginBottom: 14 }}>
                 <Icon name="warning" size={12} /> The server will apply the event's configured channel policy, consent rules, recipient safety, and available credits.
               </div>
@@ -2142,7 +2148,7 @@ export default function GuestsRedesignPage() {
               <div className="gr-send-progress-label">Sending to {sendCount} guests…</div>
               <div className="gr-send-bar-wrap"><div className="gr-send-bar" /></div>
               <div style={{ fontSize: '0.8rem', color: 'var(--rr-sub)', marginTop: 10 }}>
-                Email · SMS · WhatsApp — this usually takes under a minute
+                Email · WhatsApp · SMS · MMS · Requests may finish before provider delivery
               </div>
             </div>
           )}
@@ -2150,14 +2156,15 @@ export default function GuestsRedesignPage() {
             <div>
               <div className="gr-send-result-head">
                 <span style={{ fontSize: '2rem' }}>✓</span>
-                <h3>Invitations sent!</h3>
+                <h3>Send requests processed</h3>
               </div>
               <div className="rr-panel" style={{ padding: 14, marginBottom: 14 }}>
                 <strong>{Number(sendResult?.queued) || 0}</strong> invitation request{Number(sendResult?.queued) === 1 ? '' : 's'} confirmed by the server.
                 <div style={{ fontSize: '0.78rem', color: 'var(--rr-sub)', marginTop: 6 }}>
-                  Provider delivery status is available in Communications; it is not inferred here.
+                  Submission is not delivery. See Delivery & results for independent Email, WhatsApp, SMS and MMS outcomes.
                 </div>
               </div>
+              <button className="rr-btn secondary" onClick={()=>{setSendCount(null);goTab('delivery')}}>View delivery results</button>
               <button className="rr-btn primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => { setSendCount(null); setSendGuestIds([]); setSendResult(null); setSendStep('audience') }}>Done</button>
             </div>
           )}

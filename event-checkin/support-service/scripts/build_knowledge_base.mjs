@@ -78,3 +78,6 @@ if (process.argv.includes('--check')) {
   for (const [url, text] of outputs) writeFileSync(url, text)
   console.log(`wrote knowledge_base.md (${doc.length} chars) and internal Media Library documents`)
 }
+
+// Keep customer chat on the same public Help source and drift gate.
+await import('./build_chat_help.mjs')

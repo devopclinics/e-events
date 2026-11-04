@@ -114,3 +114,11 @@ async def test_unapproved_event_and_missing_answers_never_shared_after_edit(ctx)
  assert mode=='human' and 'Agidingbi' not in body
  ctx.login(ctx.ids['superadmin']);d=cfg();d['profiles'].append({**d['profiles'][0],'id':'duplicate-name'})
  assert (await ctx.client.put(P+'/automation/settings',json={'settings':d,'version':0})).status_code==422
+
+@pytest.mark.asyncio
+async def test_verified_webhook_creates_only_one_job(ctx,monkeypatch):
+ await configure();m=incoming('PAMCON time');monkeypatch.setattr(transport,'verify_signature',lambda *a:None)
+ async def bird(method,path,**kwargs):assert method=='GET';return httpx.Response(200,json=m)
+ monkeypatch.setattr(transport,'bird',bird)
+ for _ in range(2):assert (await ctx.client.post(P+'/bird',json={'id':m['id']})).status_code==204
+ async with _Session() as db:assert await db.scalar(select(func.count()).select_from(Job))==1

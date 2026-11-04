@@ -143,3 +143,12 @@ async def test_history_import_paginates_and_is_repeatable(ctx,monkeypatch):
     monkeypatch.setattr(service,'bird',fetch);ctx.login(ctx.ids['superadmin'])
     a=await ctx.client.post(PREFIX+'/sync',json={});assert a.status_code==200,a.text
     b=await ctx.client.post(PREFIX+'/sync',json={});assert a.json()['imported']==2 and b.json()['imported']==0 and calls==[None,'older',None,'older']
+
+def test_legacy_hmac_raw_body_and_timestamp():
+    settings.support_whatsapp_signing_key='legacy-key';raw=b'{"body":"raw content"}';stamp=str(int(time.time()))
+    signed=stamp.encode()+b'\n\n'+hashlib.sha256(raw).digest()
+    signature=base64.b64encode(hmac.new(b'legacy-key',signed,hashlib.sha256).digest()).decode()
+    headers={'messagebird-request-timestamp':stamp,'messagebird-signature':signature}
+    service.verify_signature(raw,headers)
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException):service.verify_signature(raw+b' ',headers)

@@ -24,7 +24,7 @@ def product_dialogue(text,context):
         currency='NGN' if any(w in text for w in ['nigeria','nigerian','ngn','naira','₦']) else 'your event currency'
         scope=(' for '+guests[1]+' guests') if guests else ''
         ctx.update(topic='seating' if service=='Seating' else 'pricing',awaiting='quote_scope')
-        return ('I can’t confirm an exact '+currency+' price for '+service+scope+' from the approved information available in this chat. I won’t calculate a price from guest count or reuse another client’s quote.\n\nReview current pricing: /pricing\nFor an existing event, select it and open Billing to check included access and add-on prices before purchasing.\n\nDo you need software access only, or software plus event-day staff?',ctx)
+        return ('I can’t confirm an exact '+currency+' price for '+service+scope+' from the approved information available in this chat.\n\nReview current pricing: /pricing\nFor an existing event, select it and open Billing to check included access and add-on prices before purchasing.\n\nDo you need software access only, or software plus event-day staff?',ctx)
     if fact_intent(text):return None,ctx
     if ctx.get('awaiting')=='quote_scope' and any(w in text for w in ['software','staff','support','both']):
         ctx['awaiting']='quote_request'

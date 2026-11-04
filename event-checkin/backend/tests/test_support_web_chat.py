@@ -42,3 +42,28 @@ async def test_expired_chat_and_validation(ctx):
     async with _Session() as db:
         row=await db.scalar(select(SupportWebChat));row.expires_at=datetime.utcnow()-timedelta(seconds=1);await db.commit()
     assert (await ctx.client.get(P+'/session',headers=h)).status_code==401
+
+@pytest.mark.asyncio
+async def test_product_guidance_clarification_and_reference(ctx):
+    async with _Session() as db:db.add(SupportAutomationConfig(id='main',payload={**defaults(),'enabled':True},updated_by='test'));await db.commit()
+    first,h=await session(ctx)
+    r=await ctx.client.post(P+'/messages',headers=h,json={'body':'What is Festio, and the difference between GuestHub, Festio Live and FestioMe?','request_id':str(uuid.uuid4())})
+    assert r.status_code==200 and r.json()['mode']=='auto' and 'polls' in r.text and 'networking' in r.text
+    r=await ctx.client.post(P+'/messages',headers=h,json={'body':'How do I create an event and arrange tables and seating?','request_id':str(uuid.uuid4())})
+    assert r.json()['mode']=='auto' and '/setup-redesign?view=wizard' in r.text and 'seats per table' in r.text
+    r=await ctx.client.post(P+'/messages',headers=h,json={'body':'Something unclear','request_id':str(uuid.uuid4())});assert r.json()['mode']=='auto' and 'Are you asking' in r.text
+    r=await ctx.client.post(P+'/messages',headers=h,json={'body':'Still unclear','request_id':str(uuid.uuid4())});assert r.json()['mode']=='human' and r.json()['reference'].startswith('WEB-') and 'No response time' in r.text
+
+@pytest.mark.asyncio
+async def test_organiser_greeting_and_published_scope(ctx,monkeypatch):
+    from app.routers import support_web_chat as web
+    async with _Session() as db:db.add(SupportAutomationConfig(id='main',payload={**defaults(),'enabled':True,'profiles':[{'id':'wrong','name':'Other event','approved':True,'aliases':[],'answers':{'venue':'Wrong venue'}}]},updated_by='test'));await db.commit()
+    async def published(slug):
+        assert slug=='public-event'
+        return {'id':'site-one','name':'Published event','approved':True,'aliases':[],'answers':{'venue':'Published Hall','time':'10 AM'}}
+    monkeypatch.setattr(web,'published_profile',published)
+    r=await ctx.client.post(P+'/session',json={'page':'organiser'});assert 'set up seating' in r.text
+    r=await ctx.client.post(P+'/session',json={'page':'event','site_slug':'public-event'});h={'Authorization':'Bearer '+r.json()['token']}
+    r=await ctx.client.post(P+'/messages',headers=h,json={'body':'Where is it?','request_id':str(uuid.uuid4())});assert 'Published Hall' in r.text and 'Wrong venue' not in r.text
+    r=await ctx.client.post(P+'/messages',headers=h,json={'body':'my pass','request_id':str(uuid.uuid4())});assert r.json()['mode']=='human'
+    assert (await ctx.client.post(P+'/session',json={'site_slug':'../private'})).status_code==422

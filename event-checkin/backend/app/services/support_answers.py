@@ -30,6 +30,9 @@ def answer(config,context,body):
     handover=lambda:('Festio automated reply\n\n'+config['handover'],context,'human')
     if any(contains(text,w) for w in ['human','person','agent','support','staff','speak to someone','talk to someone','refund','complaint','unsubscribe','stop']):return handover()
     if any(contains(text,w) for w in ['my pass','my qr','my seat','my table','my ticket','resend','registration status','payment status','confirm me','confirm my','seat number']):return handover()
+    from .support_product_knowledge import product_answer
+    guidance=product_answer(text)
+    if guidance:return 'Festio automated reply\n\n'+guidance,context,'auto'
     if any(contains(text,w) for w in ['other event','change event','switch event','events','menu']):context={}
     # Explicit names/aliases only; never infer an event or identity from a phone.
     named=[p for p in profiles if any(contains(text,n) for n in [p['name'],*p.get('aliases',[])] if n)]

@@ -5,7 +5,7 @@ from sqlalchemy import select,func
 from app.models import SupportWebChat,SupportAutomationConfig,SupportMessage
 from app.services.support_answers import defaults
 from conftest import _Session
-P='/api/support/chat'
+P='/api/platform/support/chat'
 async def session(ctx):
     r=await ctx.client.post(P+'/session');assert r.status_code==200,r.text
     return r.json(),{'Authorization':'Bearer '+r.json()['token']}

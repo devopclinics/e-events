@@ -561,9 +561,9 @@ async function downloadFile(path, filename, { withAuth = true } = {}) {
 }
 
 export const api = {
-  webSupportList: () => req('GET','/support/chat/management'),
-  webSupportThread: id => req('GET',`/support/chat/management/${encodeURIComponent(id)}`),
-  webSupportReply: (id,data) => req('POST',`/support/chat/management/${encodeURIComponent(id)}/reply`,data),
+  webSupportList: () => req('GET','/platform/support/chat/management'),
+  webSupportThread: id => req('GET',`/platform/support/chat/management/${encodeURIComponent(id)}`),
+  webSupportReply: (id,data) => req('POST',`/platform/support/chat/management/${encodeURIComponent(id)}/reply`,data),
   supportWhatsAppList: (q='',state='all',offset=0) => req('GET', `/platform/support/whatsapp/conversations?q=${encodeURIComponent(q)}&state=${state}&offset=${offset}`),
   supportAutomationSettings: () => req('GET','/platform/support/whatsapp/automation/settings'),
   saveSupportAutomation: (body) => req('PUT','/platform/support/whatsapp/automation/settings',body),

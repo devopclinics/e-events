@@ -20,15 +20,15 @@ with TemporaryDirectory() as tmp:
   def route(r):
    path=r.request.url.split('/api/')[-1];calls.append((path,r.request.method))
    if path.endswith('whatsapp/contact'):return r.fulfill(json={'heading':'Your next event. Let’s talk.','intro':'Chat with our team.','message':'Hi Festio'})
-   if path=='support/chat/session' and r.request.method=='POST':return r.fulfill(json={'token':'opaque-test-token','messages':messages,'mode':state['mode']})
+   if path=='platform/support/chat/session' and r.request.method=='POST':return r.fulfill(json={'token':'opaque-test-token','messages':messages,'mode':state['mode']})
    assert r.request.headers.get('authorization')=='Bearer opaque-test-token'
-   if path=='support/chat/messages':
+   if path=='platform/support/chat/messages':
     data=r.request.post_data_json;messages.append({'id':data['request_id'],'role':'customer','body':data['body']})
     if data['body']=='human':state['mode']='human';reply='The team can reply here.'
     else:reply='PAMCON starts at 10 AM.'
     messages.append({'id':data['request_id']+'reply','role':'bot','body':reply})
    return r.fulfill(json={'messages':messages,'mode':state['mode']})
-  page.route('**/api/**',route);page.goto(url);page.get_by_role('button',name='Chat with Festio',exact=True).click();expect(page.get_by_role('button',name='Start chat here',exact=True)).to_be_visible();assert not any(c[0]=='support/chat/session' for c in calls);checks.append('Opening the widget does not silently create a conversation')
+  page.route('**/api/**',route);page.goto(url);page.get_by_role('button',name='Chat with Festio',exact=True).click();expect(page.get_by_role('button',name='Start chat here',exact=True)).to_be_visible();assert not any(c[0]=='platform/support/chat/session' for c in calls);checks.append('Opening the widget does not silently create a conversation')
   page.get_by_role('button',name='Start chat here',exact=True).click();page.get_by_label('Your message',exact=True).fill('PAMCON time');page.get_by_role('button',name='Send message',exact=True).click();expect(page.get_by_role('log')).to_contain_text('10 AM');checks.append('Customer sees an event answer inside the website')
   page.get_by_role('button',name='Talk to the team',exact=True).click();expect(page.get_by_role('status')).to_contain_text('Waiting for the Festio team');checks.append('Human handover keeps the visitor in the website conversation')
   messages.append({'id':'staff','role':'team','body':'Hello from Festio support.'});page.reload();page.get_by_role('button',name='Chat with Festio',exact=True).click();expect(page.get_by_role('log')).to_contain_text('Hello from Festio support.');checks.append('Browser remembers the conversation and displays a management reply')

@@ -376,4 +376,4 @@ from .routers import support_automation
 app.include_router(support_automation.router,prefix="/api/platform/support/whatsapp",tags=["support-automation"])
 
 from .routers import support_web_chat
-app.include_router(support_web_chat.router,prefix='/api/support/chat',tags=['website-support'])
+app.include_router(support_web_chat.router,prefix='/api/platform/support/chat',tags=['website-support'])

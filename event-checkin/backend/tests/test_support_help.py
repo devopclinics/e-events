@@ -21,6 +21,9 @@ def test_help_does_not_replace_personal_or_event_answers():
     body,_,mode=answer(cfg,{},'PAMCON programme');assert mode=='auto' and 'The actual programme' in body
     assert answer(cfg,{},'my seat')[2]=='human'
     assert find_help('delete event') is None
+    assert '/guide.html#org-team' in answer(cfg,{},'How do I invite staff?')[0]
+    assert '/guide.html#org-export' in product_answer('How do I export my guest list?')
+    assert answer(cfg,{},'contact support')[2]=='human'
 
 @pytest.mark.asyncio
 async def test_explicit_resume_keeps_transcript_and_respects_pause(ctx):

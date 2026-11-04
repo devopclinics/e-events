@@ -12,7 +12,7 @@ from app.config import settings
 from app.models import SupportWebChat,User
 from app.ratelimit import rate_limit
 from app.services.support_automation import config
-from app.services.support_answers import answer
+from app.services.support_answers import answer,human_request
 router=APIRouter()
 
 def now():return datetime.utcnow()
@@ -79,7 +79,7 @@ async def send(data:Send,response:Response,authorization:str|None=Header(default
     if row.mode=='auto':
         cfg,_=await config(db)
         if cfg.get('enabled'):
-            personal=any(w in text.lower() for w in ['my pass','my qr','my seat','my table','my ticket','payment status','human','agent','refund','complaint','support','staff','talk to the team','seat number','registration status','resend','confirm me','confirm my'])
+            personal=human_request(text)
             meta={k:v for k,v in row.context.items() if k.startswith('_')}
             from app.services.support_product_knowledge import product_answer
             if meta.get('_site_slug') and not personal and not product_answer(text):

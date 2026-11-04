@@ -25,6 +25,8 @@ async def enqueue(db,provider_id):
     cfg,_=await config(db)
     if not cfg['enabled']:return
     message=await db.scalar(select(Message).where(Message.provider_id==provider_id,Message.direction=='incoming'))
+    saved=await db.get(Config,'main')
+    if saved and message and message.occurred_at<saved.updated_at:return
     if not message or message.occurred_at<datetime.utcnow()-timedelta(minutes=5) or message.occurred_at>datetime.utcnow()+timedelta(minutes=1):return
     if await db.get(Job,message.id):return
     try:
@@ -38,6 +40,9 @@ async def process_one(db):
     thread=await db.scalar(select(Conversation).where(Conversation.id==incoming.conversation_id).with_for_update())
     cfg,_=await config(db);state=await db.get(State,thread.id)
     now=datetime.utcnow()
+    resume_after=(state.context or {}).get('_resume_after') if state else None
+    if resume_after and incoming.occurred_at<=datetime.fromisoformat(resume_after):
+        job.status='skipped';await db.commit();return True
     recent=await db.scalar(select(func.count()).select_from(Message).where(Message.conversation_id==thread.id,Message.sent_by=='automation',Message.occurred_at>now-timedelta(minutes=1)))
     hourly=await db.scalar(select(func.count()).select_from(Message).where(Message.conversation_id==thread.id,Message.sent_by=='automation',Message.occurred_at>now-timedelta(hours=1)))
     if (not settings.support_whatsapp_enabled or not cfg['enabled'] or state and state.mode=='human' or
@@ -48,6 +53,7 @@ async def process_one(db):
     if not state:
         state=State(conversation_id=thread.id,mode='auto',context={});db.add(state)
     body,context,mode=answer(cfg,state.context,incoming.body)
+    if resume_after:context['_resume_after']=resume_after
     if recent>=3 or hourly>=20:
         if mode=='human':state.mode='human';state.context=context
         job.status='rate-limited';await db.commit();return True

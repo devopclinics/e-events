@@ -385,3 +385,17 @@ async def test_closed_short_link_keeps_private_invitation_title_out_of_social_ca
     card=await ctx.client.get('/api/og/i/'+code)
     assert card.status_code==200 and 'Dinner &amp; good company' not in card.text
     assert 'Dinner & good company' not in card.text
+
+async def test_need_first_invitation_preserves_separate_event_type_on_retry(ctx,monkeypatch):
+    await fresh(ctx,monkeypatch)
+    body=draft(event_type='Conference / seminar')
+    first=await ctx.client.post('/api/quick-invites',json=body)
+    assert first.status_code==201,first.text
+    retry=await ctx.client.post('/api/quick-invites',json=body)
+    assert retry.json()['id']==first.json()['id']
+    async with _Session() as db:
+        event=await db.get(Event,first.json()['id'])
+        assert event.event_type=='Conference / seminar'
+        assert event.setup_preferences['starting_point']=='invitation'
+        assert event.setup_preferences['quick_invite']['style']=='arch'
+        assert not event.notify_sms and not event.notify_whatsapp

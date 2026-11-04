@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {registrationReadiness,toolAccess,invitationPath,destinationFingerprint,CUSTOMER_TOOLS,EVENT_RECIPES,FESTIO_ADVANTAGES,searchCustomerTools,recommendedRecipe} from '../src/pages/customerJourneyModel.mjs'
+import {STARTING_POINTS,LAUNCH_NEXT,LAUNCH_EVENT_TYPES,launchNext,registrationReadiness,toolAccess,invitationPath,destinationFingerprint,CUSTOMER_TOOLS,EVENT_RECIPES,FESTIO_ADVANTAGES,searchCustomerTools,recommendedRecipe} from '../src/pages/customerJourneyModel.mjs'
 const base={id:'event-1',status:'active',rsvp_enabled:true,invite_mode:'open',rsvp_token:'unguessable'}
 test('draft design is not open registration',()=>assert.equal(registrationReadiness({...base,status:'draft'}).ready,false))
 test('ended and archived events are not silently reopened',()=>{for(const status of ['ended','archived'])assert.equal(registrationReadiness({...base,status}).ready,false)})
@@ -22,3 +22,5 @@ test('recipes and selling points only reference existing tools',()=>{const ids=n
 test('catalog search finds services previously hidden behind a catch-all',()=>{for(const q of ['meals','deliveries','venue','partners','certificates','vendors','contacts','webhooks'])assert.ok(searchCustomerTools(CUSTOMER_TOOLS,'All',q).length,q)})
 test('search respects category and provides real empty results',()=>{assert.equal(searchCustomerTools(CUSTOMER_TOOLS,'Run a conference','seating').length,0);assert.equal(searchCustomerTools(CUSTOMER_TOOLS,'All','does-not-exist').length,0);assert.equal(searchCustomerTools(CUSTOMER_TOOLS,'All','').length,34)})
 test('occasion suggestions derive from the event without changing it',()=>{const ev={event_type:'Conference / seminar'};assert.equal(recommendedRecipe(ev),'conference');assert.equal(ev.event_type,'Conference / seminar');assert.equal(recommendedRecipe({event_type:'Nikkah / Aqd'}),'wedding')})
+
+test('starting needs are independent from event type and retain every downstream tool',()=>{assert.deepEqual(STARTING_POINTS.map(x=>x.id),['invitation','tickets','checkin','seating','conference','fundraiser']);for(const p of STARTING_POINTS){assert.ok(!p.type);assert.ok(LAUNCH_NEXT[p.id]);assert.ok(CUSTOMER_TOOLS.some(t=>t.id===LAUNCH_NEXT[p.id].tool))}assert.ok(LAUNCH_EVENT_TYPES.includes('Wedding'));assert.ok(LAUNCH_EVENT_TYPES.includes('Conference / seminar'));assert.equal(recommendedRecipe({event_type:'Corporate event',setup_preferences:{starting_point:'conference'}}),'corporate');assert.equal(launchNext({setup_preferences:{starting_point:'seating'}}).tool,'seating');assert.equal(launchNext({}),null)})

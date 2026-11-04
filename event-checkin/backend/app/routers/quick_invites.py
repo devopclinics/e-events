@@ -31,6 +31,7 @@ PALETTES = {"mint": ("#123b35", "#e5efe8", "#cbdcbd"), "lavender": ("#25243e", "
 PALETTES.update({"sky": ("#173f5f", "#edf5fa", "#b8d8ed"), "sand": ("#59432d", "#faf3e7", "#dfc8a3"), "midnight": ("#e7e5fa", "#191b32", "#b9abd9")})
 
 class InviteDraft(BaseModel):
+    event_type: str | None = Field(default=None, max_length=80)
     name: str = Field(min_length=1, max_length=160)
     event_date: datetime
     timezone: str = Field(max_length=80)
@@ -236,10 +237,10 @@ async def create(data: InviteDraft, background_tasks: BackgroundTasks, db: Async
     events = (await db.scalars(select(Event).where(Event.org_id == org_id))).all()
     existing = next((e for e in events if preferences(e).get("request_id") == str(data.request_id)), None)
     if existing: return await workspace(existing, db)
-    prefs = {"quick_invite": {"style": data.style, "colour": data.colour, "cover": data.cover, "envelope": data.envelope, "request_id": str(data.request_id), "creator_email": str(data.creator_email or user.email), "creator_phone": data.creator_phone.strip(), "host_name": data.host_name.strip()}}
+    prefs = {"starting_point":"invitation", "quick_invite": {"style": data.style, "colour": data.colour, "cover": data.cover, "envelope": data.envelope, "request_id": str(data.request_id), "creator_email": str(data.creator_email or user.email), "creator_phone": data.creator_phone.strip(), "host_name": data.host_name.strip()}}
     result = await create_event(EventCreate(name=data.name, event_date=data.event_date, timezone=data.timezone,
                     venue_name=data.venue_name, description=data.message, setup_preferences=prefs,
-                    checkin_base_url=settings.public_base_url or settings.frontend_url, notify_sms=False, notify_whatsapp=False),
+                    checkin_base_url=settings.public_base_url or settings.frontend_url, notify_sms=False, notify_whatsapp=False, event_type=data.event_type),
                     background_tasks=background_tasks, db=db, current_user=user)
     event = await db.get(Event, result.id)
     event.status = "active"

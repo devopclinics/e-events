@@ -1,12 +1,23 @@
 import {parseUtc} from '../timeutil.js'
 export const CUSTOMER_JOURNEY_ENABLED = import.meta.env?.VITE_CUSTOMER_JOURNEY_ENABLED === 'true'
 export const STARTING_POINTS = [
- {id:'invitation',title:'Free invitation',description:'A beautiful link and simple replies.',type:'Private party',mode:'rsvp'},
- {id:'tickets',title:'Sell tickets',description:'Start with your event. Set up sales when ready.',type:'Other',mode:'ticketed'},
- {id:'conference',title:'Conference',description:'Bring sessions, speakers and guests together.',type:'Conference / seminar',mode:'rsvp'},
- {id:'celebration',title:'Private celebration',description:'Make a personal occasion feel special.',type:'Private party',mode:'rsvp'},
- {id:'fundraiser',title:'Fundraiser',description:'Bring people together around your cause.',type:'Community / religious event',mode:'rsvp'},
+ {id:'invitation',title:'Invite guests & collect RSVPs',description:'Share an invitation and keep every reply in one place.',mode:'rsvp',icon:'✉'},
+ {id:'tickets',title:'Sell tickets & manage registration',description:'Let people book their place and receive their event pass.',mode:'ticketed',icon:'◈'},
+ {id:'checkin',title:'Check guests in',description:'Create guest passes and manage arrival with QR scanning.',mode:'rsvp',icon:'▣'},
+ {id:'seating',title:'Arrange tables & seating',description:'Assign guests to tables and help them find their seats.',mode:'rsvp',icon:'▦'},
+ {id:'conference',title:'Organise a conference',description:'Bring registration, speakers, sessions and attendees together.',mode:'rsvp',icon:'▤'},
+ {id:'fundraiser',title:'Collect donations',description:'Give guests a simple way to support your cause.',mode:'rsvp',icon:'♡'},
 ]
+export const LAUNCH_EVENT_TYPES=['Wedding','Birthday','Conference / seminar','Corporate event','Fundraiser','Community / religious event','Concert / festival','Other']
+export const LAUNCH_NEXT = {
+ invitation:{title:'Preview your invitation, then share it.',description:'Your saved invitation is ready to review. Check its details and share the link when you are ready.',action:'Preview & share invitation',route:'/create-invitation',tool:'design'},
+ seating:{title:'Add your guests and build your tables.',description:'Start with your guest list, then choose table counts and seats per table. Assign guests and arrange the floor plan when ready.',action:'Set up tables & seating',tool:'seating'},
+ checkin:{title:'Import your guests and prepare their passes.',description:'Add or import your existing guest list first. Review personal passes before opening the scanner for arrivals.',action:'Add guests & prepare passes',route:'/guests-redesign?tab=guests',tool:'passes'},
+ tickets:{title:'Create your tickets and set up payments.',description:'Add ticket types and prices, then review payment readiness before opening sales.',action:'Set up tickets & payments',route:'/ticketing-redesign',tool:'tickets'},
+ conference:{title:'Build your conference programme.',description:'Start with sessions and speakers, then add registration and attendee tools in the same event.',action:'Set up the programme',tool:'programme'},
+ fundraiser:{title:'Create your giving campaign.',description:'Choose a goal and giving options, then review collection readiness before publishing.',action:'Set up donations',tool:'giving'},
+}
+export function launchNext(event){const goal=event?.setup_preferences?.starting_point;return LAUNCH_NEXT[goal]||null}
 export const CUSTOMER_TOOLS = [
   {
     "id": "seating",
@@ -516,7 +527,7 @@ export const FESTIO_ADVANTAGES = [
 ]
 
 export function recommendedRecipe(event) {
- const text=`${event?.event_type || ''} ${event?.setup_preferences?.starting_point || ''}`.toLowerCase()
+ const text=String(event?.event_type || event?.setup_preferences?.starting_point || '').toLowerCase()
  if(/wedding|nikkah|aqd/.test(text))return 'wedding'
  if(/conference|seminar|convention/.test(text))return 'conference'
  if(/fundrais|gala|banquet/.test(text))return 'fundraiser'

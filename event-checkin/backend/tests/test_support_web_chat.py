@@ -67,3 +67,15 @@ async def test_organiser_greeting_and_published_scope(ctx,monkeypatch):
     r=await ctx.client.post(P+'/messages',headers=h,json={'body':'Where is it?','request_id':str(uuid.uuid4())});assert 'Published Hall' in r.text and 'Wrong venue' not in r.text
     r=await ctx.client.post(P+'/messages',headers=h,json={'body':'my pass','request_id':str(uuid.uuid4())});assert r.json()['mode']=='human'
     assert (await ctx.client.post(P+'/session',json={'site_slug':'../private'})).status_code==422
+
+@pytest.mark.asyncio
+async def test_event_facts_outage_does_not_block_human_handover(ctx,monkeypatch):
+    from app.routers import support_web_chat as web
+    from fastapi import HTTPException
+    async with _Session() as db:db.add(SupportAutomationConfig(id='main',payload={**defaults(),'enabled':True},updated_by='test'));await db.commit()
+    async def published(slug):return {'id':'site-one','name':'Event','approved':True,'aliases':[],'answers':{'time':'10 AM'}}
+    monkeypatch.setattr(web,'published_profile',published)
+    r=await ctx.client.post(P+'/session',json={'site_slug':'one'});h={'Authorization':'Bearer '+r.json()['token']}
+    async def unavailable(slug):raise HTTPException(503,'Published event information unavailable')
+    monkeypatch.setattr(web,'published_profile',unavailable)
+    r=await ctx.client.post(P+'/messages',headers=h,json={'body':'human','request_id':str(uuid.uuid4())});assert r.status_code==200 and r.json()['mode']=='human'

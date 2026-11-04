@@ -122,3 +122,23 @@ async def test_verified_webhook_creates_only_one_job(ctx,monkeypatch):
  monkeypatch.setattr(transport,'bird',bird)
  for _ in range(2):assert (await ctx.client.post(P+'/bird',json={'id':m['id']})).status_code==204
  async with _Session() as db:assert await db.scalar(select(func.count()).select_from(Job))==1
+
+@pytest.mark.asyncio
+async def test_resuming_does_not_reply_to_messages_queued_before_handover(ctx,monkeypatch):
+ await configure();ident=await queue(incoming())
+ ctx.login(ctx.ids['superadmin'])
+ for mode in ['human','auto']:assert (await ctx.client.put(P+'/conversations/'+ident+'/automation',json={'mode':mode})).status_code==200
+ async def forbidden(*a,**kw):raise AssertionError('Old question must not be sent after resume')
+ monkeypatch.setattr(transport,'bird',forbidden)
+ async with _Session() as db:
+  await auto.process_one(db)
+  assert await db.scalar(select(func.count()).select_from(SupportMessage).where(SupportMessage.direction=='outgoing'))==0
+
+@pytest.mark.asyncio
+async def test_enabling_does_not_replay_recent_old_incoming_messages(ctx):
+ m=incoming()
+ async with _Session() as db:await transport.ingest(db,m);await db.commit()
+ await configure()
+ async with _Session() as db:
+  await auto.enqueue(db,m['id']);await db.commit()
+  assert await db.scalar(select(func.count()).select_from(Job))==0

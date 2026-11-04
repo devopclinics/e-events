@@ -112,5 +112,5 @@ async def set_mode(ident:str,data:Mode,db:AsyncSession=Depends(get_db),user:User
     row=await db.get(State,ident)
     if not row:row=State(conversation_id=ident,context={});db.add(row)
     row.mode=data.mode;row.updated_at=datetime.utcnow()
-    if data.mode=='auto':row.context={}
+    if data.mode=='auto':row.context={'_resume_after':row.updated_at.isoformat()}
     await db.commit();return {'mode':row.mode}

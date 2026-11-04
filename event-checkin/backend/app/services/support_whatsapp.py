@@ -59,9 +59,20 @@ def verify_signature(raw, headers):
             # timestamp + newline + sorted query + newline + binary SHA256(body).
             # This receiver's configured URL has no query string.
             stamp = headers['messagebird-request-timestamp']
+            if abs(time.time()-int(stamp))>300:log.warning('Support webhook retry outside freshness window: age_seconds=%s',round(time.time()-int(stamp)))
             check(abs(time.time()-int(stamp))<=300)
             signed = stamp.encode()+b'\n\n'+hashlib.sha256(raw).digest()
             expected=base64.b64encode(hmac.new(key.encode(),signed,hashlib.sha256).digest()).decode()
+            if not hmac.compare_digest(expected,headers['messagebird-signature']):
+                # Channels has a different signing envelope from the retired
+                # SDK. Diagnose matching envelopes without logging signatures,
+                # keys, request bodies, phone numbers or message text.
+                matches=[]
+                for label,prefix in [('url',stamp+url),('url-lines',stamp+'\n'+url+'\n'),('sdk',stamp+'\n\n')]:
+                    for encoding,body_hash in [('binary',hashlib.sha256(raw).digest()),('hex',hashlib.sha256(raw).hexdigest().encode())]:
+                        candidate=base64.b64encode(hmac.new(key.encode(),prefix.encode()+body_hash,hashlib.sha256).digest()).decode()
+                        if hmac.compare_digest(candidate,headers['messagebird-signature']):matches.append(label+'-'+encoding)
+                log.warning('Support legacy signature envelope match=%s age_seconds=%s',matches,round(time.time()-int(stamp)))
             check(hmac.compare_digest(expected,headers['messagebird-signature']))
         else:
             stamp = headers['webhook-timestamp']; ident = headers['webhook-id']

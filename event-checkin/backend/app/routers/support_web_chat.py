@@ -122,3 +122,17 @@ async def reply(ident:str,data:Send,db:AsyncSession=Depends(get_db),user:User=De
     if len(row.messages)>=200:raise HTTPException(409,'This conversation is full.')
     m=message(text,'team',str(data.request_id));m['actor']=user.id
     row.messages=[*row.messages,m];row.mode='human';row.updated_at=now();await db.commit();return public(row)
+
+
+@router.post('/automation',dependencies=[Depends(rate_limit(limit=10,window=60,scope='web-chat-resume'))])
+async def resume(response:Response,authorization:str|None=Header(default=None),db:AsyncSession=Depends(get_db)):
+    response.headers['Cache-Control']='no-store'
+    row=await owned(db,authorization,True)
+    cfg,_=await config(db)
+    if not cfg.get('enabled'):raise HTTPException(409,'Automated help is paused. The Festio team can still reply here.')
+    if row.mode!='auto':
+        if len(row.messages)>=200:raise HTTPException(409,'This conversation is full. Start a new chat.')
+        row.mode='auto';row.context={k:v for k,v in row.context.items() if k.startswith('_') and k!='_clarified'}
+        row.messages=[*row.messages,message('You chose to continue with automated help. Ask a product or event question, or open a Help article. The Festio team can still see the earlier conversation.','bot')]
+        row.updated_at=now();await db.commit()
+    return public(row)

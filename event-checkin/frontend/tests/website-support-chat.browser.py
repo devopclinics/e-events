@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 from http.server import ThreadingHTTPServer,SimpleHTTPRequestHandler
 import subprocess,threading,json
 from playwright.sync_api import sync_playwright,expect
-ROOT=Path(__file__).resolve().parents[1];OUT=Path('/home/dev/events/artifacts/festio-website-chat-2026');OUT.mkdir(exist_ok=True)
+ROOT=Path(__file__).resolve().parents[1];OUT=Path('/home/dev/events/artifacts/festio-chat-help-2026');OUT.mkdir(exist_ok=True)
 with TemporaryDirectory() as tmp:
  d=Path(tmp)
  script=r'''import {build} from 'esbuild';await build({stdin:{contents:`import React from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter} from 'react-router-dom';import Contact from './src/components/WhatsAppContact.jsx';const q=new URLSearchParams(location.search);createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={[q.get('route')||'/']}><Contact/></MemoryRouter>);`,resolveDir:process.cwd(),loader:'jsx'},bundle:true,jsx:'automatic',outfile:process.argv[1],define:{'import.meta.env':'{}','process.env.NODE_ENV':'"production"'},loader:{'.css':'css'},plugins:[{name:'identity',setup(b){b.onResolve({filter:/context\/AuthContext/},()=>({path:'auth',namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:`export const useAuth=()=>({loading:false,user:location.search.includes('manager')?{id:'manager',is_platform_superadmin:true}:location.search.includes('organiser')?{id:'organiser'}:null})`,loader:'js'}))}}]});'''
@@ -23,6 +23,8 @@ with TemporaryDirectory() as tmp:
    if path=='platform/support/chat/session' and r.request.method=='POST':
     token='opaque-test-token-'+str(len(sessions)+1);sessions[token]=messages if not sessions else [{'id':'new','role':'bot','body':'A new conversation'}];return r.fulfill(json={'token':token,'reference':'WEB-TEST-'+str(len(sessions)),'messages':sessions[token],'mode':state['mode']})
    token=r.request.headers.get('authorization','').removeprefix('Bearer ');assert token in sessions;current_messages=sessions[token]
+   if path=='platform/support/chat/automation':
+    state['mode']='auto';current_messages.append({'id':'resumed','role':'bot','body':'Read Help: /guide.html#org-create'})
    if path=='platform/support/chat/messages':
     data=r.request.post_data_json;current_messages.append({'id':data['request_id'],'role':'customer','body':data['body']})
     if data['body']=='human':state['mode']='human';reply='The team can reply here.'
@@ -36,5 +38,6 @@ with TemporaryDirectory() as tmp:
   page.screenshot(path=str(OUT/'website-chat-desktop.png'));page.get_by_role('button',name='WhatsApp',exact=True).click();expect(page.get_by_role('link',name='Continue in WhatsApp',exact=False)).to_have_attribute('href','https://wa.me/15553888825?text=Hi+Festio');checks.append('WhatsApp remains an explicit separate choice')
   page.get_by_role('button',name='Chat here',exact=True).click();page.set_viewport_size({'width':320,'height':640});page.screenshot(path=str(OUT/'website-chat-mobile.png'));assert page.locator('body').evaluate('(e)=>e.scrollWidth<=innerWidth');expect(page.get_by_role('button',name='Send message',exact=True)).to_be_visible();checks.append('Chat fits a 320px mobile screen')
   page.once('dialog',lambda d:d.accept());page.get_by_role('button',name='Start a new conversation',exact=True).click();page.get_by_role('button',name='Start chat here',exact=True).click();expect(page.get_by_role('log')).to_contain_text('A new conversation');page.get_by_role('button',name='Saved conversations',exact=False).click();page.get_by_role('button',name='WEB-TEST-1',exact=False).click();expect(page.get_by_role('log')).to_contain_text('Hello from Festio support.');checks.append('Starting a new chat preserves access to the previous conversation')
+  page.get_by_role('button',name='Continue with automated help',exact=True).click();expect(page.get_by_role('status')).not_to_contain_text('Waiting');expect(page.get_by_role('log')).to_contain_text('Hello from Festio support.');expect(page.get_by_role('link',name='Open Help article',exact=True)).to_have_attribute('href','/guide.html#org-create');checks.append('Explicit return to automated help preserves history and renders a Help article link')
   assert not errors,errors;b.close()
  server.shutdown();(OUT/'browser-validation.json').write_text(json.dumps({'checks':checks,'page_errors':errors,'provider_messages_sent':0},indent=2));print('Website chat browser checks passed:',len(checks))

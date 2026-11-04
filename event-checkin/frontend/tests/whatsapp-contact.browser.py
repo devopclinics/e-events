@@ -1,0 +1,29 @@
+"""Public WhatsApp handoff, isolated auth fixture; no messages sent."""
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from http.server import ThreadingHTTPServer,SimpleHTTPRequestHandler
+import subprocess,threading,json
+from playwright.sync_api import sync_playwright,expect
+ROOT=Path(__file__).resolve().parents[1];OUT=Path('/home/dev/events/artifacts/festio-public-whatsapp-2026');OUT.mkdir(exist_ok=True)
+with TemporaryDirectory() as tmp:
+ d=Path(tmp)
+ script=r'''import {build} from 'esbuild';await build({stdin:{contents:`import React from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter} from 'react-router-dom';import Contact from './src/components/WhatsAppContact.jsx';const q=new URLSearchParams(location.search);createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={[q.get('route')||'/']}><Contact/></MemoryRouter>);`,resolveDir:process.cwd(),loader:'jsx'},bundle:true,jsx:'automatic',outfile:process.argv[1],define:{'import.meta.env':'{}','process.env.NODE_ENV':'"production"'},loader:{'.css':'css'},plugins:[{name:'identity',setup(b){b.onResolve({filter:/context\/AuthContext/},()=>({path:'auth',namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:`export const useAuth=()=>({loading:false,user:location.search.includes('manager')?{id:'manager',is_platform_superadmin:true}:location.search.includes('organiser')?{id:'organiser'}:null})`,loader:'js'}))}}]});'''
+ subprocess.run(['/tmp/mumineen-node/node-v22.16.0-linux-x64/bin/node','--input-type=module','-e',script,str(d/'app.js')],cwd=ROOT,check=True)
+ (d/'index.html').write_text('<meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="app.css"><style>body{margin:0;background:#f6f1e7;font-family:Arial}main{padding:clamp(20px,5vw,80px);color:#174d3b}h1{font:clamp(26px,5vw,60px) Georgia}</style><main><h1>Your event.<br>Everything connected.</h1><p>Create · Share · Run</p></main><div id="root"></div><script src="app.js"></script>')
+ class H(SimpleHTTPRequestHandler):
+  def __init__(self,*a,**kw):super().__init__(*a,directory=tmp,**kw)
+  def log_message(self,*a):pass
+ server=ThreadingHTTPServer(('127.0.0.1',0),H);threading.Thread(target=server.serve_forever,daemon=True).start();url=f'http://127.0.0.1:{server.server_port}'
+ checks=[];errors=[];api_calls=[]
+ with sync_playwright() as p:
+  b=p.chromium.launch(executable_path='/home/dev/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome');page=b.new_page(viewport={'width':1440,'height':1000});page.on('pageerror',lambda e:errors.append(str(e)));page.route('**/api/**',lambda r:(api_calls.append(r.request.url),r.abort()));page.goto(url);launch=page.get_by_role('button',name='Chat with Festio on WhatsApp',exact=True);launch.click();dialog=page.get_by_role('dialog',name='Chat with Festio',exact=True);expect(dialog).to_be_visible();page.get_by_label('Start the conversation').fill('Hi Festio, help me set up seating.');href=page.get_by_role('link',name='Continue in WhatsApp',exact=False).get_attribute('href');assert href.startswith('https://wa.me/15553888825?text=');assert 'seating' in href;assert page.get_by_role('link',name='Continue in WhatsApp',exact=False).get_attribute('rel')=='noopener noreferrer';checks.append('Correct recipient and explicitly composed message; no automatic message sending')
+  page.screenshot(path=str(OUT/'desktop-contact.png'));page.keyboard.press('Escape');expect(dialog).to_have_count(0);expect(launch).to_be_focused();checks.append('Escape closes and restores launcher focus')
+  handle=page.get_by_role('button',name='Move WhatsApp button. Drag or use arrow keys.',exact=True);before=page.locator('.fwc-launch').bounding_box();handle.focus();page.keyboard.press('ArrowLeft');after=page.locator('.fwc-launch').bounding_box();assert after['x']<before['x'];page.reload();expect(page.locator('.fwc-launch')).to_be_visible();assert abs(page.locator('.fwc-launch').bounding_box()['x']-after['x'])<2;checks.append('Keyboard movement persists across reload')
+  box=handle.bounding_box();page.mouse.move(box['x']+10,box['y']+7);page.mouse.down();page.mouse.move(150,200,steps=10);page.mouse.up();assert page.locator('.fwc-launch').bounding_box()['x']<300;checks.append('Drag handle moves launcher with pointer capture')
+  launch.click();page.evaluate("Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async()=>{throw new Error('denied')}}})");page.get_by_role('button',name='Copy number',exact=True).click();expect(page.get_by_role('status')).to_contain_text('Could not copy');checks.append('Clipboard failure gives usable fallback number')
+  page.set_viewport_size({'width':320,'height':640});page.screenshot(path=str(OUT/'mobile-contact.png'));box=dialog.bounding_box();assert box['x']>=0 and box['x']+box['width']<=320;assert page.locator('body').evaluate('(e)=>e.scrollWidth<=innerWidth');checks.append('Panel fits 320px mobile viewport')
+  for query in ['?route=/r/private-token','?route=/live/display/token','?role=manager','?route=/admin-redesign']:
+   page.goto(url+query);expect(page.locator('.fwc-root')).to_have_count(0)
+  page.goto(url+'?role=organiser&route=/guests-redesign');expect(page.get_by_role('button',name='Chat with Festio on WhatsApp',exact=True)).to_be_visible();checks.append('Visitor/organiser routing and management/guest/display exclusions')
+  assert not errors,errors;assert not api_calls,api_calls;b.close()
+ server.shutdown();(OUT/'browser-validation.json').write_text(json.dumps({'checks':checks,'page_errors':errors,'private_api_requests':api_calls,'messages_sent':0},indent=2));print('Public WhatsApp browser checks passed:',len(checks))

@@ -152,3 +152,15 @@ def test_legacy_hmac_raw_body_and_timestamp():
     service.verify_signature(raw,headers)
     from fastapi import HTTPException
     with pytest.raises(HTTPException):service.verify_signature(raw+b' ',headers)
+
+
+def test_channels_url_bound_hmac():
+    settings.support_whatsapp_signing_key='channels-key';raw=b'{"id":"test"}';stamp=str(int(time.time()))
+    signed=stamp.encode()+b'\n'+settings.support_whatsapp_webhook_url.encode()+b'\n'+hashlib.sha256(raw).digest()
+    signature=base64.b64encode(hmac.new(b'channels-key',signed,hashlib.sha256).digest()).decode()
+    headers={'messagebird-request-timestamp':stamp,'messagebird-signature':signature}
+    service.verify_signature(raw,headers)
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException):service.verify_signature(raw+b' ',headers)
+    settings.support_whatsapp_webhook_url='https://wrong.example/webhook'
+    with pytest.raises(HTTPException):service.verify_signature(raw,headers)

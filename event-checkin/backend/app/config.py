@@ -114,6 +114,10 @@ class Settings(BaseSettings):
     twilio_whatsapp_invite_template_sid: str = ""     # Content SID for invite template (prod only)
     twilio_whatsapp_admission_template_sid: str = ""  # Content SID for admission template (prod only)
 
+    support_whatsapp_enabled: bool = False
+    support_whatsapp_signing_key: str = ""
+    support_whatsapp_webhook_url: str = ""
+
     bird_access_key: str = ""
     bird_workspace_id: str = ""
     bird_sms_channel_id: str = ""

@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from .database import engine
 from .config import settings
 from .engagement_config import engagement_settings
-from .routers import event_forms, prospect_webhooks, guest_sheets, media_library, quick_invites
+from .routers import support_whatsapp, event_forms, prospect_webhooks, guest_sheets, media_library, quick_invites
 from .services import quick_invite_outbox
 from .routers import guest_services, events, guests, scanner, dashboard, seating, menu, logistics, registry, speakers, partners, reminders, scheduled_communications, access, trials, demo, classify, messaging, meta_whatsapp, resend_webhooks, templates as templates_router, self_checkin, experience, tasks, public_sites, donations, live_content, conference_center
 from .routers import auth as auth_router
@@ -54,6 +54,11 @@ async def lifespan(app: FastAPI):
     # already run them. The pipeline phase (`python -m app.db_migrate`) is
     # preferred — it fails fast before swapping production.
     await db_migrate.apply(engine)
+
+    support_task = None
+    if settings.support_whatsapp_enabled:
+        from .services import support_whatsapp as support_service
+        support_task = asyncio.create_task(support_service.run())
 
     # Load the Console-editable messaging credit weights (global + per-org
     # overrides) into entitlements.py's in-memory cache so take_message_credit/
@@ -128,6 +133,12 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        if support_task is not None:
+            support_task.cancel()
+            try:
+                await support_task
+            except asyncio.CancelledError:
+                pass
         await routers.stop_sse_subscriber()
         cache_refresh_task.cancel()
         quick_invite_task.cancel()
@@ -354,3 +365,5 @@ async def health():
 # Read-only pilot barrier; no scheduling or sending side effects.
 from .routers import marketing_email_readiness
 app.include_router(marketing_email_readiness.router)
+
+app.include_router(support_whatsapp.router, prefix="/api/platform/support/whatsapp", tags=["platform-support"])

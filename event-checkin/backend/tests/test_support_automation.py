@@ -142,3 +142,15 @@ async def test_enabling_does_not_replay_recent_old_incoming_messages(ctx):
  async with _Session() as db:
   await auto.enqueue(db,m['id']);await db.commit()
   assert await db.scalar(select(func.count()).select_from(Job))==0
+
+@pytest.mark.asyncio
+async def test_shared_number_test_routing_never_queues_for_both_environments(ctx,monkeypatch):
+ await configure();m=incoming();monkeypatch.setattr(settings,'support_whatsapp_test_phones','+18320000000')
+ monkeypatch.setattr(settings,'support_whatsapp_automation_scope','production')
+ await queue(m)
+ async with _Session() as db:assert await db.scalar(select(func.count()).select_from(Job))==0
+ monkeypatch.setattr(settings,'support_whatsapp_automation_scope','staging')
+ async with _Session() as db:await auto.enqueue(db,m['id']);await db.commit();assert await db.scalar(select(func.count()).select_from(Job))==1
+ assert not auto.automation_recipient('+2348000000000')
+ monkeypatch.setattr(settings,'support_whatsapp_test_phones','');assert not auto.automation_recipient('+18320000000')
+ monkeypatch.setattr(settings,'support_whatsapp_automation_scope','unknown');assert not auto.automation_recipient('+18320000000')

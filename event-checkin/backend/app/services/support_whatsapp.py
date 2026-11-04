@@ -183,7 +183,7 @@ async def run():
                     locked=await db.scalar(text('SELECT pg_try_advisory_xact_lock(719462035)'))
                     if not locked:
                         await asyncio.sleep(30); continue
-                await sync_history(db)
+                if settings.support_whatsapp_automation_scope!='staging':await sync_history(db)
                 pending = (await db.scalars(select(SupportMessage).where(
                     SupportMessage.direction=='outgoing',SupportMessage.provider_id.is_not(None),
                     SupportMessage.status.in_(['accepted','queued','sent','submitting','pending','processing','sending'])

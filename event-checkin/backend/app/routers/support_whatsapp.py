@@ -162,6 +162,10 @@ async def webhook(request:Request,db:AsyncSession=Depends(get_db)):
     response=await service.bird('GET',service.channel_path()+'/'+ident)
     if response.status_code!=200:raise HTTPException(502,'Could not verify Bird message')
     canonical=response.json()
+    if settings.support_whatsapp_automation_scope=='staging' and canonical.get('direction')=='incoming':
+        from app.services.support_automation import automation_recipient
+        candidate=service.normalize(canonical)
+        if not candidate or not automation_recipient(candidate['phone']):return Response(status_code=204)
     await service.ingest(db,canonical)
     from app.services.support_automation import enqueue
     await enqueue(db,ident)

@@ -18,6 +18,12 @@ def defaults():return deepcopy(DEFAULTS)
 
 def contains(text,term):return bool(re.search(r'(?<!\w)'+re.escape(term.lower())+r'(?!\w)',text))
 
+def human_request(body):
+    text=' '.join(str(body or '').lower().split())
+    explicit=['human','agent','speak to someone','talk to someone','talk to staff','speak to staff','contact support','talk to support','customer support','talk to the team','speak to a person','refund','complaint','unsubscribe','stop']
+    personal=['my pass','my qr','my seat','my table','my ticket','resend','registration status','payment status','confirm me','confirm my','seat number']
+    return text in ['person','support','staff','team'] or any(contains(text,w) for w in explicit+personal)
+
 def answer(config,context,body):
     """Returns (labelled text, new context, mode); pure and previewable."""
     text=' '.join(str(body or '').lower().split())
@@ -28,8 +34,7 @@ def answer(config,context,body):
     profiles=[p for p in config.get('profiles',[]) if p.get('approved')]
     byid={p['id']:p for p in profiles}
     handover=lambda:('Festio automated reply\n\n'+config['handover'],context,'human')
-    if any(contains(text,w) for w in ['human','person','agent','support','staff','speak to someone','talk to someone','refund','complaint','unsubscribe','stop']):return handover()
-    if any(contains(text,w) for w in ['my pass','my qr','my seat','my table','my ticket','resend','registration status','payment status','confirm me','confirm my','seat number']):return handover()
+    if human_request(text):return handover()
     from .support_product_knowledge import product_answer
     guidance=product_answer(text)
     if guidance:return 'Festio automated reply\n\n'+guidance,context,'auto'

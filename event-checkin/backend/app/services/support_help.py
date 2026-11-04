@@ -8,6 +8,7 @@ ALIASES={
  'org-planner':['planner','budget','vendors','runsheet'],
  'org-team':['invite team','team members','invite staff'],
  'org-ticketing':['sell tickets','ticketing','ticket sales'],
+ 'org-export':['export guest','download guest','export the guest'],
  'org-guests':['import guests','guest list','add guests'],
  'org-meals':['menu management','meal selection','food menu'],
 }
@@ -15,6 +16,7 @@ STOP=set('how do i a an the is to for and with on of my can what please help me 
 def words(text):return {w[:-1] if len(w)>4 and w.endswith('s') else w for w in re.findall(r'[a-z0-9]+',text.lower()) if w not in STOP}
 def find_help(text):
  text=' '.join(text.lower().split());byid={t['id']:t for t in CATALOG['topics']}
+ if words(text)&{'export','download'} and 'guest' in words(text):return byid.get('org-export')
  for ident,terms in ALIASES.items():
   if any(term in text for term in terms) and ident in byid:return byid[ident]
  if not re.search(r'\b(how|help|setup|configure|manage|enable|import|export|use)\b',text):return None

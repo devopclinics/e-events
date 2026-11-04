@@ -12,7 +12,7 @@ from app.config import settings
 from app.models import SupportWebChat,User
 from app.ratelimit import rate_limit
 from app.services.support_automation import config
-from app.services.support_answers import answer,human_request
+from app.services.support_answers import answer,human_request,contains
 router=APIRouter()
 
 def now():return datetime.utcnow()
@@ -41,6 +41,16 @@ async def published_profile(slug):
     except (httpx.HTTPError,ValueError):
         logging.getLogger(__name__).warning('Published support facts unavailable')
         raise HTTPException(503,'Published event information is temporarily unavailable. Please try again.')
+
+async def find_published_events(text):
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            response=await client.get(settings.public_site_service_url.rstrip('/')+'/internal/support-events',params={'q':text[:1000]},headers={'X-Internal-Token':settings.public_site_internal_token})
+        response.raise_for_status()
+        return response.json().get('items',[])[:5]
+    except (httpx.HTTPError,ValueError):
+        logging.getLogger(__name__).warning('Published support event selection unavailable')
+        return []
 
 @router.post('/session',dependencies=[Depends(rate_limit(limit=10,window=3600,scope='web-chat-create'))])
 async def create(response:Response,data:Start|None=None,db:AsyncSession=Depends(get_db)):
@@ -80,14 +90,42 @@ async def send(data:Send,response:Response,authorization:str|None=Header(default
         cfg,_=await config(db)
         if cfg.get('enabled'):
             personal=human_request(text)
+            if not row.context.get('topic'):
+                previous=next((m for m in reversed(row.messages) if m.get('role') in ['bot','team']),{})
+                if previous.get('role')=='bot' and 'Do you already have an event?' in previous.get('body','') and 'seating' in previous.get('body','').lower():row.context={**row.context,'topic':'seating','awaiting':'existing_event'}
             meta={k:v for k,v in row.context.items() if k.startswith('_')}
             from app.services.support_product_knowledge import product_answer
-            if meta.get('_site_slug') and not personal and not product_answer(text):
-                profile=await published_profile(meta['_site_slug'])
+            from app.services.support_dialogue import fact_intent,normalise,pricing_intent
+            if (product_answer(normalise(text)) or pricing_intent(text)) and not fact_intent(text):
+                meta.pop('_pending_fact',None);meta.pop('_candidate_sites',None)
+            candidates=meta.get('_candidate_sites',[])
+            selected=None
+            approved_known=any(p.get('approved') and (row.context.get('event')==p.get('id') or any(contains(text.lower(),n) for n in [p.get('name',''),*p.get('aliases',[])] if n)) for p in cfg.get('profiles',[]))
+            if approved_known and not meta.get('_site_slug'):meta.pop('_selected_site',None)
+            if not meta.get('_site_slug') and not personal and not approved_known:
+                if text.isdecimal() and candidates and 0<int(text)<=len(candidates):selected=candidates[int(text)-1]
+                elif candidates:selected=next((p for p in candidates if normalise(text)==normalise(p['name'])),None)
+                if not selected and (fact_intent(text) or meta.get('_pending_fact') and not product_answer(normalise(text))):
+                    candidates=await find_published_events(text)
+                    meta['_candidate_sites']=candidates
+                    if len(candidates)==1:selected=candidates[0]
+                if selected:
+                    meta['_selected_site']=selected['slug']
+                    meta.pop('_candidate_sites',None)
+            scope=meta.get('_site_slug') or meta.get('_selected_site')
+            if not scope and not personal and not approved_known and (fact_intent(text) or text.isdecimal() and candidates or meta.get('_pending_fact') and not product_answer(normalise(text))):
+                menu='\n'.join(str(i+1)+'. '+p['name'] for i,p in enumerate(candidates))
+                body=('Which published event do you mean? Reply with its name or number.\n\n'+menu) if candidates else 'What is the event name or its published Festio website link? I need to identify the correct public event before answering its date or venue.'
+                row.context={**row.context,**meta,'_pending_fact':text if fact_intent(text) else meta.get('_pending_fact',text)};row.mode='auto'
+                row.messages=[*messages,message(body,'bot')];row.updated_at=now();await db.commit();return public(row)
+            if scope and not personal and (fact_intent(text) or selected or not product_answer(normalise(text)) and not pricing_intent(text)):
+
+                profile=await published_profile(scope)
                 cfg={**cfg,'profiles':[profile]}
                 answer_context={**row.context,'event':profile['id']}
             else:answer_context=row.context
-            body,context,mode=answer(cfg,answer_context,text)
+            question=meta.pop('_pending_fact',text) if selected else text
+            body,context,mode=answer(cfg,answer_context,question)
             if mode=='human' and not personal and not meta.get('_clarified'):
                 body='Are you asking about using Festio, or about a particular event? Tell me what you want to do, or give the event name. For personal passes, seats or payments, choose Talk to the team.'
                 mode='auto';meta['_clarified']=True
@@ -132,7 +170,7 @@ async def resume(response:Response,authorization:str|None=Header(default=None),d
     if not cfg.get('enabled'):raise HTTPException(409,'Automated help is paused. The Festio team can still reply here.')
     if row.mode!='auto':
         if len(row.messages)>=200:raise HTTPException(409,'This conversation is full. Start a new chat.')
-        row.mode='auto';row.context={k:v for k,v in row.context.items() if k.startswith('_') and k!='_clarified'}
+        row.mode='auto';row.context={k:v for k,v in row.context.items() if (k.startswith('_') or k in ['topic','awaiting']) and k!='_clarified'}
         row.messages=[*row.messages,message('You chose to continue with automated help. Ask a product or event question, or open a Help article. The Festio team can still see the earlier conversation.','bot')]
         row.updated_at=now();await db.commit()
     return public(row)

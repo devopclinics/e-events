@@ -280,3 +280,22 @@ async def support_facts(slug:str,db:AsyncSession=Depends(get_db)):
     from .support_chat import profile
     from fastapi.responses import JSONResponse
     return JSONResponse(profile(site.id,c),headers={'Cache-Control':'no-store'})
+
+
+@app.get('/internal/support-events',dependencies=[Depends(require_internal)])
+async def support_events(q:str='',db:AsyncSession=Depends(get_db)):
+    if not settings.enabled:return {'items':[]}
+    import re
+    def words(value):return ' '.join(re.findall(r'[a-z0-9]+',str(value).lower()))
+    query=words(q[:1000])
+    rows=(await db.execute(select(Site,Release).join(Release,Release.id==Site.published_release_id).where(Site.enabled.is_(True)).order_by(Site.slug).limit(500))).all()
+    items=[]
+    for site,release in rows:
+        name=str((release.snapshot.get('content') or {}).get('event_name') or '')
+        title=words(name)
+        overlap=len(set(title.split()) & set(query.split()))
+        exact=bool(title and title in query or words(site.slug) in query)
+        if exact or overlap>=2:items.append({'slug':site.slug,'name':name,'_score':100 if exact else overlap})
+    items.sort(key=lambda p:p['_score'],reverse=True)
+    if items and items[0]['_score']==100:items=[p for p in items if p['_score']==100]
+    return {'items':[{k:v for k,v in p.items() if k!='_score'} for p in items[:5]]}

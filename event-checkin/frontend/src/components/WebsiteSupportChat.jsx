@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react'
 const baseKey='festio:website-support:v1'
-function ReplyText({body}){return String(body).split(/(https:\/\/[^\s]+|\/(?:setup-redesign|create-invitation|guide\.html)[^\s]*)/g).map((part,i)=>/^(https:\/\/|\/(setup-redesign|create-invitation|guide\.html))/.test(part)?<a key={i} href={part} target="_blank" rel="noopener noreferrer">{part.startsWith('/')?'Open '+(part.includes('setup-redesign')?'Setup Guide':part.includes('guide.html')?'Help article':'invitation creator'):part}</a>:part)}
+function ReplyText({body}){return String(body).split(/(https:\/\/[^\s]+|\/(?:setup-redesign|create-invitation|guide\.html|pricing)[^\s]*)/g).map((part,i)=>/^(https:\/\/|\/(setup-redesign|create-invitation|guide\.html|pricing))/.test(part)?<a key={i} href={part} target="_blank" rel="noopener noreferrer">{part.startsWith('/')?'Open '+(part.includes('setup-redesign')?'Setup Guide':part.includes('guide.html')?'Help article':part.includes('/pricing')?'pricing':'invitation creator'):part}</a>:part)}
 export default function WebsiteSupportChat({page='general',siteSlug=''}){
  const key=baseKey+(siteSlug?':site:'+siteSlug:''),historyKey=key+':history'
  const [history,setHistory]=useState(()=>{try{return JSON.parse(localStorage.getItem(historyKey)||'[]').filter(x=>x.token&&new Date(x.expires_at)>new Date())}catch{return []}}),[showHistory,setShowHistory]=useState(false)

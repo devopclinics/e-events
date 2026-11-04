@@ -26,18 +26,20 @@ def human_request(body):
 
 def answer(config,context,body):
     """Returns (labelled text, new context, mode); pure and previewable."""
-    text=' '.join(str(body or '').lower().split())
+    from .support_dialogue import normalise,product_dialogue
+    text=normalise(body)
     raw=context if isinstance(context,dict) else {}
     context={}
     if isinstance(raw.get('event'),str):context['event']=raw['event']
     if isinstance(raw.get('menu'),list) and all(isinstance(x,str) for x in raw['menu']):context['menu']=raw['menu'][:20]
+    if raw.get('topic') in ['seating','pricing','event_creation']:context['topic']=raw['topic']
+    if raw.get('awaiting') in ['existing_event','guest_list','tables','quote_scope','quote_request','first_tool']:context['awaiting']=raw['awaiting']
     profiles=[p for p in config.get('profiles',[]) if p.get('approved')]
     byid={p['id']:p for p in profiles}
     handover=lambda:('Festio automated reply\n\n'+config['handover'],context,'human')
     if human_request(text):return handover()
-    from .support_product_knowledge import product_answer
-    guidance=product_answer(text)
-    if guidance:return 'Festio automated reply\n\n'+guidance,context,'auto'
+    guidance,next_context=product_dialogue(text,context)
+    if guidance:return 'Festio automated reply\n\n'+guidance,next_context,'auto'
     if any(contains(text,w) for w in ['other event','change event','switch event','events','menu']):context={}
     # Explicit names/aliases only; never infer an event or identity from a phone.
     named=[p for p in profiles if any(contains(text,n) for n in [p['name'],*p.get('aliases',[])] if n)]

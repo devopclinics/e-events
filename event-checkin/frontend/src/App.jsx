@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import SupportWidget from './components/SupportWidget'
+import ManagementWhatsApp from './components/ManagementWhatsApp'
 import RedesignGate from './pages/redesign/RedesignGate'
 import { setUiPreference } from './pages/redesign/uiPreference'
 
@@ -636,6 +637,7 @@ export default function App() {
         <div className="app-shell min-h-screen flex flex-col antialiased">
           <AppRoutes />
           <SupportWidget />
+          <ManagementWhatsApp />
         </div>
       </AuthProvider>
     </ThemeProvider>

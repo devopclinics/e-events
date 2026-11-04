@@ -561,6 +561,12 @@ async function downloadFile(path, filename, { withAuth = true } = {}) {
 }
 
 export const api = {
+  supportWhatsAppList: (q='',state='all',offset=0) => req('GET', `/platform/support/whatsapp/conversations?q=${encodeURIComponent(q)}&state=${state}&offset=${offset}`),
+  supportWhatsAppThread: (id,before) => req('GET', `/platform/support/whatsapp/conversations/${encodeURIComponent(id)}${before?'?before='+encodeURIComponent(before):''}`),
+  supportWhatsAppRead: (id,data) => req('POST', `/platform/support/whatsapp/conversations/${encodeURIComponent(id)}/read`,data),
+  supportWhatsAppState: (id,status) => req('PATCH', `/platform/support/whatsapp/conversations/${encodeURIComponent(id)}`,{status}),
+  supportWhatsAppReply: (id,data) => req('POST', `/platform/support/whatsapp/conversations/${encodeURIComponent(id)}/reply`,data,25000),
+  supportWhatsAppSync: page_token => req('POST','/platform/support/whatsapp/sync',{page_token},60000),
   customizeQuickInviteLink: (id, data) => req('POST', `/quick-invites/manage/${encodeURIComponent(id)}/link`, data),
   quickInvites: () => req('GET', '/quick-invites'),
   createQuickInvite: data => req('POST', '/quick-invites', data),

@@ -3249,3 +3249,39 @@ class OrganizationMediaAsset(Base):
     uploaded_by: Mapped[str] = mapped_column(String(36))
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class SupportConversation(Base):
+    """Platform-private WhatsApp support; never an event-team resource."""
+    __tablename__ = 'support_conversations'
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    channel_id: Mapped[str] = mapped_column(String(80))
+    phone: Mapped[str] = mapped_column(String(40))
+    name: Mapped[str] = mapped_column(String(255), default='')
+    status: Mapped[str] = mapped_column(String(20), default='open')
+    last_incoming_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_message_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    __table_args__ = (UniqueConstraint('channel_id', 'phone', name='uq_support_channel_phone'),)
+
+
+class SupportMessage(Base):
+    __tablename__ = 'support_messages'
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    conversation_id: Mapped[str] = mapped_column(ForeignKey('support_conversations.id', ondelete='CASCADE'), index=True)
+    provider_id: Mapped[str | None] = mapped_column(String(80), unique=True, nullable=True)
+    request_id: Mapped[str | None] = mapped_column(String(36), unique=True, nullable=True)
+    direction: Mapped[str] = mapped_column(String(12))
+    body: Mapped[str] = mapped_column(Text)
+    kind: Mapped[str] = mapped_column(String(30), default='text')
+    status: Mapped[str] = mapped_column(String(40))
+    sent_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    received_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    error: Mapped[str | None] = mapped_column(String(300), nullable=True)
+
+
+class SupportRead(Base):
+    __tablename__ = 'support_reads'
+    conversation_id: Mapped[str] = mapped_column(ForeignKey('support_conversations.id', ondelete='CASCADE'), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    read_at: Mapped[datetime] = mapped_column(DateTime)

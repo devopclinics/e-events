@@ -1,0 +1,43 @@
+"""Actual support component, mocked identity/provider HTTP. Never sends WhatsApp."""
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from http.server import ThreadingHTTPServer,SimpleHTTPRequestHandler
+from datetime import datetime,timedelta,timezone
+import subprocess,threading,json
+from playwright.sync_api import sync_playwright,expect
+ROOT=Path(__file__).resolve().parents[1];OUT=Path('/home/dev/events/artifacts/festio-whatsapp-support-staging-2026-11-04');OUT.mkdir(exist_ok=True)
+with TemporaryDirectory() as tmp:
+ build=Path(tmp)
+ script=r'''import {build} from 'esbuild';await build({stdin:{contents:'import React from "react";import {createRoot} from "react-dom/client";import Inbox from "./src/components/ManagementWhatsApp.jsx";createRoot(document.getElementById("root")).render(<Inbox/>);',resolveDir:process.cwd(),loader:'jsx'},bundle:true,jsx:'automatic',outfile:process.argv[1],define:{'import.meta.env':'{}'},loader:{'.css':'css'},plugins:[{name:'identity',setup(b){b.onResolve({filter:/context\/AuthContext/},()=>({path:'auth',namespace:'fixture'}));b.onResolve({filter:/\/firebase$/},()=>({path:'firebase',namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},a=>({contents:a.path==='auth'?'export const useAuth=()=>({user:{id:"operator",is_platform_superadmin:!location.search.includes("team")}})':'export const auth={currentUser:{getIdToken:async()=>"fixture"}}',loader:'js'}))}}]});'''
+ subprocess.run(['/tmp/mumineen-node/node-v22.16.0-linux-x64/bin/node','--input-type=module','-e',script,str(build/'app.js')],cwd=ROOT,check=True)
+ (build/'index.html').write_text('<meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/app.css"><div id="root"></div><script src="/app.js"></script>')
+ class Handler(SimpleHTTPRequestHandler):
+  def __init__(self,*a,**kw):super().__init__(*a,directory=tmp,**kw)
+  def log_message(self,*a):pass
+ server=ThreadingHTTPServer(('127.0.0.1',0),Handler);threading.Thread(target=server.serve_forever,daemon=True).start()
+ now=datetime.now(timezone.utc);later=(now+timedelta(hours=22)).isoformat();expired=(now-timedelta(hours=1)).isoformat();writes=[];checks=[];errors=[];closed=False;read=False;body='Where do I find my pass?'
+ def check(name,value=True):assert value,name;checks.append(name)
+ def intercept(route):
+  global read
+  req=route.request;path=req.url.split('/api')[-1].split('?')[0];payload=req.post_data_json if req.post_data else None
+  if '/api/' not in req.url:return route.continue_()
+  if req.method!='GET':writes.append((path,payload))
+  if path.endswith('/conversations'):data={'items':[{'id':'one','name':'Ada Guest','phone':'+2348000000000','status':'open','unread':not read,'last_message_at':now.isoformat(),'preview':body}], 'unread_count':0 if read else 1,'has_more':False}
+  elif path.endswith('/one'):data={'id':'one','name':'Ada Guest','phone':'+2348000000000','status':'open','context':[{'guest':'Ada Guest','event':'Example celebration','event_id':'demo'}],'messages':[{'id':'msg1','direction':'incoming','body':body,'status':'delivered','occurred_at':now.isoformat(),'received_at':now.isoformat()}],'read_through':now.isoformat(),'older_before':None,'reply_until':expired if closed else later}
+  elif path.endswith('/reply'):data={'id':'reply','status':'accepted'}
+  elif path.endswith('/read'):read=not bool(payload.get('unread'));data={'ok':True}
+  elif path.endswith('/sync'):data={'imported':1,'next_page_token':None}
+  else:data={'ok':True}
+  route.fulfill(content_type='application/json',body=json.dumps(data))
+ with sync_playwright() as w:
+  browser=w.chromium.launch(executable_path='/home/dev/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome',args=['--no-sandbox']);page=browser.new_page(viewport={'width':1440,'height':1000});page.on('pageerror',lambda e:errors.append(str(e)));page.route('**/*',intercept);base=f'http://127.0.0.1:{server.server_port}'
+  page.goto(base+'/?team');page.wait_for_timeout(500);check('event team has no launcher',page.locator('.mwa-launch-button').count()==0);check('event team makes no support API requests',not writes)
+  page.goto(base+'/');page.locator('.mwa-launch-button').click();page.get_by_role('button',name='Ada Guest',exact=False).click();expect(page.get_by_label('Conversation messages')).to_contain_text(body);check('guest context visible centrally',page.get_by_text('Ada Guest · Example celebration').is_visible());page.get_by_label('Your WhatsApp reply').fill('Hello Ada, happy to help.');page.get_by_role('button',name='Send reply',exact=False).click();page.wait_for_timeout(200);check('reply uses explicit send and request UUID',any(p.endswith('/reply') and v['request_id'] and v['body'].startswith('Hello') for p,v in writes));page.screenshot(path=str(OUT/'support-desktop.png'))
+  page.get_by_role('button',name='Expand inbox',exact=True).click();check('full inbox expands',page.locator('.mwa-expanded').count()==1);page.get_by_role('button',name='Reduce inbox').click();page.get_by_role('button',name='Close WhatsApp support').click();handle=page.get_by_role('button',name='Move WhatsApp',exact=False);before=page.locator('.mwa-launch').bounding_box();handle.focus();page.keyboard.press('ArrowLeft');after=page.locator('.mwa-launch').bounding_box();check('keyboard reposition works',after['x']<before['x']);page.reload();expect(page.locator('.mwa-launch')).to_be_visible();check('position remembered',abs(page.locator('.mwa-launch').bounding_box()['x']-after['x'])<1)
+  closed=True;page.locator('.mwa-launch-button').click();page.get_by_role('button',name='Ada Guest',exact=False).click();expect(page.get_by_label('Your WhatsApp reply')).to_be_disabled();check('closed window disables freeform reply');page.get_by_role('button',name='Import Bird history').click();page.wait_for_timeout(100);check('history import is available',any(p.endswith('/sync') for p,v in writes));page.get_by_role('button',name='Close WhatsApp support').click()
+  for width in [390,320]:
+   page.set_viewport_size({'width':width,'height':844});page.locator('.mwa-launch-button').click();
+   if page.get_by_role('button',name='Back to conversations').is_visible():page.get_by_role('button',name='Back to conversations').click()
+   page.get_by_role('button',name='Ada Guest',exact=False).click();expect(page.get_by_label('Your WhatsApp reply')).to_be_visible();check('mobile drawer fits '+str(width),page.evaluate('document.documentElement.scrollWidth<=innerWidth'));page.screenshot(path=str(OUT/('support-'+str(width)+'.png')));page.get_by_role('button',name='Back to conversations').click();expect(page.get_by_label('Find a conversation')).to_be_visible();check('mobile conversation navigation '+str(width));page.get_by_role('button',name='Close WhatsApp support').click()
+  check('no browser errors',not errors);(OUT/'browser-checks.json').write_text(json.dumps({'checks':checks,'errors':errors,'scope':'isolated React component with fixture identity and HTTP; no real sends'},indent=2));print(json.dumps({'passed':len(checks),'errors':errors}));browser.close()
+ server.shutdown()

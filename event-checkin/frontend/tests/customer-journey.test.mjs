@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {STARTING_POINTS,LAUNCH_NEXT,LAUNCH_EVENT_TYPES,launchNext,registrationReadiness,toolAccess,invitationPath,destinationFingerprint,CUSTOMER_TOOLS,EVENT_RECIPES,FESTIO_ADVANTAGES,searchCustomerTools,recommendedRecipe} from '../src/pages/customerJourneyModel.mjs'
+import {STARTING_POINTS,LAUNCH_SETUP,launchDestination,launchAccess,LAUNCH_NEXT,LAUNCH_EVENT_TYPES,launchNext,registrationReadiness,toolAccess,invitationPath,destinationFingerprint,CUSTOMER_TOOLS,EVENT_RECIPES,FESTIO_ADVANTAGES,searchCustomerTools,recommendedRecipe} from '../src/pages/customerJourneyModel.mjs'
 const base={id:'event-1',status:'active',rsvp_enabled:true,invite_mode:'open',rsvp_token:'unguessable'}
 test('draft design is not open registration',()=>assert.equal(registrationReadiness({...base,status:'draft'}).ready,false))
 test('ended and archived events are not silently reopened',()=>{for(const status of ['ended','archived'])assert.equal(registrationReadiness({...base,status}).ready,false)})
@@ -24,3 +24,5 @@ test('search respects category and provides real empty results',()=>{assert.equa
 test('occasion suggestions derive from the event without changing it',()=>{const ev={event_type:'Conference / seminar'};assert.equal(recommendedRecipe(ev),'conference');assert.equal(ev.event_type,'Conference / seminar');assert.equal(recommendedRecipe({event_type:'Nikkah / Aqd'}),'wedding')})
 
 test('starting needs are independent from event type and retain every downstream tool',()=>{assert.deepEqual(STARTING_POINTS.map(x=>x.id),['invitation','tickets','checkin','seating','conference','fundraiser']);for(const p of STARTING_POINTS){assert.ok(!p.type);assert.ok(LAUNCH_NEXT[p.id]);assert.ok(CUSTOMER_TOOLS.some(t=>t.id===LAUNCH_NEXT[p.id].tool))}assert.ok(LAUNCH_EVENT_TYPES.includes('Wedding'));assert.ok(LAUNCH_EVENT_TYPES.includes('Conference / seminar'));assert.equal(recommendedRecipe({event_type:'Corporate event',setup_preferences:{starting_point:'conference'}}),'corporate');assert.equal(launchNext({setup_preferences:{starting_point:'seating'}}).tool,'seating');assert.equal(launchNext({}),null)})
+
+test('setup destinations and upfront access remain explicit',()=>{assert.equal(launchDestination('tickets','id'),'/ticketing-redesign?toolGuide=tickets');assert.equal(launchDestination('seating','id'),'/admin-redesign?setup=seating');assert.equal(launchAccess('seating',{available_addons:[]}), 'required');assert.equal(launchAccess('seating',{available_addons:['addon_seating']}),'included');assert.equal(launchAccess('seating',{}),'unknown');assert.equal(launchAccess('tickets',{}),'standard');assert.deepEqual(LAUNCH_SETUP.seating.steps,['Add guests','Create tables','Assign seats'])})

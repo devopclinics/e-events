@@ -25,7 +25,7 @@ function Workspace(){
  const navigate=useNavigate(),[params]=useSearchParams(),[id]=useCurrentEvent(),{user}=useAuth()
  const {event,loading,error,refresh}=useEventDetails(id),guestData=useGuests(id)
  const [billing,setBilling]=useState(null),[billingError,setBillingError]=useState(''),[busy,setBusy]=useState(''),[message,setMessage]=useState(''),[failure,setFailure]=useState(''),[checkedAt,setCheckedAt]=useState(null),[checked,setChecked]=useState(''),[filter,setFilter]=useState('All'),[query,setQuery]=useState(params.get('find')||''),[dialog,setDialog]=useState(null),[link,setLink]=useState(''),[confirmOpen,setConfirmOpen]=useState(false)
- const dialogRef=useRef(null),confirmRef=useRef(null),eventIdentity=useRef(id);eventIdentity.current=id
+ const dialogRef=useRef(null),confirmRef=useRef(null),eventIdentity=useRef(id),startedSetup=useRef('');eventIdentity.current=id
  useEffect(()=>registerEventChangeGuard(()=>!busy),[busy])
  useEffect(()=>{setQuery(params.get('find')||'');setFilter('All')},[params.get('find')])
  const view=['share','tools'].includes(params.get('view'))?params.get('view'):'dashboard'
@@ -65,6 +65,7 @@ function Workspace(){
   if(eventIdentity.current!==target)return
   setConfirmOpen(false);await refresh();setChecked('');setLink('');setMessage('Registration settings saved. Check the destination before sharing.')
  }
+ useEffect(()=>{const tool=CUSTOMER_TOOLS.find(t=>t.id===params.get('setup'));const key=id+':'+tool?.id;if(!tool||!event||event.id!==id||loading||!billing||startedSetup.current===key)return;startedSetup.current=key;configureTool(tool)},[id,event,loading,billing,params.get('setup')])
  async function configureTool(tool){
   const access=toolAccess(tool,event,billing)
   if(!tool.flag||event[tool.flag]){if(tool.id==='seating')setDialog(tool);else navigate(toolWorkspaceHref(tool));return}

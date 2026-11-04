@@ -276,7 +276,23 @@ async def creation_limits(db: AsyncSession = Depends(get_db), current_user: User
     if not org:
         raise HTTPException(403, "You don't belong to an organization")
     from ..organization_entitlements import guest_cap
-    return {"guest_cap": guest_cap(org) if settings.organization_entitlements_v2 else 25,
+    from ..entitlements import FEATURE_ADDON, event_allows_addon
+    from ..billing import addons_public, tiers_public
+    candidate = Event(org_id=org.id, is_paid=False, purchased_addons=[])
+    if settings.organization_entitlements_v2:
+        snapshot_new_event(candidate, org)
+    candidate.org_addon_overrides = dict(org.addon_overrides or {})
+    policy = await db.get(PlatformSettings, "singleton")
+    candidate.addon_promo_until = policy.addon_promo_until if policy else None
+    plans = (await db.scalars(select(PricingPlan).where(PricingPlan.kind == "addon"))).all()
+    candidate.platform_addon_overrides = {plan.key: bool(plan.active) for plan in plans}
+    currency = org.currency or "USD"
+    return {"organization_name": org.name, "region": org.region,
+            "available_addons": None if org.trial_tier else [key for key in sorted(set(FEATURE_ADDON.values())) if event_allows_addon(candidate, key, organization_policy={"status":org.event_pass_status,"expires_at":org.event_pass_expires_at,"promo_expires_at":org.addon_promo_expires_at,"purchased_addons":org.purchased_addons or []}, organization_overrides=org.addon_overrides or {})],
+            "addon_prices": await addons_public(db, currency),
+            "pass_prices": await tiers_public(db, currency),
+            "has_active_pass": pass_is_active(org),
+            "guest_cap": guest_cap(org) if settings.organization_entitlements_v2 else 25,
             "currency": org.currency or "USD", "note": "Capacity is checked again when the event is created. Upgrade your organization pass for a larger event."}
 
 

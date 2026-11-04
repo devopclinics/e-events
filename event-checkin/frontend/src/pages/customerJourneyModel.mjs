@@ -9,6 +9,16 @@ export const STARTING_POINTS = [
  {id:'fundraiser',title:'Collect donations',description:'Give guests a simple way to support your cause.',mode:'rsvp',icon:'♡'},
 ]
 export const LAUNCH_EVENT_TYPES=['Wedding','Birthday','Conference / seminar','Corporate event','Fundraiser','Community / religious event','Concert / festival','Other']
+export const LAUNCH_SETUP = {
+ invitation:{button:'Create invitation & preview',steps:['Review your invitation','Check your guest link','Share and collect replies'],next:'Create your invitation, then review its finished preview and sharing link.'},
+ seating:{button:'Create event & set up seating',steps:['Add guests','Create tables','Assign seats'],addon:'addon_seating',next:'Create your event, then set up seating. Add guests and choose the tables and seats you need.'},
+ checkin:{button:'Create event & prepare passes',steps:['Import your guest list','Prepare personal passes','Open QR check-in'],next:'Create your event, then import your guests and prepare their personal passes.'},
+ tickets:{button:'Create event & set up tickets',steps:['Create ticket types','Set up payments','Review and open sales'],next:'Create your event, then set up tickets and payments. Sales remain paused until you open them.'},
+ conference:{button:'Create event & plan sessions',steps:['Create your programme','Add speakers and sessions','Set up attendee registration'],addon:'addon_experience',next:'Create your event, then set up its programme. Add speakers and registration as you need them.'},
+ fundraiser:{button:'Create event & set up donations',steps:['Create your campaign','Set up giving options','Review and publish'],addon:'addon_engagement',next:'Create your event, then configure your giving campaign. Payment readiness is checked before collection.'},
+}
+export function launchDestination(goal,eventId){if(goal==='invitation')return `/create-invitation?event=${encodeURIComponent(eventId)}`;if(goal==='tickets')return '/ticketing-redesign?toolGuide=tickets';if(goal==='checkin')return '/guests-redesign?tab=guests&toolGuide=passes';return `/admin-redesign?setup=${encodeURIComponent(goal==='conference'?'programme':goal==='fundraiser'?'giving':'seating')}`}
+export function launchAccess(goal,limits){const config=LAUNCH_SETUP[goal];if(!config?.addon)return 'standard';if(!Array.isArray(limits?.available_addons))return 'unknown';return limits.available_addons.includes(config.addon)?'included':'required'}
 export const LAUNCH_NEXT = {
  invitation:{title:'Preview your invitation, then share it.',description:'Your saved invitation is ready to review. Check its details and share the link when you are ready.',action:'Preview & share invitation',route:'/create-invitation',tool:'design'},
  seating:{title:'Add your guests and build your tables.',description:'Start with your guest list, then choose table counts and seats per table. Assign guests and arrange the floor plan when ready.',action:'Set up tables & seating',tool:'seating'},

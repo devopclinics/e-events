@@ -162,14 +162,15 @@ def event_allows(event: Event, feature: str) -> bool:
     return event_allows_addon(event, addon)
 
 
-def event_allows_addon(event: Event, addon: str) -> bool:
+def event_allows_addon(event: Event, addon: str, *, organization_policy: dict | None = None, organization_overrides: dict | None = None) -> bool:
     if settings.organization_entitlements_v2:
-        policy = _org_entitlement_cache.get(event.org_id, {})
+        policy = organization_policy if organization_policy is not None else _org_entitlement_cache.get(event.org_id, {})
         # A platform operator's organization override is an explicit grant or
         # denial, not a purchase. It must work for any organization, including
         # a free/staging account, so superadmins can provision trials and QA
         # access from the Console without fabricating a paid subscription.
-        org_override = _org_addon_override_cache.get(event.org_id, {}).get(addon)
+        overrides = organization_overrides if organization_overrides is not None else _org_addon_override_cache.get(event.org_id, {})
+        org_override = overrides.get(addon)
         if org_override is not None:
             return bool(org_override)
         active = policy.get("status") == "active" and policy.get("expires_at") and policy["expires_at"] > datetime.utcnow()

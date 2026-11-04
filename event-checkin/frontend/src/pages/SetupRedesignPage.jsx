@@ -2,7 +2,7 @@ import {useNavigate,Link} from 'react-router-dom'
 import FestioLogo from '../components/branding/FestioLogo'
 import CustomerLaunch from './CustomerLaunch'
 import CustomerSetupGuide from './CustomerSetupGuide'
-import {CUSTOMER_JOURNEY_ENABLED} from './customerJourneyModel.mjs'
+import {CUSTOMER_JOURNEY_ENABLED,launchDestination} from './customerJourneyModel.mjs'
 import {useSearchParams} from 'react-router-dom'
 import {useAuth} from '../context/AuthContext'
 import {SETUP_STAGES,readGuideResume,saveGuideResume} from './guideNavigation.mjs'
@@ -370,7 +370,7 @@ export default function SetupRedesignPage() {
   }
 
   if(CUSTOMER_JOURNEY_ENABLED && (phase==='wizard'||phase==='guide')&&params.get('detail')!=='1'){
-   if(phase==='wizard')return <div className="admin-redesign rr cj-launch-shell"><header className="cj-launch-header"><Link to="/events-redesign" aria-label="Festio events"><FestioLogo size={32}/></Link><Link to="/events-redesign">Back to my events</Link></header><main><CustomerLaunch onComplete={(event,goal)=>{previousEvent.current=event.id;setCurrentEvent(event.id);navigate(goal==='invitation'?`/create-invitation?event=${encodeURIComponent(event.id)}`:'/admin-redesign')}}/></main></div>
+   if(phase==='wizard')return <div className="admin-redesign rr cj-launch-shell"><header className="cj-launch-header"><Link to="/events-redesign" aria-label="Festio events"><FestioLogo size={32}/></Link><Link to="/events-redesign">Back to my events</Link></header><main><CustomerLaunch onComplete={(event,goal)=>{previousEvent.current=event.id;setCurrentEvent(event.id);navigate(launchDestination(goal,event.id))}}/></main></div>
    return <RedesignShell topActive="guide" eventScoped><CustomerSetupGuide key={eventId} eventId={eventId} onDetailed={()=>setParams({view:'guide',detail:'1'})}/></RedesignShell>
   }
 

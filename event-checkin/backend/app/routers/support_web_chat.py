@@ -98,6 +98,9 @@ async def send(data:Send,response:Response,authorization:str|None=Header(default
             from app.services.support_dialogue import fact_intent,normalise,pricing_intent
             if (product_answer(normalise(text)) or pricing_intent(text)) and not fact_intent(text):
                 meta.pop('_pending_fact',None);meta.pop('_candidate_sites',None)
+                if not meta.get('_site_slug'):meta.pop('_selected_site',None)
+            named_fact=re.search(r'\b(?:for|about|is)\s+(.+)',text.lower()) if fact_intent(text) else None
+            if not meta.get('_site_slug') and named_fact and not re.match(r'(it\b|the (event|conference|venue)\b|this (event|conference)\b|that event\b)',named_fact[1]):meta.pop('_selected_site',None)
             candidates=meta.get('_candidate_sites',[])
             selected=None
             approved_known=any(p.get('approved') and (row.context.get('event')==p.get('id') or any(contains(text.lower(),n) for n in [p.get('name',''),*p.get('aliases',[])] if n)) for p in cfg.get('profiles',[]))
@@ -116,7 +119,7 @@ async def send(data:Send,response:Response,authorization:str|None=Header(default
             if not scope and not personal and not approved_known and (fact_intent(text) or text.isdecimal() and candidates or meta.get('_pending_fact') and not product_answer(normalise(text))):
                 menu='\n'.join(str(i+1)+'. '+p['name'] for i,p in enumerate(candidates))
                 body=('Which published event do you mean? Reply with its name or number.\n\n'+menu) if candidates else 'What is the event name or its published Festio website link? I need to identify the correct public event before answering its date or venue.'
-                row.context={**row.context,**meta,'_pending_fact':text if fact_intent(text) else meta.get('_pending_fact',text)};row.mode='auto'
+                row.context={**{k:v for k,v in row.context.items() if k in ['topic','awaiting']},**meta,'_pending_fact':text if fact_intent(text) else meta.get('_pending_fact',text)};row.mode='auto'
                 row.messages=[*messages,message(body,'bot')];row.updated_at=now();await db.commit();return public(row)
             if scope and not personal and (fact_intent(text) or selected or not product_answer(normalise(text)) and not pricing_intent(text)):
 

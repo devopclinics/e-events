@@ -22,6 +22,7 @@ async def test_unscoped_named_event_selection_and_missing_event(ctx,monkeypatch)
  async def send(text):return (await ctx.client.post(P+'/messages',headers=h,json={'body':text,'request_id':str(uuid.uuid4())})).json()
  r=await send('What are the date and venue for QA Event?');assert r['mode']=='auto' and 'Which published event' in r['messages'][-1]['body']
  r=await send('2');assert r['mode']=='auto' and 'Hall B' in r['messages'][-1]['body'] and '10 AM' in r['messages'][-1]['body'] and 'Hall A' not in r['messages'][-1]['body']
+ r=await send('What are the date and venue for Missing Event?');assert 'event name' in r['messages'][-1]['body'] and 'Hall B' not in r['messages'][-1]['body']
  # A new unknown event gets a name/link clarification, even after earlier clarification.
  r=await ctx.client.post(P+'/session');h={'Authorization':'Bearer '+r.json()['token']}
  r=await send('When and where is the event?');assert r['mode']=='auto' and 'event name' in r['messages'][-1]['body']

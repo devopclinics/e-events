@@ -3285,3 +3285,27 @@ class SupportRead(Base):
     conversation_id: Mapped[str] = mapped_column(ForeignKey('support_conversations.id', ondelete='CASCADE'), primary_key=True)
     user_id: Mapped[str] = mapped_column(String(36), primary_key=True)
     read_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class SupportAutomationConfig(Base):
+    __tablename__ = 'support_automation_config'
+    id: Mapped[str] = mapped_column(String(20), primary_key=True, default='main')
+    payload: Mapped[dict] = mapped_column(JSON)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    updated_by: Mapped[str] = mapped_column(String(36))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class SupportAutomationState(Base):
+    __tablename__ = 'support_automation_states'
+    conversation_id: Mapped[str] = mapped_column(ForeignKey('support_conversations.id', ondelete='CASCADE'), primary_key=True)
+    mode: Mapped[str] = mapped_column(String(12), default='auto')
+    context: Mapped[dict] = mapped_column(JSON, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class SupportAutomationJob(Base):
+    __tablename__ = 'support_automation_jobs'
+    message_id: Mapped[str] = mapped_column(ForeignKey('support_messages.id', ondelete='CASCADE'), primary_key=True)
+    status: Mapped[str] = mapped_column(String(20), default='pending', index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

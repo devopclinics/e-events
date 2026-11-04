@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import require_superadmin
 from app.config import settings
 from app.database import get_db
-from app.models import SupportConversation as Conversation,SupportMessage as Message,SupportRead,Guest,Event,User
+from app.models import SupportConversation as Conversation,SupportMessage as Message,SupportRead,Guest,Event,User,SupportAutomationState
 from app.ratelimit import rate_limit
 from app.services import support_whatsapp as service
 from services.outbound_safety import recipient_allowed
@@ -62,7 +62,8 @@ async def conversation(ident:str,before:datetime|None=None,db:AsyncSession=Depen
     normalized=Guest.phone
     for char in [' ','-','(',')']:normalized=func.replace(normalized,char,'')
     matches=(await db.execute(select(Guest,Event.name).join(Event,Event.id==Guest.event_id).where(normalized.in_(numbers)).limit(10))).all()
-    return dict(id=c.id,name=c.name,phone=c.phone,status=c.status,messages=[message_out(m) for m in sorted(selected,key=lambda m:(m.occurred_at,m.id))],
+    automation=await db.get(SupportAutomationState,ident)
+    return dict(automation_mode=automation.mode if automation else 'auto',id=c.id,name=c.name,phone=c.phone,status=c.status,messages=[message_out(m) for m in sorted(selected,key=lambda m:(m.occurred_at,m.id))],
                 read_through=max((m.received_at for m in selected),default=None),older_before=selected[-1].received_at if len(rows)>100 else None,
                 reply_until=c.last_incoming_at+timedelta(hours=24) if c.last_incoming_at else None,
                 context=[dict(guest=g.first_name+' '+g.last_name,event=event,event_id=g.event_id) for g,event in matches])
@@ -116,6 +117,8 @@ async def reply(ident:str,data:ReplyBody,db:AsyncSession=Depends(get_db),user:Us
     if not c.last_incoming_at or datetime.utcnow()>=c.last_incoming_at+timedelta(hours=24):
         raise HTTPException(409,'The 24-hour reply window has closed. Ask the customer to message again or use an approved WhatsApp template. No message was sent.')
     if not recipient_allowed('whatsapp',c.phone):raise HTTPException(403,'Sending to this number is blocked by the staging recipient guard')
+    from app.services.support_automation import pause
+    await pause(db,ident)
     number=c.phone
     m=Message(conversation_id=ident,request_id=str(data.request_id),direction='outgoing',body=text,kind='text',status='submitting',sent_by=user.id,occurred_at=datetime.utcnow())
     db.add(m);await db.commit() # Durable send intent before contacting the provider. Never retry automatically.
@@ -158,5 +161,9 @@ async def webhook(request:Request,db:AsyncSession=Depends(get_db)):
     except (ValueError,TypeError,AttributeError):raise HTTPException(400,'Missing message reference')
     response=await service.bird('GET',service.channel_path()+'/'+ident)
     if response.status_code!=200:raise HTTPException(502,'Could not verify Bird message')
-    await service.ingest(db,response.json());await db.commit()
+    canonical=response.json()
+    await service.ingest(db,canonical)
+    from app.services.support_automation import enqueue
+    await enqueue(db,ident)
+    await db.commit()
     return Response(status_code=204)

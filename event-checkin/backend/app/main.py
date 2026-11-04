@@ -367,3 +367,6 @@ from .routers import marketing_email_readiness
 app.include_router(marketing_email_readiness.router)
 
 app.include_router(support_whatsapp.router, prefix="/api/platform/support/whatsapp", tags=["platform-support"])
+
+from .routers import support_automation
+app.include_router(support_automation.router,prefix="/api/platform/support/whatsapp",tags=["support-automation"])

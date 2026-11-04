@@ -23,3 +23,15 @@ class PublishedReleaseTests(unittest.IsolatedAsyncioTestCase):
    with self.assertRaises(HTTPException) as e:await support_facts('missing',db)
    self.assertEqual(e.exception.status_code,404)
   finally:settings.enabled=previous
+
+class PublishedSelectorTests(unittest.IsolatedAsyncioTestCase):
+ async def test_named_and_ambiguous_published_selection(self):
+  from .main import support_events
+  from .config import settings
+  old=settings.enabled;settings.enabled=True
+  try:
+   rows=[(SimpleNamespace(slug='qa-a'),SimpleNamespace(snapshot={'content':{'event_name':'STAGING QA Event A'},'draft':'Do not use'})),(SimpleNamespace(slug='qa-b'),SimpleNamespace(snapshot={'content':{'event_name':'STAGING QA Event B'}}))]
+   db=SimpleNamespace(execute=AsyncMock(return_value=SimpleNamespace(all=lambda:rows)))
+   result=await support_events('What are the date and venue for STAGING QA Event A?',db);self.assertEqual([x['slug'] for x in result['items']],['qa-a'])
+   result=await support_events('What is the date for QA Event?',db);self.assertEqual(len(result['items']),2);self.assertNotIn('Do not use',str(result))
+  finally:settings.enabled=old

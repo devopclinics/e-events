@@ -22,6 +22,9 @@ with TemporaryDirectory() as tmp:
   req=route.request;path=req.url.split('/api')[-1].split('?')[0];payload=req.post_data_json if req.post_data else None
   if '/api/' not in req.url:return route.continue_()
   if req.method!='GET':writes.append((path,payload))
+  if 'paused' in req.frame.url and path.endswith('/conversations'):return route.fulfill(status=503,json={'detail':'WhatsApp support is not enabled'})
+  if path.endswith('/automation/settings'):return route.fulfill(json={'settings':{'enabled':False,'heading':'Your event','intro':'Contact Festio','message':'Hi Festio','welcome':'Choose an event','handover':'A teammate will help','profiles':[]},'version':0,'channel_enabled':False})
+  if path=='/events':return route.fulfill(json=[])
   if path.endswith('/conversations'):data={'items':[{'id':'one','name':'Ada Guest','phone':'+2348000000000','status':'open','unread':not read,'last_message_at':now.isoformat(),'preview':body}], 'unread_count':0 if read else 1,'has_more':False}
   elif path.endswith('/one'):data={'id':'one','name':'Ada Guest','phone':'+2348000000000','status':'open','context':[{'guest':'Ada Guest','event':'Example celebration','event_id':'demo'}],'messages':[{'id':'msg1','direction':'incoming','body':body,'status':'delivered','occurred_at':now.isoformat(),'received_at':now.isoformat()}],'read_through':now.isoformat(),'older_before':None,'reply_until':expired if closed else later}
   elif path.endswith('/reply'):data={'id':'reply','status':'accepted'}
@@ -39,5 +42,6 @@ with TemporaryDirectory() as tmp:
    page.set_viewport_size({'width':width,'height':844});page.locator('.mwa-launch-button').click();
    if page.get_by_role('button',name='Back to conversations').is_visible():page.get_by_role('button',name='Back to conversations').click()
    page.get_by_role('button',name='Ada Guest',exact=False).click();expect(page.get_by_label('Your WhatsApp reply')).to_be_visible();check('mobile drawer fits '+str(width),page.evaluate('document.documentElement.scrollWidth<=innerWidth'));page.screenshot(path=str(OUT/('support-'+str(width)+'.png')));page.get_by_role('button',name='Back to conversations').click();expect(page.get_by_label('Find a conversation')).to_be_visible();check('mobile conversation navigation '+str(width));page.get_by_role('button',name='Close WhatsApp support').click()
+  page.set_viewport_size({'width':1440,'height':1000});page.goto(base+'/?paused');page.locator('.mwa-launch-button').click();expect(page.get_by_text('Prepare your WhatsApp experience.',exact=True)).to_be_visible();check('paused channel has friendly configuration state');check('paused channel has no error alert',page.get_by_role('alert').count()==0);page.get_by_role('button',name='Configure answers & appearance',exact=True).click();expect(page.get_by_role('dialog',name='WhatsApp answers and appearance',exact=True)).to_be_visible();check('settings remain accessible while channel is paused')
   check('no browser errors',not errors);(OUT/'browser-checks.json').write_text(json.dumps({'checks':checks,'errors':errors,'scope':'isolated React component with fixture identity and HTTP; no real sends'},indent=2));print(json.dumps({'passed':len(checks),'errors':errors}));browser.close()
  server.shutdown()

@@ -1,9 +1,9 @@
 // Export the same reviewed page DOM that is shown in the studio; no server-side URL fetching.
-export async function createProposalPdf(frame) {
+export async function createProposalPdf(frame, {pageCount=3, title='Festio Event Proposal'}={}) {
  const doc=frame?.contentDocument
  if(!doc)throw new Error('Wait for the proposal preview to load.')
  const pages=[...doc.querySelectorAll('.sheet')]
- if(pages.length!==3)throw new Error('The proposal must contain three complete pages.')
+ if(pages.length!==pageCount)throw new Error('The proposal must contain three complete pages.')
  await doc.fonts?.ready
  const originals=[]
  try {
@@ -16,7 +16,7 @@ export async function createProposalPdf(frame) {
    originals.push([image,image.src]);image.src=data;await image.decode()
   }
   const [{default:html2canvas},{jsPDF}]=await Promise.all([import('html2canvas'),import('jspdf')])
-  const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});pdf.setProperties({title:'Festio Event Proposal',creator:'Festio Proposal Studio'})
+  const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});pdf.setProperties({title,creator:'Festio Proposal Studio'})
   for(let i=0;i<pages.length;i++){
    const p=pages[i]
    if(p.scrollHeight>p.clientHeight+1||p.querySelector('footer').getBoundingClientRect().top<p.querySelector('footer').previousElementSibling.getBoundingClientRect().bottom+8)throw new Error('A page overflows. Shorten the proposal before exporting.')

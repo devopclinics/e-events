@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from PIL import Image, ImageOps, UnidentifiedImageError
 from ..auth import get_current_user, require_superadmin
 from ..database import get_db
-from ..models import Event, Membership, Organization, OrganizationMediaAsset, User, EmailDeliveryEvent
+from ..models import Event, Membership, Organization, OrganizationMediaAsset, User, EmailDeliveryEvent, CommercialDocument
 from ..ratelimit import rate_limit
 from services.email_service import send_simple_email
 from services.outbound_safety import recipient_allowed
@@ -136,10 +136,17 @@ async def email_proposal(
     message: str = Form('', max_length=3000),
     request_id: str = Form(...),
     confirmed: bool = Form(False),
+    document_id: str | None = Form(None),
     event_id: str | None = Form(None),
     user: User = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db),
 ):
+    invoice = None
+    if document_id:
+        invoice = await db.get(CommercialDocument, document_id)
+        if not invoice or invoice.kind != 'invoice': raise HTTPException(404,'Invoice not found.')
+        if invoice.status == 'draft': raise HTTPException(400,'Issue the invoice before emailing it.')
+    document_kind = 'invoice' if invoice else 'proposal'
     if not confirmed: raise HTTPException(400,'Review the recipient and proposal before confirming the send.')
     if '\r' in subject or '\n' in subject: raise HTTPException(400,'Use a single-line email subject.')
     try: uuid.UUID(request_id)
@@ -151,24 +158,29 @@ async def email_proposal(
     if len(content)>5*1024*1024: raise HTTPException(413,'Choose a proposal PDF up to 5 MB.')
     if file.content_type!='application/pdf' or not content.startswith(b'%PDF-') or b'%%EOF' not in content[-1024:]:
         raise HTTPException(400,'Attach a valid proposal PDF.')
-    digest=hashlib.sha256(content+recipient.encode()+subject.encode()+message.encode()+str(event_id).encode()).hexdigest()
+    digest=hashlib.sha256(content+recipient.encode()+subject.encode()+message.encode()+str(event_id).encode()+str(document_id).encode()).hexdigest()
     key='proposal:'+hashlib.sha256((str(user.id)+request_id).encode()).hexdigest()
     existing=await db.scalar(select(EmailDeliveryEvent).where(EmailDeliveryEvent.provider_event_id==key))
     if existing:
         if (existing.tags or {}).get('request_digest')!=digest: raise HTTPException(409,'This send reference belongs to a different proposal or recipient. Start a new reviewed email.')
         return {'status':existing.status,'request_id':request_id,'duplicate_prevented':True,'note':'Existing send status returned. No additional email was submitted.'}
-    row=EmailDeliveryEvent(provider='internal',provider_event_id=key,event_id=event_id,recipient=recipient,subject=subject,message_kind='client_proposal',event_type='proposal.requested',status='sending',tags={'request_digest':digest,'actor_user_id':str(user.id),'request_id':request_id})
+    row=EmailDeliveryEvent(provider='internal',provider_event_id=key,event_id=event_id,recipient=recipient,subject=subject,message_kind='client_'+document_kind,event_type='proposal.requested',status='sending',tags={'request_digest':digest,'actor_user_id':str(user.id),'request_id':request_id})
     db.add(row)
     try: await db.commit()
     except IntegrityError:
         await db.rollback()
         raise HTTPException(409,'This proposal send is already being processed. Check its status before sending again.')
-    body='<p>'+html_module.escape(message or 'Thank you for considering Festio. Please find your event proposal attached.').replace('\n','<br>')+'</p><p>The attached PDF contains the reviewed event scope, quotation and payment terms.</p>'
+    body='<p>'+html_module.escape(message or ('Please find your Festio invoice attached.' if invoice else 'Thank you for considering Festio. Please find your event proposal attached.')).replace('\n','<br>')+'</p><p>The attached PDF contains the reviewed event scope, quotation and payment terms.</p>'
     try:
-        accepted=await send_simple_email(recipient,subject,body,attachments=[('Festio-Event-Proposal.pdf',content,'application/pdf')],event_id=event_id,message_kind='client_proposal')
+        accepted=await send_simple_email(recipient,subject,body,attachments=[((invoice.reference+'.pdf') if invoice else 'Festio-Event-Proposal.pdf',content,'application/pdf')],event_id=event_id,message_kind='client_'+document_kind)
         row.status='accepted' if accepted else 'unconfirmed'
     except Exception:
         row.status='unconfirmed'
-    row.event_type='proposal.'+row.status
+    if invoice and row.status=='accepted':
+        invoice=await db.scalar(select(CommercialDocument).where(CommercialDocument.id==document_id).with_for_update().execution_options(populate_existing=True))
+        if invoice.status=='issued':
+            invoice.status='sent'
+            invoice.version+=1
+    row.event_type=document_kind+'.'+row.status
     await db.commit()
     return {'status':row.status,'request_id':request_id,'duplicate_prevented':False,'note':'Email accepted for sending. Delivery is not yet confirmed.' if row.status=='accepted' else 'Provider acceptance could not be confirmed. Check delivery history before starting another send to avoid duplicates.'}

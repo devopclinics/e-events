@@ -3285,3 +3285,20 @@ class SupportRead(Base):
     conversation_id: Mapped[str] = mapped_column(ForeignKey('support_conversations.id', ondelete='CASCADE'), primary_key=True)
     user_id: Mapped[str] = mapped_column(String(36), primary_key=True)
     read_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class CommercialDocument(Base):
+    """Management-only sales documents; issued snapshots cannot be edited."""
+    __tablename__ = 'commercial_documents'
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    kind: Mapped[str] = mapped_column(String(12), index=True)
+    reference: Mapped[str] = mapped_column(String(40), unique=True)
+    source_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    payload: Mapped[dict] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(16), default='draft')
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    paid_minor: Mapped[int] = mapped_column(BigInteger, default=0)
+    payment_history: Mapped[list] = mapped_column(JSON, default=list)
+    created_by: Mapped[str] = mapped_column(String(36))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    issued_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

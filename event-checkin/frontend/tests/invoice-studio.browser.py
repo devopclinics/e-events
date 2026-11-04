@@ -1,0 +1,33 @@
+"""Real invoice component and PDF export with isolated API fixtures; no live email."""
+import subprocess,tempfile,threading,json
+from pathlib import Path
+from http.server import ThreadingHTTPServer,SimpleHTTPRequestHandler
+from playwright.sync_api import sync_playwright,expect
+ROOT=Path(__file__).resolve().parents[1];OUT=Path('/home/dev/events/artifacts/festio-media-invoices-2026');OUT.mkdir(exist_ok=True)
+with tempfile.TemporaryDirectory() as tmp:
+ d=Path(tmp)
+ entry="""import React from 'react';import {createRoot} from 'react-dom/client';import Studio from './src/components/proposals/InvoiceStudio.jsx';window.calls=[];createRoot(document.getElementById('root')).render(<Studio source={{id:'proposal-one',payload:{client:'Honeybols Events',title:'Birthday celebration',date:'2027-05-22',guests:500,credits:3000,operators:4,hours:6,deposit:60,fees:[{id:'package',label:'Festio event experience & reception support',amount:600000,complimentary:false},{id:'website',label:'Birthday website, invitation & RSVP',amount:75000,complimentary:true},{id:'seating',label:'Seating & floor-plan setup',amount:100000,complimentary:true},{id:'report',label:'Attendance report & handover',amount:25000,complimentary:true}]}}} onClose={()=>window.closedStudio=true}/>);"""
+ fixture="""let saved=null;export const api={getCommercialDocument:async()=>structuredClone(saved),listCommercialDocuments:async()=>saved?[saved]:[],saveCommercialDocument:async(id,data)=>{window.calls.push({kind:'save'});saved={...data,id:'invoice-one',reference:'INV-2026-TEST',status:'draft',version:1,paid_minor:0};return structuredClone(saved)},issueInvoice:async()=>{saved={...saved,status:'issued',version:2};return structuredClone(saved)},recordInvoicePayment:async(id,version,paid_minor)=>{saved={...saved,paid_minor,status:'part-paid',version:saved.version+1};return structuredClone(saved)},emailProposal:async(data,file)=>{window.calls.push({kind:'email',data,size:file.size});saved={...saved,status:'sent',version:saved.version+1};return {status:'accepted',note:'Accepted for sending; delivery is not confirmed.'}}};"""
+ script="import {build} from 'esbuild';await build({stdin:{contents:"+json.dumps(entry)+",resolveDir:process.cwd(),loader:'jsx'},bundle:true,jsx:'automatic',outfile:process.argv[1],define:{'import.meta.env':'{}','process.env.NODE_ENV':'\"production\"'},loader:{'.css':'css'},plugins:[{name:'fixtures',setup(b){b.onResolve({filter:new RegExp('/api$')},()=>({path:'api',namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:"+json.dumps(fixture)+",loader:'js'}))}}]});"
+ subprocess.run(['/tmp/mumineen-node/node-v22.16.0-linux-x64/bin/node','--input-type=module','-e',script,str(d/'app.js')],cwd=ROOT,check=True)
+ (d/'index.html').write_text('<meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="app.css"><div id="root"></div><script src="app.js"></script>')
+ class H(SimpleHTTPRequestHandler):
+  def __init__(self,*a,**kw):super().__init__(*a,directory=tmp,**kw)
+  def log_message(self,*a):pass
+ server=ThreadingHTTPServer(('127.0.0.1',0),H);threading.Thread(target=server.serve_forever,daemon=True).start()
+ with sync_playwright() as p:
+  b=p.chromium.launch(executable_path='/home/dev/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome');page=b.new_page(viewport={'width':1500,'height':1100},accept_downloads=True);errors=[];page.on('pageerror',lambda e:errors.append(str(e)));page.route('**/*.svg',lambda r:r.fulfill(content_type='image/svg+xml',body=(ROOT/'public/brand/festio-logo.svg').read_text()));page.goto(f'http://127.0.0.1:{server.server_port}')
+  expect(page.get_by_label('Bill to',exact=True)).to_have_value('Honeybols Events')
+  for label,value in [('Agreed discount','200000'),('Bank','Providus Bank LTD'),('Account name','FOHMA INTEGRATED SOLUTIONS LTD'),('Account number','1310138643')]:page.get_by_label(label,exact=True).fill(value)
+  expect(page.locator('.pg-summary')).to_contain_text('400,000');expect(page.locator('.pg-summary')).to_contain_text('240,000')
+  page.get_by_role('button',name='Save invoice draft',exact=True).click();expect(page.get_by_role('status')).to_contain_text('Invoice draft saved')
+  review=page.get_by_role('checkbox',name='I reviewed',exact=False);review.check();button=page.get_by_role('button',name='Issue & lock invoice',exact=True);expect(button).to_be_enabled(timeout=15000)
+  page.get_by_role('button',name='Full preview',exact=True).click();page.screenshot(path=str(OUT/'invoice-full-preview.png'));page.get_by_role('button',name='Back to editing',exact=True).click();button.click();expect(page.get_by_label('Bill to',exact=True)).to_be_disabled();review.check()
+  with page.expect_download(timeout=60000) as result:page.get_by_role('button',name='Download invoice PDF',exact=True).click()
+  pdf=Path(result.value.path());(OUT/'Honeybols-generated-invoice.pdf').write_bytes(pdf.read_bytes());assert 'Pages:           1' in subprocess.check_output(['pdfinfo',str(pdf)],text=True)
+  page.get_by_label('Recipient email',exact=True).fill('client@example.com');page.get_by_role('button',name='Review email & attachment',exact=True).click();expect(page.get_by_role('button',name='Confirm & send invoice',exact=True)).to_be_enabled(timeout=60000);assert not page.evaluate('calls.filter(x=>x.kind==="email")');page.get_by_role('button',name='Confirm & send invoice',exact=True).click();expect(page.get_by_role('status')).to_contain_text('Accepted for sending')
+  page.get_by_label('Total received so far (NGN)',exact=True).fill('240000');page.get_by_role('button',name='Update payment record',exact=True).click();expect(page.get_by_role('status')).to_contain_text('Payment total recorded manually')
+  page.get_by_role('button',name='Back to saved documents',exact=True).click();page.get_by_role('button',name='Open invoice',exact=True).click();expect(page.get_by_label('Account number',exact=True)).to_have_value('1310138643');expect(page.get_by_label('Bill to',exact=True)).to_be_disabled()
+  page.set_viewport_size({'width':390,'height':844});page.screenshot(path=str(OUT/'invoice-mobile.png'));assert page.locator('dialog').evaluate('(e)=>e.scrollWidth<=e.clientWidth+2');assert not errors,errors;assert len(page.evaluate('calls.filter(x=>x.kind==="email")'))==1
+  (OUT/'browser-validation.json').write_text(json.dumps({'checks':['conversion','complimentary rows','discount','60/40 split','save','issue lock','real one-page PDF','reviewed email','manual payment','reopen','mobile'],'live_emails_sent':0,'page_errors':errors},indent=2));b.close()
+ server.shutdown();print('Invoice browser flow passed; no live sends.')

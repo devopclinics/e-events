@@ -79,14 +79,15 @@ async def send(data:Send,response:Response,authorization:str|None=Header(default
     if row.mode=='auto':
         cfg,_=await config(db)
         if cfg.get('enabled'):
+            personal=any(w in text.lower() for w in ['my pass','my qr','my seat','my table','my ticket','payment status','human','agent','refund','complaint','support','staff','talk to the team','seat number','registration status','resend','confirm me','confirm my'])
             meta={k:v for k,v in row.context.items() if k.startswith('_')}
-            if meta.get('_site_slug'):
+            from app.services.support_product_knowledge import product_answer
+            if meta.get('_site_slug') and not personal and not product_answer(text):
                 profile=await published_profile(meta['_site_slug'])
                 cfg={**cfg,'profiles':[profile]}
                 answer_context={**row.context,'event':profile['id']}
             else:answer_context=row.context
             body,context,mode=answer(cfg,answer_context,text)
-            personal=any(w in text.lower() for w in ['my pass','my qr','my seat','my table','my ticket','payment status','human','agent','refund','complaint','support','staff','talk to the team','seat number','registration status','resend','confirm me','confirm my'])
             if mode=='human' and not personal and not meta.get('_clarified'):
                 body='Are you asking about using Festio, or about a particular event? Tell me what you want to do, or give the event name. For personal passes, seats or payments, choose Talk to the team.'
                 mode='auto';meta['_clarified']=True

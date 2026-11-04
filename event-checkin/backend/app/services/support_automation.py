@@ -11,6 +11,13 @@ from app.services.support_answers import defaults,answer
 from services.outbound_safety import recipient_allowed
 log=logging.getLogger(__name__)
 
+def automation_recipient(number):
+    tests={transport.phone(p) for p in settings.support_whatsapp_test_phones.split(',') if p.strip()}
+    scope=settings.support_whatsapp_automation_scope
+    if scope=='staging':return number in tests
+    if scope=='production':return number not in tests
+    return False
+
 async def config(db):
     row=await db.get(Config,'main')
     return (row.payload if row else defaults()),(row.version if row else 0)
@@ -27,6 +34,9 @@ async def enqueue(db,provider_id):
     message=await db.scalar(select(Message).where(Message.provider_id==provider_id,Message.direction=='incoming'))
     saved=await db.get(Config,'main')
     if saved and message and message.occurred_at<saved.updated_at:return
+    if message:
+        conversation=await db.get(Conversation,message.conversation_id)
+        if not automation_recipient(conversation.phone):return
     if not message or message.occurred_at<datetime.utcnow()-timedelta(minutes=5) or message.occurred_at>datetime.utcnow()+timedelta(minutes=1):return
     if await db.get(Job,message.id):return
     try:
@@ -46,7 +56,7 @@ async def process_one(db):
     recent=await db.scalar(select(func.count()).select_from(Message).where(Message.conversation_id==thread.id,Message.sent_by=='automation',Message.occurred_at>now-timedelta(minutes=1)))
     hourly=await db.scalar(select(func.count()).select_from(Message).where(Message.conversation_id==thread.id,Message.sent_by=='automation',Message.occurred_at>now-timedelta(hours=1)))
     if (not settings.support_whatsapp_enabled or not cfg['enabled'] or state and state.mode=='human' or
-        thread.channel_id!=settings.bird_whatsapp_channel_id or not recipient_allowed('whatsapp',thread.phone) or
+        thread.channel_id!=settings.bird_whatsapp_channel_id or not automation_recipient(thread.phone) or not recipient_allowed('whatsapp',thread.phone) or
         incoming.occurred_at<now-timedelta(minutes=5) or not thread.last_incoming_at or
         thread.last_incoming_at<now-timedelta(hours=24)):
         job.status='skipped';await db.commit();return True

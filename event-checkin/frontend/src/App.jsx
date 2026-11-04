@@ -9,6 +9,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import SupportWidget from './components/SupportWidget'
 import ManagementWhatsApp from './components/ManagementWhatsApp'
 import WhatsAppContact from './components/WhatsAppContact'
+import SupportChatPage from './components/SupportChatPage'
 import RedesignGate from './pages/redesign/RedesignGate'
 import { setUiPreference } from './pages/redesign/uiPreference'
 
@@ -632,6 +633,7 @@ export default function App() {
     return () => clearTimeout(timer)
   }, [])
 
+  if(window.location.pathname==='/support-chat')return <SupportChatPage/>
   return (
     <ThemeProvider>
       <AuthProvider>

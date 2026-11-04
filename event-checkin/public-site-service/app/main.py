@@ -264,5 +264,19 @@ async def public_site(slug: str, db: AsyncSession = Depends(get_db)):
     if not site or not site.published_release_id: raise HTTPException(404, "Website not published")
     release = await db.get(Release, site.published_release_id)
     if not release: raise HTTPException(404, "Website release unavailable")
-    return HTMLResponse(render_site(release.snapshot["content"], release.snapshot["family"]), headers={"Cache-Control": "public, max-age=60, stale-while-revalidate=300", "Content-Security-Policy": security_policy(), "X-Content-Type-Options": "nosniff"})
+    from .support_chat import embed
+    return HTMLResponse(embed(render_site(release.snapshot["content"], release.snapshot["family"]),site.slug), headers={"Cache-Control": "public, max-age=60, stale-while-revalidate=300", "Content-Security-Policy": security_policy(), "X-Content-Type-Options": "nosniff"})
 
+
+
+@app.get('/site/{slug}/support-facts')
+async def support_facts(slug:str,db:AsyncSession=Depends(get_db)):
+    """Whitelist from the active public release. No drafts, guest records or tokens."""
+    if not settings.enabled:raise HTTPException(404,'Website not published')
+    site=await db.scalar(select(Site).where(Site.slug==slug,Site.enabled.is_(True),Site.published_release_id.is_not(None)))
+    release=await db.get(Release,site.published_release_id) if site else None
+    if not release:raise HTTPException(404,'Website not published')
+    c=release.snapshot.get('content') or {}
+    from .support_chat import profile
+    from fastapi.responses import JSONResponse
+    return JSONResponse(profile(site.id,c),headers={'Cache-Control':'no-store'})

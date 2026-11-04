@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../context/AuthContext'
-import { chatWidgetConfig, selectChatSession, widgetUrl, validSupportIdentity, connectChatFrame } from '../lib/chatWidget.mjs'
+import { isCustomerContactRoute, chatWidgetConfig, selectChatSession, widgetUrl, validSupportIdentity, connectChatFrame } from '../lib/chatWidget.mjs'
 import './SupportWidget.css'
 
 const config = chatWidgetConfig(import.meta.env, window.location.origin)
@@ -97,7 +97,7 @@ export default function SupportWidget() {
   const { user, loading } = useAuth()
   const { pathname } = useLocation()
   const session = useMemo(() => selectChatSession({ user, loading, pathname, config }), [user, loading, pathname])
-  if (!session) return null
+  if (isCustomerContactRoute({user,loading,pathname}) || !session) return null
   // Unmounting destroys the iframe and its bridge on route, login/logout, or
   // account changes. No Chatwoot SDK global or cookie is shared between modes.
   const key = `${session.mode}:${user?.id || 'anonymous'}:${user?.org_id || user?.organization_id || ''}:${pathname}`

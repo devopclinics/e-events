@@ -9,6 +9,7 @@ import { ThemeProvider, useTheme } from './context/ThemeContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import SupportWidget from './components/SupportWidget'
 import ManagementWhatsApp from './components/ManagementWhatsApp'
+import WhatsAppContact from './components/WhatsAppContact'
 import RedesignGate from './pages/redesign/RedesignGate'
 import { setUiPreference } from './pages/redesign/uiPreference'
 
@@ -640,6 +641,7 @@ export default function App() {
           <AppRoutes />
           <SupportWidget />
           <ManagementWhatsApp />
+          <WhatsAppContact />
         </div>
       </AuthProvider>
     </ThemeProvider>

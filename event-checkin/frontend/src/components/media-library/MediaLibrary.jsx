@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import ProposalGenerator from '../proposals/ProposalGenerator'
+import InvoiceStudio from '../proposals/InvoiceStudio'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import {
@@ -324,6 +326,8 @@ function FileCard({ asset, onPreview, onCopy, archived = false }) {
 }
 export default function MediaLibrary() {
   const { user } = useAuth()
+  const [proposalOpen, setProposalOpen] = useState(false)
+  const [invoiceOpen,setInvoiceOpen]=useState(false),[invoiceSource,setInvoiceSource]=useState(null),[proposalRecord,setProposalRecord]=useState(null)
   const [collection, setCollection] = useState('templates')
   const [query, setQuery] = useState('')
   const [format, setFormat] = useState('all')
@@ -381,6 +385,8 @@ export default function MediaLibrary() {
   }
   return (
     <main className="ml-library">
+      {proposalOpen&&<ProposalGenerator initialRecord={proposalRecord} onClose={()=>setProposalOpen(false)} onInvoice={row=>{setProposalOpen(false);setInvoiceSource(row);setInvoiceOpen(true)}}/>}
+      {invoiceOpen&&<InvoiceStudio source={invoiceSource} onClose={()=>setInvoiceOpen(false)} onProposal={row=>{setInvoiceOpen(false);setProposalRecord(row);setProposalOpen(true)}}/>}
       <header className="ml-hero">
         <div>
           <p className="ml-eyebrow">FESTIO / THE MEDIA COLLECTION</p>
@@ -396,7 +402,8 @@ export default function MediaLibrary() {
         </div>
         <div className="ml-hero-note">
           <span className="ml-badge">Platform team</span>
-          <p>
+          <button className="ml-button primary" onClick={()=>{setProposalRecord(null);setProposalOpen(true)}}>Generate proposal</button>
+          <button className="ml-button" onClick={()=>{setInvoiceSource(null);setInvoiceOpen(true)}}>Proposals &amp; invoices</button><p>
             A considered collection.
             <br />
             Less searching. More creating.

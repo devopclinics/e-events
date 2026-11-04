@@ -1,0 +1,8 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import {invoiceFromProposal,invoiceTotals,invoiceErrors,buildInvoice} from '../src/components/proposals/invoiceDocument.mjs'
+const draft=()=>({...invoiceFromProposal({client:'Honeybols Events',title:'Birthday celebration',date:'2027-05-22',fees:[{id:'package',label:'Event package',amount:600000,complimentary:false},{id:'setup',label:'Website & RSVP',amount:75000,complimentary:true}],deposit:60}),discount:200000,bank:'Providus Bank LTD',accountName:'FOHMA INTEGRATED SOLUTIONS LTD',accountNumber:'1310138643'})
+test('negotiated discount preserves complimentary services and splits exact minor units',()=>{assert.deepEqual(invoiceTotals(draft()),{subtotal:60000000,discount:20000000,total:40000000,deposit:24000000,balance:16000000});assert.deepEqual(invoiceErrors(draft()),[])})
+test('proposal conversion does not mutate original fee rows',()=>{const p={fees:[{label:'Service',amount:100,complimentary:false}]},i=invoiceFromProposal(p);i.fees[0].amount=200;assert.equal(p.fees[0].amount,100)})
+test('HTML escapes client, service and bank content, renders dates and brand',()=>{const d=draft();d.client='<script>alert(1)</script>';const s=buildInvoice(d,{reference:'INV-TEST',status:'issued'});assert.ok(s.includes('&lt;script&gt;'));assert.ok(!s.includes('<script>'));assert.ok(s.includes('15 May 2027'));assert.ok(s.includes('1310138643'));assert.equal((s.match(/class="sheet"/g)||[]).length,1)})
+test('rejects missing payment details, negative total and fractional minor amounts',()=>{assert.ok(invoiceErrors({...draft(),bank:''}).length);assert.ok(invoiceErrors({...draft(),discount:700000}).length);const d=draft();d.fees[0].amount=1.001;assert.ok(invoiceErrors(d).length)})

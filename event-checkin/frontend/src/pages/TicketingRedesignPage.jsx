@@ -52,7 +52,7 @@ export default function TicketingRedesignPage() {
   const [settingsDraft, setSettingsDraft] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const [section, setSection] = useState(() => new URLSearchParams(window.location.search).has('stripe') ? 'payments' : 'sales')
+  const [section, setSection] = useState(() => new URLSearchParams(window.location.search).has('stripe') ? 'payments' : new URLSearchParams(window.location.search).get('toolGuide')==='tickets' ? 'tickets' : 'sales')
   const [filters,setFilters]=useState({q:'',status:'',from_date:'',to_date:'',offset:0,limit:50})
   const [search,setSearch]=useState('')
   const [selectedOrders,setSelectedOrders]=useState([])

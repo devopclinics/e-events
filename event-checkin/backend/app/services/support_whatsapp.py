@@ -1,4 +1,4 @@
-"""Private Bird support adapter. No guest mutations and no automated replies."""
+"""Private Bird support adapter. No guest mutations. Approved automation is handled separately."""
 import asyncio
 import base64
 import hashlib
@@ -194,6 +194,9 @@ async def run():
                         data=response.json();message.status=str(data.get('status') or message.status)[:40]
                         if 'fail' in message.status:message.error=str(data.get('reason') or 'Bird reported delivery failure')[:300]
                 await db.commit()
+                from app.services.support_automation import process_one
+                for _ in range(20):
+                    if not await process_one(db):break
         except Exception:
             log.warning('WhatsApp support history refresh failed',exc_info=False)
         await asyncio.sleep(30)

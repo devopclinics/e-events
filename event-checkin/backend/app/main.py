@@ -370,3 +370,7 @@ app.include_router(support_whatsapp.router, prefix="/api/platform/support/whatsa
 
 from .routers import commercial_documents
 app.include_router(commercial_documents.router, prefix="/api/platform/commercial-documents", tags=["commercial-documents"])
+
+
+from .routers import support_automation
+app.include_router(support_automation.router,prefix="/api/platform/support/whatsapp",tags=["support-automation"])

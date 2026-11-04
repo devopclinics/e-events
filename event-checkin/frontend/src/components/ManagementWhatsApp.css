@@ -3,3 +3,4 @@
 .mwa-backdrop{position:fixed;inset:0;z-index:1090;background:#15392e18}
 
 .mwa-automation-state{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;background:#edf1e7;font-size:11px}.mwa-automation-state button{border:1px solid #cad8c3;border-radius:7px;padding:7px 10px;background:#fffdf6;color:#234b3c;cursor:pointer}
+.mwa-message p>small{display:block;font-size:10px;font-weight:bold;margin-bottom:5px}

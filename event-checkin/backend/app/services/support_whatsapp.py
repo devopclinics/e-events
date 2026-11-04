@@ -54,6 +54,15 @@ def verify_signature(raw, headers):
             check(abs(now - float(claims['iat'])) <= 300 and float(claims['exp']) > now)
             check(hmac.compare_digest(claims['url_hash'], hashlib.sha256(url.encode()).hexdigest()))
             check(hmac.compare_digest(claims['payload_hash'], hashlib.sha256(raw).hexdigest()))
+        elif headers.get('messagebird-signature'):
+            # Legacy MessageBird SDK RequestValidator::buildPayloadFromRequest:
+            # timestamp + newline + sorted query + newline + binary SHA256(body).
+            # This receiver's configured URL has no query string.
+            stamp = headers['messagebird-request-timestamp']
+            check(abs(time.time()-int(stamp))<=300)
+            signed = stamp.encode()+b'\n\n'+hashlib.sha256(raw).digest()
+            expected=base64.b64encode(hmac.new(key.encode(),signed,hashlib.sha256).digest()).decode()
+            check(hmac.compare_digest(expected,headers['messagebird-signature']))
         else:
             stamp = headers['webhook-timestamp']; ident = headers['webhook-id']
             check(abs(time.time() - int(stamp)) <= 300 and ident)
@@ -62,6 +71,7 @@ def verify_signature(raw, headers):
             expected = base64.b64encode(hmac.new(secret, signed, hashlib.sha256).digest()).decode()
             check(any(hmac.compare_digest(v, 'v1,'+expected) for v in headers.get('webhook-signature', '').split()))
     except (AssertionError, ValueError, KeyError, TypeError):
+        log.warning('Support webhook signature rejected (JWT=%s, legacy=%s, standard=%s)',bool(headers.get('messagebird-signature-jwt')),bool(headers.get('messagebird-signature')),bool(headers.get('webhook-signature')))
         raise HTTPException(401, 'Invalid support webhook signature')
 
 

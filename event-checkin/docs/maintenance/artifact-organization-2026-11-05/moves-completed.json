@@ -1,0 +1,2615 @@
+[
+  {
+    "old": "/home/dev/events/artifacts/marketing-layout-deploy-2026-10-21",
+    "new": "/home/dev/events/artifacts/brand/marketing/marketing-layout-deploy-2026-10-21",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15751520
+  },
+  {
+    "old": "/home/dev/events/artifacts/shared-guest-sheet-deploy-2026-10-22",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/shared-guest-sheet-deploy-2026-10-22",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15752993
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-public-whatsapp-2026",
+    "new": "/home/dev/events/artifacts/product/messaging/festio-public-whatsapp-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16908646
+  },
+  {
+    "old": "/home/dev/events/artifacts/ncnmo-offline-prod-2026-10-06",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/ncnmo-offline-prod-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15880126
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-menu-data-cleanup-2026-10-06",
+    "new": "/home/dev/events/artifacts/product/guest-operations/guesthub-menu-data-cleanup-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15881318
+  },
+  {
+    "old": "/home/dev/events/artifacts/marketing-visual-implementation-2026-10-21",
+    "new": "/home/dev/events/artifacts/brand/marketing/marketing-visual-implementation-2026-10-21",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15751889
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-footer-2026",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/festio-footer-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15991112
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-live-production-2026-10-06",
+    "new": "/home/dev/events/artifacts/product/live-and-community/guesthub-live-production-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15882008
+  },
+  {
+    "old": "/home/dev/events/artifacts/website-featured-programmes-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/website-featured-programmes-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15861211
+  },
+  {
+    "old": "/home/dev/events/artifacts/meetings-join-button-2026-10-24",
+    "new": "/home/dev/events/artifacts/product/meetings/meetings-join-button-2026-10-24",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15754527
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-capability-audit-2026-11-02",
+    "new": "/home/dev/events/artifacts/product/onboarding/festio-capability-audit-2026-11-02",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16518961
+  },
+  {
+    "old": "/home/dev/events/artifacts/marketing-automation-review-2026-10-21",
+    "new": "/home/dev/events/artifacts/brand/marketing/marketing-automation-review-2026-10-21",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15750275
+  },
+  {
+    "old": "/home/dev/events/artifacts/rsvp-browser-review-2026-10-03",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/rsvp-browser-review-2026-10-03",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15748668
+  },
+  {
+    "old": "/home/dev/events/artifacts/ncnmo-live-website-review-2026-10-07",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/ncnmo-live-website-review-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15861347
+  },
+  {
+    "old": "/home/dev/events/artifacts/studio-layout-preview-20261028",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/studio-layout-preview-20261028",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15864683
+  },
+  {
+    "old": "/home/dev/events/artifacts/pamcon-journey-corrections-2026",
+    "new": "/home/dev/events/artifacts/clients/pamcon/pamcon-journey-corrections-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16518718
+  },
+  {
+    "old": "/home/dev/events/artifacts/design-studio-flyer-production-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/design-studio-flyer-production-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15860764
+  },
+  {
+    "old": "/home/dev/events/artifacts/meetings-gaps-2026-10-25",
+    "new": "/home/dev/events/artifacts/product/meetings/meetings-gaps-2026-10-25",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15755346
+  },
+  {
+    "old": "/home/dev/events/artifacts/invitation-envelope-default-access-20261028",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/invitation-envelope-default-access-20261028",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15862758
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-live-review-2026-10-06",
+    "new": "/home/dev/events/artifacts/product/live-and-community/guesthub-live-review-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15882050
+  },
+  {
+    "old": "/home/dev/events/artifacts/pamcon-hub-fixes-2026",
+    "new": "/home/dev/events/artifacts/clients/pamcon/pamcon-hub-fixes-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16518483
+  },
+  {
+    "old": "/home/dev/events/artifacts/pamcon-modern-review-2026-10-13",
+    "new": "/home/dev/events/artifacts/clients/pamcon/pamcon-modern-review-2026-10-13",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15861589
+  },
+  {
+    "old": "/home/dev/events/artifacts/guest-chat-ui-2026-10-04",
+    "new": "/home/dev/events/artifacts/product/messaging/guest-chat-ui-2026-10-04",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15768601
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-staging-audit-fixes-2026-11-02",
+    "new": "/home/dev/events/artifacts/qa/audits/festio-staging-audit-fixes-2026-11-02",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16521414
+  },
+  {
+    "old": "/home/dev/events/artifacts/birthday-500-proposal-2027",
+    "new": "/home/dev/events/artifacts/clients/birthday-500-2027/birthday-500-proposal-2027",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16523539
+  },
+  {
+    "old": "/home/dev/events/artifacts/mumineen-ticket-checkout-2026-10-27",
+    "new": "/home/dev/events/artifacts/clients/mumineen-academy/mumineen-ticket-checkout-2026-10-27",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15757305
+  },
+  {
+    "old": "/home/dev/events/artifacts/rsvp-more-2026-10-10",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/rsvp-more-2026-10-10",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15862117
+  },
+  {
+    "old": "/home/dev/events/artifacts/rsvp-theme-fit-2026-10-12",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/rsvp-theme-fit-2026-10-12",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15862459
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-discovery-2026",
+    "new": "/home/dev/events/artifacts/product/onboarding/festio-discovery-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15991088
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-superadmin-event-delete-2026",
+    "new": "/home/dev/events/artifacts/product/administration/festio-superadmin-event-delete-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16518392
+  },
+  {
+    "old": "/home/dev/events/artifacts/rsvp-staging-review-2026-10-03",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/rsvp-staging-review-2026-10-03",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15748678
+  },
+  {
+    "old": "/home/dev/events/artifacts/guest-services-deploy-2026-10-19",
+    "new": "/home/dev/events/artifacts/product/guest-operations/guest-services-deploy-2026-10-19",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15863703
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-meals-2026-10-06",
+    "new": "/home/dev/events/artifacts/product/guest-operations/guesthub-meals-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15881081
+  },
+  {
+    "old": "/home/dev/events/artifacts/rsvp-welcome-option-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/rsvp-welcome-option-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15860491
+  },
+  {
+    "old": "/home/dev/events/artifacts/paman-meeting-2026-10-13",
+    "new": "/home/dev/events/artifacts/clients/pamcon/paman-meeting-2026-10-13",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15862572
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-meeting-template-sharing-2026",
+    "new": "/home/dev/events/artifacts/product/meetings/festio-meeting-template-sharing-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15991170
+  },
+  {
+    "old": "/home/dev/events/artifacts/meetings-followup-review-2026-10-25",
+    "new": "/home/dev/events/artifacts/product/meetings/meetings-followup-review-2026-10-25",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15756132
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-app-staging-2026-10-06",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/guesthub-app-staging-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15880320
+  },
+  {
+    "old": "/home/dev/events/artifacts/site-clarity-fix-2026-10-21",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/site-clarity-fix-2026-10-21",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15750797
+  },
+  {
+    "old": "/home/dev/events/artifacts/design-studio-flyer-implementation-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/design-studio-flyer-implementation-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15860718
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-live-implementation-2026-10-06",
+    "new": "/home/dev/events/artifacts/product/live-and-community/guesthub-live-implementation-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15881930
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-free-invitations-refinement-2026",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/festio-free-invitations-refinement-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15991386
+  },
+  {
+    "old": "/home/dev/events/artifacts/pass-confirms-registration-2026",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/pass-confirms-registration-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16518650
+  },
+  {
+    "old": "/home/dev/events/artifacts/setup-guide-fixes-2026-10-08",
+    "new": "/home/dev/events/artifacts/product/onboarding/setup-guide-fixes-2026-10-08",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15861629
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-app-production-2026-10-06",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/guesthub-app-production-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15880574
+  },
+  {
+    "old": "/home/dev/events/artifacts/pamcon-2026-flyer-review",
+    "new": "/home/dev/events/artifacts/clients/pamcon/pamcon-2026-flyer-review",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16518400
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-whatsapp-support-staging-2026-11-04",
+    "new": "/home/dev/events/artifacts/product/messaging/festio-whatsapp-support-staging-2026-11-04",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16781301
+  },
+  {
+    "old": "/home/dev/events/artifacts/knowledge-refresh-2026-10-06",
+    "new": "/home/dev/events/artifacts/product/general/knowledge-refresh-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15880138
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-free-invitations-options-2026",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/festio-free-invitations-options-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16518332
+  },
+  {
+    "old": "/home/dev/events/artifacts/startup-blank-recovery-2026-10-06",
+    "new": "/home/dev/events/artifacts/product/general/startup-blank-recovery-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15880820
+  },
+  {
+    "old": "/home/dev/events/artifacts/marketing-automation-fix-2026-10-21",
+    "new": "/home/dev/events/artifacts/brand/marketing/marketing-automation-fix-2026-10-21",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15750282
+  },
+  {
+    "old": "/home/dev/events/artifacts/site-clarity-review-2026-10-21",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/site-clarity-review-2026-10-21",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15750767
+  },
+  {
+    "old": "/home/dev/events/artifacts/rsvp-landing-review-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/rsvp-landing-review-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15860458
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-staging-recheck-2",
+    "new": "/home/dev/events/artifacts/product/general/festio-staging-recheck-2",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16521476
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-support-inbox-polish-2026",
+    "new": "/home/dev/events/artifacts/product/general/festio-support-inbox-polish-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16911774
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-invitation-short-links-2026",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/festio-invitation-short-links-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16518369
+  },
+  {
+    "old": "/home/dev/events/artifacts/pamcon-palette-2026",
+    "new": "/home/dev/events/artifacts/clients/pamcon/pamcon-palette-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16518548
+  },
+  {
+    "old": "/home/dev/events/artifacts/dynamic-rsvp-2026-10-11",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/dynamic-rsvp-2026-10-11",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15862271
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-chat-help-2026",
+    "new": "/home/dev/events/artifacts/product/messaging/festio-chat-help-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16912087
+  },
+  {
+    "old": "/home/dev/events/artifacts/invitation-envelope-guest-names-20261028",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/invitation-envelope-guest-names-20261028",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15863119
+  },
+  {
+    "old": "/home/dev/events/artifacts/marketing-visual-deploy-2026-10-21",
+    "new": "/home/dev/events/artifacts/brand/marketing/marketing-visual-deploy-2026-10-21",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15752245
+  },
+  {
+    "old": "/home/dev/events/artifacts/meal-workflow-deploy-2026-10-20",
+    "new": "/home/dev/events/artifacts/product/guest-operations/meal-workflow-deploy-2026-10-20",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15749024
+  },
+  {
+    "old": "/home/dev/events/artifacts/pamcon-pass-email-2026",
+    "new": "/home/dev/events/artifacts/clients/pamcon/pamcon-pass-email-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16518631
+  },
+  {
+    "old": "/home/dev/events/artifacts/mumineen-academy-2026",
+    "new": "/home/dev/events/artifacts/clients/mumineen-academy/mumineen-academy-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15756990
+  },
+  {
+    "old": "/home/dev/events/artifacts/standalone-meetings-release-2026-10-24",
+    "new": "/home/dev/events/artifacts/product/meetings/standalone-meetings-release-2026-10-24",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15753370
+  },
+  {
+    "old": "/home/dev/events/artifacts/rsvp-phone-staging-2026-10-03",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/rsvp-phone-staging-2026-10-03",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15748765
+  },
+  {
+    "old": "/home/dev/events/artifacts/ticketing-paused-review-2026-10-25",
+    "new": "/home/dev/events/artifacts/product/commerce/ticketing-paused-review-2026-10-25",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15756519
+  },
+  {
+    "old": "/home/dev/events/artifacts/startup-cache-recovery-2026-10-06",
+    "new": "/home/dev/events/artifacts/product/general/startup-cache-recovery-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15881030
+  },
+  {
+    "old": "/home/dev/events/artifacts/organizer-journey-deploy-2026-10-19",
+    "new": "/home/dev/events/artifacts/product/onboarding/organizer-journey-deploy-2026-10-19",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15862813
+  },
+  {
+    "old": "/home/dev/events/artifacts/setup-guide-permanent-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/onboarding/setup-guide-permanent-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15861514
+  },
+  {
+    "old": "/home/dev/events/artifacts/event-website-review-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/event-website-review-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15860796
+  },
+  {
+    "old": "/home/dev/events/artifacts/ncnmo-phone-repair-2026-10-04",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/ncnmo-phone-repair-2026-10-04",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15748786
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-programme-implementation-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/guesthub-programme-implementation-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15860296
+  },
+  {
+    "old": "/home/dev/events/artifacts/workspace-navigation-2026-10-16",
+    "new": "/home/dev/events/artifacts/product/general/workspace-navigation-2026-10-16",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15862793
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-invitation-share-preview-2026",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/festio-invitation-share-preview-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16518382
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-programme-refresh-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/guesthub-programme-refresh-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15860283
+  },
+  {
+    "old": "/home/dev/events/artifacts/form-publish-feedback-2026-10-06",
+    "new": "/home/dev/events/artifacts/product/general/form-publish-feedback-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15880777
+  },
+  {
+    "old": "/home/dev/events/artifacts/latest-main-deploy-2026-10-17",
+    "new": "/home/dev/events/artifacts/operations/reports/latest-main-deploy-2026-10-17",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15862928
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-programme-implementation-2026-10-06",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/guesthub-programme-implementation-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15881806
+  },
+  {
+    "old": "/home/dev/events/artifacts/speakers-inline-2026-10-08",
+    "new": "/home/dev/events/artifacts/product/general/speakers-inline-2026-10-08",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15861915
+  },
+  {
+    "old": "/home/dev/events/artifacts/ticketing-theme-review-2026-10-25-checks.log",
+    "new": "/home/dev/events/artifacts/product/commerce/ticketing-theme-review-2026-10-25-checks.log",
+    "kind": "loose artifact",
+    "is_directory": false,
+    "inode_before": 15754953,
+    "sha256": "68e3260b43e1e90ffd1f26a5d2a29f0dd0e63e11e9199180d0216bde10009577"
+  },
+  {
+    "old": "/home/dev/events/artifacts/ncnmo-demo-staff-2026-10-05",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/ncnmo-demo-staff-2026-10-05",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15860083
+  },
+  {
+    "old": "/home/dev/events/artifacts/event-forms-install-2026-10-06",
+    "new": "/home/dev/events/artifacts/product/general/event-forms-install-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15880707
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-external-website-2026-10-09",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/guesthub-external-website-2026-10-09",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15862005
+  },
+  {
+    "old": "/home/dev/events/artifacts/ncnmo-demo-content-2026-10-05",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/ncnmo-demo-content-2026-10-05",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15860249
+  },
+  {
+    "old": "/home/dev/events/artifacts/server-image-cleanup-2026-10-25",
+    "new": "/home/dev/events/artifacts/product/general/server-image-cleanup-2026-10-25",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15756931
+  },
+  {
+    "old": "/home/dev/events/artifacts/guest-services-help-deploy-2026-10-19",
+    "new": "/home/dev/events/artifacts/product/guest-operations/guest-services-help-deploy-2026-10-19",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15863756
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-platform-operations-sections-2026",
+    "new": "/home/dev/events/artifacts/product/general/festio-platform-operations-sections-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15991185
+  },
+  {
+    "old": "/home/dev/events/artifacts/ncnmo-2025-programme-review-2026-10-06",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/ncnmo-2025-programme-review-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15880592
+  },
+  {
+    "old": "/home/dev/events/artifacts/guest-programme-production-2026-10-06",
+    "new": "/home/dev/events/artifacts/operations/reports/guest-programme-production-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15880695
+  },
+  {
+    "old": "/home/dev/events/artifacts/recheck-guide-deploy-2026-10-08",
+    "new": "/home/dev/events/artifacts/product/onboarding/recheck-guide-deploy-2026-10-08",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15861866
+  },
+  {
+    "old": "/home/dev/events/artifacts/guest-services-2026-10-19",
+    "new": "/home/dev/events/artifacts/product/guest-operations/guest-services-2026-10-19",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15863205
+  },
+  {
+    "old": "/home/dev/events/artifacts/theme-contrast-2026-10-10",
+    "new": "/home/dev/events/artifacts/product/general/theme-contrast-2026-10-10",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15862075
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-shared-media-2026",
+    "new": "/home/dev/events/artifacts/product/general/festio-shared-media-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15991262
+  },
+  {
+    "old": "/home/dev/events/artifacts/marketing-layout-review-2026-10-21",
+    "new": "/home/dev/events/artifacts/brand/marketing/marketing-layout-review-2026-10-21",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15751160
+  },
+  {
+    "old": "/home/dev/events/artifacts/iedpu-production-browser-review-2026-10-03",
+    "new": "/home/dev/events/artifacts/clients/iedpu/iedpu-production-browser-review-2026-10-03",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15748698
+  },
+  {
+    "old": "/home/dev/events/artifacts/guest-services-design-review-2026-10-19",
+    "new": "/home/dev/events/artifacts/product/guest-operations/guest-services-design-review-2026-10-19",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15864163
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-app-implementation-2026-10-06",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/guesthub-app-implementation-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15880234
+  },
+  {
+    "old": "/home/dev/events/artifacts/email-pilot-deploy-2026-10-18",
+    "new": "/home/dev/events/artifacts/operations/reports/email-pilot-deploy-2026-10-18",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15862818
+  },
+  {
+    "old": "/home/dev/events/artifacts/pr10-deploy-2026-10-19",
+    "new": "/home/dev/events/artifacts/operations/reports/pr10-deploy-2026-10-19",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15862897
+  },
+  {
+    "old": "/home/dev/events/artifacts/rsvp-formats-2026-10-10",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/rsvp-formats-2026-10-10",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15862175
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-inline-chat-recheck-2026",
+    "new": "/home/dev/events/artifacts/product/messaging/festio-inline-chat-recheck-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16912037
+  },
+  {
+    "old": "/home/dev/events/artifacts/event-website-template-gallery-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/event-website-template-gallery-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15860943
+  },
+  {
+    "old": "/home/dev/events/artifacts/envelope-save-apply-fix-20261028",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/envelope-save-apply-fix-20261028",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15863199
+  },
+  {
+    "old": "/home/dev/events/artifacts/workspace-navigation-deploy-2026-10-16",
+    "new": "/home/dev/events/artifacts/operations/reports/workspace-navigation-deploy-2026-10-16",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15862802
+  },
+  {
+    "old": "/home/dev/events/artifacts/gs-edge-backend-first.log",
+    "new": "/home/dev/events/artifacts/qa/logs/gs-edge-backend-first.log",
+    "kind": "loose artifact",
+    "is_directory": false,
+    "inode_before": 15747760,
+    "sha256": "a8156be99b6a01ff78f27fef09d9e8ee452423e1f597f7f475cb9bbb56060192"
+  },
+  {
+    "old": "/home/dev/events/artifacts/ncnmo-team-presentation-2026-10-04",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/ncnmo-team-presentation-2026-10-04",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15859877
+  },
+  {
+    "old": "/home/dev/events/artifacts/landing-community-review-2026-10-15",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/landing-community-review-2026-10-15",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15862727
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-whatsapp-event-answers-2026",
+    "new": "/home/dev/events/artifacts/product/messaging/festio-whatsapp-event-answers-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16911083
+  },
+  {
+    "old": "/home/dev/events/artifacts/ncnmo-premium-website-mockup-2026-10-07",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/ncnmo-premium-website-mockup-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15861357
+  },
+  {
+    "old": "/home/dev/events/artifacts/ticketing-safety-fixes-2026-10-25",
+    "new": "/home/dev/events/artifacts/product/commerce/ticketing-safety-fixes-2026-10-25",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15755732
+  },
+  {
+    "old": "/home/dev/events/artifacts/website-featured-control-check-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/website-featured-control-check-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15861302
+  },
+  {
+    "old": "/home/dev/events/artifacts/rsvp-fix-2026-10-12",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/rsvp-fix-2026-10-12",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15862432
+  },
+  {
+    "old": "/home/dev/events/artifacts/design-studio-flyer-mockup-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/design-studio-flyer-mockup-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15860704
+  },
+  {
+    "old": "/home/dev/events/artifacts/pamcon-hub-review-2026",
+    "new": "/home/dev/events/artifacts/clients/pamcon/pamcon-hub-review-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16518478
+  },
+  {
+    "old": "/home/dev/events/artifacts/website-programme-description-fix-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/website-programme-description-fix-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15860935
+  },
+  {
+    "old": "/home/dev/events/artifacts/premium-website-implementation-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/premium-website-implementation-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15861374
+  },
+  {
+    "old": "/home/dev/events/artifacts/design-studio-redesign-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/design-studio-redesign-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15860605
+  },
+  {
+    "old": "/home/dev/events/artifacts/pamcon-guests-20261104",
+    "new": "/home/dev/events/artifacts/clients/pamcon/pamcon-guests-20261104",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16912243
+  },
+  {
+    "old": "/home/dev/events/artifacts/meetings-studio-2026-10-24",
+    "new": "/home/dev/events/artifacts/product/meetings/meetings-studio-2026-10-24",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15754130
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-programme-design-2026-10-06",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/guesthub-programme-design-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15881792
+  },
+  {
+    "old": "/home/dev/events/artifacts/pamcon-organizer-contacts-2026",
+    "new": "/home/dev/events/artifacts/clients/pamcon/pamcon-organizer-contacts-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16518586
+  },
+  {
+    "old": "/home/dev/events/artifacts/pamcon-pass-schedule-2026",
+    "new": "/home/dev/events/artifacts/clients/pamcon/pamcon-pass-schedule-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16518670
+  },
+  {
+    "old": "/home/dev/events/artifacts/conference-theme-help-2026-10-21",
+    "new": "/home/dev/events/artifacts/product/general/conference-theme-help-2026-10-21",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15752270
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-homepage-2026",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/festio-homepage-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15991014
+  },
+  {
+    "old": "/home/dev/events/artifacts/rsvp-registration-visibility-2026-10-27",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/rsvp-registration-visibility-2026-10-27",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15757258
+  },
+  {
+    "old": "/home/dev/events/artifacts/guest-services-live-followup-2026-10-20",
+    "new": "/home/dev/events/artifacts/product/live-and-community/guest-services-live-followup-2026-10-20",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15749460
+  },
+  {
+    "old": "/home/dev/events/artifacts/shared-guest-sheet-mobile-deploy-2026-10-22",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/shared-guest-sheet-mobile-deploy-2026-10-22",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15753023
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-meeting-share-title-2026",
+    "new": "/home/dev/events/artifacts/product/meetings/festio-meeting-share-title-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15991324
+  },
+  {
+    "old": "/home/dev/events/artifacts/pamcon-website-deploy-2026-10-13",
+    "new": "/home/dev/events/artifacts/clients/pamcon/pamcon-website-deploy-2026-10-13",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15861602
+  },
+  {
+    "old": "/home/dev/events/artifacts/design-studio-implementation-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/design-studio-implementation-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15860621
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-meeting-share-2026",
+    "new": "/home/dev/events/artifacts/product/meetings/festio-meeting-share-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15991129
+  },
+  {
+    "old": "/home/dev/events/artifacts/website-layout-2026-10-10",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/website-layout-2026-10-10",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15862042
+  },
+  {
+    "old": "/home/dev/events/artifacts/festiome-access-2026-10-04",
+    "new": "/home/dev/events/artifacts/product/live-and-community/festiome-access-2026-10-04",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15768757
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-chat-retest2-2026",
+    "new": "/home/dev/events/artifacts/product/messaging/festio-chat-retest2-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16912109
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-session-access-2026",
+    "new": "/home/dev/events/artifacts/product/general/festio-session-access-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16911015
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-brand-unification-2026",
+    "new": "/home/dev/events/artifacts/brand/marketing/festio-brand-unification-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16518745
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-meals-design-2026-10-06",
+    "new": "/home/dev/events/artifacts/product/guest-operations/guesthub-meals-design-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15881163
+  },
+  {
+    "old": "/home/dev/events/artifacts/festiome-actions-2026-10-04",
+    "new": "/home/dev/events/artifacts/product/live-and-community/festiome-actions-2026-10-04",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15768721
+  },
+  {
+    "old": "/home/dev/events/artifacts/audit-production-2026-10-08",
+    "new": "/home/dev/events/artifacts/operations/reports/audit-production-2026-10-08",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15861655
+  },
+  {
+    "old": "/home/dev/events/artifacts/rsvp-production-review-2026-10-03",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/rsvp-production-review-2026-10-03",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15748688
+  },
+  {
+    "old": "/home/dev/events/artifacts/guest-services-gap-review-2026-10-19",
+    "new": "/home/dev/events/artifacts/product/guest-operations/guest-services-gap-review-2026-10-19",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15864587
+  },
+  {
+    "old": "/home/dev/events/artifacts/setup-guide-audit-review-2026-10-08",
+    "new": "/home/dev/events/artifacts/product/onboarding/setup-guide-audit-review-2026-10-08",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15861622
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-invitation-party-size-2026",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/festio-invitation-party-size-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16518350
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-delivery-tracking-2026",
+    "new": "/home/dev/events/artifacts/product/messaging/festio-delivery-tracking-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16521474
+  },
+  {
+    "old": "/home/dev/events/artifacts/premium-website-production-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/premium-website-production-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15861465
+  },
+  {
+    "old": "/home/dev/events/artifacts/ncnmo-demo-preflight-2026-10-05",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/ncnmo-demo-preflight-2026-10-05",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15860205
+  },
+  {
+    "old": "/home/dev/events/artifacts/pamcon-pass-2026",
+    "new": "/home/dev/events/artifacts/clients/pamcon/pamcon-pass-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16518603
+  },
+  {
+    "old": "/home/dev/events/artifacts/event-website-fixes-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/event-website-fixes-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15860861
+  },
+  {
+    "old": "/home/dev/events/artifacts/rsvp-phone-production-2026-10-03",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/rsvp-phone-production-2026-10-03",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15748774
+  },
+  {
+    "old": "/home/dev/events/artifacts/website-template-collection-release-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/website-template-collection-release-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15861096
+  },
+  {
+    "old": "/home/dev/events/artifacts/meetings-counter-refresh-2026-10-24",
+    "new": "/home/dev/events/artifacts/product/meetings/meetings-counter-refresh-2026-10-24",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15754575
+  },
+  {
+    "old": "/home/dev/events/artifacts/meal-attendance-2026-10-20",
+    "new": "/home/dev/events/artifacts/product/guest-operations/meal-attendance-2026-10-20",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15748563
+  },
+  {
+    "old": "/home/dev/events/artifacts/pamcon-readiness-2026-10-13",
+    "new": "/home/dev/events/artifacts/clients/pamcon/pamcon-readiness-2026-10-13",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15862631
+  },
+  {
+    "old": "/home/dev/events/artifacts/audit-fixes-2026-10-08",
+    "new": "/home/dev/events/artifacts/product/general/audit-fixes-2026-10-08",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15861555
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-whatsapp-support-production-2026-11-04",
+    "new": "/home/dev/events/artifacts/product/messaging/festio-whatsapp-support-production-2026-11-04",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16783568
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-email-recovery-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/guesthub-email-recovery-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15860537
+  },
+  {
+    "old": "/home/dev/events/artifacts/cluster-observability-review-2026-10-25",
+    "new": "/home/dev/events/artifacts/product/general/cluster-observability-review-2026-10-25",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15756948
+  },
+  {
+    "old": "/home/dev/events/artifacts/shared-guest-sheet-2026-10-22",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/shared-guest-sheet-2026-10-22",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15752643
+  },
+  {
+    "old": "/home/dev/events/artifacts/event-website-audit-response-2026-10-08",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/event-website-audit-response-2026-10-08",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15861718
+  },
+  {
+    "old": "/home/dev/events/artifacts/envelope-continuation-20261028",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/envelope-continuation-20261028",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15863416
+  },
+  {
+    "old": "/home/dev/events/artifacts/guest-services-operations-deploy-2026-10-19",
+    "new": "/home/dev/events/artifacts/product/guest-operations/guest-services-operations-deploy-2026-10-19",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15864537
+  },
+  {
+    "old": "/home/dev/events/artifacts/design-studio-audit-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/design-studio-audit-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15860570
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-review-fixes-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/guesthub-review-fixes-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15882086
+  },
+  {
+    "old": "/home/dev/events/artifacts/rsvp-layout-2026-10-10",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/rsvp-layout-2026-10-10",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15862122
+  },
+  {
+    "old": "/home/dev/events/artifacts/design-studio-production-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/design-studio-production-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15860640
+  },
+  {
+    "old": "/home/dev/events/artifacts/rsvp-review-2026-10-12",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/rsvp-review-2026-10-12",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15862422
+  },
+  {
+    "old": "/home/dev/events/artifacts/website-draft-save-fix-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/website-draft-save-fix-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15861306
+  },
+  {
+    "old": "/home/dev/events/artifacts/marketing-layout-implementation-2026-10-21",
+    "new": "/home/dev/events/artifacts/brand/marketing/marketing-layout-implementation-2026-10-21",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15751168
+  },
+  {
+    "old": "/home/dev/events/artifacts/design-studio-flyer-investigation-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/design-studio-flyer-investigation-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15860698
+  },
+  {
+    "old": "/home/dev/events/artifacts/pamcon-whatsapp-approved-2026",
+    "new": "/home/dev/events/artifacts/clients/pamcon/pamcon-whatsapp-approved-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16518716
+  },
+  {
+    "old": "/home/dev/events/artifacts/guest-programme-audiences-2026-10-06",
+    "new": "/home/dev/events/artifacts/product/general/guest-programme-audiences-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15880620
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-invitation-studio-preservation-2026",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/festio-invitation-studio-preservation-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16518339
+  },
+  {
+    "old": "/home/dev/events/artifacts/guest-services-audit-fixes-2026-10-20",
+    "new": "/home/dev/events/artifacts/product/guest-operations/guest-services-audit-fixes-2026-10-20",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15749077
+  },
+  {
+    "old": "/home/dev/events/artifacts/invitation-envelope-release-20261028",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/invitation-envelope-release-20261028",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15862771
+  },
+  {
+    "old": "/home/dev/events/artifacts/invitation-envelope-wording-20261028",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/invitation-envelope-wording-20261028",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15863106
+  },
+  {
+    "old": "/home/dev/events/artifacts/festiome-production-review-2026-10-02",
+    "new": "/home/dev/events/artifacts/product/live-and-community/festiome-production-review-2026-10-02",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15748614
+  },
+  {
+    "old": "/home/dev/events/artifacts/ncnmo-live-three-activities-2026-10-04",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/ncnmo-live-three-activities-2026-10-04",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15859953
+  },
+  {
+    "old": "/home/dev/events/artifacts/guest-services-edge-fixes-2026-10-19",
+    "new": "/home/dev/events/artifacts/product/guest-operations/guest-services-edge-fixes-2026-10-19",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15747761
+  },
+  {
+    "old": "/home/dev/events/artifacts/guardian-manual-handoff-2026-10-05",
+    "new": "/home/dev/events/artifacts/product/general/guardian-manual-handoff-2026-10-05",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15859960
+  },
+  {
+    "old": "/home/dev/events/artifacts/guest-services-edge-deploy-2026-10-20",
+    "new": "/home/dev/events/artifacts/product/guest-operations/guest-services-edge-deploy-2026-10-20",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15748125
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-customer-flow-2026",
+    "new": "/home/dev/events/artifacts/product/onboarding/festio-customer-flow-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16518972
+  },
+  {
+    "old": "/home/dev/events/artifacts/ticketing-theme-review-2026-10-25",
+    "new": "/home/dev/events/artifacts/product/commerce/ticketing-theme-review-2026-10-25",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15754952
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-need-first-staging-2026-11-04",
+    "new": "/home/dev/events/artifacts/product/general/festio-need-first-staging-2026-11-04",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16777261
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-app-layout-2026-10-06",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/guesthub-app-layout-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15880208
+  },
+  {
+    "old": "/home/dev/events/artifacts/pamcon-pass-start-time-2026",
+    "new": "/home/dev/events/artifacts/clients/pamcon/pamcon-pass-start-time-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16518710
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-appearance-2026-10-06",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/guesthub-appearance-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15881649
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-team-invites-2026",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/festio-team-invites-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15991143
+  },
+  {
+    "old": "/home/dev/events/artifacts/birthday-500-invoice-2027",
+    "new": "/home/dev/events/artifacts/clients/birthday-500-2027/birthday-500-invoice-2027",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16784243
+  },
+  {
+    "old": "/home/dev/events/artifacts/website-and-setup-fixes-2026-10-08",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/website-and-setup-fixes-2026-10-08",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15861727
+  },
+  {
+    "old": "/home/dev/events/artifacts/proposal-generator-2026",
+    "new": "/home/dev/events/artifacts/product/commerce/proposal-generator-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16523558
+  },
+  {
+    "old": "/home/dev/events/artifacts/help-knowledge-update-2026-10-08",
+    "new": "/home/dev/events/artifacts/product/general/help-knowledge-update-2026-10-08",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15861942
+  },
+  {
+    "old": "/home/dev/events/artifacts/guest-services-implementation-2026-10-19",
+    "new": "/home/dev/events/artifacts/product/guest-operations/guest-services-implementation-2026-10-19",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15864176
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-guest-export-feedback-2026",
+    "new": "/home/dev/events/artifacts/product/general/festio-guest-export-feedback-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15991337
+  },
+  {
+    "old": "/home/dev/events/artifacts/landing-community-deploy-2026-10-15",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/landing-community-deploy-2026-10-15",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15862733
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-media-studio-2026",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/festio-media-studio-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15991226
+  },
+  {
+    "old": "/home/dev/events/artifacts/ncnmo-phone-live-2026-10-03",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/ncnmo-phone-live-2026-10-03",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15748783
+  },
+  {
+    "old": "/home/dev/events/artifacts/ticket-checkout-demo-2026-10-27",
+    "new": "/home/dev/events/artifacts/product/commerce/ticket-checkout-demo-2026-10-27",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15757382
+  },
+  {
+    "old": "/home/dev/events/artifacts/mumineen-future-templates-2026-10-27",
+    "new": "/home/dev/events/artifacts/clients/mumineen-academy/mumineen-future-templates-2026-10-27",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15757166
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-unlimited-events-stabilization-2026",
+    "new": "/home/dev/events/artifacts/product/general/festio-unlimited-events-stabilization-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16518360
+  },
+  {
+    "old": "/home/dev/events/artifacts/ncnmo-prod-readiness-2026-10-04",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/ncnmo-prod-readiness-2026-10-04",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15859715
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-whatsapp-enable-both-2026",
+    "new": "/home/dev/events/artifacts/product/messaging/festio-whatsapp-enable-both-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16911488
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-live-design-2026-10-06",
+    "new": "/home/dev/events/artifacts/product/live-and-community/guesthub-live-design-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15881889
+  },
+  {
+    "old": "/home/dev/events/artifacts/ncnmo-guest-services-2026-10-19",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/ncnmo-guest-services-2026-10-19",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15864144
+  },
+  {
+    "old": "/home/dev/events/artifacts/pamcon-pass-schedule-mockup",
+    "new": "/home/dev/events/artifacts/clients/pamcon/pamcon-pass-schedule-mockup",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16518660
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-meal-combinations-2026-10-06",
+    "new": "/home/dev/events/artifacts/product/guest-operations/guesthub-meal-combinations-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15881254
+  },
+  {
+    "old": "/home/dev/events/artifacts/rsvp-landing-design-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/rsvp-landing-design-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15860481
+  },
+  {
+    "old": "/home/dev/events/artifacts/standalone-meetings-review-2026-10-24",
+    "new": "/home/dev/events/artifacts/product/meetings/standalone-meetings-review-2026-10-24",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15753054
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-visual-menu-2026-10-06",
+    "new": "/home/dev/events/artifacts/product/guest-operations/guesthub-visual-menu-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15881171
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-food-art-2026-10-06",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/guesthub-food-art-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15881542
+  },
+  {
+    "old": "/home/dev/events/artifacts/audit-response-2026-10-08",
+    "new": "/home/dev/events/artifacts/product/general/audit-response-2026-10-08",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15861549
+  },
+  {
+    "old": "/home/dev/events/artifacts/setup-readiness-layout-2026-10-08",
+    "new": "/home/dev/events/artifacts/product/onboarding/setup-readiness-layout-2026-10-08",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15861804
+  },
+  {
+    "old": "/home/dev/events/artifacts/proposal-studio-complete-2026",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/proposal-studio-complete-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16777232
+  },
+  {
+    "old": "/home/dev/events/artifacts/guest-services-performance-offline-2026-10-20",
+    "new": "/home/dev/events/artifacts/product/guest-operations/guest-services-performance-offline-2026-10-20",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15749848
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-website-2026-10-09",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/guesthub-website-2026-10-09",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15861975
+  },
+  {
+    "old": "/home/dev/events/artifacts/ncnmo-offline-readiness-2026-10-06",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/ncnmo-offline-readiness-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15880083
+  },
+  {
+    "old": "/home/dev/events/artifacts/proposal-studio-generic-2026",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/proposal-studio-generic-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16777252
+  },
+  {
+    "old": "/home/dev/events/artifacts/admission-popup-2026-10-05",
+    "new": "/home/dev/events/artifacts/product/general/admission-popup-2026-10-05",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15859999
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-programme-colours-2026-10-07",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/guesthub-programme-colours-2026-10-07",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15860407
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-website-chat-2026",
+    "new": "/home/dev/events/artifacts/product/messaging/festio-website-chat-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16911633
+  },
+  {
+    "old": "/home/dev/events/artifacts/repository-cleanup-2026-11-05",
+    "new": "/home/dev/events/artifacts/operations/repository-cleanup/repository-cleanup-2026-11-05",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 17170433
+  },
+  {
+    "old": "/home/dev/events/artifacts/guesthub-forms-design-2026-10-06",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/guesthub-forms-design-2026-10-06",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15881374
+  },
+  {
+    "old": "/home/dev/events/artifacts/marketing-visual-review-2026-10-21",
+    "new": "/home/dev/events/artifacts/brand/marketing/marketing-visual-review-2026-10-21",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15751880
+  },
+  {
+    "old": "/home/dev/events/artifacts/meeting-url-fix-2026-10-24",
+    "new": "/home/dev/events/artifacts/product/meetings/meeting-url-fix-2026-10-24",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15753752
+  },
+  {
+    "old": "/home/dev/events/artifacts/ncnmo-branding-2026-10-04",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/ncnmo-branding-2026-10-04",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15768576
+  },
+  {
+    "old": "/home/dev/events/artifacts/guest-services-meal-queue-2026-10-20",
+    "new": "/home/dev/events/artifacts/product/guest-operations/guest-services-meal-queue-2026-10-20",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15748189
+  },
+  {
+    "old": "/home/dev/events/artifacts/conference-theme-help-deploy-2026-10-21",
+    "new": "/home/dev/events/artifacts/operations/reports/conference-theme-help-deploy-2026-10-21",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15752619
+  },
+  {
+    "old": "/home/dev/events/artifacts/festiome-staging-review-2026-10-02",
+    "new": "/home/dev/events/artifacts/product/live-and-community/festiome-staging-review-2026-10-02",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15748597
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-media-invoices-2026",
+    "new": "/home/dev/events/artifacts/product/commerce/festio-media-invoices-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16815920
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-platform-operations-2026",
+    "new": "/home/dev/events/artifacts/product/general/festio-platform-operations-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15991154
+  },
+  {
+    "old": "/home/dev/events/artifacts/website-template-selection-fix-2026-10-27",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/website-template-selection-fix-2026-10-27",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15757220
+  },
+  {
+    "old": "/home/dev/events/artifacts/meetings-counter-tests.log",
+    "new": "/home/dev/events/artifacts/product/meetings/meetings-counter-tests.log",
+    "kind": "loose artifact",
+    "is_directory": false,
+    "inode_before": 15754574,
+    "sha256": "2bcd3472506a71035a4d5d003ebc060b9da7272d4c54b25ee2a8e222a1b6efc2"
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-task-setup-staging-2026-11-04",
+    "new": "/home/dev/events/artifacts/product/onboarding/festio-task-setup-staging-2026-11-04",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16781039
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-free-invitations-2026",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/festio-free-invitations-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15991349
+  },
+  {
+    "old": "/home/dev/events/artifacts/live-flow-fixes-2026-10-05",
+    "new": "/home/dev/events/artifacts/product/live-and-community/live-flow-fixes-2026-10-05",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15860029
+  },
+  {
+    "old": "/home/dev/events/artifacts/ncnmo-colors-2026-10-04",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/ncnmo-colors-2026-10-04",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15768679
+  },
+  {
+    "old": "/home/dev/events/artifacts/meetings-gaps-backend-tests.log",
+    "new": "/home/dev/events/artifacts/product/meetings/meetings-gaps-backend-tests.log",
+    "kind": "loose artifact",
+    "is_directory": false,
+    "inode_before": 15755345,
+    "sha256": "65a5c09c703b7db1c29e6598f0d2c6257657c53ff9a073950d0ce6b434136375"
+  },
+  {
+    "old": "/home/dev/events/artifacts/guest-services-help-validation-2026-10-19",
+    "new": "/home/dev/events/artifacts/product/guest-operations/guest-services-help-validation-2026-10-19",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15863748
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-marketing-purpose-2026",
+    "new": "/home/dev/events/artifacts/brand/marketing/festio-marketing-purpose-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 15991285
+  },
+  {
+    "old": "/home/dev/events/artifacts/festio-whatsapp-flyer-2026",
+    "new": "/home/dev/events/artifacts/brand/marketing/festio-whatsapp-flyer-2026",
+    "kind": "project bundle",
+    "is_directory": true,
+    "inode_before": 16783704
+  },
+  {
+    "old": "/home/dev/events/WomensConvention2026_FestioCheckIn.pptx",
+    "new": "/home/dev/events/artifacts/product/general/WomensConvention2026_FestioCheckIn.pptx",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15476935,
+    "sha256": "b3fc72f500de41bddd5638da98863da93bba41b337072f4cf31be664f17343fe"
+  },
+  {
+    "old": "/home/dev/events/NCNMO_EVENT_WEBSITE_BACKUP_BEFORE_RICH_PUBLISH_2026-09-17.json",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/NCNMO_EVENT_WEBSITE_BACKUP_BEFORE_RICH_PUBLISH_2026-09-17.json",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15476533,
+    "sha256": "00976f37a058ace7d9c65ec6fc92719ceff20f07295a90d48f1f652427fbf373"
+  },
+  {
+    "old": "/home/dev/events/Festio-Staging-Gap-Recheck-2",
+    "new": "/home/dev/events/artifacts/qa/audits/Festio-Staging-Gap-Recheck-2",
+    "kind": "workspace collection",
+    "is_directory": true,
+    "inode_before": 16521407
+  },
+  {
+    "old": "/home/dev/events/festio-results-only-1366x768.png",
+    "new": "/home/dev/events/artifacts/product/results/festio-results-only-1366x768.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15477707,
+    "sha256": "7ea93dd16064c52ddb78bb7f803ee45c7e147b8dffbda155459e554d739b3fa9"
+  },
+  {
+    "old": "/home/dev/events/Festio_Pricing_and_Addons.csv",
+    "new": "/home/dev/events/artifacts/brand/pricing/Festio_Pricing_and_Addons.csv",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15481310,
+    "sha256": "4e49543f1c2c0982ff5f7a2cf48dbf789bf0fd5abeae9b645d8ea6d062d610bc"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_LIVE_DONATION_TRACKER_MULTI_CHANNEL_MOCKUP_2026-09-23.png",
+    "new": "/home/dev/events/artifacts/product/live-and-community/FESTIO_LIVE_DONATION_TRACKER_MULTI_CHANNEL_MOCKUP_2026-09-23.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15476590,
+    "sha256": "ed1288ba3794d963130c6450ded935113b7c45fba2dcc0f416cde3250d083a62"
+  },
+  {
+    "old": "/home/dev/events/K&H Aqdu.jpeg",
+    "new": "/home/dev/events/artifacts/clients/weddings/reference-images/K&H Aqdu.jpeg",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15510511,
+    "sha256": "f935a34327febc10d3c1ecb51a9c392a09b8beb5b67c37d90c553744f14c9987"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_EVENT_WEBSITE_IMPLEMENTATION_PLAN.md",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/FESTIO_EVENT_WEBSITE_IMPLEMENTATION_PLAN.md",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15476953,
+    "sha256": "b19ea383bc65467b3d941e52b1dc2804ccf3a33508927b2d9e3fe5dd8e0dfe45"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_PRODUCT_WIDE_GUIDED_SETUP_UPGRADE_PLAN_2026-09-30.md",
+    "new": "/home/dev/events/artifacts/product/onboarding/FESTIO_PRODUCT_WIDE_GUIDED_SETUP_UPGRADE_PLAN_2026-09-30.md",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15477782,
+    "sha256": "3dac8932ade0aadc00a9dac7752a7b31063084b1355d199a174b2ce94ce3478c"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_EVENT_WEBSITE_STUDIO_FINAL_MOCKUP_2026-09-16.png",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/FESTIO_EVENT_WEBSITE_STUDIO_FINAL_MOCKUP_2026-09-16.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15476645,
+    "sha256": "9aef8a1920b09756bc91268d64d3d1955a9fd023d66fe5a32bb66761cd6a95d6"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_LIVE_CERTIFICATES_PRESENTER_MOCKUP_2026-09-29.png",
+    "new": "/home/dev/events/artifacts/product/live-and-community/FESTIO_LIVE_CERTIFICATES_PRESENTER_MOCKUP_2026-09-29.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15520966,
+    "sha256": "0636ca56b489a3c6846ed890c23e1dc86e0dfa4b588509f858f3708bb645deb7"
+  },
+  {
+    "old": "/home/dev/events/probe_out.txt",
+    "new": "/home/dev/events/artifacts/qa/audits/probe_out.txt",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15480483,
+    "sha256": "d1b829a1554d976c2813d523f6833c57b9b7bfe2bf2fca6ee0741ceef6a64efb"
+  },
+  {
+    "old": "/home/dev/events/IEDPU_FINANCE_RECONCILIATION_PORTAL_MOCKUP_2026-09-23.html",
+    "new": "/home/dev/events/artifacts/clients/iedpu/IEDPU_FINANCE_RECONCILIATION_PORTAL_MOCKUP_2026-09-23.html",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15520996,
+    "sha256": "5f8267ebd8c0af6188a707790f68fea03e2978d1409e3f365cbf7b039b4a614b"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_LIVE_DONATION_TRACKER_IMPLEMENTATION_PLAN.md",
+    "new": "/home/dev/events/artifacts/product/live-and-community/FESTIO_LIVE_DONATION_TRACKER_IMPLEMENTATION_PLAN.md",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15520958,
+    "sha256": "e4965f4bcb22388a3985a4a9c46bd821cca4c6cd0b10878b7be118dc3027cd6a"
+  },
+  {
+    "old": "/home/dev/events/NCNMO_STAGING_LIVE_MANIFEST.json",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/NCNMO_STAGING_LIVE_MANIFEST.json",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15490579,
+    "sha256": "a3ca4d2b55ff4be98d9f6a5edbd11df34ea649e9ac45042b8c01a23321bb02a8"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_COMPLETE_GUIDED_PLATFORM_UPGRADE_PLAN_2026-09-30.md",
+    "new": "/home/dev/events/artifacts/product/onboarding/FESTIO_COMPLETE_GUIDED_PLATFORM_UPGRADE_PLAN_2026-09-30.md",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15521031,
+    "sha256": "1a5280a8209b493352ff98a99a18a28d3d532ecf824ca6f50e26e82d6046b3a5"
+  },
+  {
+    "old": "/home/dev/events/mbf6.png",
+    "new": "/home/dev/events/artifacts/clients/mbf/mbf6.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15510646,
+    "sha256": "4d7ec9748ee81f0b645605ee67bc6b19fd873786460551a73fe4265c04efea1f"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_ADMIN_REDESIGN_STAGE_B_COMPLETION_2026-07-28.md",
+    "new": "/home/dev/events/artifacts/product/administration/FESTIO_ADMIN_REDESIGN_STAGE_B_COMPLETION_2026-07-28.md",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15481630,
+    "sha256": "9898a0cd9c907fdeaddbb8079b20bab7862d6d4bfd7dd338cf7870c79d0f7ee0"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_LIVE_DONATION_TRACKER_PROJECTOR_MOCKUP_2026-09-23.png",
+    "new": "/home/dev/events/artifacts/product/live-and-community/FESTIO_LIVE_DONATION_TRACKER_PROJECTOR_MOCKUP_2026-09-23.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15520960,
+    "sha256": "30f06d45e8dfa135e09b67fe62ee0af82daee922f073c1439ababebb2d1fa983"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_LIVE_NAVIGATION_INFORMATION_ARCHITECTURE_MOCKUP_2026-09-29.html",
+    "new": "/home/dev/events/artifacts/product/live-and-community/FESTIO_LIVE_NAVIGATION_INFORMATION_ARCHITECTURE_MOCKUP_2026-09-29.html",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15520992,
+    "sha256": "f6580838512ed52c226851d5848ad4c53191105bd25893dceae25e390af40960"
+  },
+  {
+    "old": "/home/dev/events/assets",
+    "new": "/home/dev/events/artifacts/brand/assets/library",
+    "kind": "workspace collection",
+    "is_directory": true,
+    "inode_before": 15733817
+  },
+  {
+    "old": "/home/dev/events/NCNMO_EVENT_WEBSITE_ALIGNED_CONTENT_2026-09-17.json",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/NCNMO_EVENT_WEBSITE_ALIGNED_CONTENT_2026-09-17.json",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15476730,
+    "sha256": "92386cc06f1b8dac0a6e345a257ac2e960a349a20c596140298fdcb66e86c908"
+  },
+  {
+    "old": "/home/dev/events/Festio_Pricing_and_Addons.xlsx",
+    "new": "/home/dev/events/artifacts/brand/pricing/Festio_Pricing_and_Addons.xlsx",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15479912,
+    "sha256": "7e437a887ac59fd88f8892be303d0a697802d4ad9b1eaae2cd5d0a50c517ae00"
+  },
+  {
+    "old": "/home/dev/events/NCNMO_EVENT_WEBSITE_V10_STAGING_2026-09-17.png",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/NCNMO_EVENT_WEBSITE_V10_STAGING_2026-09-17.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15476734,
+    "sha256": "6b3ce9fc64d8f2bf0063187b9b29ffbcfbda31c4776a2f47c4cf594e6adeee46"
+  },
+  {
+    "old": "/home/dev/events/SCALABILITY_SECURITY_ANALYSIS.md",
+    "new": "/home/dev/events/artifacts/operations/reports/SCALABILITY_SECURITY_ANALYSIS.md",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15479168,
+    "sha256": "7ef4b4dba339e633c201f03955936c38cc2770a1205748560539fd9559bd7128"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_ADMIN_MOCKUP_PARITY_AUDIT_2026-07-28.md",
+    "new": "/home/dev/events/artifacts/product/administration/FESTIO_ADMIN_MOCKUP_PARITY_AUDIT_2026-07-28.md",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15481649,
+    "sha256": "dd07603062b66a1f0bda5c6ecac5bf1a8f05b7afe1c1c5ada8b532fba65c63f3"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_ADMIN_REDESIGN_PHASE_9_PROGRESS_2026-07-29.md",
+    "new": "/home/dev/events/artifacts/product/administration/FESTIO_ADMIN_REDESIGN_PHASE_9_PROGRESS_2026-07-29.md",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15481769,
+    "sha256": "29cc61af7c0e7deddc167a8bf5dfbc88e57ab36397dce1ccc104f5d1cf57b83b"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_ADMIN_REDESIGN_PHASE_7_8_COMPLETION_2026-07-29.md",
+    "new": "/home/dev/events/artifacts/product/administration/FESTIO_ADMIN_REDESIGN_PHASE_7_8_COMPLETION_2026-07-29.md",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15481767,
+    "sha256": "737f805d610577127a37b1a78992d9cbe2cf9833e30446c89578c85badc920c3"
+  },
+  {
+    "old": "/home/dev/events/Backgroud.png",
+    "new": "/home/dev/events/artifacts/brand/assets/reference/Backgroud.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15481781,
+    "sha256": "32ee0d1a8ca1aafff8a06c8bb711c7f855148316da9b77ba31ac3735834f5074"
+  },
+  {
+    "old": "/home/dev/events/NCNMO-Platform-2026-Two-Page-Overview.pdf",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/NCNMO-Platform-2026-Two-Page-Overview.pdf",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15490583,
+    "sha256": "5b5989441e126ec70abd732d67a6a9bac4535fb988de565fcfa75fe97b82003b"
+  },
+  {
+    "old": "/home/dev/events/image.png",
+    "new": "/home/dev/events/artifacts/brand/assets/reference/image.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15477950,
+    "sha256": "4ab691e1bb9d2ab9f3f20d9baa4bd05de868ee69b9ebe1d594c437b6352b3d82"
+  },
+  {
+    "old": "/home/dev/events/iedpu-assets",
+    "new": "/home/dev/events/artifacts/clients/iedpu/assets",
+    "kind": "workspace collection",
+    "is_directory": true,
+    "inode_before": 16150935
+  },
+  {
+    "old": "/home/dev/events/mockups",
+    "new": "/home/dev/events/artifacts/product/design-reference/mockups",
+    "kind": "workspace collection",
+    "is_directory": true,
+    "inode_before": 15481584
+  },
+  {
+    "old": "/home/dev/events/IEDPU_GIVING_HUB_POLISH_mobile-320.png",
+    "new": "/home/dev/events/artifacts/clients/iedpu/IEDPU_GIVING_HUB_POLISH_mobile-320.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15520995,
+    "sha256": "921ec6978cf17cb4dfc9efafb3145c6236d5b48657d4308c720efa79f87c7708"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_LIVE_UNIFIED_WORKSPACE_MOCKUP_2026-09-29.html",
+    "new": "/home/dev/events/artifacts/product/live-and-community/FESTIO_LIVE_UNIFIED_WORKSPACE_MOCKUP_2026-09-29.html",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15520978,
+    "sha256": "eb175ad81a9f59adb46503d68a2550e4d723ec94683189fae85951acc5ced691"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_MARKETING_WEBSITE_AUDIT_2026-08-09.md",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/FESTIO_MARKETING_WEBSITE_AUDIT_2026-08-09.md",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15484911,
+    "sha256": "164145deb87a62f4bd68d74c3976f28f4286d4e25b414c416262f8a5b6554331"
+  },
+  {
+    "old": "/home/dev/events/redesign-screenshots",
+    "new": "/home/dev/events/artifacts/qa/screenshots/redesign-screenshots",
+    "kind": "workspace collection",
+    "is_directory": true,
+    "inode_before": 15483426
+  },
+  {
+    "old": "/home/dev/events/FESTIO_ADMIN_MOCKUP_PARITY_REAUDIT_2026-07-28.md",
+    "new": "/home/dev/events/artifacts/product/administration/FESTIO_ADMIN_MOCKUP_PARITY_REAUDIT_2026-07-28.md",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15481677,
+    "sha256": "8c4cb0431957203e85bea2d4078cedecf0cf73aeb5d55d637b1e534d7cc750dd"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_LIVE_CERTIFICATES_PRESENTER_MOCKUP_2026-09-29.html",
+    "new": "/home/dev/events/artifacts/product/live-and-community/FESTIO_LIVE_CERTIFICATES_PRESENTER_MOCKUP_2026-09-29.html",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15520964,
+    "sha256": "b3cd9e3a086ae3e8940a336f2c5853def56a8c4ffb000ecd03cc258106dffe4d"
+  },
+  {
+    "old": "/home/dev/events/NCNMO_EVENT_WEBSITE_ALIGNED_PREVIEW_2026-09-17.html",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/NCNMO_EVENT_WEBSITE_ALIGNED_PREVIEW_2026-09-17.html",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15476731,
+    "sha256": "ab4d1da6c5e22a1f71acd30aa209e83e8830c65548a5dd14e4575818168ec580"
+  },
+  {
+    "old": "/home/dev/events/hajj$umrah",
+    "new": "/home/dev/events/artifacts/clients/hajj-umrah/source-images",
+    "kind": "workspace collection",
+    "is_directory": true,
+    "inode_before": 16150899
+  },
+  {
+    "old": "/home/dev/events/FESTIO_COMPLETE_GUIDED_PLATFORM_PHASE_MAP_MOCKUP_2026-09-30.html",
+    "new": "/home/dev/events/artifacts/product/onboarding/FESTIO_COMPLETE_GUIDED_PLATFORM_PHASE_MAP_MOCKUP_2026-09-30.html",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15521033,
+    "sha256": "06e0abe8b50119b5d61c938d9e07cc4647a5b12eb77c8664a55eb3bea5021d47"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_STAGING_QA_HANDOFF_2026-07-19.md",
+    "new": "/home/dev/events/artifacts/product/general/FESTIO_STAGING_QA_HANDOFF_2026-07-19.md",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15480647,
+    "sha256": "a59727a5af8967bfec9461a05b587cdbf764cae6743fe618b737fb71d187323c"
+  },
+  {
+    "old": "/home/dev/events/NCNMO_PLATFORM_2026_CLIENT_PROPOSAL.html",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/NCNMO_PLATFORM_2026_CLIENT_PROPOSAL.html",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15477898,
+    "sha256": "a880c24a116d56d5edad66c642136c5292ee1746e07d0d767153693512a5be6c"
+  },
+  {
+    "old": "/home/dev/events/IEDPU_GIVING_HUB_POLISH_desktop.png",
+    "new": "/home/dev/events/artifacts/clients/iedpu/IEDPU_GIVING_HUB_POLISH_desktop.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15520968,
+    "sha256": "8fcfd1cad6c158bebb17266e6df7027d10865c1af11818256ef2cc6ab23acde6"
+  },
+  {
+    "old": "/home/dev/events/festio-results-only-1024x768.png",
+    "new": "/home/dev/events/artifacts/product/results/festio-results-only-1024x768.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15477708,
+    "sha256": "205e26a4c5313ff73402fd0b20174dfcc5c358ba5e02ab0ad02778205eb36172"
+  },
+  {
+    "old": "/home/dev/events/Festio-Staging-Audit-Evidence",
+    "new": "/home/dev/events/artifacts/qa/audits/Festio-Staging-Audit-Evidence",
+    "kind": "workspace collection",
+    "is_directory": true,
+    "inode_before": 16520895
+  },
+  {
+    "old": "/home/dev/events/NCNMO-Platform-2026-Proposal.pdf",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/NCNMO-Platform-2026-Proposal.pdf",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15476597,
+    "sha256": "0b7ee00b3f0585a51c017061c65f8704767cd425e23b1a4fae330fd0edd4e95d"
+  },
+  {
+    "old": "/home/dev/events/festio-results-only-768x1024-v2.png",
+    "new": "/home/dev/events/artifacts/product/results/festio-results-only-768x1024-v2.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15477053,
+    "sha256": "e74fa724532fd07b253b7126bd6be9c08e45ff7b63c1dd5c1ffdadf0b2047c67"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_EVENT_WEBSITE_STUDIO_MOCKUP_2026-09-16.html",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/FESTIO_EVENT_WEBSITE_STUDIO_MOCKUP_2026-09-16.html",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15476524,
+    "sha256": "0d9db7a7229ad5fb1a3cd3fd3a4f3116923374cc6c10472a15678d1385a9f8d4"
+  },
+  {
+    "old": "/home/dev/events/NCNMO_PLATFORM_DEMO_PLAN.md",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/NCNMO_PLATFORM_DEMO_PLAN.md",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15490521,
+    "sha256": "d8f2d5b557d1de0bafe7f89db3d2a8ab9e50e87c7ce273b484f7f70a368c9fd2"
+  },
+  {
+    "old": "/home/dev/events/debug-give.png",
+    "new": "/home/dev/events/artifacts/brand/assets/reference/debug-give.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15477908,
+    "sha256": "a5d6c17441f80a0440bf85798c2adc2ce45300f87e4d0f218863a3d56495b4f7"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_LIVE_DONATION_TRACKER_PLEDGE_DETAILS_MOCKUP_2026-09-23.png",
+    "new": "/home/dev/events/artifacts/product/live-and-community/FESTIO_LIVE_DONATION_TRACKER_PLEDGE_DETAILS_MOCKUP_2026-09-23.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15520959,
+    "sha256": "a70be60d7cd9e12af3884528ea798759e6946c42c982f74ccef61644234d8f20"
+  },
+  {
+    "old": "/home/dev/events/probe_err.txt",
+    "new": "/home/dev/events/artifacts/qa/audits/probe_err.txt",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15476540,
+    "sha256": "f83ecaf0352de0cbd916cddb30db821f4863764445551de97e7b73b8076f5f81"
+  },
+  {
+    "old": "/home/dev/events/Catering_Vendor_Professional_Dashboard.xlsx",
+    "new": "/home/dev/events/artifacts/brand/pricing/Catering_Vendor_Professional_Dashboard.xlsx",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15483719,
+    "sha256": "40ab08c7e88e3a7e1e91ae8ad9e3a3abb96fd2ae654388aa1aa3a3f4e9e228ff"
+  },
+  {
+    "old": "/home/dev/events/IEDPU_GIVING_HUB_UPDATED_MOCKUP_2026-09-23.png",
+    "new": "/home/dev/events/artifacts/clients/iedpu/IEDPU_GIVING_HUB_UPDATED_MOCKUP_2026-09-23.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15520984,
+    "sha256": "0ff94df1464389f1161a994139d58171ed11fa265104a49b1981decabe43f3f5"
+  },
+  {
+    "old": "/home/dev/events/NCNMO_PLATFORM_2026_CLIENT_PROPOSAL.md",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/NCNMO_PLATFORM_2026_CLIENT_PROPOSAL.md",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15490556,
+    "sha256": "bf8292e04fbe4a0decf486e5de753558b7e7c11aae2693788db0603f0fca2b93"
+  },
+  {
+    "old": "/home/dev/events/festio-customer-audit",
+    "new": "/home/dev/events/artifacts/qa/audits/festio-customer-audit",
+    "kind": "workspace collection",
+    "is_directory": true,
+    "inode_before": 15759442
+  },
+  {
+    "old": "/home/dev/events/FESTIO_PRODUCT_WIDE_SETUP_GUIDE_MOCKUP_2026-09-30.html",
+    "new": "/home/dev/events/artifacts/product/onboarding/FESTIO_PRODUCT_WIDE_SETUP_GUIDE_MOCKUP_2026-09-30.html",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15521029,
+    "sha256": "92026b51deebfdb5a3d3182fbcdffee576d5ae34f3e2b9e1f0fa5c8c7f58dbd1"
+  },
+  {
+    "old": "/home/dev/events/IEDPU_GIVING_HUB_IMPLEMENTED_mobile-320.png",
+    "new": "/home/dev/events/artifacts/clients/iedpu/IEDPU_GIVING_HUB_IMPLEMENTED_mobile-320.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15520989,
+    "sha256": "909eaecc74ab1a6fbceb7295bb6cce7ecea3914a9be71e1f9b42584a0e3198df"
+  },
+  {
+    "old": "/home/dev/events/NCNMO_EVENT_SITE_3.1.32_DESKTOP.png",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/NCNMO_EVENT_SITE_3.1.32_DESKTOP.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15476666,
+    "sha256": "c9c4098f3a359546b61bd60876d51417af1d7b6ecd7ab8c326276c0f75766bd3"
+  },
+  {
+    "old": "/home/dev/events/mobile-scanner-command-center.png",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/mobile-scanner-command-center.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15483402,
+    "sha256": "2cee7666e2e4418189b391b9bfa8ce3418a3c89b011dcbc4d96ba13f22d5ff48"
+  },
+  {
+    "old": "/home/dev/events/IEDPU_GIVING_HUB_IMPLEMENTED_mobile.png",
+    "new": "/home/dev/events/artifacts/clients/iedpu/IEDPU_GIVING_HUB_IMPLEMENTED_mobile.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15520988,
+    "sha256": "907f3f5b10489afc5069ba0ef73458b60ce6e7640e01064d3c45879c41e8b3d2"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_GUIDED_SETUP_PHASED_ROADMAP_MOCKUP_2026-09-30.html",
+    "new": "/home/dev/events/artifacts/product/onboarding/FESTIO_GUIDED_SETUP_PHASED_ROADMAP_MOCKUP_2026-09-30.html",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15477909,
+    "sha256": "4d49a41b66d68413e9c0f8399364d03cd974e02c95670d86d132f396b1b0c651"
+  },
+  {
+    "old": "/home/dev/events/festio-results-only-1920x1080.png",
+    "new": "/home/dev/events/artifacts/product/results/festio-results-only-1920x1080.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15476976,
+    "sha256": "377e4cde0479cb6a4aa4ec6af1cee02a16cc8eccc12d868860caf0108adcf2de"
+  },
+  {
+    "old": "/home/dev/events/mbf3.jpeg",
+    "new": "/home/dev/events/artifacts/clients/mbf/mbf3.jpeg",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15510645,
+    "sha256": "97322c71aaf12b8c13639df7d47113e7063e455b96eecf17793f43a9cd335ee6"
+  },
+  {
+    "old": "/home/dev/events/Festio \u2014 Guest Management for Modern Events.pdf",
+    "new": "/home/dev/events/artifacts/brand/marketing/Festio \u2014 Guest Management for Modern Events.pdf",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15477039,
+    "sha256": "a0e58df4c978b60f70be9eca936986a0edbb763feed2560fa8eea2fd8fb5b14c"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_ADMIN_REDESIGN_WIRING_PROMPT.md",
+    "new": "/home/dev/events/artifacts/product/administration/FESTIO_ADMIN_REDESIGN_WIRING_PROMPT.md",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15481678,
+    "sha256": "494e67b6f048e3f6f94e93ad9b862c3604026435c347399cea58dba214736485"
+  },
+  {
+    "old": "/home/dev/events/festio-qa-claude-results.json",
+    "new": "/home/dev/events/artifacts/qa/audits/festio-qa-claude-results.json",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15480801,
+    "sha256": "dce7114fe9e23e03c3d7ffad8bd62f08c82161d1c29fc76787a1dc4e469acabb"
+  },
+  {
+    "old": "/home/dev/events/NCNMO_EVENT_WEBSITE_RICH_CONTENT_2026-09-16.json",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/NCNMO_EVENT_WEBSITE_RICH_CONTENT_2026-09-16.json",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15476671,
+    "sha256": "6292dd9724612f5de11cb97dbe5e08973e85e299e3439185cd096efbdf2db0d5"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_EVENT_WEBSITE_HEADER_FOOTER_AUDIT_2026-09-16.md",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/FESTIO_EVENT_WEBSITE_HEADER_FOOTER_AUDIT_2026-09-16.md",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15476722,
+    "sha256": "65125f684c82779a01c5f5eccfa68085ea2eaeee249fac79636414cc7b58b27c"
+  },
+  {
+    "old": "/home/dev/events/festio-results-only-768x1024.png",
+    "new": "/home/dev/events/artifacts/product/results/festio-results-only-768x1024.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15477709,
+    "sha256": "b3117282e3a72342868d91e3bbfaee05bf52f601d3fb6024a22034b00f4b10c3"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_ADMIN_REDESIGN_STAGE_C_COMPLETION_2026-07-28.md",
+    "new": "/home/dev/events/artifacts/product/administration/FESTIO_ADMIN_REDESIGN_STAGE_C_COMPLETION_2026-07-28.md",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15481747,
+    "sha256": "9fd3f3a7630c07f6127770d16e86e5b713590ef4e33c82a855abfabc422301c4"
+  },
+  {
+    "old": "/home/dev/events/Festio_Homepage_Redesign_Source",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/Festio_Homepage_Redesign_Source",
+    "kind": "workspace collection",
+    "is_directory": true,
+    "inode_before": 15484144
+  },
+  {
+    "old": "/home/dev/events/IEDPU_GIVING_HUB_IMPLEMENTED_tablet.png",
+    "new": "/home/dev/events/artifacts/clients/iedpu/IEDPU_GIVING_HUB_IMPLEMENTED_tablet.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15520987,
+    "sha256": "208a3a64ea733ef1c93c9d1bbb91798a9df7ade3fcd2a3c3eb067f2822a9417a"
+  },
+  {
+    "old": "/home/dev/events/Food Items Update-All.xlsx",
+    "new": "/home/dev/events/artifacts/clients/reference-material/Food Items Update-All.xlsx",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15483720,
+    "sha256": "e38a80705d52454bd0406d0427ff02757c8ee6f3fab2ddbbfef2758539fa0ea6"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_MARKETING_MODULE_AUDIT_2026-07-29.md",
+    "new": "/home/dev/events/artifacts/brand/marketing/FESTIO_MARKETING_MODULE_AUDIT_2026-07-29.md",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15484934,
+    "sha256": "a1667907e8638e6d7250f9f64f65fcf6c21090faad78ac223f2a2c542324ea72"
+  },
+  {
+    "old": "/home/dev/events/NCNMO-Platform-2026-Festio-Proposal.pdf",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/NCNMO-Platform-2026-Festio-Proposal.pdf",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15490557,
+    "sha256": "b169d825fbd8dadf6e99daec049064e840a4b7c342903e6bbc0f618d1ac514d1"
+  },
+  {
+    "old": "/home/dev/events/NCNMO_EVENT_WEBSITE_BACKUP_BEFORE_ALIGNMENT_2026-09-17.json",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/NCNMO_EVENT_WEBSITE_BACKUP_BEFORE_ALIGNMENT_2026-09-17.json",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15476681,
+    "sha256": "eb01f2244e2cf67faf454e6c468179a02843b75d704b4a4578f974559c6e9c55"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_PASS_REDESIGN_OPTIONS_MOCKUP_2026-10-01.html",
+    "new": "/home/dev/events/artifacts/product/invitations-and-guests/FESTIO_PASS_REDESIGN_OPTIONS_MOCKUP_2026-10-01.html",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15521061,
+    "sha256": "681cb67381e2d09be373e47cc0030ae587d9208cc696ab5a91641672080a2dc6"
+  },
+  {
+    "old": "/home/dev/events/IEDPU_GIVING_HUB_IMPLEMENTED_desktop.png",
+    "new": "/home/dev/events/artifacts/clients/iedpu/IEDPU_GIVING_HUB_IMPLEMENTED_desktop.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15520985,
+    "sha256": "6725bd6a46f24731104db7e1cc2f4494a1bb7f16c18d7207d5635aa5e36a5893"
+  },
+  {
+    "old": "/home/dev/events/NCNMO_PLATFORM_2026_TWO_PAGE_OVERVIEW.html",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/NCNMO_PLATFORM_2026_TWO_PAGE_OVERVIEW.html",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15490581,
+    "sha256": "ce574de962bc3fafc7f66385899a4ac6345878e75fa3a17b125b8d9f669ff075"
+  },
+  {
+    "old": "/home/dev/events/mbf4.png",
+    "new": "/home/dev/events/artifacts/clients/mbf/mbf4.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15482597,
+    "sha256": "0a6f051dd174dfbf6a3c444ed6b28e63ac84314551342c35e687926aa766120b"
+  },
+  {
+    "old": "/home/dev/events/K&H Aqdus.jpeg",
+    "new": "/home/dev/events/artifacts/clients/weddings/reference-images/K&H Aqdus.jpeg",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15510525,
+    "sha256": "eb6259a4ed0e1113789f1ed02e37398b60dc3fe0f4a03613fe4b482d3c8d665d"
+  },
+  {
+    "old": "/home/dev/events/festio-qa-codex-qa.txt",
+    "new": "/home/dev/events/artifacts/qa/audits/festio-qa-codex-qa.txt",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15480796,
+    "sha256": "4528363fbd0b1d37221d27bf0c57e490eea363c42649d8cb0b9d9b402f887008"
+  },
+  {
+    "old": "/home/dev/events/festio-qa-claude-results.txt",
+    "new": "/home/dev/events/artifacts/qa/audits/festio-qa-claude-results.txt",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15480800,
+    "sha256": "3bec4c9d1b0a1ec68c68204f14d2d6d797eeb958abfe06ee9e1ce6ec0cc074f5"
+  },
+  {
+    "old": "/home/dev/events/festio-complete-capability-landscape.png",
+    "new": "/home/dev/events/artifacts/product/onboarding/festio-complete-capability-landscape.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15510226,
+    "sha256": "96bb988c6e0319f4d03492c93bc6d9d34874b0b7ca82eed744d229deb5c67456"
+  },
+  {
+    "old": "/home/dev/events/NCNMO_STAGING_IMPLEMENTATION_REPORT.md",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/NCNMO_STAGING_IMPLEMENTATION_REPORT.md",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15490580,
+    "sha256": "64751de453381a7f679b4f8e134b563141ae7d8daeb883d8e6169b2c4b7b5039"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_EVENT_WEBSITE_RICH_PROGRAMME_MOCKUP_2026-09-16.html",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/FESTIO_EVENT_WEBSITE_RICH_PROGRAMME_MOCKUP_2026-09-16.html",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15476672,
+    "sha256": "a6ccb43bb09285cf6e2b4ae1a6d1675207734f17cf71338ea349834a7613f35a"
+  },
+  {
+    "old": "/home/dev/events/IEDPU_GIVING_HUB_UPDATED_MOCKUP_2026-09-23.html",
+    "new": "/home/dev/events/artifacts/clients/iedpu/IEDPU_GIVING_HUB_UPDATED_MOCKUP_2026-09-23.html",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15520965,
+    "sha256": "760b5386bd410a385ad46f185ad41fd2ae32ff59f9967f382cd1e01b336de2e1"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_GUEST_JOURNEY_FINAL_MOCKUP_2026-10-01.html",
+    "new": "/home/dev/events/artifacts/product/onboarding/FESTIO_GUEST_JOURNEY_FINAL_MOCKUP_2026-10-01.html",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15521062,
+    "sha256": "b37646a7f5b2d319f78977327edf881eb828bbf7fd4b4c69ce765768ab86858a"
+  },
+  {
+    "old": "/home/dev/events/festio-qa-backup-codex-qa.json",
+    "new": "/home/dev/events/artifacts/qa/audits/festio-qa-backup-codex-qa.json",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15480797,
+    "sha256": "1e8ebb4f61f04d73b4adc469c5eec007560ab5805384c516c67f1ffe05d5c78f"
+  },
+  {
+    "old": "/home/dev/events/festio-marketing-audit-evidence",
+    "new": "/home/dev/events/artifacts/qa/audits/festio-marketing-audit-evidence",
+    "kind": "workspace collection",
+    "is_directory": true,
+    "inode_before": 15479319
+  },
+  {
+    "old": "/home/dev/events/paman",
+    "new": "/home/dev/events/artifacts/clients/pamcon/source-assets",
+    "kind": "workspace collection",
+    "is_directory": true,
+    "inode_before": 15476750
+  },
+  {
+    "old": "/home/dev/events/FESTIO_ADMIN_PARITY_AUDIT_2026-07-28.md",
+    "new": "/home/dev/events/artifacts/product/administration/FESTIO_ADMIN_PARITY_AUDIT_2026-07-28.md",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15481648,
+    "sha256": "1d9a03a682bbf372212f3ac81764ac8d1ef97ce5a6267890c3a4b1f8fcdc80ca"
+  },
+  {
+    "old": "/home/dev/events/festio-live-mbf2026-review-2026-09-08.md",
+    "new": "/home/dev/events/artifacts/clients/mbf/festio-live-mbf2026-review-2026-09-08.md",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15479975,
+    "sha256": "fa7a5b1e7202c59c43a87fd9b38d3b42cfba5f707fee67406b8b3e582e7c3f84"
+  },
+  {
+    "old": "/home/dev/events/Harvad 75yrs- goof life for men.pdf",
+    "new": "/home/dev/events/artifacts/clients/reference-material/Harvad 75yrs- goof life for men.pdf",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15476528,
+    "sha256": "3fda23c1d83b9b5faf38a972b9ab47ec491cff5e9be32e140f27ffc6a4791546"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_EVENT_WEBSITE_STUDIO_FINAL_MOCKUP_2026-09-16.html",
+    "new": "/home/dev/events/artifacts/product/design-and-websites/FESTIO_EVENT_WEBSITE_STUDIO_FINAL_MOCKUP_2026-09-16.html",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15476610,
+    "sha256": "7dbaaf1696aff5f282e58220d19cca83dde48ac9b091be54d0bee14e5de4be75"
+  },
+  {
+    "old": "/home/dev/events/MBF-Flier.png",
+    "new": "/home/dev/events/artifacts/clients/mbf/MBF-Flier.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15484663,
+    "sha256": "b96ad534bb3976416b0ef832896f1995b7d681bfd11186c34ed236a6b00a02b7"
+  },
+  {
+    "old": "/home/dev/events/IEDPU_DONATION_PROJECTOR_COUNTS_MOCKUP_2026-09-27.png",
+    "new": "/home/dev/events/artifacts/clients/iedpu/IEDPU_DONATION_PROJECTOR_COUNTS_MOCKUP_2026-09-27.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15490600,
+    "sha256": "feffe81200de292c51c3701e45703a2c8c5dcbd3ab72cc1c3f54cb0e4d484846"
+  },
+  {
+    "old": "/home/dev/events/IEDPU_FINANCE_RECONCILIATION_PORTAL_MOCKUP_2026-09-23.png",
+    "new": "/home/dev/events/artifacts/clients/iedpu/IEDPU_FINANCE_RECONCILIATION_PORTAL_MOCKUP_2026-09-23.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15520997,
+    "sha256": "d84ee8dd6552d09a28e15c6b5edc64e034b4d0b7738820f625a55ac7b8109f94"
+  },
+  {
+    "old": "/home/dev/events/FESTIOME_CHAT_FIRST_MOCKUP_2026-10-02.html",
+    "new": "/home/dev/events/artifacts/product/messaging/FESTIOME_CHAT_FIRST_MOCKUP_2026-10-02.html",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15476602,
+    "sha256": "371767130bcea3ca956b28e4a059b094e16156a4dccef62edbd15cac525d45a4"
+  },
+  {
+    "old": "/home/dev/events/NCNMO_PLATFORM_2026_TWO_PAGE_OVERVIEW.md",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/NCNMO_PLATFORM_2026_TWO_PAGE_OVERVIEW.md",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15490582,
+    "sha256": "3bff3fca2c1d0e405fe0ad243abb5d4f7c8a02a8972329ac29e0b3ae292edcc4"
+  },
+  {
+    "old": "/home/dev/events/IEDPU_DONATION_PROJECTOR_COUNTS_MOCKUP_2026-09-27.html",
+    "new": "/home/dev/events/artifacts/clients/iedpu/IEDPU_DONATION_PROJECTOR_COUNTS_MOCKUP_2026-09-27.html",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15490599,
+    "sha256": "a100fb4c19af5ad7f90ba004238b0f4a6798b655b384edc02ba906a15e0ae44b"
+  },
+  {
+    "old": "/home/dev/events/IEDPU_GIVING_HUB_POLISH_mobile.png",
+    "new": "/home/dev/events/artifacts/clients/iedpu/IEDPU_GIVING_HUB_POLISH_mobile.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15520994,
+    "sha256": "a009967bd41410ca1f50e69a8957151f917356903cd8137141dd09665b4187db"
+  },
+  {
+    "old": "/home/dev/events/FESTIO_UNIFIED_RESULTS_CLOSEOUT_MOCKUP_2026-09-30.html",
+    "new": "/home/dev/events/artifacts/product/results/FESTIO_UNIFIED_RESULTS_CLOSEOUT_MOCKUP_2026-09-30.html",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15521041,
+    "sha256": "cb7d769f4334b045016be9cb5e8e6f70c6a514d6320033e9e3124300f48676c0"
+  },
+  {
+    "old": "/home/dev/events/NCNMO_PLATFORM_SETUP_PROMPT.md",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/NCNMO_PLATFORM_SETUP_PROMPT.md",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15490523,
+    "sha256": "76cde50a55e216900abe64752df1625c714ad098f28f3f64941db9704cb7aef2"
+  },
+  {
+    "old": "/home/dev/events/NCNMO_STAGING_DEMO_MANIFEST.json",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/NCNMO_STAGING_DEMO_MANIFEST.json",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15477799,
+    "sha256": "b9147cf99147f1b74f07f0334366f491a592be583f8b0e0979712d4990a4da7c"
+  },
+  {
+    "old": "/home/dev/events/festio-auto-final-1920.png",
+    "new": "/home/dev/events/artifacts/brand/assets/reference/festio-auto-final-1920.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15477041,
+    "sha256": "001fa70185e92ba8e7144b3e7ea184618f040313ab689ae9202c68904c7ace72"
+  },
+  {
+    "old": "/home/dev/events/NCNMO_EVENT_SITE_3.1.32_MOBILE.png",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/NCNMO_EVENT_SITE_3.1.32_MOBILE.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15477906,
+    "sha256": "1322430da14593042016916ad5d19bf5fbd69e59ec2c76ed386a7271fc872f3c"
+  },
+  {
+    "old": "/home/dev/events/mbf5.png",
+    "new": "/home/dev/events/artifacts/clients/mbf/mbf5.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15510656,
+    "sha256": "16bf4509d73261d684b3f38e8ca9b96c925755d37c5d30b6ae8d403ba11cdea0"
+  },
+  {
+    "old": "/home/dev/events/audit-evidence",
+    "new": "/home/dev/events/artifacts/qa/audits/audit-evidence",
+    "kind": "workspace collection",
+    "is_directory": true,
+    "inode_before": 15728921
+  },
+  {
+    "old": "/home/dev/events/NCNMO_PLATFORM_2026_PROPOSAL_PREVIEW.jpg",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/NCNMO_PLATFORM_2026_PROPOSAL_PREVIEW.jpg",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15490559,
+    "sha256": "d66ea1dd0aee9e13cbc822481e5ae1aeba79ecd9af671c5fd0718b696cabbf3a"
+  },
+  {
+    "old": "/home/dev/events/IEDPU_LIVE_DISPLAY_REVIEW_2026-09-27.png",
+    "new": "/home/dev/events/artifacts/clients/iedpu/IEDPU_LIVE_DISPLAY_REVIEW_2026-09-27.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15476693,
+    "sha256": "18bd129ae921becd9449cfd8991df6e108c58fa2ee1c69d9c1bc32c7f3b5e7d9"
+  },
+  {
+    "old": "/home/dev/events/NCNMO_STAGING_DEMO_BADGES",
+    "new": "/home/dev/events/artifacts/clients/ncnmo/demo-badges",
+    "kind": "workspace collection",
+    "is_directory": true,
+    "inode_before": 15490568
+  },
+  {
+    "old": "/home/dev/events/FESTIO_LIVE_DONATION_TRACKER_MOCKUP_2026-09-23.png",
+    "new": "/home/dev/events/artifacts/product/live-and-community/FESTIO_LIVE_DONATION_TRACKER_MOCKUP_2026-09-23.png",
+    "kind": "workspace document",
+    "is_directory": false,
+    "inode_before": 15520944,
+    "sha256": "57571dc74c8f8961d5719dc1fecada4475aa1a29314cea994038fb7096a4a27d"
+  },
+  {
+    "old": "/home/dev/events/.archive",
+    "new": "/home/dev/events/artifacts/archive/recovery",
+    "kind": "private recovery archives",
+    "is_directory": true,
+    "inode_before": 17170543
+  },
+  {
+    "old": "/home/dev/events/.pdf-report-review",
+    "new": "/home/dev/events/artifacts/qa/pdf-report-review",
+    "kind": "review evidence",
+    "is_directory": true,
+    "inode_before": 16127286
+  }
+]

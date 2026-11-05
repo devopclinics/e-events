@@ -1,0 +1,15 @@
+{
+  "physical_items_moved": 358,
+  "categories": {
+    "brand": 21,
+    "product": 224,
+    "clients": 88,
+    "qa": 15,
+    "operations": 9,
+    "archive": 1
+  },
+  "legacy_shortcuts_retained": true,
+  "repositories_moved": false,
+  "runtime_mounts_changed": false,
+  "search_index": "artifacts/INDEX.html"
+}

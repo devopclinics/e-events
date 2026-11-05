@@ -3338,3 +3338,16 @@ class SupportWebChat(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime)
     read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class GuestSessionAccess(Base):
+    """Explicit entry decision, independent of admission and seating."""
+    __tablename__ = 'guest_session_access'
+    __table_args__ = (UniqueConstraint('guest_id', 'zone_id', name='uq_guest_session_access'),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey('events.id', ondelete='CASCADE'), index=True)
+    guest_id: Mapped[str] = mapped_column(String(36), ForeignKey('guests.id', ondelete='CASCADE'), index=True)
+    zone_id: Mapped[str] = mapped_column(String(36), ForeignKey('zones.id', ondelete='CASCADE'), index=True)
+    decision: Mapped[str] = mapped_column(String(10))
+    updated_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -517,3 +517,57 @@ async def access_movements(event_id: str, limit: int = 1000, db: AsyncSession = 
              "guardian_verification_method": row.guardian_verification_method,
              "scanned_by_name": users[row.scanned_by].name if row.scanned_by in users else None}
             for row in rows]
+
+
+# Explicit per-session access. Unassigned guests fail closed on restricted sessions.
+from pydantic import BaseModel, Field
+from typing import Literal
+from ..models import GuestSessionAccess
+from ..services.session_access import restricted_sessions
+
+class SessionDecisionUpdate(BaseModel):
+    guest_ids: list[str] = Field(min_length=1, max_length=500)
+    decision: Literal['allow', 'block', 'review']
+
+class SessionRestrictionUpdate(BaseModel):
+    restricted: bool
+
+@router.get('/{event_id}/session-access')
+async def session_access_list(event_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(require_paid_event_admin)):
+    event = await access_event(event_id, db)
+    zones = (await db.scalars(select(Zone).where(Zone.event_id == event_id, Zone.is_active.is_(True)).order_by(Zone.sort_order))).all()
+    guests = (await db.scalars(select(Guest).where(Guest.event_id == event_id).order_by(Guest.first_name, Guest.last_name))).all()
+    rows = (await db.scalars(select(GuestSessionAccess).where(GuestSessionAccess.event_id == event_id))).all()
+    return dict(zones=[dict(id=z.id, name=z.name, restricted=z.id in restricted_sessions(event)) for z in zones], guests=[dict(id=g.id, name=(g.first_name+' '+g.last_name).strip(), email=g.email, phone=g.phone) for g in guests], decisions=[dict(guest_id=r.guest_id, zone_id=r.zone_id, decision=r.decision, updated_at=r.updated_at, updated_by=r.updated_by) for r in rows])
+
+@router.put('/{event_id}/session-access/{zone_id}/restriction')
+async def session_access_restriction(event_id: str, zone_id: str, data: SessionRestrictionUpdate, db: AsyncSession = Depends(get_db), user: User = Depends(require_paid_event_admin)):
+    await access_event(event_id, db)
+    await _get_zone(event_id, zone_id, db)
+    event = await db.scalar(select(Event).where(Event.id == event_id).with_for_update())
+    ids = set(restricted_sessions(event))
+    if data.restricted: ids.add(zone_id)
+    else: ids.discard(zone_id)
+    event.setup_preferences = {**(event.setup_preferences or {}), 'restricted_session_ids': sorted(ids)}
+    await db.commit()
+    return dict(restricted=data.restricted)
+
+@router.put('/{event_id}/session-access/{zone_id}')
+async def session_access_update(event_id: str, zone_id: str, data: SessionDecisionUpdate, db: AsyncSession = Depends(get_db), user: User = Depends(require_paid_event_admin)):
+    # Lock the event to serialize bulk decisions and avoid lost concurrent changes.
+    await access_event(event_id, db)
+    await db.scalar(select(Event).where(Event.id == event_id).with_for_update())
+    await _get_zone(event_id, zone_id, db)
+    ids=set(data.guest_ids)
+    found=set((await db.scalars(select(Guest.id).where(Guest.event_id == event_id, Guest.id.in_(ids)).order_by(Guest.id).with_for_update())).all())
+    if found != ids: raise HTTPException(404, 'One or more guests do not belong to this event')
+    for gid in sorted(ids):
+        row=await db.scalar(select(GuestSessionAccess).where(GuestSessionAccess.guest_id == gid, GuestSessionAccess.zone_id == zone_id))
+        if row is None:
+            row=GuestSessionAccess(event_id=event_id, guest_id=gid, zone_id=zone_id)
+            db.add(row)
+        row.decision=data.decision
+        row.updated_by=user.id
+        row.updated_at=datetime.utcnow()
+    await db.commit()
+    return dict(updated=len(ids), decision=data.decision)

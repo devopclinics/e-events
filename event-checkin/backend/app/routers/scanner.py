@@ -888,7 +888,10 @@ async def offline_manifest(
     # Fail closed offline when admission needs a live consent/workflow decision.
     # Do not evaluate/mutate every guest's progress while downloading a manifest.
     workflow = await active_workflow(event_id, db)
-    offline_block = None
+    from ..services.session_access import restricted_sessions
+    from ..models import GuestSessionAccess
+    session_access_online_required = bool(restricted_sessions(event)) or bool(await db.scalar(select(GuestSessionAccess.id).where(GuestSessionAccess.event_id == event_id).limit(1)))
+    offline_block = "Restricted sessions require an online connection for current access decisions" if session_access_online_required else None
     if workflow and any(s.enabled and s.required and s.blocks_checkin for s in workflow.steps):
         offline_block = "This event has required admission steps. Reconnect to verify them before check-in."
     if event.section_mode_enabled:
@@ -950,6 +953,7 @@ async def offline_manifest(
         "guest_tag_links": [{"guest_id": row.guest_id, "tag_id": row.tag_id} for row in tag_links],
         "guest_tags": [{"id": tag.id, "name": tag.name} for tag in tags],
         "zone_tag_rules": [{"zone_id": row.zone_id, "tag_id": row.tag_id} for row in zone_tag_rules],
+        "session_access_online_required": session_access_online_required,
     }
 
 
@@ -1457,7 +1461,7 @@ async def scan_qr_zone(
     """Venue Access scan: log a directional, per-zone movement. Completely
     separate from the legacy `scan_qr` flow above (which is unchanged). Only
     usable on events with `venue_access_enabled`."""
-    guest = (await db.execute(select(Guest).where(Guest.qr_token == qr_token))).scalar_one_or_none()
+    guest = (await db.execute(select(Guest).where(Guest.qr_token == qr_token).with_for_update())).scalar_one_or_none()
     if not guest:
         raise HTTPException(404, "Invalid QR code — this ticket was not found.")
     event = await db.get(Event, guest.event_id)
@@ -1525,8 +1529,15 @@ async def scan_qr_zone(
 
     # Access decision: valid state transition, ticket permission, then capacity.
     allowed, reason = await ticket_allows(guest, zone.id, db)
-    denied = not allowed or bool(admission_denial) or bool(guardian_denial)
-    deny_reason = admission_denial or guardian_denial or reason
+    from ..services.session_access import session_decision
+    session_allowed, session_reason = await session_decision(event, guest, zone.id, db) if direction == "in" else (True, None)
+    from ..services.session_access import restricted_sessions
+    if zone.id in restricted_sessions(event) and direction == "in" and session_allowed:
+        from .classify import _guest_allowed
+        tag_allowed, _, tag_reason = await _guest_allowed(guest.id, zone.id, db)
+        if not tag_allowed: session_allowed, session_reason = False, tag_reason
+    denied = not allowed or not session_allowed or bool(admission_denial) or bool(guardian_denial)
+    deny_reason = session_reason or admission_denial or guardian_denial or reason
     if not denied and latest_movement and latest_movement.direction == direction:
         denied = True
         deny_reason = (

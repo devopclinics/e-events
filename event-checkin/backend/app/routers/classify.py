@@ -279,9 +279,19 @@ async def gate_scan(event_id: str, gid: str, body: GateScanRequest,
         return GateScanResult(status="invalid", message="Invalid QR for this event.")
 
     zone = await db.get(Zone, gate.zone_id)
+    if not zone or not zone.is_active:
+        raise HTTPException(404, 'Session is not active')
+    from ..services.session_access import restricted_sessions, session_decision
+    # Restricted sessions use the same transition, authorization and audit engine.
+    if zone.id in restricted_sessions(event):
+        from .scanner import scan_qr_zone
+        from ..schemas import ScanZoneRequest
+        result = await scan_qr_zone(body.qr_token, ScanZoneRequest(zone_id=zone.id, direction=gate.direction), background_tasks, db, user)
+        return GateScanResult(status='denied' if result.denied else 'allowed', message=result.deny_reason if result.denied else f'{result.guest_name} — {zone.name}', allowed=not result.denied, guest_name=result.guest_name, zone_name=zone.name, direction=result.direction, occupancy=result.occupancy)
     direction = gate.direction
     allowed, matched, reason = await _guest_allowed(guest.id, gate.zone_id, db)
-    denied, deny_reason = (not allowed), reason
+    session_allowed, session_reason = await session_decision(event, guest, gate.zone_id, db) if direction == "in" else (True, None)
+    denied, deny_reason = (not allowed or not session_allowed), session_reason or reason
     if not denied and direction == "in" and zone and zone.capacity:
         if await zone_occupancy(zone.id, db) >= zone.capacity:
             denied, deny_reason = True, "Zone is at capacity"

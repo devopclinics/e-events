@@ -1,0 +1,85 @@
+[
+  {
+    "archive": "/home/dev/events/.archive/cleanup-2026-11-05/worktree-standalone-meetings-review.tar.gz",
+    "paths": [
+      "worktrees/standalone-meetings-review"
+    ],
+    "source_bytes": 197914773,
+    "archive_bytes": 170141861,
+    "verified_files": 1295,
+    "sha256": "800f6ef2eb02eef624aa6fb956785fbbc55d43f61187c3273817e9e823797e74",
+    "worktree_heads": {
+      "worktrees/standalone-meetings-review": "2a1180173489eee92df32ee2e4054c2246cfb104"
+    },
+    "deduplicated_files": 29
+  },
+  {
+    "archive": "/home/dev/events/.archive/cleanup-2026-11-05/worktree-festio-live-report-implementation.tar.gz",
+    "paths": [
+      "worktrees/festio-live-report-implementation"
+    ],
+    "source_bytes": 269225986,
+    "archive_bytes": 164321954,
+    "verified_files": 1485,
+    "sha256": "7d198d5deee041753858de6daab64349868ff4e3366996972339aae84a8ab52d",
+    "worktree_heads": {
+      "worktrees/festio-live-report-implementation": "5b3fc53b5febd10f50a19cf058c8896fd57498a6"
+    },
+    "deduplicated_files": 138
+  },
+  {
+    "archive": "/home/dev/events/.archive/cleanup-2026-11-05/worktree-festio-live-design-workspace.tar.gz",
+    "paths": [
+      "worktrees/festio-live-design-workspace"
+    ],
+    "source_bytes": 186257469,
+    "archive_bytes": 162616645,
+    "verified_files": 1201,
+    "sha256": "f546339049b3a0aef5a35815d63609131fd31b989ab2eeae3351bd0a2a8aadc8",
+    "worktree_heads": {
+      "worktrees/festio-live-design-workspace": "5b3fc53b5febd10f50a19cf058c8896fd57498a6"
+    },
+    "deduplicated_files": 28
+  },
+  {
+    "archive": "/home/dev/events/.archive/cleanup-2026-11-05/worktree-festio-report-redesign.tar.gz",
+    "paths": [
+      "worktrees/festio-report-redesign"
+    ],
+    "source_bytes": 269391130,
+    "archive_bytes": 164367746,
+    "verified_files": 1499,
+    "sha256": "f9843539afb80bbda1d5dfd86cbd3d01a2d5b672532867b3e599a9b6e29c7ed8",
+    "worktree_heads": {
+      "worktrees/festio-report-redesign": "5b3fc53b5febd10f50a19cf058c8896fd57498a6"
+    },
+    "deduplicated_files": 138
+  },
+  {
+    "archive": "/home/dev/events/.archive/cleanup-2026-11-05/regenerable-test-builds.tar.gz",
+    "paths": [
+      "artifacts/ticketing-paused-review-2026-10-25/test-dist",
+      "artifacts/meetings-followup-review-2026-10-25/test-dist",
+      "artifacts/ticketing-safety-fixes-2026-10-25/test-dist",
+      "artifacts/meetings-gaps-2026-10-25/test-dist",
+      "artifacts/ticketing-theme-review-2026-10-25/test-dist",
+      "artifacts/meetings-counter-refresh-2026-10-24/test-dist",
+      "artifacts/meetings-studio-2026-10-24/test-dist",
+      "artifacts/meeting-url-fix-2026-10-24/test-dist",
+      "artifacts/standalone-meetings-release-2026-10-24/test-dist",
+      "artifacts/shared-guest-sheet-2026-10-22/test-dist",
+      "artifacts/marketing-layout-implementation-2026-10-21/test-dist",
+      "artifacts/conference-theme-help-2026-10-21/test-dist",
+      "artifacts/marketing-visual-implementation-2026-10-21/test-dist",
+      "artifacts/site-clarity-fix-2026-10-21/test-dist",
+      "artifacts/marketing-layout-deploy-2026-10-21/test-dist",
+      "artifacts/marketing-automation-fix-2026-10-21/test-dist"
+    ],
+    "source_bytes": 1651371776,
+    "archive_bytes": 113884622,
+    "verified_files": 5228,
+    "sha256": "4438544c6a4ca529f55f691e7dff2d455ad3421a5ea974aeb736300a8aace124",
+    "worktree_heads": {},
+    "deduplicated_files": 3141
+  }
+]

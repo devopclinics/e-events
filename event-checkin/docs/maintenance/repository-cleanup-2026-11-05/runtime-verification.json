@@ -1,0 +1,7 @@
+{
+  "production_images_unchanged": true,
+  "production_replicas_ready": true,
+  "staging_running_containers_unchanged": true,
+  "production_health": "ok",
+  "staging_health": "ok"
+}

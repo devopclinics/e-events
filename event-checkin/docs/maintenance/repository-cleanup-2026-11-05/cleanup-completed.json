@@ -1,0 +1,39 @@
+{
+  "retired_worktrees": [
+    "worktrees/standalone-meetings-review",
+    "worktrees/festio-live-report-implementation",
+    "worktrees/festio-live-design-workspace",
+    "worktrees/festio-report-redesign"
+  ],
+  "archived_test_builds": [
+    "artifacts/ticketing-paused-review-2026-10-25/test-dist",
+    "artifacts/meetings-followup-review-2026-10-25/test-dist",
+    "artifacts/ticketing-safety-fixes-2026-10-25/test-dist",
+    "artifacts/meetings-gaps-2026-10-25/test-dist",
+    "artifacts/ticketing-theme-review-2026-10-25/test-dist",
+    "artifacts/meetings-counter-refresh-2026-10-24/test-dist",
+    "artifacts/meetings-studio-2026-10-24/test-dist",
+    "artifacts/meeting-url-fix-2026-10-24/test-dist",
+    "artifacts/standalone-meetings-release-2026-10-24/test-dist",
+    "artifacts/shared-guest-sheet-2026-10-22/test-dist",
+    "artifacts/marketing-layout-implementation-2026-10-21/test-dist",
+    "artifacts/conference-theme-help-2026-10-21/test-dist",
+    "artifacts/marketing-visual-implementation-2026-10-21/test-dist",
+    "artifacts/site-clarity-fix-2026-10-21/test-dist",
+    "artifacts/marketing-layout-deploy-2026-10-21/test-dist",
+    "artifacts/marketing-automation-fix-2026-10-21/test-dist"
+  ],
+  "retired_local_branches": 69,
+  "archives_bytes": 775332828,
+  "original_bytes": 2574161134,
+  "net_reclaimed_bytes": 1798828306,
+  "main_aligned_commit": "960f3fcede7e5631e20a86a70edadeb95dad8d47",
+  "protected_live_worktrees": [
+    "platform-tutor",
+    "worktrees/festio-live-reliability",
+    "worktrees/ncnmo-staging-demo",
+    "worktrees/customer-journey-staging",
+    "worktrees/media-invoices"
+  ],
+  "archive_root": "/home/dev/events/.archive/cleanup-2026-11-05"
+}

@@ -1,0 +1,278 @@
+[
+  {
+    "branch": "chore/disable-github-automation",
+    "head": "5a54787e90740cfd5c94316a438853b3b40b5cae"
+  },
+  {
+    "branch": "feat/clean-giving-experience",
+    "head": "5256581d52f6fa2ee00847a7844501a272e70f43"
+  },
+  {
+    "branch": "feat/conference-center",
+    "head": "9ef01fcdd06eb5b4400550cf5bd9a39c7059afa4"
+  },
+  {
+    "branch": "feat/editorial-website-studio",
+    "head": "1cca99d70a25a4159a3b35e7fa5942898c3e22b1"
+  },
+  {
+    "branch": "feat/envelope-collection-studio",
+    "head": "d150ae876fd49684067fd50de09c8e768f0c6530"
+  },
+  {
+    "branch": "feat/envelope-guest-names",
+    "head": "2f454910580d2dbc70f926f1dc44ee5ef83e07cd"
+  },
+  {
+    "branch": "feat/envelope-wording",
+    "head": "105880f4c33c0422de2d9cf1ce0f6e2f66770eb4"
+  },
+  {
+    "branch": "feat/event-forms-install",
+    "head": "f1d7c171949266c5ff34c37fd184b0de946485b3"
+  },
+  {
+    "branch": "feat/event-themed-giving",
+    "head": "8984214835c3dbb96af9eeb10d36dd2562063bf6"
+  },
+  {
+    "branch": "feat/floor-table-colours",
+    "head": "56eec8b0dc4312528260452bbc87f974a4025e40"
+  },
+  {
+    "branch": "feat/floor-table-management",
+    "head": "a2a1f4cd1859b83782c06abfeec62285594a1c03"
+  },
+  {
+    "branch": "feat/guest-programme-audiences",
+    "head": "5334fb48498c71eff851ac0a47c3b1ade72c856a"
+  },
+  {
+    "branch": "feat/guest-service-assignments",
+    "head": "bac9f5bc16c71c451efbecd456ade38551628164"
+  },
+  {
+    "branch": "feat/guesthub-inline-meals",
+    "head": "1f332abe69acfb60d91c03acbfc9f31db3689e88"
+  },
+  {
+    "branch": "feat/homepage-connected-experience",
+    "head": "19ab7311e49a3504dc4e29cf28f41427a50d48be"
+  },
+  {
+    "branch": "feat/invite-workspace-refinement",
+    "head": "ce6a3b59036485bb25f17f25dd128112040d9197"
+  },
+  {
+    "branch": "feat/live-certificates-presenter-materials",
+    "head": "e812db7a22ff61412d7664f9f414fdc20f303042"
+  },
+  {
+    "branch": "feat/marketing-purpose-workspace",
+    "head": "e7251411b64e3a78e08f1a7a62af7027828fe248"
+  },
+  {
+    "branch": "feat/media-library-studio",
+    "head": "c6d5381217b6c9eb330227740a9835569c286f81"
+  },
+  {
+    "branch": "feat/meeting-template-sharing",
+    "head": "8f9635643a62e21ab94b463e9b02baafcbd86401"
+  },
+  {
+    "branch": "feat/modern-giving-page",
+    "head": "33c4e7ebf09b6751350ae763fc758c8cdc35d733"
+  },
+  {
+    "branch": "feat/modern-welcome-registration",
+    "head": "bd64fd409a2ff48dd390b0e316c7c5c43f697e51"
+  },
+  {
+    "branch": "feat/mumineen-paid-invitation-journey",
+    "head": "9a46a1c94c652de9b5cd28497933eb2c4bec0c5a"
+  },
+  {
+    "branch": "feat/ncnmo-offline-readiness",
+    "head": "91324ec79efae24c469f53fac3a7bc13be4966d8"
+  },
+  {
+    "branch": "feat/optional-envelope-auto-continue",
+    "head": "15947938fe74d4608ca2a1ac6734cbd36ec3ddc3"
+  },
+  {
+    "branch": "feat/platform-operations-section-designs",
+    "head": "4abb599c5697c9660140472b3fe2952e2325f8ad"
+  },
+  {
+    "branch": "feat/platform-operations-workspace",
+    "head": "3cdd0f1be3da57c8275f9b5275921478d4188560"
+  },
+  {
+    "branch": "feat/premium-event-discovery",
+    "head": "1e1d8fad402277e5c78c24e4d602cacddc6c4c46"
+  },
+  {
+    "branch": "feat/refined-design-studio-surfaces",
+    "head": "e6d3271105e1865ae8268e1243ec04ce8bd5c3dd"
+  },
+  {
+    "branch": "feat/shared-event-media",
+    "head": "e92d7c40bc906fe0fc7379b18c8e59a22a78d30a"
+  },
+  {
+    "branch": "feat/stripe-managed-risk",
+    "head": "4bc04461a5eeac48ac2a42a559555b915e54d623"
+  },
+  {
+    "branch": "feat/visual-venue-studio",
+    "head": "d0fc598eaf52bc95334444751467115f0e02ec6c"
+  },
+  {
+    "branch": "feature/invite-rsvp",
+    "head": "ff493f7c6c65138a62c613c76f55eee6b1fd4507"
+  },
+  {
+    "branch": "fix/clearer-organizer-homepage",
+    "head": "74c7f3fe134f82cfcf17c035d5d068e614bd1a7b"
+  },
+  {
+    "branch": "fix/consistent-design-studio-navigation",
+    "head": "9f19aaa69ec17a6981514d7fdc0316afa1744ac6"
+  },
+  {
+    "branch": "fix/default-invitation-opening",
+    "head": "2a69f7d8bab79db8d1d72d0ce5022281e4143cda"
+  },
+  {
+    "branch": "fix/envelope-save-applies-custom",
+    "head": "9e39853a10ee19aa639b31eaaf1f4c8720231a12"
+  },
+  {
+    "branch": "fix/form-publish-feedback",
+    "head": "52e5383001754dd86b9da0e6632d7fd9e2adad0f"
+  },
+  {
+    "branch": "fix/guest-export-error-feedback",
+    "head": "868bd7dbf2c3ba356df2d55efbce3cab0e95e5f7"
+  },
+  {
+    "branch": "fix/guest-services-edge-cases",
+    "head": "f9ac90c28615c18720e058a31d997b5a9671acc9"
+  },
+  {
+    "branch": "fix/guest-services-help-validation",
+    "head": "9299900e311e49698328dab3a639e7d0825e8327"
+  },
+  {
+    "branch": "fix/guest-services-meal-queue",
+    "head": "c1716770117756f5a696b212fee7fcb57107d57a"
+  },
+  {
+    "branch": "fix/guest-services-operations-board",
+    "head": "1d3099fb27316102eabb29595717f993498b995d"
+  },
+  {
+    "branch": "fix/homepage-anchor-layout",
+    "head": "27c9452701d63100d2e597fbb145b81f2b5f1aca"
+  },
+  {
+    "branch": "fix/homepage-footer-polish",
+    "head": "e7f1429397c2c0cb7bd4cc8643278696130c2e63"
+  },
+  {
+    "branch": "fix/homepage-navigation-review",
+    "head": "8b97eead6a4d089745c42008253387fcd994ac08"
+  },
+  {
+    "branch": "fix/legacy-envelope-timing-save",
+    "head": "bb3d8d245608ed8b91c68cbfb4e422287c07bb2d"
+  },
+  {
+    "branch": "fix/marketing-onboarding-automation",
+    "head": "1574f0520ae20763a433cb7871849d7007638d3c"
+  },
+  {
+    "branch": "fix/meeting-share-links",
+    "head": "fcb8876d16e1c98e267b5e7671f7357171781c0c"
+  },
+  {
+    "branch": "fix/meeting-share-title",
+    "head": "cc9a7d1780af17f53bf32c03057c5dcc6a60b261"
+  },
+  {
+    "branch": "fix/meetings-followup-ux",
+    "head": "2b04402093b435141bdcf272f723949ba9283ffc"
+  },
+  {
+    "branch": "fix/payout-error-feedback",
+    "head": "f0783fc5a687e04114dd762983676a96c24ba9cc"
+  },
+  {
+    "branch": "fix/permanent-setup-guide",
+    "head": "b5aff6e5557975a76e744efcff4627c650047732"
+  },
+  {
+    "branch": "fix/planner-account-isolation",
+    "head": "910b01f4c03d61c80d295cdc8a0e0184595a0685"
+  },
+  {
+    "branch": "fix/planner-selected-event-scope",
+    "head": "3323302f23d5fb88b49a5473fb1ced19291e513d"
+  },
+  {
+    "branch": "fix/recheck-guide-followup",
+    "head": "d1398dfaead526c21d7970e41c42da9b61e56ec5"
+  },
+  {
+    "branch": "fix/restore-editorial-website-studio",
+    "head": "befde73a926448563e2d7c1ecec5a5f2e8b4b559"
+  },
+  {
+    "branch": "fix/restore-website-editor",
+    "head": "f3fa09642ed38f33396e571247ea699b5e777e83"
+  },
+  {
+    "branch": "fix/standalone-meetings-release",
+    "head": "e831c69c4db6c318b94e116bbc31691b4ae03e0d"
+  },
+  {
+    "branch": "fix/startup-blank-recovery",
+    "head": "d36431a7a744e3cbdde38b2d71ea3ae670b4195f"
+  },
+  {
+    "branch": "fix/stripe-onboarding-errors",
+    "head": "21cd7688aac7d18d268fcba1bf22a3a0d4694d93"
+  },
+  {
+    "branch": "fix/studio-layout-preview-timeout",
+    "head": "872587448aa28deca515c29491e0a670bf63539e"
+  },
+  {
+    "branch": "fix/studio-preview-surfaces-and-certificates",
+    "head": "29d0aaa667bfe2dd53d01a79abe9678c32ffecea"
+  },
+  {
+    "branch": "fix/team-invitation-email",
+    "head": "59ed8a3cc9b4da39f75d8863880b4a5617d47d61"
+  },
+  {
+    "branch": "fix/ticketing-error-fallback",
+    "head": "77fde2354f33c42930f51a9c6558d6e8d31c3ab9"
+  },
+  {
+    "branch": "fix/ticketing-safety-reporting",
+    "head": "f560e54c84b7434dfb7cd45cdbb520d265291032"
+  },
+  {
+    "branch": "port/from-prod",
+    "head": "26ac14d2c6e1fe048f94ea94a97ac521d63e349d"
+  },
+  {
+    "branch": "release/invitation-envelopes-20261028",
+    "head": "c0846db7d83e8d6d7cb194d203e29d7246a57334"
+  },
+  {
+    "branch": "staging/guesthub-event-app",
+    "head": "cb1f783a3892431a50a48aa83d8900e7df8fdd81"
+  }
+]

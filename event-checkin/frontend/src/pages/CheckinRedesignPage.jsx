@@ -6,11 +6,13 @@ import { useEventDetails } from '../hooks/useEventDetails'
 import { useVenueAccess } from '../hooks/useEventResources'
 import RedesignShell, { Icon, ConfirmDialog } from './redesign/RedesignShell'
 import './CheckinRedesignPage.css'
+import SessionAccessPanel from '../components/SessionAccessPanel'
 
 const TABS = [
   { id: 'zones', label: 'Zones' },
   { id: 'tickets', label: 'Ticket types' },
   { id: 'assign', label: 'Assign' },
+  { id: 'sessions', label: 'Session access' },
   { id: 'analytics', label: 'Analytics' },
   { id: 'operations', label: 'Junior operations' },
   { id: 'rules', label: 'Rules' },
@@ -475,6 +477,8 @@ export default function CheckinRedesignPage() {
               </div>
             </div>
           )}
+
+          {view === 'sessions' && <SessionAccessPanel eventId={eventId}/>}
 
           {view === 'assign' && (
             <div className="rd-panel">

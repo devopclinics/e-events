@@ -1021,6 +1021,7 @@ export default function ScannerPage() {
   }
 
   function offlineAccessDecision(manifest, guest, zone, mode) {
+    if (manifest.session_access_online_required) return {allowed:false, reason:"Session access requires an online connection. Reconnect before scanning.", matchedTags:[]}
     if (mode === 'gate') {
       const ruleTagIds = new Set((manifest.zone_tag_rules || []).filter((rule) => rule.zone_id === zone.id).map((rule) => rule.tag_id))
       if (ruleTagIds.size) {

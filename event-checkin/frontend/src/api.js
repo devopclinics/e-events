@@ -1381,6 +1381,9 @@ export const api = {
   updateRegistrySettings: (eventId, data) => req('PUT', `/events/${eventId}/registry/settings`, data),
   sendRegistryMessage: (eventId, channels = ['email', 'sms', 'whatsapp']) => req('POST', `/events/${eventId}/registry/send-message`, { channels }),
   listRegistryClaims: (eventId) => req('GET', `/events/${eventId}/registry/claims`),
+  sessionAccess: (eventId) => req('GET', `/events/${eventId}/session-access`),
+  setSessionAccess: (eventId, zoneId, guestIds, decision) => req('PUT', `/events/${eventId}/session-access/${zoneId}`, {guest_ids: guestIds, decision}),
+  setSessionRestriction: (eventId, zoneId, restricted) => req('PUT', `/events/${eventId}/session-access/${zoneId}/restriction`, {restricted}),
   // Venue Access Intelligence (admin)
   listZones: (eventId) => req('GET', `/events/${eventId}/zones`),
   createZone: (eventId, data) => req('POST', `/events/${eventId}/zones`, data),

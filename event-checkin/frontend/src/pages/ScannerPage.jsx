@@ -836,10 +836,11 @@ export default function ScannerPage() {
       const cached = loadOfflineManifest(eventId)
       api.listZones(eventId).then(setZones).catch(() => setZones(cached?.zones || []))
       api.listGates(eventId).then((g) => {
-        setGates(g)
-        setScanBy(g.length ? 'gate' : 'zone')
+        const activeGates = g.filter(gate => gate.is_active !== false)
+        setGates(activeGates)
+        setScanBy(activeGates.length ? 'gate' : 'zone')
       }).catch(() => {
-        const fallbackGates = cached?.gates || []
+        const fallbackGates = (cached?.gates || []).filter(gate => gate.is_active !== false)
         setGates(fallbackGates)
         setScanBy(fallbackGates.length ? 'gate' : 'zone')
       })

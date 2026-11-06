@@ -66,7 +66,7 @@ async def test_manifest_requires_assignment_and_active_event(ctx):
     event_id = await prepare(ctx)
     ctx.login(ctx.ids['user_b'])
     denied = await ctx.client.get(f'/api/scan/offline-manifest/{event_id}')
-    assert denied.status_code == 403
+    assert denied.status_code == 404  # Do not disclose another organization's event.
     ctx.login(ctx.ids['user_a'])
     async with _Session() as db:
         event = await db.get(Event, event_id)

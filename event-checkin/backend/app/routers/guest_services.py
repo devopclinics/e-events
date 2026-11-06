@@ -348,6 +348,10 @@ async def configure(event_id: str, member_id: str, body: AssignmentUpdate, db: A
     for row in existing:
         if row.id not in retained:await db.delete(row)
     eu.guest_service_scoped=body.scoped; eu.updated_at=datetime.utcnow()
+    if body.scoped and eu.feature_permissions is not None:
+        # A responsibility assignment authorizes the scoped workspace only.
+        # It must never restore the event-wide scanner or guest directory.
+        eu.feature_permissions = {"guestservices": "manage"}
     audit(db,event_id,actor,'assignments_updated',detail={'member_id':eu.id,'scoped':body.scoped,'assignments':[i.model_dump(mode='json') for i in body.assignments]})
     await db.commit()
     return {'ok':True}

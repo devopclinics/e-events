@@ -1,3 +1,4 @@
+from ..auth import require_event_org_admin
 from datetime import datetime
 import html as _html
 import logging
@@ -216,12 +217,16 @@ async def _event_out_for_user(event: Event, user: User, db: AsyncSession) -> Eve
     elif eu and eu.event_role == "manager":
         access_role = "event_manager"
         access_level = eu.access_level or "edit"
-        can_manage, can_view_guests, can_manage_guests = True, True, True
+        can_manage, can_view_guests, can_manage_guests = access_level == "edit", True, access_level == "edit"
     else:
         access_role, access_level = "official", "view"
         can_manage = False
         can_manage_guests = bool(eu and eu.can_manage_guests)
         can_view_guests = bool(eu and (eu.can_view_guests or eu.can_manage_guests))
+    if eu and eu.feature_permissions is not None and not user.is_platform_superadmin and role not in ("owner", "admin"):
+        can_manage = can_manage and eu.feature_permissions.get("settings") == "manage"
+        can_view_guests = eu.feature_permissions.get("guests") in ("view", "manage")
+        can_manage_guests = eu.feature_permissions.get("guests") == "manage" and (eu.access_level or "edit") == "edit"
     org = await db.get(Organization, event.org_id)
     redesign_accessible = user.is_platform_superadmin or (
         org is not None and org.redesign_cohort != "legacy_only"
@@ -229,6 +234,7 @@ async def _event_out_for_user(event: Event, user: User, db: AsyncSession) -> Eve
     org_cohort = org.redesign_cohort if org is not None else "legacy_only"
     return EventOut.model_validate(event).model_copy(update={
         "message_credits": await available_credits(db, event), "credit_scope": credit_scope(),
+        "my_feature_permissions": eu.feature_permissions if eu and role not in ("owner", "admin") else None,
         "my_access_role": access_role,
         "my_access_level": access_level,
         "my_can_manage_event": can_manage,
@@ -914,6 +920,7 @@ async def list_members(
     return [
         EventMemberOut(
             id=eu.id,
+            feature_permissions=eu.feature_permissions,
             user=UserOut.model_validate(u),
             assigned_at=eu.assigned_at,
             can_reassign_seats=eu.can_reassign_seats,
@@ -965,12 +972,13 @@ async def assign_member(
     if existing:
         raise HTTPException(409, "User is already assigned to this event")
 
-    eu = EventUser(event_id=event_id, user_id=body.user_id)
+    eu = EventUser(event_id=event_id, user_id=body.user_id, feature_permissions={})
     db.add(eu)
     await db.commit()
     await db.refresh(eu)
     return EventMemberOut(
         id=eu.id,
+        feature_permissions=eu.feature_permissions,
         user=UserOut.model_validate(user),
         assigned_at=eu.assigned_at,
         can_reassign_seats=eu.can_reassign_seats,
@@ -1015,7 +1023,7 @@ async def set_org_member_role(
     user_id: str,
     body: MemberRoleUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_event_admin),
+    _: User = Depends(require_event_org_admin),
 ):
     """Change a teammate's role in this event's organization (owner/admin/staff)."""
     event = await db.get(Event, event_id)
@@ -1067,6 +1075,9 @@ async def invite_org_member(
     yet, a placeholder is created and linked when they first sign in with that
     email. Re-inviting an existing member updates their role."""
     event = await db.get(Event, event_id)
+    inviter_role = await _org_role(inviter, event.org_id, db)
+    if body.role != "staff" and not inviter.is_platform_superadmin and inviter_role not in ("owner", "admin"):
+        raise HTTPException(403, "Only organization administrators can grant organization-wide access")
     email = body.email.lower().strip()
     user = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
     if not user:
@@ -1077,14 +1088,15 @@ async def invite_org_member(
     membership = await db.scalar(
         select(Membership).where(Membership.org_id == event.org_id, Membership.user_id == user.id)
     )
-    if membership:
-        membership.role = body.role
-    else:
-        db.add(Membership(org_id=event.org_id, user_id=user.id, role=body.role))
+    # Reinviting never changes an existing organization role. Use the explicit
+    # role editor, protected by organization-admin authority, for that action.
+    effective_role = membership.role if membership else body.role
+    if not membership:
+        db.add(Membership(org_id=event.org_id, user_id=user.id, role=effective_role))
     await db.commit()
     await db.refresh(user)
-    status = await _email_team_invitation(event, user, body.role, inviter, db)
-    return OrgMemberOut(user=UserOut.model_validate(user), role=body.role, invite_email_status=status)
+    status = await _email_team_invitation(event, user, effective_role, inviter, db)
+    return OrgMemberOut(user=UserOut.model_validate(user), role=effective_role, invite_email_status=status)
 
 
 @router.post("/{event_id}/org-members/{user_id}/invitation")

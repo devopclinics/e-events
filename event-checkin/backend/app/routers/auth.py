@@ -51,7 +51,11 @@ async def festiome_token(
     access: dict[str, tuple[Event, str]] = {event.id: (event, "admin") for event in managed}
     for event, event_user in assigned:
         if event.id not in access:
-            role = "moderator" if event_user.event_role == "manager" else "member"
+            if event_user.feature_permissions is not None and event_user.feature_permissions.get("festiome") not in ("view", "manage"):
+                continue
+            editable = (event_user.access_level or "edit") == "edit"
+            moderate = event_user.feature_permissions.get("festiome") == "manage" if event_user.feature_permissions is not None else event_user.event_role == "manager"
+            role = "moderator" if moderate and editable else "readonly" if event_user.feature_permissions is not None or not editable else "member"
             access[event.id] = (event, role)
     if access:
         if not client.configured:
@@ -108,9 +112,15 @@ async def planner_token(
             eu = await db.scalar(select(EventUser).where(
                 EventUser.event_id == event_id, EventUser.user_id == user.id
             ))
-            if eu:
-                if eu.event_role == "manager":
-                    role = "admin"
+            if eu and org_role is not None:
+                if eu.feature_permissions is not None:
+                    level = eu.feature_permissions.get("planner")
+                    if level in ("view", "manage"):
+                        role = "member"
+                        if level == "manage" and (eu.access_level or "edit") == "edit":
+                            capabilities = ["tasks", "budget", "vendors", "documents", "runsheet"]
+                elif eu.event_role == "manager":
+                    role = "admin" if (eu.access_level or "edit") == "edit" else "member"
                 elif eu.can_view_planner:
                     role = "member"
                     capabilities = [
@@ -174,8 +184,10 @@ async def live_token(
             role = "admin"
         else:
             eu = await db.scalar(select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == user.id))
-            if eu and eu.event_role == "manager":
-                role = "admin"
+            if eu and org_role is not None and (eu.access_level or "edit") == "edit":
+                if eu.feature_permissions is not None:
+                    if eu.feature_permissions.get("live") == "manage": role = "admin"
+                elif eu.event_role == "manager": role = "admin"
     if role is None:
         raise HTTPException(403, "You don't have access to Festio Live for this event")
     now = datetime.now(timezone.utc)
@@ -255,7 +267,10 @@ async def ticketing_token(
         raise HTTPException(404, "Event not found")
     role = "admin" if user.is_platform_superadmin else await _org_role(user, event.org_id, db)
     if role not in ("owner", "admin"):
-        raise HTTPException(404, "Event not found")
+        eu = await db.scalar(select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == user.id))
+        if role is None or not eu or (eu.access_level or "edit") != "edit" or not eu.feature_permissions or eu.feature_permissions.get("ticketing") != "manage":
+            raise HTTPException(404, "Event not found")
+        role = "admin"
     org = await db.get(Organization, event.org_id)
     now = datetime.now(timezone.utc)
     token = jwt.encode({
@@ -316,6 +331,7 @@ async def me(user: User = Depends(get_current_user), db: AsyncSession = Depends(
         id=user.id, name=user.name, email=user.email,
         role=role,
         created_at=user.created_at,
+        is_support_agent=user.is_support_agent,
         is_platform_superadmin=user.is_platform_superadmin,
         is_org_admin=is_org_admin,
         redesign_cohort=redesign_cohort,

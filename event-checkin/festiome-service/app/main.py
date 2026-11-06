@@ -712,9 +712,28 @@ async def upsert_event_user(
                 if subgroup_member.role != "owner":
                     subgroup_member.role = desired_role
                 subgroup_member.rules_accepted_version = subgroup.rules_version
+    else:
+        # A narrower staff role must also replace earlier elevated subgroup roles.
+        subgroup_ids = select(FestioMeGroup.id).where(FestioMeGroup.tenant_id == group.tenant_id, FestioMeGroup.external_event_ref == external_event_ref, FestioMeGroup.is_primary.is_(False))
+        previous = (await db.execute(select(Member).where(Member.group_id.in_(subgroup_ids), Member.identity_kind == "user", Member.identity_ref == subject, Member.role.in_(["admin", "moderator"]), Member.removed_at.is_(None)))).scalars().all()
+        for prior in previous:
+            prior.role = desired_role
     await db.commit()
     await db.refresh(member)
     return member
+
+
+@app.delete("/internal/v1/guesthub/event-links/{external_event_ref}/users/{subject}", status_code=204)
+async def remove_event_user(external_event_ref: str, subject: str, _: None = Depends(internal_service), db: AsyncSession = Depends(get_db)):
+    """Revoke staff memberships in the event and its subgroups, leaving guests alone."""
+    group = await _event_group(db, external_event_ref)
+    group_ids = select(FestioMeGroup.id).where(FestioMeGroup.tenant_id == group.tenant_id, FestioMeGroup.external_event_ref == external_event_ref)
+    members = (await db.execute(select(Member).where(Member.group_id.in_(group_ids), Member.identity_kind == "user", Member.identity_ref == subject, Member.removed_at.is_(None)))).scalars().all()
+    if any(member.role == "owner" for member in members):
+        raise HTTPException(409, "Transfer FestioMe group ownership before restricting this staff member")
+    for member in members:
+        member.removed_at = datetime.utcnow()
+    await db.commit()
 
 
 @app.post("/internal/v1/guesthub/event-links/{external_event_ref}/guest-token")

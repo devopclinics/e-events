@@ -11,3 +11,5 @@
 @media(prefers-reduced-motion:reduce){.mwa-backdrop{backdrop-filter:none}}
 @media(max-height:850px){.mwa-web-welcome{padding:24px 32px;overflow:auto;max-height:100%}.mwa-welcome-details{display:none}.mwa-private-note{display:block;margin-top:24px;padding-top:18px;border-top:1px solid #e4e8db}.mwa-welcome-art{height:76px;margin-bottom:20px}.mwa-web-welcome h3{font-size:32px}}
 .mwa-panel.mwa-expanded{width:auto;height:auto}
+
+.mwa-staff-access{position:fixed;inset:10vh max(16px,15vw);z-index:10050;overflow:auto;background:#fffdf8;border:1px solid #cbd8cc;border-radius:18px;padding:24px;box-shadow:0 20px 80px #0005}.mwa-staff-access header,.mwa-staff-access article{display:flex;justify-content:space-between;gap:16px;align-items:center}.mwa-staff-access article{padding:16px 0;border-bottom:1px solid #ddd}.mwa-staff-access input{display:block;padding:10px;width:100%;border:1px solid #ccc}.mwa-staff-access button{padding:10px;border:1px solid #285346;border-radius:8px}

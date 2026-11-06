@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from ..database import get_db
+from ..database import get_db, AsyncSessionLocal
 from ..models import EmailDeliveryEvent, Guest, Event, User, Zone, MenuCategory, SeatingTable, TicketType, TableGroup, ScanEvent
 from ..schemas import DashboardStats, GuestOut, ZoneOccupancy, TableReport, DashboardBreakdown, DashboardTimelinePoint, DashboardInviteDelivery, DashboardContactStats, DashboardEmailDelivery, DashboardChannelDelivery, DashboardCredits
 from ..auth import require_dashboard_access, verify_token_user, user_has_dashboard_access
@@ -287,14 +287,25 @@ async def event_stream(
         sse_subscribers[event_id] = []
     sse_subscribers[event_id].append(queue)
 
+    actor_id = user.id
+    await db.rollback()  # Never hold a database transaction for a long-lived stream.
+
     async def generate():
         try:
             yield f"data: {json.dumps({'type': 'connected'})}\n\n"
             while True:
                 try:
                     event_data = await asyncio.wait_for(queue.get(), timeout=25)
-                    yield f"data: {json.dumps(event_data)}\n\n"
                 except asyncio.TimeoutError:
+                    event_data = None
+                async with AsyncSessionLocal() as access_db:
+                    actor = await access_db.get(User, actor_id)
+                    current_event = await access_db.get(Event, event_id)
+                    if not actor or not actor.is_active or not current_event or not await user_has_dashboard_access(actor, current_event, access_db):
+                        break
+                if event_data is not None:
+                    yield f"data: {json.dumps(event_data)}\n\n"
+                else:
                     yield ": keepalive\n\n"
         finally:
             subscribers = sse_subscribers.get(event_id, [])

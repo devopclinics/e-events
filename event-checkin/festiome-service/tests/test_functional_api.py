@@ -103,3 +103,32 @@ async def test_member_can_edit_profile_name(api):
     assert updated.json()["display_name"] == "Ada Updated"
     members = (await api.get(f"/v1/groups/{group['id']}/members")).json()
     assert members[0]["display_name"] == "Ada Updated"
+
+@pytest.mark.asyncio
+async def test_event_staff_revocation_removes_subgroups_without_touching_guests_or_other_events(api):
+    from app.auth import internal_service
+    async def internal_override():return None
+    app.dependency_overrides[internal_service]=internal_override
+    base='/internal/v1/guesthub/event-links'
+    for event in ('event-one','event-two'):
+        r=await api.post(base,json={'external_org_ref':'org','external_event_ref':event,'name':event,'owner':{'subject':'owner','name':'Owner','email':'owner@example.test'}})
+        assert r.status_code==201,r.text
+    subgroup=await api.post(base+'/event-one/subgroups',json={'name':'Staff subgroup'})
+    assert subgroup.status_code==201,subgroup.text
+    for event in ('event-one','event-two'):
+        r=await api.put(base+f'/{event}/users/limited',json={'name':'Limited','role':'moderator'})
+        assert r.status_code==200,r.text
+    guest=await api.put(base+'/event-one/members/guest-person',json={'name':'Guest'})
+    assert guest.status_code==200,guest.text
+    r=await api.delete(base+'/event-one/users/limited');assert r.status_code==204,r.text
+    groups=await api.get('/v1/groups',headers={'Authorization':'Bearer limited'})
+    assert groups.status_code==200,groups.text
+    assert [g['external_event_ref'] for g in groups.json()]==['event-two']
+    r=await api.delete(base+'/event-one/users/owner');assert r.status_code==409,r.text
+    # Guest identity remains active after staff removal.
+    from sqlalchemy import select
+    from app.models import Member
+    async for db in app.dependency_overrides[get_db]():
+        row=await db.get(Member,guest.json()['id']);assert row.removed_at is None
+        break
+    app.dependency_overrides.pop(internal_service,None)

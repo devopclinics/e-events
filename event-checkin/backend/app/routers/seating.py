@@ -1,3 +1,4 @@
+from ..auth import require_event_org_admin
 import random
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
@@ -690,11 +691,19 @@ async def update_member_permissions(
     user_id: str,
     body: dict,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_paid_event_admin),
+    _: User = Depends(require_event_org_admin),
 ):
-    eu = await db.scalar(select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == user_id))
+    eu = await db.scalar(select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == user_id).with_for_update())
     if not eu:
         raise HTTPException(404, "Member not found")
+    from ..models import StaffAccessAudit
+    audit_fields = ("event_role", "access_level", "feature_permissions", "can_view_guests", "can_manage_guests", "can_manage_menu", "can_reassign_seats", "can_view_dashboard", "can_view_planner", "can_manage_planner_tasks", "can_manage_planner_budget", "can_manage_planner_vendors", "can_manage_planner_documents", "can_manage_planner_runsheet")
+    previous_access = {key: getattr(eu, key) for key in audit_fields}
+    if eu.feature_permissions is not None:
+        from ..auth import _org_role
+        event = await db.get(Event, event_id)
+        if not _.is_platform_superadmin and await _org_role(_, event.org_id, db) not in ("owner", "admin"):
+            raise HTTPException(403, "Only organization administrators can change restricted staff permissions")
     # Optional optimistic-concurrency guard: two admins opening this member's
     # row at once shouldn't have the second save silently overwrite the
     # first's permission change. Omitted by callers that don't track it.
@@ -753,6 +762,61 @@ async def update_member_permissions(
         if level not in ("edit", "view"):
             raise HTTPException(400, "access_level must be edit or view")
         eu.access_level = level
+    if eu.feature_permissions is not None and "feature_permissions" not in body:
+        # Compatibility clients may still submit the individual capability flags.
+        # Update the same allowlist, rather than leave contradictory permissions.
+        policy = dict(eu.feature_permissions)
+        groups = {
+            "guests": ("can_view_guests", "can_manage_guests"),
+            "overview": ("can_view_dashboard", None),
+            "seating": (None, "can_reassign_seats"),
+            "menu": (None, "can_manage_menu"),
+            "planner": ("can_view_planner", None),
+        }
+        changed = False
+        for feature, (view_field, manage_field) in groups.items():
+            if any(field in body for field in (view_field, manage_field) if field):
+                changed = True
+                level = "manage" if manage_field and getattr(eu, manage_field) else "view" if view_field and getattr(eu, view_field) else None
+                if level: policy[feature] = level
+                else: policy.pop(feature, None)
+        if changed: body["feature_permissions"] = policy
+    if "feature_permissions" in body:
+        from ..staff_permissions import validate_policy
+        policy = validate_policy(body["feature_permissions"])
+        # Only organization administrators can establish or broaden a policy.
+        from ..auth import _org_role
+        event = await db.get(Event, event_id)
+        if not _.is_platform_superadmin and await _org_role(_, event.org_id, db) not in ("owner", "admin"):
+            raise HTTPException(403, "Only organization administrators can change feature access")
+        if eu.guest_service_scoped and any(key != "guestservices" for key in policy):
+            raise HTTPException(409, "Use Guest Services assignment permissions for scoped staff")
+        eu.feature_permissions = policy
+        eu.can_view_guests = policy.get("guests") in ("view", "manage")
+        eu.can_manage_guests = policy.get("guests") == "manage"
+        eu.can_view_dashboard = policy.get("overview") in ("view", "manage")
+        eu.can_reassign_seats = policy.get("seating") == "manage"
+        eu.can_manage_menu = policy.get("menu") == "manage"
+        eu.can_view_planner = policy.get("planner") in ("view", "manage")
+        for field in planner_fields[1:]:
+            setattr(eu, field, policy.get("planner") == "manage")
+    # Revoke persistent community staff membership when narrowing access.
+    # Guest identities are separate and remain unaffected. Grants are reconciled
+    # only by a fresh token exchange after this transaction commits.
+    event = await db.get(Event, event_id)
+    target = await db.get(User, user_id)
+    from ..auth import _org_role
+    if event.festiome_id and target and await _org_role(target, event.org_id, db) not in ("owner", "admin"):
+        if previous_access["feature_permissions"] != eu.feature_permissions or previous_access["access_level"] != eu.access_level or previous_access["event_role"] != eu.event_role:
+            from ..services.festiome_client import get_festiome_client, FestioMeUnavailable
+            client = get_festiome_client()
+            if not client.configured:
+                raise HTTPException(503, "FestioMe must be available to revoke this staff member's community access")
+            try:
+                await client.remove_user(event_id, target.firebase_uid or target.id)
+            except FestioMeUnavailable as exc:
+                raise HTTPException(503, str(exc)) from exc
+    db.add(StaffAccessAudit(actor_id=_.id, subject_id=user_id, event_id=event_id, scope="event_features", before=previous_access, after={key: getattr(eu, key) for key in audit_fields}))
     await db.commit()
     return {"ok": True}
 

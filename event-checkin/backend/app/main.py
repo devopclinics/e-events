@@ -377,3 +377,7 @@ app.include_router(support_automation.router,prefix="/api/platform/support/whats
 
 from .routers import support_web_chat
 app.include_router(support_web_chat.router,prefix='/api/platform/support/chat',tags=['website-support'])
+
+# Register after all routers so every authenticated event route is covered.
+from .staff_permissions import install_staff_feature_guards
+install_staff_feature_guards(app)

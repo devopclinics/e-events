@@ -6,7 +6,7 @@ from fastapi import APIRouter,Depends,HTTPException,Header,Response
 from pydantic import BaseModel,Field,ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.auth import require_superadmin
+from app.auth import require_superadmin, require_support_agent
 from app.database import get_db
 from app.config import settings
 from app.models import SupportWebChat,User
@@ -139,19 +139,19 @@ async def send(data:Send,response:Response,authorization:str|None=Header(default
     row.messages=messages;row.updated_at=now();await db.commit();return public(row)
 
 @router.get('/management')
-async def inbox(db:AsyncSession=Depends(get_db),user:User=Depends(require_superadmin)):
+async def inbox(db:AsyncSession=Depends(get_db),user:User=Depends(require_support_agent)):
     rows=(await db.scalars(select(SupportWebChat).where(SupportWebChat.expires_at>now(),SupportWebChat.updated_at.is_not(None)).order_by(SupportWebChat.updated_at.desc()).limit(100))).all()
     rows=[r for r in rows if any(m['role']=='customer' for m in r.messages)]
     return {'items':[dict(id=r.id,reference='WEB-'+r.id.replace('-','')[:12].upper(),mode=r.mode,updated_at=r.updated_at,unread=any(m['role']=='customer' and (not r.read_at or m['at']>r.read_at.isoformat()+'Z') for m in r.messages),preview=next((m['body'][:100] for m in reversed(r.messages) if m['role']=='customer'),'')) for r in rows]}
 
 @router.get('/management/{ident}')
-async def thread(ident:str,db:AsyncSession=Depends(get_db),user:User=Depends(require_superadmin)):
+async def thread(ident:str,db:AsyncSession=Depends(get_db),user:User=Depends(require_support_agent)):
     row=await db.get(SupportWebChat,ident)
     if not row or row.expires_at<=now():raise HTTPException(404,'Chat not found.')
     row.read_at=now();await db.commit();return dict(id=row.id,source={'page':row.context.get('_page','general'),'site_slug':row.context.get('_site_slug')},**public(row))
 
 @router.post('/management/{ident}/reply')
-async def reply(ident:str,data:Send,db:AsyncSession=Depends(get_db),user:User=Depends(require_superadmin)):
+async def reply(ident:str,data:Send,db:AsyncSession=Depends(get_db),user:User=Depends(require_support_agent)):
     row=await db.scalar(select(SupportWebChat).where(SupportWebChat.id==ident).with_for_update())
     if not row or row.expires_at<=now():raise HTTPException(404,'Chat not found.')
     text=data.body.strip()

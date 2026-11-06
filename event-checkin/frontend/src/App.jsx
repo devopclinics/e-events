@@ -65,6 +65,7 @@ const ApiExplorerPage = lazy(() => import('./pages/ApiExplorerPage'))
 const CustomerWorkspace = lazy(() => import('./pages/CustomerWorkspace'))
 const AdminRedesignPage = lazy(() => import('./pages/AdminRedesignPage'))
 const EventsListRedesignPage = lazy(() => import('./pages/EventsListRedesignPage'))
+const GuestExportPage = lazy(() => import('./pages/GuestExportPage'))
 const GuestsRedesignPage = lazy(() => import('./pages/GuestsRedesignPage'))
 const CommunicationsRedesignPage = lazy(() => import('./pages/CommunicationsRedesignPage'))
 const BillingRedesignPage = lazy(() => import('./pages/BillingRedesignPage'))
@@ -543,6 +544,7 @@ function AppRoutes() {
           valid user back through /login to the legacy admin. */}
       <Route path="/admin-redesign" element={<ProtectedRoute>{CUSTOMER_JOURNEY_ENABLED ? <CustomerWorkspace /> : <AdminRedesignPage />}</ProtectedRoute>} />
       <Route path="/events-redesign" element={<ProtectedRoute><EventsListRedesignPage /></ProtectedRoute>} />
+      <Route path="/guest-export" element={<ProtectedRoute><GuestExportPage /></ProtectedRoute>} />
       <Route path="/guests-redesign" element={<ProtectedRoute><GuestsRedesignPage /></ProtectedRoute>} />
       <Route path="/communications-redesign" element={<ProtectedRoute><CommunicationsRedesignPage /></ProtectedRoute>} />
       <Route path="/billing-redesign" element={<ProtectedRoute><BillingRedesignPage /></ProtectedRoute>} />

@@ -424,6 +424,7 @@ function GuestsTab({ notify, onView, onEdit, onRemove, onUnadmit, onApproveRsvp,
                           {g.household !== 'Unassigned' && <span className="gr-household-badge">{g.household}</span>}
                         </div>
                         <small className="rd-rowlink">{g.submitter ? `${g.role} · Guest of ${g.submitter}` : g.role}</small>
+                        <div className="gr-session-access" aria-label="Session permissions">{(g.raw.session_access || []).map(s => <span key={s.zone_id} className={`gr-access-badge ${s.decision}`} title="Session permission only. Registration, ticket and gate rules still apply.">{s.name}: {s.decision === 'allow' ? 'Allowed' : s.decision === 'block' ? 'Blocked' : s.restricted ? 'Needs approval' : 'Existing rules'}</span>)}</div>
                       </div>
                     </div>
                   </td>

@@ -48,3 +48,32 @@ async def test_existing_unrestricted_event_unchanged(ctx):
     r=await ctx.client.post(f'/api/scan/{qr}/zone',json={'zone_id':conf});assert not r.json()['denied'],r.text
     await ctx.client.put(f'/api/events/{eid}/session-access/{dinner}',json={'guest_ids':[gid],'decision':'block'})
     r=await ctx.client.post(f'/api/events/{eid}/gates/{gate}/scan',json={'qr_token':qr});assert not r.json()['allowed'];assert 'Blocked' in r.json()['message']
+
+
+@pytest.mark.asyncio
+async def test_guest_directory_exposes_scoped_session_decisions(ctx):
+    eid,gid,qr,conf,dinner,gate=await prep(ctx)
+    root=f'/api/events/{eid}/session-access'
+    await ctx.client.put(root+'/'+conf,json={'guest_ids':[gid],'decision':'allow'})
+    await ctx.client.put(root+'/'+dinner,json={'guest_ids':[gid],'decision':'block'})
+    response=await ctx.client.get(f'/api/events/{eid}/guests')
+    assert response.status_code==200,response.text
+    guest=next(g for g in response.json() if g['id']==gid)
+    statuses={s['name']:s for s in guest['session_access']}
+    assert statuses['Conference']['decision']=='allow'
+    assert statuses['Dinner']['decision']=='block'
+    assert all(s['restricted'] for s in statuses.values())
+    await ctx.client.put(root+'/'+conf,json={'guest_ids':[gid],'decision':'review'})
+    guest=next(g for g in (await ctx.client.get(f'/api/events/{eid}/guests')).json() if g['id']==gid)
+    assert next(s for s in guest['session_access'] if s['zone_id']==conf)['decision']=='review'
+    ctx.login(ctx.ids['user_b'])
+    assert (await ctx.client.get(f'/api/events/{eid}/guests')).status_code==404
+    async with _Session() as db:
+        from datetime import datetime
+        other_event=Event(org_id=ctx.ids['org_b'],name='Other event',couples_name='Other',event_date=datetime(2026,11,11),checkin_base_url='http://test')
+        db.add(other_event);await db.flush()
+        db.add(Guest(event_id=other_event.id,first_name='Other',last_name='Guest'))
+        await db.commit();other_id=other_event.id
+    other=await ctx.client.get(f"/api/events/{other_id}/guests")
+    assert other.status_code==200,other.text
+    assert all(g['session_access']==[] for g in other.json())

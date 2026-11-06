@@ -2428,7 +2428,15 @@ class GuestUpdate(BaseModel):
     seat_number: Optional[str] = None
 
 
+class GuestSessionAccessOut(BaseModel):
+    zone_id: str
+    name: str
+    decision: str
+    restricted: bool
+
+
 class GuestOut(BaseModel):
+    session_access: list[GuestSessionAccessOut] = Field(default_factory=list)
     is_test: Optional[bool] = None
     is_junior: bool = False
     model_config = ConfigDict(from_attributes=True)

@@ -74,6 +74,7 @@ from .scanner import (
 )
 from services import messaging
 from services.credit_ledger import send_with_credit_ledger
+from ..services.session_access import attach_session_access
 from ..services.experience import next_guest_steps, sync_guest_progress
 from ..services.festiome_outbox import queue_guest_remove, queue_guest_sync
 from ..services.webhook_outbox import queue_webhook_event
@@ -1613,6 +1614,7 @@ async def list_guests(event_id: str, db: AsyncSession = Depends(get_db), _: User
         g.table_group_name = names.get(g.assigned_table_group_id)
         g.household_name = household_names.get(g.household_id)
     await _attach_message_status(guests, event_id, db)
+    await attach_session_access(guests, event_id, db)
     return guests
 
 

@@ -564,6 +564,8 @@ export const api = {
   webSupportList: () => req('GET','/platform/support/chat/management'),
   webSupportThread: id => req('GET',`/platform/support/chat/management/${encodeURIComponent(id)}`),
   webSupportReply: (id,data) => req('POST',`/platform/support/chat/management/${encodeURIComponent(id)}/reply`,data),
+  supportStaffAccess: (q='') => req('GET', `/platform/support/whatsapp/staff-access?q=${encodeURIComponent(q)}`),
+  setSupportStaffAccess: (id,enabled) => req('PATCH', `/platform/support/whatsapp/staff-access/${id}`, {enabled}),
   supportWhatsAppList: (q='',state='all',offset=0) => req('GET', `/platform/support/whatsapp/conversations?q=${encodeURIComponent(q)}&state=${state}&offset=${offset}`),
   supportAutomationSettings: () => req('GET','/platform/support/whatsapp/automation/settings'),
   saveSupportAutomation: (body) => req('PUT','/platform/support/whatsapp/automation/settings',body),

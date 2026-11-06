@@ -62,6 +62,8 @@ def _guarded_drop_column(table: str, column: str) -> str:
 
 
 SCHEMA_PATCHES: list[str] = [
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_support_agent BOOLEAN NOT NULL DEFAULT false",
+    "ALTER TABLE event_users ADD COLUMN IF NOT EXISTS feature_permissions JSON NULL",
     "ALTER TABLE quick_invite_recipients ADD COLUMN IF NOT EXISTS party_size INTEGER NOT NULL DEFAULT 1",
     "ALTER TABLE quick_invite_recipients ADD COLUMN IF NOT EXISTS party_guest_ids JSON",
     "ALTER TABLE quick_invite_recipients ADD COLUMN IF NOT EXISTS reply_message TEXT",

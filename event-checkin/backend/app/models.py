@@ -413,6 +413,7 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(50), default="official")  # legacy global role; superseded by Membership
     # Operator-only flag (you), distinct from customer org admins. Grants audited
     # cross-tenant support access. Never set for customer accounts.
+    is_support_agent: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     is_platform_superadmin: Mapped[bool] = mapped_column(Boolean, default=False)
     # Operator can suspend an account: blocks sign-in entirely. Paired with
     # disabling the Firebase user so they can't re-authenticate.
@@ -429,6 +430,7 @@ class EventUser(Base):
     event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
     assigned_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    feature_permissions: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     guest_service_scoped: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     can_reassign_seats: Mapped[bool] = mapped_column(Boolean, default=False)
     can_manage_menu: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -3334,3 +3336,16 @@ class GuestSessionAccess(Base):
     decision: Mapped[str] = mapped_column(String(10))
     updated_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class StaffAccessAudit(Base):
+    """Append-only administrative access changes, without contact details."""
+    __tablename__ = "staff_access_audits"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    actor_id: Mapped[str] = mapped_column(String(36), index=True)
+    subject_id: Mapped[str] = mapped_column(String(36), index=True)
+    event_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    scope: Mapped[str] = mapped_column(String(40))
+    before: Mapped[dict] = mapped_column(JSON)
+    after: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

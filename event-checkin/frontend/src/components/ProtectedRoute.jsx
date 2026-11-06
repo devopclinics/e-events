@@ -1,3 +1,4 @@
+import { canSeeStaffFeature, staffRouteFeature } from '../lib/staffFeatures'
 import { useContext, useEffect, useRef, useState } from 'react'
 import { Navigate, useLocation, useNavigate, UNSAFE_LocationContext, UNSAFE_RouteContext, UNSAFE_NavigationContext } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -103,11 +104,27 @@ export default function ProtectedRoute({
     return()=>{alive=false}
   }, [paidOnly, user, currentEventId,paidKey])
 
+  const featureKey = (user?.id || '') + ':' + currentEventId
+  const [featureState, setFeatureState] = useState({key:null,event:null})
+  useEffect(() => {
+    if (!user || user.is_platform_superadmin || user.role === 'admin' || !currentEventId) return
+    let alive=true
+    const refresh=()=>api.listEvents().then(events=>{
+      if(alive)setFeatureState({key:featureKey,event:events.find(e=>e.id===currentEventId)||null})
+    }).catch(()=>{if(alive)setFeatureState({key:featureKey,event:null})})
+    refresh()
+    window.addEventListener('focus',refresh)
+    window.addEventListener('festio:event-updated',refresh)
+    return()=>{alive=false;window.removeEventListener('focus',refresh);window.removeEventListener('festio:event-updated',refresh)}
+  },[user,currentEventId,featureKey,location.pathname])
+  const featureEvent=featureState.key===featureKey?featureState.event:null
+  const feature=staffRouteFeature(location.pathname,location.search)
+  const delegated=featureEvent?.my_feature_permissions != null && canSeeStaffFeature(featureEvent,feature) && !['settings','team','export'].includes(feature)
   const ready=!loading&&user&&!eventQuery.conflict&&(!requestedEvent||(
     eventReturn.key===returnKey&&eventReturn.status==='verified'&&currentEventId===requestedEvent))&&
     (!paidOnly||(paidState.key===paidKey&&paidState.status==='ok'))&&
-    (!platformSuperadminOnly||user.is_platform_superadmin)&&(!adminOnly||user.role==='admin')&&
-    (!setupOnly||['admin','event_manager'].includes(user.role))
+    (!platformSuperadminOnly||user.is_platform_superadmin)&&(!adminOnly||user.role==='admin'||delegated)&&
+    (!setupOnly||['admin','event_manager'].includes(user.role)||delegated)
   useEffect(()=>{
     if(ready)committed.current={user:user.id,event:currentEventId,children,location,locationContext,routeContext,
       index:historyIndex(),authorization:eventReturn,applied:{key:returnKey,user:user.id}}
@@ -122,8 +139,8 @@ export default function ProtectedRoute({
   // Keep the committed editor and its registered dirty guard alive while a
   // history/deep-link event change is authorized and offered to that guard.
   const previous=committed.current
-  const roleAllowed=(!platformSuperadminOnly||user?.is_platform_superadmin)&&(!adminOnly||user?.role==='admin')&&
-    (!setupOnly||['admin','event_manager'].includes(user?.role))
+  const roleAllowed=(!platformSuperadminOnly||user?.is_platform_superadmin)&&(!adminOnly||user?.role==='admin'||delegated)&&
+    (!setupOnly||['admin','event_manager'].includes(user?.role)||delegated)
   if(roleAllowed&&!loading&&user&&previous?.user===user.id&&previous.event===currentEventId&&(requestedEvent||eventQuery.conflict)&&
     (eventReturn.key!==returnKey||eventReturn.status==='checking'||eventQuery.conflict))
     return workspace(previous,true)
@@ -142,8 +159,10 @@ export default function ProtectedRoute({
     }
   }
   if (platformSuperadminOnly && !user.is_platform_superadmin) return <Navigate to="/admin" replace />
-  if (adminOnly && user.role !== 'admin') return <Navigate to="/scanner" replace />
-  if (setupOnly && !['admin', 'event_manager'].includes(user.role)) return <Navigate to="/scanner" replace />
+  if (!user.is_platform_superadmin && user.role !== 'admin' && currentEventId && featureState.key !== featureKey) return <Spinner />
+  if (!canSeeStaffFeature(featureEvent,feature)) return <div role="alert">This feature is not included in your staff access. Ask your event administrator to update your permissions.</div>
+  if (adminOnly && user.role !== 'admin' && !delegated) return <Navigate to="/scanner" replace />
+  if (setupOnly && !['admin', 'event_manager'].includes(user.role) && !delegated) return <Navigate to="/scanner" replace />
   if (paidOnly) {
     if (paidState.key!==paidKey||paidState.status==='checking') return <Spinner />
     if (paidState.status==='denied') return <Navigate to="/admin" replace />

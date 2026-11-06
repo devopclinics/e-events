@@ -6,7 +6,7 @@ from fastapi import APIRouter,Depends,HTTPException,Request,Response,Query
 from pydantic import BaseModel,Field
 from sqlalchemy import select,func,or_,exists
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.auth import require_superadmin
+from app.auth import require_superadmin, require_support_agent
 from app.config import settings
 from app.database import get_db
 from app.models import SupportConversation as Conversation,SupportMessage as Message,SupportRead,Guest,Event,User,SupportAutomationState
@@ -30,7 +30,7 @@ def unread_for(user):
 
 
 @router.get('/conversations',dependencies=[Depends(enabled)])
-async def conversations(q:str=Query('',max_length=100),state:str='all',offset:int=Query(0,ge=0),db:AsyncSession=Depends(get_db),user:User=Depends(require_superadmin)):
+async def conversations(q:str=Query('',max_length=100),state:str='all',offset:int=Query(0,ge=0),db:AsyncSession=Depends(get_db),user:User=Depends(require_support_agent)):
     unread=unread_for(user)
     query=select(Conversation,unread.label('unread'))
     if q:query=query.where(or_(Conversation.phone.contains(q,autoescape=True),Conversation.name.ilike('%'+q.replace('%','').replace('_','')+'%')))
@@ -46,7 +46,7 @@ async def conversations(q:str=Query('',max_length=100),state:str='all',offset:in
 
 
 @router.get('/conversations/{ident}',dependencies=[Depends(enabled)])
-async def conversation(ident:str,before:datetime|None=None,db:AsyncSession=Depends(get_db),user:User=Depends(require_superadmin)):
+async def conversation(ident:str,before:datetime|None=None,db:AsyncSession=Depends(get_db),user:User=Depends(require_support_agent)):
     c=await db.get(Conversation,ident)
     if not c:raise HTTPException(404,'Conversation not found')
     query=select(Message).where(Message.conversation_id==ident)
@@ -75,7 +75,7 @@ class ReadBody(BaseModel):
 
 
 @router.post('/conversations/{ident}/read',dependencies=[Depends(enabled)])
-async def mark_read(ident:str,data:ReadBody,db:AsyncSession=Depends(get_db),user:User=Depends(require_superadmin)):
+async def mark_read(ident:str,data:ReadBody,db:AsyncSession=Depends(get_db),user:User=Depends(require_support_agent)):
     c=await db.scalar(select(Conversation).where(Conversation.id==ident).with_for_update())
     if not c:raise HTTPException(404,'Conversation not found')
     row=await db.get(SupportRead,(ident,user.id))
@@ -92,7 +92,7 @@ class StateBody(BaseModel):
 
 
 @router.patch('/conversations/{ident}',dependencies=[Depends(enabled)])
-async def change_state(ident:str,data:StateBody,db:AsyncSession=Depends(get_db),user:User=Depends(require_superadmin)):
+async def change_state(ident:str,data:StateBody,db:AsyncSession=Depends(get_db),user:User=Depends(require_support_agent)):
     c=await db.get(Conversation,ident)
     if not c:raise HTTPException(404,'Conversation not found')
     c.status=data.status;await db.commit();return {'ok':True}
@@ -104,7 +104,7 @@ class ReplyBody(BaseModel):
 
 
 @router.post('/conversations/{ident}/reply',dependencies=[Depends(enabled),Depends(rate_limit(limit=30,window=60,scope='support-reply'))])
-async def reply(ident:str,data:ReplyBody,db:AsyncSession=Depends(get_db),user:User=Depends(require_superadmin)):
+async def reply(ident:str,data:ReplyBody,db:AsyncSession=Depends(get_db),user:User=Depends(require_support_agent)):
     text=data.body.strip()
     if not text:raise HTTPException(422,'Enter a reply')
     c=await db.scalar(select(Conversation).where(Conversation.id==ident).with_for_update())
@@ -171,3 +171,25 @@ async def webhook(request:Request,db:AsyncSession=Depends(get_db)):
     await enqueue(db,ident)
     await db.commit()
     return Response(status_code=204)
+
+
+@router.get('/staff-access')
+async def support_staff_access(q: str = Query('', max_length=100), db: AsyncSession = Depends(get_db), user: User = Depends(require_superadmin)):
+    query = select(User).where(User.is_active.is_(True))
+    if q.strip(): query = query.where(User.email.ilike('%' + q.strip() + '%'))
+    else: query = query.where(User.is_support_agent.is_(True))
+    users = (await db.execute(query.order_by(User.email).limit(30))).scalars().all()
+    return {'items': [{'id': u.id, 'name': u.name, 'email': u.email, 'enabled': u.is_support_agent} for u in users]}
+
+class SupportStaffAccessBody(BaseModel):
+    enabled: bool
+
+@router.patch('/staff-access/{user_id}')
+async def set_support_staff_access(user_id: str, data: SupportStaffAccessBody, db: AsyncSession = Depends(get_db), user: User = Depends(require_superadmin)):
+    target = await db.get(User, user_id)
+    if not target or not target.is_active: raise HTTPException(404, 'Active user not found')
+    from app.models import StaffAccessAudit
+    db.add(StaffAccessAudit(actor_id=user.id, subject_id=target.id, scope="support_inbox", before={"enabled": target.is_support_agent}, after={"enabled": data.enabled}))
+    target.is_support_agent = data.enabled
+    await db.commit()
+    return {'ok': True}

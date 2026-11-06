@@ -1,3 +1,4 @@
+import { canSeeStaffFeature, staffRouteFeature } from '../../lib/staffFeatures'
 import FestioLogo from '../../components/branding/FestioLogo'
 import {guideHref,readGuideResume,SETUP_STAGES} from '../guideNavigation.mjs'
 import { useEffect, useRef, useState } from 'react'
@@ -371,6 +372,7 @@ const SIDEBAR_NAV = [
   ['calendar', 'Start here', '/admin-redesign', 'overview'],
   ['grid', 'Setup Guide', '/setup-redesign?view=guide', 'guide', null, 'setupGuide'],
   ['users', 'Guests', '/guests-redesign?tab=guests', 'guests'],
+  ['download', 'Export guest data', '/guest-export', 'export'],
   ['send', 'Invites & RSVP', '/guests-redesign?tab=invite', 'invite'],
   ['message', 'Guest inbox', '/communications-redesign?tab=hub', 'communication'],
   ['card', 'Billing', '/billing-redesign?tab=billing', 'billing'],
@@ -550,7 +552,7 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
   const eventName = event?.name || (currentEventId ? 'Loading…' : 'No event selected')
   const resume=readGuideResume(currentEventId,user?.id)
   const setupHref=guideHref(currentEventId,user?.id)
-  const visibleTopLinks = TOP_LINKS.filter((l) => !l.gate || l.gate({ user, event, ticketingMaster }))
+  const visibleTopLinks = TOP_LINKS.filter((l) => canSeeStaffFeature(event, staffRouteFeature(l.to?.split('?')[0] || '', l.to?.split('?')[1] || '')) && (!l.gate || l.gate({ user: event?.my_feature_permissions != null ? {...user,role:'event_manager'} : user, event, ticketingMaster })))
 
   const navigation = workspaceNavigation(visibleTopLinks, location, topActive)
   const destination = (link) => link.id === 'guide' ? setupHref : link.to
@@ -612,7 +614,7 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
           )}
 
           <div className="rr-topbar-right">
-            <Link className="rr-scanner-shortcut" to="/scanner-redesign"><Icon name="ticket" size={14} /><span>Open scanner</span></Link>
+            {canSeeStaffFeature(event, 'scanner') && <Link className="rr-scanner-shortcut" to="/scanner-redesign"><Icon name="ticket" size={14} /><span>Open scanner</span></Link>}
             {user && (
               <details className="rr-account" ref={accountRef}>
                 <summary aria-label="Organisation and account">
@@ -655,6 +657,7 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
                   ))}
                 </div>
                 {SIDEBAR_NAV.map(([icon, label, to, id, count, gate, discoverable], i) => {
+                  if (to && !canSeeStaffFeature(event, staffRouteFeature(to.split('?')[0], to.split('?')[1] || ''))) return null
                   const accessMissing = gate && !flags[gate]
                   if (accessMissing && !discoverable && !['admin', 'event_manager'].includes(user?.role)) return null
                   if (icon === 'grp') return <small key={label + i}>{label.toUpperCase()}</small>
@@ -673,7 +676,7 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
         <main className={`rr-main ${withEventSidebar ? '' : 'rr-main-wide'}`}>
           {resume?.task && location.pathname!=='/setup-redesign' && <Link className="guide-return" to={setupHref} style={{display:'block',padding:12,marginBottom:12}}>← Return to {SETUP_STAGES.find(([id])=>id===resume.view)?.[1] || 'Setup Guide'}</Link>}
           <RedesignRouteBoundary onError={handleRouteError}>
-            {children}
+            {canSeeStaffFeature(event, staffRouteFeature(location.pathname, location.search)) ? <>{(event?.my_feature_permissions?.[staffRouteFeature(location.pathname, location.search)] === 'view' || event?.my_access_role === 'event_manager' && event?.my_access_level === 'view') && <p role="status" className="rr-panel" style={{padding:'12px 18px'}}>View-only access. Your administrator must enable editing before you can save changes.</p>}{children}</> : <section className="rr-panel" style={{padding:32}}><h2>You do not have access to this feature</h2><p>Ask your event administrator to update your staff permissions.</p></section>}
           </RedesignRouteBoundary>
         </main>
       </div>

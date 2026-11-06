@@ -161,6 +161,13 @@ class FestioMeClient:
             raise FestioMeUnavailable("FestioMe user synchronization failed")
         return response.json()
 
+    async def remove_user(self, external_event_ref: str, subject: str) -> None:
+        response = await self._request("DELETE", f"/internal/v1/guesthub/event-links/{external_event_ref}/users/{subject}")
+        if response.status_code == 409:
+            raise FestioMeUnavailable("Transfer FestioMe group ownership before restricting this staff member")
+        if response.status_code not in (200, 204, 404):
+            raise FestioMeUnavailable("FestioMe staff access could not be revoked; retry before saving this policy")
+
     async def guest_token(
         self, external_event_ref: str, *, guest_ref: str, name: str,
         email: str | None,

@@ -1,3 +1,4 @@
+import {canSeeStaffFeature,staffRouteFeature} from '../src/lib/staffFeatures.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {readFileSync,readdirSync} from 'node:fs'
@@ -38,7 +39,7 @@ function harness({initialSelection='A',path='/setup-redesign',search='?event=B&v
     useContext(){return null},useRef(initial){const i=cursor++;if(!(i in states))states[i]={current:initial};return states[i]},
     useEffect(fn,next){const i=cursor++;if(!deps[i]||next.some((x,j)=>x!==deps[i][j])){deps[i]=next;pending.push(()=>{cleanups[i]?.();cleanups[i]=fn()})}}}
   const jsx=(type,props)=>type==='Provider'||type==='div'&&!props.role&&'aria-busy' in props?props.children:({type,props})
-  const modules={react,'react/jsx-runtime':{jsx,jsxs:jsx},'react-router-dom':{Navigate:'Navigate',useLocation:()=>location,useNavigate:()=>()=>{},UNSAFE_LocationContext:{Provider:'Provider'},UNSAFE_RouteContext:{Provider:'Provider'},UNSAFE_NavigationContext:{}},
+  const modules={'../lib/staffFeatures':{canSeeStaffFeature,staffRouteFeature},react,'react/jsx-runtime':{jsx,jsxs:jsx},'react-router-dom':{Navigate:'Navigate',useLocation:()=>location,useNavigate:()=>()=>{},UNSAFE_LocationContext:{Provider:'Provider'},UNSAFE_RouteContext:{Provider:'Provider'},UNSAFE_NavigationContext:{}},
     '../context/AuthContext':{useAuth:()=>({user,loading:false})},'../api':{api:{listEvents:()=>new Promise(resolve=>{requests.push(resolve)})}},
     '../hooks/useCurrentEvent':{useCurrentEvent:()=>[selected,setCurrent]},
     '../pages/organizerGuidance.mjs':{eventIdentityFromQuery,authenticatedOrganizerReturn}}
@@ -146,7 +147,7 @@ for(const direction of ['back','forward','replace'])for(const outcome of ['cance
   }
   const current=evaluate('../src/hooks/useCurrentEvent.js',{})
   const user={id:'owner',role:'admin'},requests=[]
-  const Protected=evaluate('../src/components/ProtectedRoute.jsx',{
+  const Protected=evaluate('../src/components/ProtectedRoute.jsx',{'../lib/staffFeatures':{canSeeStaffFeature,staffRouteFeature},
     '../context/AuthContext':{useAuth:()=>({user,loading:false})},'../api':{api:{listEvents:()=>new Promise((resolve,reject)=>requests.push(Object.assign(resolve,{reject})))}},
     '../hooks/useCurrentEvent':current,'../pages/organizerGuidance.mjs':{eventIdentityFromQuery}}).default
   let navigation,routerLocation,index,selected,edit,allow=false,mounts=0,unmounts=0,guardCalls=0

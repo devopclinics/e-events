@@ -117,7 +117,7 @@ export function connectChatFrame({ frame, session, identity, hostWindow = window
 
 // The WhatsApp contact handoff is separate from the private management inbox.
 export function isCustomerContactRoute({user,loading,pathname=''}){
- if(loading||user?.is_platform_superadmin)return false
+ if(loading||user?.is_platform_superadmin||user?.is_support_agent)return false
  const path=pathname.replace(/\/+$/,'')||'/'
  if(SALES_ROUTES.has(path)||['/create-invitation','/tickets','/guide'].includes(path))return true
  return !!user?.id&&(SUPPORT_ROUTES.has(path)||/^\/(floor-plan|floorplan-redesign)\/[^/]+$/.test(path))

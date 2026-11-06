@@ -165,3 +165,5 @@
   .tm-directory-toolbar .rd-seg { margin-left: 0; }
   .tm-add-grid, .tm-org-directory-grid { grid-template-columns: 1fr; }
 }
+
+.tm-feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}.tm-feature-grid label{display:flex;flex-direction:column;gap:6px;padding:12px;border:1px solid #d7dfd6;border-radius:12px}.tm-feature-grid label span{font-weight:600}

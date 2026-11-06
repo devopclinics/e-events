@@ -377,7 +377,9 @@ async def require_event_admin(
             EventUser.event_id == event_id, EventUser.user_id == user.id
         ))
         if not eu or eu.event_role != "manager":
-            raise HTTPException(403, "Admin access required")
+            from .staff_permissions import delegated_feature_access
+            if not await delegated_feature_access(event_id, request, user, db):
+                raise HTTPException(403, "Admin access required")
         if (eu.access_level or "edit") != "edit" and request.method not in ("GET", "HEAD", "OPTIONS"):
             raise HTTPException(403, "This event access is view-only.")
     return user
@@ -454,7 +456,7 @@ async def require_guest_manage_access(
     eu = await db.scalar(select(EventUser).where(
         EventUser.event_id == event_id, EventUser.user_id == user.id
     ))
-    if eu and not eu.guest_service_scoped and (eu.event_role == "manager" or eu.can_manage_guests):
+    if eu and not eu.guest_service_scoped and (eu.access_level or "edit") == "edit" and (eu.event_role == "manager" or eu.can_manage_guests):
         return user
     raise HTTPException(403, "You don't have permission to manage guests for this event.")
 
@@ -499,7 +501,11 @@ async def user_has_dashboard_access(user: User, event: Event, db: AsyncSession) 
         return True
     eu = await db.scalar(select(EventUser).where(
         EventUser.event_id == event.id, EventUser.user_id == user.id))
-    return bool(eu and (eu.can_view_dashboard or eu.event_role == "manager"))
+    if role is None or not eu or eu.guest_service_scoped:
+        return False
+    if eu.feature_permissions is not None:
+        return eu.feature_permissions.get("overview") in ("view", "manage")
+    return bool(eu.can_view_dashboard or eu.event_role == "manager")
 
 
 _PAID_REQUIRED = "This feature requires an Event Pass — upgrade this event to unlock it."
@@ -528,7 +534,9 @@ async def require_paid_event_admin(
             EventUser.event_id == event_id, EventUser.user_id == user.id
         ))
         if not eu or eu.event_role != "manager":
-            raise HTTPException(403, "Admin access required")
+            from .staff_permissions import delegated_feature_access
+            if not await delegated_feature_access(event_id, request, user, db):
+                raise HTTPException(403, "Admin access required")
         if (eu.access_level or "edit") != "edit" and request.method not in ("GET", "HEAD", "OPTIONS"):
             raise HTTPException(403, "This event access is view-only.")
     if not event.is_paid:
@@ -600,3 +608,34 @@ async def require_read_write_api_key(api_key: ApiKey = Depends(require_api_key))
     if api_key.scope != "read_write":
         raise HTTPException(403, "This API key is read-only. Create a read-write key to use this endpoint.")
     return api_key
+
+
+async def require_guest_export_access(event_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> User:
+    event = await db.get(Event, event_id)
+    if not event: raise HTTPException(404, "Event not found")
+    role = await _org_role(user, event.org_id, db)
+    if user.is_platform_superadmin or role in ("owner", "admin"): return user
+    if role is None: raise HTTPException(404, "Event not found")
+    eu = await db.scalar(select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == user.id))
+    if eu and not eu.guest_service_scoped:
+        if eu.feature_permissions is not None:
+            if eu.feature_permissions.get("export") in ("view", "manage"): return user
+        elif (eu.access_level or "edit") == "edit" and (eu.event_role == "manager" or eu.can_manage_guests): return user
+    raise HTTPException(403, "You do not have guest export access for this event")
+
+
+async def require_support_agent(user: User = Depends(get_current_user)) -> User:
+    if not user.is_active or not (user.is_platform_superadmin or user.is_support_agent):
+        raise HTTPException(403, "Festio support access required")
+    return user
+
+
+async def require_event_org_admin(event_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> User:
+    event = await db.get(Event, event_id)
+    if not event: raise HTTPException(404, "Event not found")
+    if user.is_platform_superadmin: return user
+    role = await _org_role(user, event.org_id, db)
+    if role is None: raise HTTPException(404, "Event not found")
+    if role not in ("owner", "admin"):
+        raise HTTPException(403, "Only organization administrators can change staff access")
+    return user

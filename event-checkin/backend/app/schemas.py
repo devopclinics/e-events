@@ -62,6 +62,7 @@ class UserOut(BaseModel):
     role: str
     created_at: datetime
     # Org-aware flags (populated for the current user by /auth/me).
+    is_support_agent: bool = False
     is_platform_superadmin: bool = False
     is_org_admin: bool = False
     # Redesign cohort of the org the user owns/admins (see Organization.redesign_cohort).
@@ -194,6 +195,7 @@ class EventSourceUpdate(BaseModel):
 
 
 class EventOut(BaseModel):
+    my_feature_permissions: dict[str, str] | None = None
     cancelled: bool = False
     is_test: Optional[bool] = None
     external_website_url: Optional[str] = Field(default=None, max_length=2000)
@@ -339,6 +341,7 @@ class EventOut(BaseModel):
 
 
 class EventMemberOut(BaseModel):
+    feature_permissions: dict[str, str] | None = None
     id: str
     user: UserOut
     assigned_at: datetime

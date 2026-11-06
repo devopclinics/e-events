@@ -1,3 +1,4 @@
+import { STAFF_FEATURES } from '../lib/staffFeatures'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import RedesignShell, { Icon, ConfirmDialog } from './redesign/RedesignShell'
@@ -18,7 +19,7 @@ import './TeamRedesignPage.css'
 // org-role changes, invite-teammate actions, subtasks, attachments, and task
 // activity also use the existing server contracts.
 
-const ROLE_LABEL = { staff: 'Staff', manager: 'Event owner/admin' }
+const ROLE_LABEL = { staff: 'Staff', manager: 'Event manager' }
 const EVENT_ROLE_OPTIONS = ['staff', 'manager']
 const ACCESS_LEVEL_OPTIONS = ['edit', 'view']
 const GUEST_ACCESS_OPTIONS = ['none', 'view', 'manage']
@@ -72,6 +73,8 @@ function permOn(m, key) {
 }
 
 function guestAccessOf(m) {
+  if (m.feature_permissions != null) return m.feature_permissions.guests === 'manage' && m.event_role === 'manager' && m.access_level === 'view' ? 'view' : m.feature_permissions.guests || 'none'
+  if (m.event_role === 'manager' && m.access_level === 'view') return 'view'
   if (m.can_manage_guests) return 'manage'
   if (m.can_view_guests) return 'view'
   return 'none'
@@ -255,7 +258,7 @@ function TaskTable({ tasks, showEvent, onOpen, onStatusChange, onEdit, onDelete,
   )
 }
 
-function TeamTab({ eventId, notify, onRequestDelete }) {
+function TeamTab({ eventId, notify, onRequestDelete, canManageAccess }) {
   const [members, setMembers] = useState(null)
   const [membersError, setMembersError] = useState('')
   const [orgMembers, setOrgMembers] = useState(null)
@@ -330,7 +333,7 @@ function TeamTab({ eventId, notify, onRequestDelete }) {
   }
 
   async function inviteAndAssign(email, role) {
-    const orgMember = await api.inviteOrgMember(eventId, { email, role: role === 'manager' ? 'admin' : 'staff' })
+    const orgMember = await api.inviteOrgMember(eventId, { email, role: 'staff' })
     if (!assignedIds.has(orgMember.user.id)) await api.assignMember(eventId, orgMember.user.id)
     if (role === 'manager') await api.updateMemberPermissions(eventId, orgMember.user.id, { event_role: 'manager' })
     await Promise.all([loadMembers(), loadOrgMembers()])
@@ -404,7 +407,7 @@ function TeamTab({ eventId, notify, onRequestDelete }) {
         <>
           <div className="tm-directory-summary">
             <div><Icon name="team" size={15}/><strong>{members.length}</strong><span>Event team</span></div>
-            <div><Icon name="shield" size={15}/><strong>{managerCount}</strong><span>Administrators</span></div>
+            <div><Icon name="shield" size={15}/><strong>{managerCount}</strong><span>Event managers</span></div>
             <div><Icon name="users" size={15}/><strong>{guestManagers}</strong><span>Guest managers</span></div>
             <div><Icon name="grid" size={15}/><strong>{scopedMembers}</strong><span>Section scoped</span></div>
           </div>
@@ -413,7 +416,7 @@ function TeamTab({ eventId, notify, onRequestDelete }) {
             <div className="rd-search"><Icon name="search" size={13}/><input value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder="Search team by name or email…"/></div>
             <div className="rd-seg">
               <button className={roleFilter === 'all' ? 'on' : ''} onClick={() => setRoleFilter('all')}>All</button>
-              <button className={roleFilter === 'manager' ? 'on' : ''} onClick={() => setRoleFilter('manager')}>Admins</button>
+              <button className={roleFilter === 'manager' ? 'on' : ''} onClick={() => setRoleFilter('manager')}>Managers</button>
               <button className={roleFilter === 'staff' ? 'on' : ''} onClick={() => setRoleFilter('staff')}>Staff</button>
             </div>
             <button className="rr-btn primary" onClick={() => setInvitePanelOpen((value) => !value)}><Icon name="plus" size={13}/> Add teammate</button>
@@ -425,7 +428,7 @@ function TeamTab({ eventId, notify, onRequestDelete }) {
               <div className="rd-panel-body">
                 {confirmInvite ? <div className="tm-noaccount-confirm"><p><b>{confirmInvite.email}</b> will receive a team invitation. They can sign in with this email, or create an account using it.</p><div className="rd-row2"><button className="rr-btn secondary" onClick={() => setConfirmInvite(null)}>Cancel</button><button className="rr-btn primary" disabled={inviting} onClick={confirmInviteAnyway}>{inviting ? 'Sending…' : 'Send invitation'}</button></div></div> : <>
                   <label className="rd-field-label">Email address</label><input className="rd-field" type="email" placeholder="name@example.com" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)}/>
-                  <label className="rd-field-label">Role</label><select className="rr-select" value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}><option value="staff">Staff</option><option value="manager">Event owner/admin</option></select>
+                  <label className="rd-field-label">Role</label><select className="rr-select" value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}><option value="staff">Staff</option><option value="manager">Event manager</option></select>
                   <button className="rr-btn primary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={sendInvite}><Icon name="send" size={13}/> Send invite</button>
                 </>}
               </div>
@@ -455,18 +458,18 @@ function TeamTab({ eventId, notify, onRequestDelete }) {
                     <div className="tm-member-card-head">
                       <span className="tm-member-avatar">{initialsOf(member.user.name)}</span>
                       <div><h3>{member.user.name}</h3><span>{member.user.email}</span></div>
-                      <span className={`tm-role ${eventRole}`}>{eventRole === 'manager' ? 'Admin' : 'Staff'}</span>
+                      <span className={`tm-role ${eventRole}`}>{eventRole === 'manager' ? 'Manager' : 'Staff'}</span>
                     </div>
                     <div className="tm-member-access">
                       <span><Icon name="users" size={11}/> Guests: <b>{guestAccess === 'none' ? 'No access' : guestAccess === 'view' ? 'View' : 'Manage'}</b></span>
-                      <span><Icon name="grid" size={11}/> Scanner: <b>{sections.length ? `${sections.length} section${sections.length === 1 ? '' : 's'}` : 'All sections'}</b></span>
+                      <span><Icon name="grid" size={11}/> Scanner: <b>{member.feature_permissions != null && !member.feature_permissions.scanner ? 'No access' : sections.length ? `${sections.length} section${sections.length === 1 ? '' : 's'}` : 'All sections'}</b></span>
                     </div>
                     <div className="tm-member-capabilities">
-                      {enabledPerms.map((permission) => <span key={permission.key}><Icon name={permission.icon} size={10}/>{permission.label}</span>)}
-                      {!enabledPerms.length && <span className="muted">Standard staff access</span>}
+                      {member.feature_permissions != null ? Object.entries(member.feature_permissions).map(([key,level])=><span key={key}>{STAFF_FEATURES.find(([id])=>id===key)?.[1]||key} · {level}</span>) : enabledPerms.map((permission) => <span key={permission.key}><Icon name={permission.icon} size={10}/>{permission.label}</span>)}
+                      {member.feature_permissions != null && !Object.keys(member.feature_permissions).length ? <span className="muted">No features enabled</span> : member.feature_permissions == null && !enabledPerms.length && <span className="muted">Existing role permissions</span>}
                     </div>
                     <div className="tm-member-card-actions">
-                      <button className="rr-btn secondary" onClick={() => setEditingMemberId(editingMember?.id === member.id ? '' : member.id)}>{editingMember?.id === member.id ? 'Close settings' : 'Edit access'}</button>
+                      <button className="rr-btn secondary" disabled={!canManageAccess} onClick={() => setEditingMemberId(editingMember?.id === member.id ? '' : member.id)}>{editingMember?.id === member.id ? 'Close settings' : 'Edit access'}</button>
                       <button className="rr-btn secondary" disabled={!!resending} onClick={async () => {
                         setResending(member.user.id)
                         try {
@@ -489,15 +492,26 @@ function TeamTab({ eventId, notify, onRequestDelete }) {
                 return <aside className="rr-panel tm-member-editor">
                   <div className="tm-member-editor-head"><div><span className="tm-member-avatar">{initialsOf(editingMember.user.name)}</span><div><h3>{editingMember.user.name}</h3><p>Event access settings</p></div></div><button className="rr-link-btn" onClick={() => setEditingMemberId('')}>Close ✕</button></div>
                   <div className="tm-member-editor-body">
+                    <div className="tm-editor-section"><strong>Feature access · least privilege</strong>
+                      <p>Organization owners and administrators retain full organization access. Assign an organization Staff role to limit this person.</p>
+                      {editingMember.feature_permissions == null ? <><p>This person uses existing role permissions. Start a restricted policy to deny every tool, then allow only the features they need.</p><button className="rr-btn secondary" onClick={() => updatePermissions(editingMember, {feature_permissions: {}}, 'Restricted policy enabled. Select the required features below.')}>Start with no features</button></> : <>
+                        <p>Unselected features are blocked in navigation and on the server. View allows reading; Manage permits changes. Paid tools still require event access. A view-only manager cannot make changes, even when a feature is set to Manage. Team and settings also require an event manager role.</p>
+                        <div className="tm-perm-row"><button className="tm-perm-chip" onClick={() => updatePermissions(editingMember,{feature_permissions:{scanner:'manage'}},'Check-in only access saved')}>Check-in only</button><button className="tm-perm-chip" onClick={() => updatePermissions(editingMember,{feature_permissions:{guests:'manage',scanner:'manage'}},'Guest desk access saved')}>Guest desk</button><button className="tm-perm-chip" onClick={() => updatePermissions(editingMember,{feature_permissions:{seating:'manage',guests:'view'}},'Seating and read-only guest access saved')}>Seating + guest view</button><button className="tm-perm-chip" onClick={() => updatePermissions(editingMember,{feature_permissions:{}},'All feature access removed')}>Remove all features</button></div>
+                        <p>Presets replace the selected features. Seating includes guest-list viewing so the person can assign guests to tables. Connected-service sessions can remain active until their short-lived token expires.</p>
+                        <div className="tm-feature-grid">{STAFF_FEATURES.map(([key,label]) => <label key={key}><span>{label}</span><select className="rr-select" aria-label={`${label} access for ${editingMember.user.name}`} value={editingMember.feature_permissions[key] || 'none'} onChange={e => {const policy={...editingMember.feature_permissions}; if(e.target.value==='none') delete policy[key]; else policy[key]=e.target.value; updatePermissions(editingMember, {feature_permissions:policy}, `${label} access updated`)}}><option value="none">No access</option>{!['live','ticketing'].includes(key)&&<option value="view">View</option>}<option value="manage">Manage</option></select></label>)}</div>
+                      </>}
+                    </div>
                     <label className="rd-field-label">Event role</label>
                     <select className="rr-select" value={eventRole} onChange={(e) => updatePermissions(editingMember, { event_role: e.target.value }, `${editingMember.user.name} role set to ${ROLE_LABEL[e.target.value]}`)}>{EVENT_ROLE_OPTIONS.map((role) => <option key={role} value={role}>{ROLE_LABEL[role]}</option>)}</select>
                     {eventRole === 'manager' && <><label className="rd-field-label">Administrative access</label><select className="rr-select" value={editingMember.access_level || 'edit'} onChange={(e) => updatePermissions(editingMember, { access_level: e.target.value }, `${editingMember.user.name} access updated`)}>{ACCESS_LEVEL_OPTIONS.map((access) => <option key={access} value={access}>{access === 'edit' ? 'Can edit' : 'View only'}</option>)}</select></>}
+                    {editingMember.feature_permissions == null && <>
                     <label className="rd-field-label">Guest list access</label>
                     <select className="rr-select" value={guestAccessOf(editingMember)} onChange={(e) => updatePermissions(editingMember, e.target.value === 'manage' ? { can_view_guests: true, can_manage_guests: true } : e.target.value === 'view' ? { can_view_guests: true, can_manage_guests: false } : { can_view_guests: false, can_manage_guests: false }, `${editingMember.user.name} guest access updated`)}>{GUEST_ACCESS_OPTIONS.map((access) => <option key={access} value={access}>{access === 'none' ? 'No access' : access === 'view' ? 'View guests' : 'Manage guests'}</option>)}</select>
                     <label className="rd-field-label">Planner access</label>
                     <select className="rr-select" value={eventRole === 'manager' ? 'manage' : editingMember.can_view_planner ? 'view' : 'none'} disabled={eventRole === 'manager'} onChange={(e) => updatePermissions(editingMember, { can_view_planner: e.target.value !== 'none' }, `${editingMember.user.name} planner access updated`)}><option value="none">No planner access</option><option value="view">View planner</option><option value="manage">Full access (event admins)</option></select>
                     {(eventRole === 'manager' || editingMember.can_view_planner) && <div className="tm-editor-section"><strong>Planner permissions</strong><p>Grant only the areas this person is responsible for. Viewing does not allow edits.</p><div className="tm-editor-options">{PLANNER_PERMS.map((permission) => { const on = eventRole === 'manager' || !!editingMember[permission.key]; return <button key={permission.key} disabled={eventRole === 'manager'} className={on ? 'on' : ''} onClick={() => updatePermissions(editingMember, { [permission.key]: !on }, `${permission.label} ${on ? 'revoked' : 'granted'} for ${editingMember.user.name}`)}><Icon name="check" size={13}/><span>{permission.label}<small>{on ? 'Can manage' : 'View only'}</small></span><i>{on ? '✓' : '+'}</i></button> })}</div></div>}
-                    {eventRole === 'manager' && <div className="tm-editor-section"><strong>Operational permissions</strong><div className="tm-editor-options">{PERMS.map((permission) => { const on = permOn(editingMember, permission.key); return <button key={permission.key} className={on ? 'on' : ''} onClick={() => updatePermissions(editingMember, { [permission.key === 'seats' ? 'can_reassign_seats' : permission.key === 'menu' ? 'can_manage_menu' : 'can_view_dashboard']: !on }, `${permission.label} ${on ? 'revoked' : 'granted'} for ${editingMember.user.name}`)}><Icon name={permission.icon} size={13}/><span>{permission.label}<small>{on ? 'Allowed' : 'Not allowed'}</small></span><i>{on ? '✓' : '+'}</i></button> })}</div></div>}
+                    {editingMember.feature_permissions == null && <div className="tm-editor-section"><strong>Operational permissions</strong><div className="tm-editor-options">{PERMS.map((permission) => { const on = permOn(editingMember, permission.key); return <button key={permission.key} className={on ? 'on' : ''} onClick={() => updatePermissions(editingMember, { [permission.key === 'seats' ? 'can_reassign_seats' : permission.key === 'menu' ? 'can_manage_menu' : 'can_view_dashboard']: !on }, `${permission.label} ${on ? 'revoked' : 'granted'} for ${editingMember.user.name}`)}><Icon name={permission.icon} size={13}/><span>{permission.label}<small>{on ? 'Allowed' : 'Not allowed'}</small></span><i>{on ? '✓' : '+'}</i></button> })}</div></div>}
+                    </>}
                     {groups.length > 0 && <div className="tm-editor-section"><strong>Scanner sections</strong><p>Choose where this person can scan. All sections is the default.</p><div className="tm-perm-row"><button className={`tm-perm-chip ${sections.length === 0 ? 'on' : ''}`} onClick={() => updateSections(editingMember, [])}>All sections</button>{groups.map((group) => <button key={group.id} className={`tm-perm-chip ${sections.includes(group.id) ? 'on' : ''}`} onClick={() => updateSections(editingMember, sections.includes(group.id) ? sections.filter((id) => id !== group.id) : [...sections, group.id])}>{group.name}</button>)}</div></div>}
                   </div>
                 </aside>
@@ -507,7 +521,7 @@ function TeamTab({ eventId, notify, onRequestDelete }) {
 
           <div className="rr-panel tm-org-directory">
             <button className="tm-org-directory-toggle" onClick={() => setOrgDirectoryOpen((value) => !value)}><div><Icon name="team" size={15}/><span><strong>Organization directory</strong><small>Manage org-wide roles independently of this event</small></span></div><span>{orgMembers?.length || 0} members {orgDirectoryOpen ? '▲' : '▼'}</span></button>
-            {orgDirectoryOpen && <div className="tm-org-directory-grid">{orgMembers === null ? <LoadingSkeleton rows={3}/> : orgMembers.map((member) => <div className="tm-org-person" key={member.user.id}><div className="rd-who"><span className="dot">{initialsOf(member.user.name)}</span><div><div>{member.user.name}</div><small className="tm-email">{member.user.email}</small></div></div><select className="rr-select gr-inline-select" value={orgRoles[member.user.id] ?? member.role} onChange={async (event) => { const role = event.target.value; try { await api.setOrgMemberRole(eventId, member.user.id, role); setOrgRoles((current) => ({ ...current, [member.user.id]: role })); await loadOrgMembers(); notify(`${member.user.name} org role set to ${role}`) } catch (error) { notify(error.message || 'Organization role could not be updated', true) } }}>{ORG_ROLE_OPTIONS.map((role) => <option key={role} value={role}>{role[0].toUpperCase() + role.slice(1)}</option>)}</select></div>)}</div>}
+            {orgDirectoryOpen && <div className="tm-org-directory-grid">{orgMembers === null ? <LoadingSkeleton rows={3}/> : orgMembers.map((member) => <div className="tm-org-person" key={member.user.id}><div className="rd-who"><span className="dot">{initialsOf(member.user.name)}</span><div><div>{member.user.name}</div><small className="tm-email">{member.user.email}</small></div></div><select className="rr-select gr-inline-select" disabled={!canManageAccess} value={orgRoles[member.user.id] ?? member.role} onChange={async (event) => { const role = event.target.value; try { await api.setOrgMemberRole(eventId, member.user.id, role); setOrgRoles((current) => ({ ...current, [member.user.id]: role })); await loadOrgMembers(); notify(`${member.user.name} org role set to ${role}`) } catch (error) { notify(error.message || 'Organization role could not be updated', true) } }}>{ORG_ROLE_OPTIONS.map((role) => <option key={role} value={role}>{role[0].toUpperCase() + role.slice(1)}</option>)}</select></div>)}</div>}
           </div>
         </>
       )}
@@ -845,7 +859,7 @@ export default function TeamRedesignPage() {
         <button className={tab === 'mytasks' ? 'active' : ''} onClick={() => goTab('mytasks')}><Icon name="clock" size={13} /> My Tasks</button>
       </div>
 
-      {tab === 'team' && <TeamTab eventId={currentEventId} notify={notify} onRequestDelete={setDeleteTarget} />}
+      {tab === 'team' && <TeamTab eventId={currentEventId} canManageAccess={['org_admin','platform_admin'].includes(event?.my_access_role)} notify={notify} onRequestDelete={setDeleteTarget} />}
       {tab === 'tasks' && <TasksTab eventId={currentEventId} notify={notify} onRequestDelete={setDeleteTarget} />}
       {tab === 'mytasks' && <MyTasksTab notify={notify} />}
 

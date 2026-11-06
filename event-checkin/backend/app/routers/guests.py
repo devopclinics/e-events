@@ -1,3 +1,4 @@
+from ..auth import require_guest_export_access
 import csv
 import html
 import io
@@ -799,7 +800,7 @@ async def export_guests(
     sections: str = "guests,messaging,experience",
     guest_ids: str | None = None,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_guest_manage_access),
+    _: User = Depends(require_guest_export_access),
 ):
     """Download event data. `sections` (comma-separated: guests, messaging,
     experience) selects what to include. CSV emits one flattened sheet; XLSX emits

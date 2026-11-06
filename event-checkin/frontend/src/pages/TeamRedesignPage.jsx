@@ -1,3 +1,4 @@
+import StaffAccessGuide from '../components/StaffAccessGuide'
 import { STAFF_FEATURES } from '../lib/staffFeatures'
 import { useEffect, useState } from 'react'
 import {useAuth} from '../context/AuthContext'
@@ -407,6 +408,7 @@ function TeamTab({ eventId, notify, onRequestDelete, canManageAccess }) {
         <ErrorRetryState message={membersError} onRetry={loadMembers} />
       ) : (
         <>
+          <StaffAccessGuide canManageAccess={canManageAccess} onOpenDirectory={() => {setOrgDirectoryOpen(true); requestAnimationFrame(() => document.getElementById('team-organization-directory')?.scrollIntoView({behavior:'smooth',block:'start'}))}} onAddTeammate={() => setInvitePanelOpen(true)} />
           <div className="tm-directory-summary">
             <div><Icon name="team" size={15}/><strong>{members.length}</strong><span>Event team</span></div>
             <div><Icon name="shield" size={15}/><strong>{managerCount}</strong><span>Event managers</span></div>
@@ -495,7 +497,7 @@ function TeamTab({ eventId, notify, onRequestDelete, canManageAccess }) {
                 return <aside className="rr-panel tm-member-editor">
                   <div className="tm-member-editor-head"><div><span className="tm-member-avatar">{initialsOf(editingMember.user.name)}</span><div><h3>{editingMember.user.name}</h3><p>Event access settings</p></div></div><button className="rr-link-btn" onClick={() => setEditingMemberId('')}>Close ✕</button></div>
                   <div className="tm-member-editor-body">
-                    <div className="tm-editor-section"><strong>Feature access · least privilege</strong>
+                    <div className="tm-editor-section"><strong>Feature access · least privilege</strong><button type="button" className="rr-link-btn" aria-controls="staff-access-guide" onClick={() => {const guide=document.getElementById('staff-access-guide');if(guide){guide.open=true;guide.scrollIntoView({behavior:'smooth',block:'start'})}}}>How to set up staff access</button>
                       <p>Organization owners and administrators retain full organization access. Assign an organization Staff role to limit this person.</p>
                       {editingMember.feature_permissions == null ? <><p>This person uses existing role permissions. Start a restricted policy to deny every tool, then allow only the features they need.</p><button className="rr-btn secondary" onClick={() => updatePermissions(editingMember, {feature_permissions: {}}, 'Restricted policy enabled. Select the required features below.')}>Start with no features</button></> : <>
                         <p>Unselected features are blocked in navigation and on the server. View allows reading; Manage permits changes. Paid tools still require event access. A view-only manager cannot make changes, even when a feature is set to Manage. Team and settings also require an event manager role.</p>
@@ -522,7 +524,7 @@ function TeamTab({ eventId, notify, onRequestDelete, canManageAccess }) {
             </div>
           )}
 
-          <div className="rr-panel tm-org-directory">
+          <div id="team-organization-directory" className="rr-panel tm-org-directory">
             <button className="tm-org-directory-toggle" onClick={() => setOrgDirectoryOpen((value) => !value)}><div><Icon name="team" size={15}/><span><strong>Organization directory</strong><small>Manage org-wide roles independently of this event</small></span></div><span>{orgMembers?.length || 0} members {orgDirectoryOpen ? '▲' : '▼'}</span></button>
             {orgDirectoryOpen && <div className="tm-org-directory-grid">{orgMembers === null ? <LoadingSkeleton rows={3}/> : orgMembers.map((member) => <div className="tm-org-person" key={member.user.id}><div className="rd-who"><span className="dot">{initialsOf(member.user.name)}</span><div><div>{member.user.name}</div><small className="tm-email">{member.user.email}</small></div></div><select className="rr-select gr-inline-select" disabled={!canManageAccess} value={orgRoles[member.user.id] ?? member.role} onChange={async (event) => { const role = event.target.value; try { await api.setOrgMemberRole(eventId, member.user.id, role); setOrgRoles((current) => ({ ...current, [member.user.id]: role })); await loadOrgMembers(); notify(`${member.user.name} org role set to ${role}`) } catch (error) { notify(error.message || 'Organization role could not be updated', true) } }}>{ORG_ROLE_OPTIONS.map((role) => <option key={role} value={role}>{role[0].toUpperCase() + role.slice(1)}</option>)}</select></div>)}</div>}
           </div>

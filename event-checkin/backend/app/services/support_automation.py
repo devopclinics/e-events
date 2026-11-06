@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from app.models import SupportAutomationConfig as Config,SupportAutomationState as State,SupportAutomationJob as Job,SupportConversation as Conversation,SupportMessage as Message
 from app.config import settings
 from app.services import support_whatsapp as transport
-from app.services.support_answers import defaults,answer
+from app.services.support_answers import defaults,answer,TOPICS,contains
 from services.outbound_safety import recipient_allowed
 log=logging.getLogger(__name__)
 
@@ -67,6 +67,10 @@ async def process_one(db):
     if recent>=3 or hourly>=20:
         if mode=='human':state.mode='human';state.context=context
         job.status='rate-limited';await db.commit();return True
+    if mode=='auto' and context.get('menu'):
+        text=' '.join((incoming.body or '').lower().split())
+        recognised = text.isdecimal() or text in ['hi','hello','hey','help','events','menu','other event','change event','switch event'] or any(contains(text,w) for words in TOPICS.values() for w in words)
+        if not recognised:mode='human'
     if mode=='human' or not body or not body.strip():
         # Leave the incoming message unread for management; never send a fallback.
         state.mode='human';state.context=context;state.updated_at=now

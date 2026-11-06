@@ -471,3 +471,5 @@
 .sc-offline-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .sc-offline-body summary { cursor: pointer; font-weight: 700; }
 .sc-command-tabs { box-sizing: border-box; min-width: 0; max-width: 100%; }
+
+.sc-result-table{margin-top:12px;padding:12px 16px;border:1px solid currentColor;border-radius:10px;font-size:1.25rem;font-weight:700;line-height:1.5}.sc-session-context{display:flex;flex-direction:column;gap:6px;padding:14px 16px;border:1px solid #cddcce;border-radius:10px;background:#edf3e8;color:#234d3e;margin-block:12px}.sc-session-context strong{font-size:18px}.sc-session-context span{font-size:13px;line-height:1.6}

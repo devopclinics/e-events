@@ -884,6 +884,7 @@ export const api = {
   resolveInboundEmail: (eventId, emailId, action) => req('POST', `/events/${eventId}/experience/inbound-automations/needs-review/${emailId}/${action}`, {}),
 
   // Seating
+  setSessionSeating: (eventId, zoneId, mode) => req('PUT', `/events/${eventId}/session-access/${zoneId}/seating`, { mode }),
   listTables: (eventId) => req('GET', `/events/${eventId}/tables`),
   createTable: (eventId, data) => req('POST', `/events/${eventId}/tables`, data),
   updateTable: (eventId, tableId, data, ifUnmodifiedSince, protectAssigned = false) =>

@@ -77,3 +77,73 @@ async def test_guest_directory_exposes_scoped_session_decisions(ctx):
     other=await ctx.client.get(f"/api/events/{other_id}/guests")
     assert other.status_code==200,other.text
     assert all(g['session_access']==[] for g in other.json())
+
+@pytest.mark.asyncio
+async def test_conference_general_seating_then_dinner_uses_existing_tables(ctx):
+    from app.models import SeatingTable
+    eid,gid,qr,conf,dinner,gate=await prep(ctx)
+    async with _Session() as db:
+        event=await db.get(Event,eid);event.seating_enabled=True
+        guest=await db.get(Guest,gid);guest.admitted=False
+        table=SeatingTable(event_id=eid,name='Dinner 1',capacity=2);db.add(table);await db.commit();tid=table.id
+    base=f'/api/events/{eid}/session-access'
+    for zone,mode in [(conf,'none'),(dinner,'event')]:
+        assert (await ctx.client.put(base+'/'+zone+'/seating',json={'mode':mode})).status_code==200
+        await ctx.client.put(base+'/'+zone,json={'guest_ids':[gid],'decision':'allow'})
+    response=await ctx.client.post(f'/api/scan/{qr}/zone',json={'zone_id':conf})
+    assert not response.json()['denied'],response.text
+    assert response.json()['table_name'] is None
+    async with _Session() as db:
+        guest=await db.get(Guest,gid);assert guest.admitted and guest.table_id is None and guest.seat_number is None
+    response=await ctx.client.post(f'/api/events/{eid}/gates/{gate}/scan',json={'qr_token':qr})
+    assert response.json()['allowed'],response.text
+    assert response.json()['table_name']=='Dinner 1' and response.json()['seat_number']=='1'
+    response=await ctx.client.post(f'/api/events/{eid}/gates/{gate}/scan',json={'qr_token':qr})
+    assert not response.json()['allowed'] and 'already inside' in response.json()['message']
+    async with _Session() as db:
+        guest=await db.get(Guest,gid);assert guest.table_id==tid and guest.seat_number=='1'
+    response=await ctx.client.post(f'/api/scan/{qr}/zone',json={'zone_id':conf,'direction':'out'})
+    assert not response.json()['denied'] and response.json()['table_name'] is None
+
+@pytest.mark.asyncio
+async def test_dinner_assigned_only_and_full_tables_do_not_record_entry(ctx):
+    from app.models import SeatingTable
+    eid,gid,qr,conf,dinner,gate=await prep(ctx)
+    async with _Session() as db:
+        event=await db.get(Event,eid);event.seating_enabled=True
+        table=SeatingTable(event_id=eid,name='Full dinner table',capacity=1);db.add(table);await db.flush()
+        other=Guest(event_id=eid,first_name='Seated',last_name='Guest',table_id=table.id,seat_number='1');db.add(other)
+        await db.commit();tid=table.id
+    base=f'/api/events/{eid}/session-access'
+    await ctx.client.put(base+'/'+dinner,json={'guest_ids':[gid],'decision':'allow'})
+    await ctx.client.put(base+'/'+dinner+'/seating',json={'mode':'assigned'})
+    response=await ctx.client.post(f'/api/scan/{qr}/zone',json={'zone_id':dinner})
+    assert response.json()['denied'] and 'No table assigned' in response.json()['deny_reason']
+    async with _Session() as db:
+        guest=await db.get(Guest,gid);guest.table_id=tid;await db.commit()
+    response=await ctx.client.post(f'/api/events/{eid}/gates/{gate}/scan',json={'qr_token':qr})
+    assert not response.json()['allowed'] and 'full' in response.json()['message']
+    async with _Session() as db:
+        guest=await db.get(Guest,gid);assert guest.seat_number is None
+        scans=(await db.scalars(select(ScanEvent).where(ScanEvent.guest_id==gid,ScanEvent.zone_id==dinner))).all();assert all(s.denied for s in scans)
+    await ctx.client.put(base+'/'+dinner,json={'guest_ids':[gid],'decision':'block'})
+    response=await ctx.client.post(f'/api/scan/{qr}/zone',json={'zone_id':dinner})
+    assert response.json()['denied'] and 'Blocked' in response.json()['deny_reason']
+
+@pytest.mark.asyncio
+async def test_session_seating_modes_scope_and_preserve_other_preferences(ctx):
+    eid,gid,qr,conf,dinner,gate=await prep(ctx)
+    root=f'/api/events/{eid}/session-access'
+    assert (await ctx.client.put(root+'/'+conf+'/seating',json={'mode':'unknown'})).status_code==422
+    ctx.login(ctx.ids['user_b'])
+    assert (await ctx.client.put(root+'/'+conf+'/seating',json={'mode':'none'})).status_code==404
+    ctx.login(ctx.ids['superadmin'])
+    await ctx.client.put(root+'/'+conf+'/seating',json={'mode':'none'})
+    response=await ctx.client.get(root)
+    assert next(z for z in response.json()['zones'] if z['id']==conf)['seating_mode']=='none'
+    async with _Session() as db:
+        e=await db.get(Event,eid);assert set(e.setup_preferences['restricted_session_ids'])=={conf,dinner}
+    await ctx.client.put(root+'/'+conf+'/seating',json={'mode':'default'})
+    async with _Session() as db:
+        from app.services.session_access import seating_at_admission
+        assert seating_at_admission(await db.get(Event,eid))

@@ -1,3 +1,4 @@
+from ..services.session_access import session_seating_mode, seating_at_admission, prepare_session_seating
 import html as html_escape
 import json
 from datetime import datetime, timedelta
@@ -1244,7 +1245,7 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
     # Honors couple pairings + table-group restrictions (see assign_next_seat).
     # Keyed on seat_number (not table_id) so pre-assigned-table guests still get a seat.
     defer_seating_to_experience = await _experience_defers_seating(event, db)
-    if event and event.seating_enabled and not guest.seat_number and not defer_seating_to_experience:
+    if event and event.seating_enabled and seating_at_admission(event) and not guest.seat_number and not defer_seating_to_experience:
         # Known invited guests can use an event-level fallback group. Explicit
         # table/group assignments always win, as does a section chosen by the
         # manual check-in path before it reaches this shared admission function.
@@ -1461,7 +1462,7 @@ async def scan_qr_zone(
     """Venue Access scan: log a directional, per-zone movement. Completely
     separate from the legacy `scan_qr` flow above (which is unchanged). Only
     usable on events with `venue_access_enabled`."""
-    guest = (await db.execute(select(Guest).where(Guest.qr_token == qr_token).with_for_update())).scalar_one_or_none()
+    guest = (await db.execute(select(Guest).where(Guest.qr_token == qr_token))).scalar_one_or_none()
     if not guest:
         raise HTTPException(404, "Invalid QR code — this ticket was not found.")
     event = await db.get(Event, guest.event_id)
@@ -1491,6 +1492,12 @@ async def scan_qr_zone(
     zone = await db.get(Zone, body.zone_id)
     if not zone or zone.event_id != event.id or not zone.is_active:
         raise HTTPException(404, "Zone not found.")
+
+    seating_mode = session_seating_mode(event, zone.id)
+    if seating_mode in ('event', 'assigned'):
+        # Serialize seat allocation across scanners using this event's tables.
+        await db.scalar(select(Event).where(Event.id == event.id).with_for_update())
+    guest = await db.scalar(select(Guest).where(Guest.id == guest.id).with_for_update().execution_options(populate_existing=True))
 
     # Direction: explicit, else inferred from the zone's mode.
     direction = body.direction or ("in" if zone.direction_mode in ("both", "entry") else "out")
@@ -1532,7 +1539,7 @@ async def scan_qr_zone(
     from ..services.session_access import session_decision
     session_allowed, session_reason = await session_decision(event, guest, zone.id, db) if direction == "in" else (True, None)
     from ..services.session_access import restricted_sessions
-    if zone.id in restricted_sessions(event) and direction == "in" and session_allowed:
+    if (zone.id in restricted_sessions(event) or seating_mode != "default") and direction == "in" and session_allowed:
         from .classify import _guest_allowed
         tag_allowed, _, tag_reason = await _guest_allowed(guest.id, zone.id, db)
         if not tag_allowed: session_allowed, session_reason = False, tag_reason
@@ -1557,6 +1564,13 @@ async def scan_qr_zone(
         if await zone_occupancy(zone.id, db) >= zone.capacity:
             denied, deny_reason = True, "Zone is at capacity"
 
+    if not denied and direction == 'in' and seating_mode != 'default':
+        if guest.rsvp_status == 'declined':
+            denied, deny_reason = True, 'This ticket has been cancelled and cannot be admitted.'
+        else:
+            seat_error = await prepare_session_seating(event, guest, zone.id, db)
+            if seat_error: denied, deny_reason = True, seat_error
+
     db.add(ScanEvent(
         event_id=event.id, guest_id=guest.id, zone_id=zone.id, direction=direction,
         scanned_by=current_user.id, denied=denied, deny_reason=deny_reason,
@@ -1571,7 +1585,7 @@ async def scan_qr_zone(
         guest.admit_notified = True
         from ..services.marketing_client import capture_event_outcome
         await capture_event_outcome(db, event, "checkin_succeeded", guest.id, use_case="checkin", guest=guest)
-        if event.seating_enabled and not guest.seat_number and not await _experience_defers_seating(event, db):
+        if seating_mode == "default" and seating_at_admission(event) and event.seating_enabled and not guest.seat_number and not await _experience_defers_seating(event, db):
             await assign_next_seat(guest, db)
         await sync_guest_progress(event.id, guest.id, db, source="staff", actor_user_id=current_user.id)
         from .live_content import auto_issue_eligible_certificates
@@ -1611,7 +1625,7 @@ async def scan_qr_zone(
         status="guardian_required" if guardian_denial else ("denied" if denied else "ok"), denied=denied, deny_reason=deny_reason,
         guest_name=f"{guest.first_name} {guest.last_name}", ticket_type=tt_name,
         zone_name=zone.name, direction=direction, occupancy=occ,
-        journey_count=int(journey_count), seat_number=guest.seat_number, table_name=table_name,
+        journey_count=int(journey_count), seat_number=guest.seat_number if seating_mode != "none" else None, table_name=table_name if seating_mode != "none" else None,
         guardian_name=f"{guardian.first_name} {guardian.last_name}" if guardian and not guardian_denial else None,
         guardian_verification_method=guardian_method,
         guardian_candidates=(await usable_guardian_candidates(event, guest, db)) if guardian_denial else [],

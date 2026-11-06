@@ -62,11 +62,11 @@ async def test_human_pause_and_resume(ctx,monkeypatch):
  async with _Session() as db:await auto.process_one(db);assert (await db.get(State,ident)).mode=='human'
  await queue(incoming('PAMCON where'))
  async with _Session() as db:await auto.process_one(db)
- assert len(calls)==1
+ assert len(calls)==0
  ctx.login(ctx.ids['superadmin']);assert (await ctx.client.put(P+'/conversations/'+ident+'/automation',json={'mode':'auto'})).status_code==200
  await queue(incoming())
  async with _Session() as db:await auto.process_one(db)
- assert len(calls)==2
+ assert len(calls)==1
 @pytest.mark.asyncio
 async def test_unknown_provider_outcome_not_retried(ctx,monkeypatch):
  await configure();await queue(incoming())
@@ -154,3 +154,19 @@ async def test_shared_number_test_routing_never_queues_for_both_environments(ctx
  assert not auto.automation_recipient('+2348000000000')
  monkeypatch.setattr(settings,'support_whatsapp_test_phones','');assert not auto.automation_recipient('+18320000000')
  monkeypatch.setattr(settings,'support_whatsapp_automation_scope','unknown');assert not auto.automation_recipient('+18320000000')
+
+
+@pytest.mark.asyncio
+async def test_unanswered_message_silently_waits_for_team(ctx,monkeypatch):
+ await configure();ident=await queue(incoming('A completely unrecognised question'));calls=[]
+ async def bird(*a,**kw):calls.append(kw);raise AssertionError('No handover message may be sent')
+ monkeypatch.setattr(transport,'bird',bird)
+ async with _Session() as db:
+  assert await auto.process_one(db)
+  assert (await db.get(State,ident)).mode=='human'
+  assert (await db.scalar(select(Job))).status=='awaiting-team'
+  assert await db.scalar(select(func.count()).select_from(SupportMessage).where(SupportMessage.direction=='outgoing'))==0
+  assert await db.scalar(select(func.count()).select_from(SupportMessage).where(SupportMessage.direction=='incoming'))==1
+ await queue(incoming('PAMCON venue'))
+ async with _Session() as db:await auto.process_one(db)
+ assert calls==[]

@@ -67,6 +67,10 @@ async def process_one(db):
     if recent>=3 or hourly>=20:
         if mode=='human':state.mode='human';state.context=context
         job.status='rate-limited';await db.commit();return True
+    if mode=='human' or not body or not body.strip():
+        # Leave the incoming message unread for management; never send a fallback.
+        state.mode='human';state.context=context;state.updated_at=now
+        job.status='awaiting-team';await db.commit();return True
     request=str(uuid5(NAMESPACE_URL,'festio-auto:'+incoming.id))
     existing=await db.scalar(select(Message).where(Message.request_id==request))
     if existing:

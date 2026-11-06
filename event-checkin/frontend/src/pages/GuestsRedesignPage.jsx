@@ -1,3 +1,4 @@
+import { loadGuestAuxiliary } from '../lib/guestAuxiliary'
 import GuestDeliveryTracking from '../components/GuestDeliveryTracking'
 import FestioLogo from '../components/branding/FestioLogo'
 import EnvelopeSettings from '../components/invitations/EnvelopeSettings'
@@ -1521,33 +1522,21 @@ export default function GuestsRedesignPage() {
     }
   }
 
-  async function loadQuestions() {
-    if (!eventId) { setRsvpQuestions([]); return }
-    setRsvpQuestions((await api.listRSVPQuestions(eventId)).map(adaptQuestion))
-  }
-
-  async function loadTableGroups() {
-    if (!eventId) { setTableGroups([]); setTables([]); setTicketTypes([]); return }
-    try {
-      const [nextGroups, nextTables, nextTicketTypes] = await Promise.all([
-        api.listTableGroups(eventId),
-        api.listTables(eventId),
-        api.listTicketTypes(eventId).catch(() => []),
-      ])
-      setTableGroups(nextGroups)
-      setTables(nextTables)
-      setTicketTypes(nextTicketTypes)
-    } catch (e) {
-      notify(e.message || 'Table groups could not be loaded', true)
-    }
-  }
-
   useEffect(() => {
     loadHouseholds()
-    loadTableGroups()
-    loadQuestions().catch((e) => notify(e.message || 'RSVP questions could not be loaded', true))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId])
+
+  useEffect(() => {
+    let active = true
+    setTableGroups([]); setTables([]); setTicketTypes([]); setRsvpQuestions([])
+    loadGuestAuxiliary(api, eventId, event).then(resources => {
+      if (!active) return
+      setTableGroups(resources.groups); setTables(resources.tables)
+      setTicketTypes(resources.ticketTypes); setRsvpQuestions(resources.questions.map(adaptQuestion))
+    }).catch(e => { if (active) notify(e.message || 'Guest options could not be loaded', true) })
+    return () => { active = false }
+  }, [eventId, event])
 
   useEffect(() => {
     if (eventError) notify(eventError, true)

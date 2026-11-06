@@ -28,3 +28,5 @@
  .sa-table input[type=checkbox]{width:18px;height:18px}
 }
 @media(max-width:360px){.sa-table td.sa-session-cell{grid-template-columns:1fr;gap:8px}.sa-session-label strong{font-size:15px}}
+
+.sa-zones label:has(select){flex-direction:column;align-items:stretch}.sa-zones label select{width:100%;font-size:12px;white-space:normal}

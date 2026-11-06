@@ -73,7 +73,7 @@ function ResultCard({ result, onStepComplete, stepBusy }) {
         <p>{result.message || (tone === 'green' ? 'The scan was recorded.' : 'The scan could not be completed.')}</p>
         {name && <div className="sc-result-guest">{name}</div>}
         {(result.table_name || result.seat_number) && (
-          <div className="sc-result-guest">
+          <div className="sc-result-table">
             {result.table_name ? `Table ${result.table_name}` : 'No table'}
             {result.seat_number ? ` · Seat ${result.seat_number}` : ''}
           </div>
@@ -156,6 +156,9 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
   const [guardianSearch, setGuardianSearch] = useState('')
   const [sectionId, setSectionId] = useState(sections.length === 1 ? sections[0].id : '')
   const accessMode = !!event?.venue_access_enabled && (!event?.separate_admission_access_enabled || mode === 'access')
+  const activeZone = zones.find(z => z.id === (zoneId || gates.find(g => g.id === gateId)?.zone_id))
+  const sessionSeating = event?.setup_preferences?.session_seating_modes?.[activeZone?.id]
+  const activeDirection = gates.find(g => g.id === gateId)?.direction || direction
   const guardianChildName = guardianStep?.guest
     ? [guardianStep.guest.first_name, guardianStep.guest.last_name].filter(Boolean).join(' ')
     : 'this junior'
@@ -271,7 +274,7 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
       <div className="sc-camera-frame">
         <div className="sc-camera-corners"><span/><span/><span/><span/></div>
         <div className="sc-camera-placeholder">
-          <p>{guardianStep ? `Scan guardian QR for ${guardianChildName}` : mode === 'checkout' ? 'Convention check-out scan' : mode === 'access' ? 'Zone access scan' : 'Convention check-in scan'}</p>
+          <p>{guardianStep ? `Scan guardian QR for ${guardianChildName}` : mode === 'checkout' ? 'Convention check-out scan' : accessMode ? (activeZone ? `${activeZone.name} ${activeDirection === 'out' ? 'check-out' : 'check-in'}` : 'Choose a session or gate below') : 'Convention check-in scan'}</p>
           <QrCameraScanner onScan={recordScan} disabled={busy || (!guardianStep && accessMode && !gateId && !zoneId && mode !== 'checkout')} />
           <small>{guardianStep ? 'Ask the guardian to present their own Festio Pass.' : 'Scan a guest pass, or paste a pass URL or token below.'}</small>
         </div>
@@ -283,6 +286,7 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
           {zoneId && <select className="sc-selector" aria-label="Direction" value={direction} onChange={(e) => setDirection(e.target.value)}><option value="in">In</option><option value="out">Out</option></select>}
         </div>
       )}
+      {!guardianStep && accessMode && activeZone && <div className="sc-session-context"><strong>{activeZone.name}</strong><span>{sessionSeating === 'none' ? 'Attendance only. No table or seat is assigned for this session.' : sessionSeating === 'assigned' ? 'Guests need a preassigned table. Check the table and seat on the result before directing them.' : sessionSeating === 'event' ? 'Uses existing table and seating rules. Check the table and seat on the result before directing the guest.' : 'Check the session and direction before scanning.'}</span></div>}
       {!guardianStep && event.section_mode_enabled && sections.length > 1 && mode !== 'checkout' && <select className="sc-selector" aria-label="Active section" value={sectionId} onChange={(e) => setSectionId(e.target.value)}><option value="">Select section</option>{sections.map((section) => <option key={section.id} value={section.id}>{section.name}</option>)}</select>}
       {guardianStep ? (
         <section className="sc-guardian-handoff" aria-live="polite">

@@ -448,6 +448,8 @@ class GateScanRequest(BaseModel):
 
 
 class GateScanResult(BaseModel):
+    table_name: Optional[str] = None
+    seat_number: Optional[str] = None
     status: str               # allowed | denied | invalid
     message: str
     allowed: bool = False

@@ -523,7 +523,7 @@ async def access_movements(event_id: str, limit: int = 1000, db: AsyncSession = 
 from pydantic import BaseModel, Field
 from typing import Literal
 from ..models import GuestSessionAccess
-from ..services.session_access import restricted_sessions
+from ..services.session_access import restricted_sessions, session_seating_mode
 
 class SessionDecisionUpdate(BaseModel):
     guest_ids: list[str] = Field(min_length=1, max_length=500)
@@ -538,7 +538,7 @@ async def session_access_list(event_id: str, db: AsyncSession = Depends(get_db),
     zones = (await db.scalars(select(Zone).where(Zone.event_id == event_id, Zone.is_active.is_(True)).order_by(Zone.sort_order))).all()
     guests = (await db.scalars(select(Guest).where(Guest.event_id == event_id).order_by(Guest.first_name, Guest.last_name))).all()
     rows = (await db.scalars(select(GuestSessionAccess).where(GuestSessionAccess.event_id == event_id))).all()
-    return dict(zones=[dict(id=z.id, name=z.name, restricted=z.id in restricted_sessions(event)) for z in zones], guests=[dict(id=g.id, name=(g.first_name+' '+g.last_name).strip(), email=g.email, phone=g.phone) for g in guests], decisions=[dict(guest_id=r.guest_id, zone_id=r.zone_id, decision=r.decision, updated_at=r.updated_at, updated_by=r.updated_by) for r in rows])
+    return dict(zones=[dict(id=z.id, name=z.name, restricted=z.id in restricted_sessions(event), seating_mode=session_seating_mode(event,z.id)) for z in zones], guests=[dict(id=g.id, name=(g.first_name+' '+g.last_name).strip(), email=g.email, phone=g.phone) for g in guests], decisions=[dict(guest_id=r.guest_id, zone_id=r.zone_id, decision=r.decision, updated_at=r.updated_at, updated_by=r.updated_by) for r in rows])
 
 @router.put('/{event_id}/session-access/{zone_id}/restriction')
 async def session_access_restriction(event_id: str, zone_id: str, data: SessionRestrictionUpdate, db: AsyncSession = Depends(get_db), user: User = Depends(require_paid_event_admin)):
@@ -571,3 +571,19 @@ async def session_access_update(event_id: str, zone_id: str, data: SessionDecisi
         row.updated_at=datetime.utcnow()
     await db.commit()
     return dict(updated=len(ids), decision=data.decision)
+
+
+class SessionSeatingUpdate(BaseModel):
+    mode: Literal['default', 'none', 'event', 'assigned']
+
+@router.put('/{event_id}/session-access/{zone_id}/seating')
+async def session_seating_update(event_id: str, zone_id: str, data: SessionSeatingUpdate, db: AsyncSession = Depends(get_db), user: User = Depends(require_paid_event_admin)):
+    await access_event(event_id, db)
+    await _get_zone(event_id, zone_id, db)
+    event = await db.scalar(select(Event).where(Event.id == event_id).with_for_update())
+    modes = dict((event.setup_preferences or {}).get('session_seating_modes', {}))
+    if data.mode == 'default': modes.pop(zone_id, None)
+    else: modes[zone_id] = data.mode
+    event.setup_preferences = {**(event.setup_preferences or {}), 'session_seating_modes': modes}
+    await db.commit()
+    return dict(mode=data.mode)

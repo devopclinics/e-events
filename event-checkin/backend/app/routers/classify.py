@@ -281,13 +281,13 @@ async def gate_scan(event_id: str, gid: str, body: GateScanRequest,
     zone = await db.get(Zone, gate.zone_id)
     if not zone or not zone.is_active:
         raise HTTPException(404, 'Session is not active')
-    from ..services.session_access import restricted_sessions, session_decision
+    from ..services.session_access import restricted_sessions, session_decision, session_seating_mode
     # Restricted sessions use the same transition, authorization and audit engine.
-    if zone.id in restricted_sessions(event):
+    if zone.id in restricted_sessions(event) or session_seating_mode(event, zone.id) != "default":
         from .scanner import scan_qr_zone
         from ..schemas import ScanZoneRequest
         result = await scan_qr_zone(body.qr_token, ScanZoneRequest(zone_id=zone.id, direction=gate.direction), background_tasks, db, user)
-        return GateScanResult(status='denied' if result.denied else 'allowed', message=result.deny_reason if result.denied else f'{result.guest_name} — {zone.name}', allowed=not result.denied, guest_name=result.guest_name, zone_name=zone.name, direction=result.direction, occupancy=result.occupancy)
+        return GateScanResult(status='denied' if result.denied else 'allowed', message=result.deny_reason if result.denied else f'{result.guest_name} — {zone.name}', allowed=not result.denied, guest_name=result.guest_name, zone_name=zone.name, direction=result.direction, occupancy=result.occupancy, table_name=result.table_name, seat_number=result.seat_number)
     direction = gate.direction
     allowed, matched, reason = await _guest_allowed(guest.id, gate.zone_id, db)
     session_allowed, session_reason = await session_decision(event, guest, gate.zone_id, db) if direction == "in" else (True, None)

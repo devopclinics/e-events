@@ -1,3 +1,4 @@
+import GuestGroupPassSettings from '../components/GuestGroupPassSettings'
 import { loadGuestAuxiliary } from '../lib/guestAuxiliary'
 import GuestDeliveryTracking from '../components/GuestDeliveryTracking'
 import FestioLogo from '../components/branding/FestioLogo'
@@ -421,6 +422,7 @@ function GuestsTab({ notify, onView, onEdit, onRemove, onUnadmit, onApproveRsvp,
                       <div>
                         <div className="gr-name-row">
                           {g.name}
+                          {g.raw.shared_group_limit && <span className="gr-household-badge">Shared QR · {g.raw.shared_group_limit} people</span>}
                           {g.vip && <span className="gr-vip-badge">VIP</span>}
                           {g.household !== 'Unassigned' && <span className="gr-household-badge">{g.household}</span>}
                         </div>
@@ -1858,6 +1860,7 @@ export default function GuestsRedesignPage() {
 
       {editTarget && (
         <Modal title={`Edit guest: ${editTarget.name}`} onClose={() => setEditTarget(null)} width={520}>
+          <GuestGroupPassSettings eventId={event.id} guestId={editTarget.id}/>
           <p className="rd-hint" role="note">Update this existing guest. Their registration status, personal pass and check-in record are preserved. No invitation is sent when you save.</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>

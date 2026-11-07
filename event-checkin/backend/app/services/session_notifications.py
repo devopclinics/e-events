@@ -43,7 +43,7 @@ async def queue_session_receipt(tasks, event, guest, zone, scan, table_name, db)
             intro += '<p>Please proceed to the conference seating area. No table assignment is required.</p>'
         else:
             intro += '<p>Your table and seat are shown below. An usher can help you find your place.</p>'
-        data = dict(guest_id=guest.id, event_id=event.id, first_name=guest.first_name,
+        data = dict(session_receipt=True, guest_id=guest.id, event_id=event.id, first_name=guest.first_name,
                     last_name=guest.last_name, email=guest.email, phone=guest.phone,
                     admitted_at=scan.scanned_at, event_timezone=event.timezone,
                     table_name=table_name, seat_number=seat_number, menu_choices=[],

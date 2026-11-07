@@ -1269,6 +1269,9 @@ async def send_admission_email(guest_data: dict):
       {experience_html}
       <p style="margin-top: 24px; color: #666;">Enjoy the event!</p>
     """
+    if guest_data.get("session_receipt"):
+        from services.session_email import render_session_receipt
+        inner = render_session_receipt(guest_data, theme)
     body = _festio_email_shell(
         inner,
         title=msg["Subject"],

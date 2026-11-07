@@ -880,6 +880,7 @@ export default function DesignStudioRedesignPage() {
       setOutputs(rendered.outputs || rendered || [])
       setPreviewTpl(items.find((item) => item.selected) || items[0] || null)
       setPageSections({
+        ...(saved.page_config || {}),
         hero: { ...DEFAULT_PAGE_SECTIONS.hero, ...(saved.page_config?.hero || {}) },
         organizer: { ...DEFAULT_PAGE_SECTIONS.organizer, ...(saved.page_config?.organizer || {}) },
         details: { ...DEFAULT_PAGE_SECTIONS.details, ...(saved.page_config?.details || {}) },
@@ -981,7 +982,7 @@ export default function DesignStudioRedesignPage() {
         theme_config: design?.theme_config || {},
         wording_config: design?.wording_config || {},
         asset_config: design?.asset_config || {},
-        page_config: nextSections,
+        page_config: { ...(design?.page_config || {}), ...nextSections },
       })
       setDesign(saved)
       notify('Page settings saved')
@@ -1018,7 +1019,7 @@ export default function DesignStudioRedesignPage() {
         flyer_settings: flyerSettings,
         image_position: imagePosition,
       },
-      page_config: pageSections,
+      page_config: { ...(design?.page_config || {}), ...pageSections },
     }
   }
 
@@ -1081,7 +1082,7 @@ export default function DesignStudioRedesignPage() {
       flyer_image_url: design?.asset_config?.flyer_image_url || '',
       wording,
       pass_options: passOptions,
-      page_config: pageSections,
+      page_config: { ...(design?.page_config || {}), ...pageSections },
       hub_style: hubStyle,
       guest_app_theme: guestAppTheme,
     }

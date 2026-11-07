@@ -147,6 +147,9 @@ footer{{padding:2rem 5vw;border-top:1px solid #ddd;display:flex;justify-content:
 
 
 def render_site(content: dict, family: str, *, preview: bool = False) -> str:
+    if content.get("convention_editorial"):
+        from .convention_editorial import render
+        return render(content, preview=preview)
     if content.get("industry_editorial") and canonical_template(family) == "modern-professional":
         from .industry_editorial import render
         return render(content, preview=preview)

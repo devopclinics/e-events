@@ -32,7 +32,7 @@ def render_session_receipt(data, theme=None):
     description = ('Your place is ready. Show this confirmation to an usher to find your table.' if seated
                    else 'You are checked in for the conference.')
     description_block = (f'<p style="font:14px/1.8 Arial,sans-serif;color:#536155;margin:0;">{description}</p>' if seated else
-        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:18px;border:1px solid #e4dacb;border-left:4px solid {accent};border-radius:10px;background:#fffdf8;"><tr><td style="padding:18px;"><strong style="display:block;font:700 18px/1.5 Arial,sans-serif;color:{primary};">{description}</strong><p style="font:14px/1.7 Arial,sans-serif;color:#3e5046;margin:8px 0 0;">Open seating for this session. No table assignment is required.</p></td></tr></table>')
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:18px;border:1px solid #e4dacb;border-left:4px solid {accent};border-radius:10px;background:#fffdf8;"><tr><td style="padding:18px;"><strong style="display:block;font:900 20px/1.5 Arial,sans-serif;color:{primary};">{description}</strong></td></tr></table>')
     assignment = ''
     if seated:
         assignment = f'''<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;border:1px solid #e4dacb;border-top:4px solid {accent};border-radius:12px;background:#fffdf8;"><tr>

@@ -1,7 +1,14 @@
 """Opt-in convention editorial layout, driven by the saved website snapshot."""
 from pathlib import Path
 from html import escape
-from .community import safe_url
+from urllib.parse import urlparse
+
+
+def safe_url(value):
+    """Validate raw URLs; attributes are escaped once by the renderer."""
+    value = str(value or "").strip()
+    parsed = urlparse(value)
+    return value if parsed.scheme in ("http", "https") and parsed.netloc else ""
 
 
 def render(c, preview=False):

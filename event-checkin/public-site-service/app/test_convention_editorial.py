@@ -43,3 +43,14 @@ def test_bvn_artwork_and_existing_donation_campaign_are_linked():
 def test_unsafe_feature_images_and_donation_links_are_rejected():
     page=render_site(content(feature_sections=[{'id':'bvn','image_url':'javascript:alert(1)'},{'id':'donate','action':{'label':'Donate','url':'javascript:alert(2)'}}]),'editorial')
     assert 'javascript:' not in page
+
+
+def test_hotel_directions_preserve_map_query_parameters():
+    from html import unescape
+    from urllib.parse import urlparse, parse_qs
+    import re
+    url='https://www.google.com/maps/search/?api=1&query=4440+W+Airport+Freeway'
+    page=render_site(content(venue='Wyndham Hotel',venue_address='Irving, Texas',venue_url=url),'editorial')
+    target=unescape(re.search(r'href="([^"]+)"[^>]*>Get directions',page)[1])
+    assert parse_qs(urlparse(target).query)['query']==['4440 W Airport Freeway']
+    assert '&amp;amp;' not in page

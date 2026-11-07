@@ -28,6 +28,10 @@ def render(c, preview=False):
         programme+=f'<div class="card schedule-day"><h3>{e(label)}</h3><div class="agenda">{entries}</div></div>'
     def feature(key,fallback):
         s=features.get(key,{})
+        if key == 'travel':
+            directions=safe_url(c.get('venue_url'))
+            action=link({'label':'Get directions ↗','url':directions},'btn gold') if directions else ''
+            return f'''<article class="card travel-card" id="travel"><div class="travel-art" aria-hidden="true"><span>DALLAS–IRVING<span>TEXAS, USA</span></span><svg viewBox="0 0 240 140" fill="none"><path d="M30 125h190M50 125V54h50v71M100 125V20h78v105M178 125V70h28v55"/><path d="M113 35h13m13 0h13m13 0h1M113 51h13m13 0h13m13 0h1M113 67h13m13 0h13m13 0h1M113 83h13m13 0h13m13 0h1M61 69h10m12 0h5M61 85h10m12 0h5M61 101h10m12 0h5M130 125v-23h20v23"/><path class="travel-pin" d="M51 23c0 12-17 29-17 29S17 35 17 23a17 17 0 0134 0Z"/><circle cx="34" cy="23" r="5"/></svg></div><div class="travel-copy"><span class="pill">TRAVEL &amp; HOTEL</span><h3>Your Dallas home base.</h3><p class="travel-intro">Stay close. Come together.</p><div class="travel-address"><span class="travel-location" aria-hidden="true">↗</span><div><strong>{e(c.get('venue'))}</strong><p>{e(c.get('venue_address'))}</p></div></div><div class="travel-actions">{action}<span>Save the location for your arrival.</span></div><div class="travel-booking"><span class="travel-status" aria-hidden="true"></span><div><strong>Planning your stay?</strong><p>Official group booking details will be shared here when confirmed.</p></div></div></div></article>'''
         image=safe_url(s.get('image_url'))
         media=f'<img class="feature-image" src="{e(image)}" alt="{e(s.get("title") or fallback)}" loading="lazy">' if image else ''
         return f'<article class="card" id="{key}">{media}<span class="pill">{e(s.get("kicker"))}</span><h3 style="margin-top:15px">{e(s.get("title") or fallback)}</h3><p>{e(s.get("summary"))}</p>{link(s.get("action"),"")}</article>'

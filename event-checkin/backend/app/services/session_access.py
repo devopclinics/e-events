@@ -6,6 +6,14 @@ def restricted_sessions(event):
     return (event.setup_preferences or {}).get('restricted_session_ids', [])
 
 async def session_decision(event, guest, zone_id, db):
+    # Group attendees inherit current group restrictions even with an individual pass.
+    from app.models import GroupPassMember, GuestGroupPass, Guest
+    parent=await db.scalar(select(GroupPassMember).join(GuestGroupPass,GuestGroupPass.guest_id==GroupPassMember.pass_guest_id).where(GroupPassMember.guest_id==guest.id,GroupPassMember.pass_guest_id!=guest.id,GuestGroupPass.enabled.is_(True)))
+    if parent:
+        root=await db.get(Guest,parent.pass_guest_id)
+        if not root or root.rsvp_status=='declined':return False,'This group registration is cancelled. Please visit the help desk.'
+        allowed,reason=await session_decision(event,root,zone_id,db)
+        if not allowed:return False,reason
     row = await db.scalar(select(GuestSessionAccess).where(GuestSessionAccess.event_id == event.id, GuestSessionAccess.guest_id == guest.id, GuestSessionAccess.zone_id == zone_id))
     if row and row.decision == 'block':
         zone = await db.get(Zone, zone_id)

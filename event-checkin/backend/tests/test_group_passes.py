@@ -90,7 +90,7 @@ async def test_gate_preserves_access_and_individual_exit_does_not_replenish(ctx)
     assert (await ctx.client.get(path(i),params={'zone_id':i['conference']})).json()['remaining']==1
 
 @pytest.mark.asyncio
-async def test_staff_least_privilege_and_plan_cap(ctx):
+async def test_staff_least_privilege(ctx):
     from app.models import Membership, EventUser
     i=await setup(ctx)
     async with _Session() as db:
@@ -107,3 +107,21 @@ async def test_personal_pass_unchanged(ctx):
     await ctx.client.put(config(i),json={'enabled':False,'admission_limit':3})
     result=await ctx.client.post(f"/api/scan/{i['token']}/zone",json={'zone_id':i['conference']})
     assert result.status_code==200 and not result.json()['denied'],result.text
+
+
+@pytest.mark.asyncio
+async def test_plan_cap_and_current_group_restriction(ctx):
+    i=await setup(ctx)
+    async with _Session() as db:
+        event=await db.get(Event,i['event']);event.guest_cap=1;await db.commit()
+    assert (await ctx.client.post(path(i),json=body(i,2))).status_code==402
+    async with _Session() as db:
+        event=await db.get(Event,i['event']);event.guest_cap=3;await db.commit()
+    response=await ctx.client.post(path(i),json=body(i,2));assert response.status_code==200,response.text
+    child=response.json()['members'][1]['guest_id']
+    async with _Session() as db:
+        guest=await db.get(Guest,child);qr=guest.qr_token
+        rule=await db.scalar(select(GuestSessionAccess).where(GuestSessionAccess.guest_id==i['guest'],GuestSessionAccess.zone_id==i['dinner']));rule.decision='block';await db.commit()
+    denied=await ctx.client.post(f'/api/scan/{qr}/zone',json={'zone_id':i['dinner']})
+    assert denied.status_code==200 and denied.json()['denied'],denied.text
+    assert (await ctx.client.put(f"/api/events/{i['event']}/guests/{child}/group-pass",json={'enabled':True,'admission_limit':3})).status_code==409

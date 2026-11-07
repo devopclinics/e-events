@@ -1,3 +1,4 @@
+import PassLabels from '../components/PassLabels'
 import FestioLogo from '../components/branding/FestioLogo'
 import PassSchedule, { passScheduleItems } from '../components/invite/PassSchedule';
 import { useEffect, useState } from 'react'
@@ -509,12 +510,12 @@ export default function ScanAutoPage() {
           <div className="flex justify-center">
             <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4 inline-block">
               {guest?.id ? (
-                <img
+                <><PassLabels token={token}/><img
                   src={qrImageUrl}
                   alt="Your QR code"
                   className="pass-qr w-44 h-44 object-contain"
                   onError={(e) => { e.target.style.display = 'none' }}
-                />
+                /></>
               ) : (
                 <div className="w-44 h-44 flex items-center justify-center text-slate-300 text-sm">
                   QR not available

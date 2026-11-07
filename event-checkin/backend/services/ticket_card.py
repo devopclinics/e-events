@@ -76,6 +76,7 @@ def generate_ticket_card(
     guest_last_name: str = "",
     qr_png_bytes: bytes,
     admitted: bool = False,
+    pass_labels: list[str] | None = None,
     table_name: str = "",
     seat_number: str = "",
     seating_term: str = "Table",
@@ -129,6 +130,8 @@ def generate_ticket_card(
     if has_seat_info:
         body_h += 52
 
+    label_lines=[line for label in (pass_labels or []) for line in _wrap_lines(label, _d, f_badge, W-PAD*2-24)]
+    if label_lines:body_h += len(label_lines)*30+24
     H = header_h + 32 + body_h
 
     img  = Image.new("RGB", (W, H), _BG_HEADER)
@@ -191,6 +194,13 @@ def generate_ticket_card(
     guest_name = f"{guest_first_name} {guest_last_name}".strip()
     _centered(draw, y, guest_name, f_guest, _WHITE, W)
     y += 52
+
+    if label_lines:
+        draw.rounded_rectangle([PAD,y,W-PAD,y+len(label_lines)*30+12],radius=12,fill=_WHITE)
+        for line in label_lines:
+            _centered(draw,y+6,line,f_badge,_TEAL,W)
+            y+=30
+        y+=24
 
     if admitted:
         bp, bh = 24, 64

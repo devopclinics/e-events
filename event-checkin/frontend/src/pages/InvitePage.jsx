@@ -1,3 +1,4 @@
+import PassLabels from '../components/PassLabels'
 import FestioLogo from '../components/branding/FestioLogo'
 import OrganizerContacts from '../components/invite/OrganizerContacts';
 import { personalEnvelopeScope } from '../components/invitations/envelopePersonalization.mjs'
@@ -2233,6 +2234,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
                 </span>
                 <div className="fh-pass-welcome mt-3 text-sm font-semibold text-slate-500 dark:text-slate-400">Welcome,</div>
                 <div className="fh-hub-guest-name text-xl font-extrabold text-slate-900 dark:text-white">{hub?.guest?.name || 'Guest'}</div>
+                {!previewMock && <PassLabels token={hub?.guest?.qr_token}/>}
                 {hub?.guest?.qr_token && (
                   <div className="fh-pass-qr-frame relative mx-auto mt-4 max-w-[240px] rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700">
                     <img src={previewMock ? PREVIEW_QR_DATA_URI : `/api/scan/${hub.guest.qr_token}/qr.png`} alt="Your QR pass code" className="mx-auto h-48 w-48" />
@@ -3062,6 +3064,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
 
             <div className="mt-3 text-center">
               <div className="text-base font-extrabold">{hub?.guest?.name || 'Guest'}</div>
+                {!previewMock && <PassLabels token={hub?.guest?.qr_token}/>}
               {hasRsvp && hub?.guest?.rsvp_status && (
                 <div className="mt-0.5 text-xs font-bold" style={{ color: tone.muted }}>
                   {hub.guest.rsvp_status === 'confirmed' ? 'Attending' : hub.guest.rsvp_status}

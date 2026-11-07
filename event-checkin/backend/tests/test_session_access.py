@@ -147,3 +147,41 @@ async def test_session_seating_modes_scope_and_preserve_other_preferences(ctx):
     async with _Session() as db:
         from app.services.session_access import seating_at_admission
         assert seating_at_admission(await db.get(Event,eid))
+
+@pytest.mark.asyncio
+async def test_session_notifications_test_scope_and_no_denied_or_duplicate_receipts(ctx, monkeypatch):
+    from app.services import session_notifications as receipts
+    emails=[];whatsapp=[]
+    async def email(data): emails.append(data)
+    async def wa(**kwargs): whatsapp.append(kwargs);return {'status':'queued'}
+    async def reserve(*args,**kwargs):return True
+    async def credit(ledger,send,**kwargs):await send(**kwargs)
+    monkeypatch.setattr(receipts,'_send_email',email)
+    monkeypatch.setattr(receipts.messaging,'_channel_ready',lambda *args:True)
+    monkeypatch.setattr(receipts.messaging,'_bird_whatsapp_send',wa)
+    monkeypatch.setattr(receipts,'reserve_message_credit',reserve)
+    monkeypatch.setattr(receipts,'send_with_credit_ledger',credit)
+    monkeypatch.setattr(receipts,'can_use_paid_channels',lambda event:True)
+    eid,gid,qr,conf,dinner,gate=await prep(ctx)
+    async with _Session() as db:
+        e=await db.get(Event,eid);e.notify_email=True;e.notify_whatsapp=True
+        e.channel_policy={'session_checkin':{'mode':'all','channels':['email','whatsapp']}}
+        g=await db.get(Guest,gid);g.phone='+18327941707';g.whatsapp_consent=True
+        e.setup_preferences={**e.setup_preferences,'session_seating_modes':{conf:'none'},'session_checkin_notifications':{'enabled':True,'audience':'test','test_guest_ids':[gid],'zone_ids':[conf,dinner],'whatsapp_templates':{'link':'approved-link','table':'approved-table'}}}
+        await db.commit()
+    root=f'/api/events/{eid}/session-access'
+    await ctx.client.put(root+'/'+conf,json={'guest_ids':[gid],'decision':'allow'})
+    await ctx.client.put(root+'/'+dinner,json={'guest_ids':[gid],'decision':'block'})
+    result=await ctx.client.post(f'/api/scan/{qr}/zone',json={'zone_id':conf})
+    assert result.json()['notifications']=={'email':'queued','whatsapp':'queued'},result.text
+    assert len(emails)==1 and emails[0]['table_name'] is None and emails[0]['seat_number'] is None
+    assert whatsapp[0]['template']=='approved-link' and whatsapp[0]['var_keys']==['firstName','eventName','hubLink']
+    await ctx.client.post(f'/api/scan/{qr}/zone',json={'zone_id':conf})
+    denied=await ctx.client.post(f'/api/events/{eid}/gates/{gate}/scan',json={'qr_token':qr})
+    assert not denied.json()['allowed'] and denied.json()['notifications']=={}
+    await ctx.client.post(f'/api/scan/{qr}/zone',json={'zone_id':conf,'direction':'out'})
+    assert len(emails)==len(whatsapp)==1
+    async with _Session() as db:
+        e=await db.get(Event,eid);e.setup_preferences={**e.setup_preferences,'session_checkin_notifications':{**e.setup_preferences['session_checkin_notifications'],'test_guest_ids':[]}};await db.commit()
+    await ctx.client.post(f'/api/scan/{qr}/zone',json={'zone_id':conf})
+    assert len(emails)==len(whatsapp)==1

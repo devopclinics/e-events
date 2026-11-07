@@ -1186,6 +1186,11 @@ async def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event,
             f'<img src="{qr_url}" alt="Your check-in QR code" width="220" height="220" '
             f'style="display:block;width:220px;height:220px;border:0;" />'
         )
+    from ..services.pass_labels import pass_labels
+    import html as _pass_html
+    labels=await pass_labels(db,event,guest)
+    if qr_img and labels:
+        qr_img += '<div style="margin:12px 0;font-weight:800;color:#173e32;">'+ '<br>'.join(_pass_html.escape(label) for label in labels)+'</div>'
     ctx = build_template_context(event, guest, extras={"rsvp_link": invite_url, "qr_code": qr_img})
     dispatched = False
     chosen = channels_for_flow(event, guest, "invite" if template_key == "rsvp_invitation" else "reminder", paid_ok=paid_channels)

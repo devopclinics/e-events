@@ -829,6 +829,8 @@ async def ticket_card_image(
         if tbl:
             table_name = tbl.name
 
+    from ..services.pass_labels import pass_labels
+    labels=await pass_labels(db,event,guest)
     card = await _asyncio.to_thread(
         generate_ticket_card,
         event_name=event.name,
@@ -840,6 +842,7 @@ async def ticket_card_image(
         guest_first_name=guest.first_name,
         guest_last_name=guest.last_name or "",
         qr_png_bytes=qr_bytes,
+        pass_labels=labels,
         admitted=admitted,
         table_name=table_name,
         seat_number=guest.seat_number or "",
@@ -1858,3 +1861,14 @@ async def save_guest_menu(guest, body, db, *, actor_user_id=None, category_locks
     await sync_guest_progress(event.id, guest.id, db, source="staff" if actor_user_id else "guest", actor_user_id=actor_user_id)
     await db.commit()
     return {"ok": True, "saved": len(new_rows)}
+
+
+@router.get("/{qr_token}/labels")
+async def view_pass_labels(qr_token: str, db: AsyncSession = Depends(get_db)):
+    guest=await db.scalar(select(Guest).where(Guest.qr_token==qr_token))
+    if not guest or guest.rsvp_status=='declined':raise HTTPException(404,'Pass not found')
+    event=await db.get(Event,guest.event_id)
+    if not event:raise HTTPException(404,'Event not found')
+    from ..services.pass_labels import pass_labels
+    from fastapi.responses import JSONResponse
+    return JSONResponse({'labels':await pass_labels(db,event,guest)},headers={'Cache-Control':'no-store'})

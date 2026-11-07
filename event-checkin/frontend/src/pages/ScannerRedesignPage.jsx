@@ -1,3 +1,4 @@
+import PassLabels from '../components/PassLabels'
 import { useEffect, useRef, useState } from 'react'
 import {formatEventMoment} from '../timeutil'
 import { api } from '../api'
@@ -73,6 +74,7 @@ function ResultCard({ result, onStepComplete, stepBusy }) {
         <strong>{tone === 'red' ? (result.guest_name ? 'Guest found · Entry not recorded' : 'Check-in needs attention') : (result.status || 'Result').replaceAll('_', ' ')}</strong>
         <p>{result.message || (tone === 'green' ? 'The scan was recorded.' : 'The scan could not be completed.')}</p>
         {result.status === 'group_admitted' && <div><strong>{result.scope}: {result.used} / {result.admission_limit} admitted · {result.remaining} remaining</strong>{result.members.map(member => <p key={member.guest_id}>{member.name}{member.table_name ? ` · ${member.table_name} · Seat ${member.seat_number || '—'}` : ''}</p>)}</div>}
+        <PassLabels token={result.pass_token || guest.qr_token}/>
         {name && <div className="sc-result-guest">{name}</div>}
         {(result.table_name || result.seat_number) && (
           <div className="sc-result-table">
@@ -227,7 +229,7 @@ export function TokenScanner({ event, zones, gates, sections, mode, offlineManif
       }
       const manifestGuest = ((offlineManifest || loadOfflineManifest(event.id))?.guests || []).find((item) => item.qr_token === value)
       const result = {
-        ...response, admission_feedback: admissionFeedback,
+        ...response, pass_token: value, admission_feedback: admissionFeedback,
         guest: response.guest || manifestGuest,
         denied: response.denied ?? response.allowed === false,
         guest_name: response.guest_name,
@@ -287,7 +289,7 @@ export function TokenScanner({ event, zones, gates, sections, mode, offlineManif
     setGroupEntry(entry)
     try {
       const response = await api.enterGroupPass(entry.token, { ...entry.query, request_id: entry.request_id, quantity: entry.quantity })
-      onResult(response); setGroupEntry(null); groupPending.current = false; setToken('')
+      onResult({ ...response, pass_token: entry.token }); setGroupEntry(null); groupPending.current = false; setToken('')
       void onRefreshManifest()
     } catch (error) {
       setError(error.message || 'Unable to confirm. Retry the same admission to avoid counting twice.')

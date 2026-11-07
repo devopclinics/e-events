@@ -8,9 +8,13 @@ def restricted_sessions(event):
 async def session_decision(event, guest, zone_id, db):
     row = await db.scalar(select(GuestSessionAccess).where(GuestSessionAccess.event_id == event.id, GuestSessionAccess.guest_id == guest.id, GuestSessionAccess.zone_id == zone_id))
     if row and row.decision == 'block':
-        return False, 'Blocked from this session by the organiser'
+        zone = await db.get(Zone, zone_id)
+        name = zone.name if zone else 'this session'
+        return False, f'Blocked from {name}. This does not cancel event registration. Please visit the event help desk to review session access.'
     if zone_id in restricted_sessions(event) and (not row or row.decision != 'allow'):
-        return False, 'Session access needs organiser approval'
+        zone = await db.get(Zone, zone_id)
+        name = zone.name if zone else 'This session'
+        return False, f'{name} access needs organiser approval. Event registration is unchanged. Please visit the event help desk.'
     return True, None
 
 

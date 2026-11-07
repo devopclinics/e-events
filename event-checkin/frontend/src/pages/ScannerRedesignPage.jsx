@@ -69,7 +69,7 @@ function ResultCard({ result, onStepComplete, stepBusy }) {
     <div className={`sc-result-card sc-tone-${tone}`} role="status" data-testid="scan-result">
       <div className="sc-result-icon"><Icon name={tone === 'green' ? 'check' : tone === 'amber' ? 'info' : 'shield'} size={28}/></div>
       <div className="sc-result-info">
-        <strong>{result.denied ? 'Denied' : (result.status || 'Result').replaceAll('_', ' ')}</strong>
+        <strong>{tone === 'red' ? (result.guest_name ? 'Guest found · Entry not recorded' : 'Check-in needs attention') : (result.status || 'Result').replaceAll('_', ' ')}</strong>
         <p>{result.message || (tone === 'green' ? 'The scan was recorded.' : 'The scan could not be completed.')}</p>
         {name && <div className="sc-result-guest">{name}</div>}
         {(result.table_name || result.seat_number) && (

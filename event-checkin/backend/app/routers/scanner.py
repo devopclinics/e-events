@@ -1570,12 +1570,13 @@ async def scan_qr_zone(
             seat_error = await prepare_session_seating(event, guest, zone.id, db)
             if seat_error: denied, deny_reason = True, seat_error
 
-    db.add(ScanEvent(
+    scan = ScanEvent(
         event_id=event.id, guest_id=guest.id, zone_id=zone.id, direction=direction,
         scanned_by=current_user.id, denied=denied, deny_reason=deny_reason,
         guardian_guest_id=guardian.id if guardian and not guardian_denial else None,
         guardian_relationship=guardian_relationship, guardian_verification_method=guardian_method,
-    ))
+    )
+    db.add(scan)
     # Preserve the historical combined admission + zone behavior unless the
     # event explicitly enables the separated convention/zone workflow.
     if not event.separate_admission_access_enabled and not denied and direction == "in" and not guest.admitted:
@@ -1613,6 +1614,22 @@ async def scan_qr_zone(
         tbl = await db.get(SeatingTable, guest.table_id)
         table_name = tbl.name if tbl else None
 
+    notifications = {}
+    if not denied and direction == 'in':
+        from ..services.session_notifications import queue_session_receipt
+        try:
+            notifications = await queue_session_receipt(background_tasks, event, guest, zone, scan, table_name, db)
+        except Exception:
+            # Entry is already committed. A notification problem must not turn a
+            # successful admission into an HTTP error or encourage a second scan.
+            import logging
+            logging.getLogger(__name__).exception('Session receipt could not be queued for scan=%s', scan.id)
+            await db.rollback()
+            await db.refresh(guest)
+            await db.refresh(event)
+            await db.refresh(zone)
+            notifications = {'status': 'queue_failed'}
+
     await broadcast(event.id, {
         "type": "scan", "guest_id": guest.id,
         "name": f"{guest.first_name} {guest.last_name}",
@@ -1621,6 +1638,7 @@ async def scan_qr_zone(
     })
 
     return ScanZoneResult(
+        notifications=notifications,
         status="guardian_required" if guardian_denial else ("denied" if denied else "ok"), denied=denied, deny_reason=deny_reason,
         guest_name=f"{guest.first_name} {guest.last_name}", ticket_type=tt_name,
         zone_name=zone.name, direction=direction, occupancy=occ,

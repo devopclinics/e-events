@@ -448,6 +448,7 @@ class GateScanRequest(BaseModel):
 
 
 class GateScanResult(BaseModel):
+    notifications: dict[str, str] = Field(default_factory=dict)
     table_name: Optional[str] = None
     seat_number: Optional[str] = None
     status: str               # allowed | denied | invalid
@@ -2255,6 +2256,7 @@ class ScanCheckoutRequest(BaseModel):
 
 
 class ScanZoneResult(BaseModel):
+    notifications: dict[str, str] = Field(default_factory=dict)
     status: str               # "ok" | "denied"
     denied: bool = False
     deny_reason: Optional[str] = None

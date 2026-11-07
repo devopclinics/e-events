@@ -10,7 +10,8 @@ def test_conference_receipt_has_no_dinner_seating_and_uses_event_local_time():
     html=render_session_receipt(fixture(),{'primary_color':'#3b0a50','accent_color':'#f3bb53'})
     assert 'YOUR TABLE' not in html and '>SEAT<' not in html
     assert 'You are checked in for the conference.' in html
-    assert 'No table assignment is required' in html
+    assert 'No table assignment is required' not in html
+    assert 'font:900 20px/1.5' in html
     assert '10:00 AM WAT' in html and 'Wed, 11 Nov 2026' in html
     assert 'background: #22c55e' not in html
 

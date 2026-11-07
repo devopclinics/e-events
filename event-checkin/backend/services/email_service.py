@@ -1270,15 +1270,17 @@ async def send_admission_email(guest_data: dict):
       <p style="margin-top: 24px; color: #666;">Enjoy the event!</p>
     """
     if guest_data.get("session_receipt"):
-        from services.session_email import render_session_receipt
+        from services.session_email import render_session_receipt, wrap_session_receipt
         inner = render_session_receipt(guest_data, theme)
-    body = _festio_email_shell(
-        inner,
-        title=msg["Subject"],
-        preheader=f"Welcome, {guest_data['first_name']}! You have been checked in.",
-        footer_reason="You are receiving this email because you were checked in for this event.",
-        theme=theme,
-    )
+        body = wrap_session_receipt(inner)
+    else:
+        body = _festio_email_shell(
+            inner,
+            title=msg["Subject"],
+            preheader=f"Welcome, {guest_data['first_name']}! You have been checked in.",
+            footer_reason="You are receiving this email because you were checked in for this event.",
+            theme=theme,
+        )
 
     msg.attach(MIMEText(_plain_text_from_html(inner), "plain", "utf-8"))
     msg.attach(MIMEText(body, "html", "utf-8"))

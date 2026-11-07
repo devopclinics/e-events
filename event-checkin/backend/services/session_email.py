@@ -30,7 +30,7 @@ def render_session_receipt(data, theme=None):
     seated = bool(table or seat)
     heading = 'Your seat.<br>Your evening.' if seated else 'You’re here.<br>Let’s begin.'
     description = ('Your place is ready. Show this confirmation to an usher to find your table.' if seated
-                   else 'Welcome to the experience. Please proceed to the session seating area.')
+                   else 'You are checked in for the conference.')
     assignment = ''
     if seated:
         assignment = f'''<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;border:1px solid #e4dacb;border-top:4px solid {accent};border-radius:12px;background:#fffdf8;"><tr>

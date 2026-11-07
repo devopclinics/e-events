@@ -20,6 +20,7 @@ import './GuestHubThemes.css'
 import PublicTicketCheckout from '../components/PublicTicketCheckout'
 import EventApp from '../components/guesthub/EventApp'
 import WelcomeLanding from '../components/invite/WelcomeLanding'
+import ConventionGuestHub, { ConventionRegistration } from '../components/convention/ConventionReview'
 import GuestHubRecovery from '../components/invite/GuestHubRecovery'
 import PublicProgrammeEntry from '../components/invite/PublicProgrammeEntry'
 
@@ -2053,6 +2054,9 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   </div>
 
 
+  if (import.meta.env.VITE_CUSTOMER_JOURNEY_ENABLED === 'true' && designTheme?.page_config?.communityReview?.enabled && hub) {
+    return <ConventionGuestHub event={event} hub={hub} journey={journey} config={{...designTheme.page_config.communityReview, sendMessage: text => api.sendGuestDirectMessage(event.id, accessToken, text)}} error={error} onRetry={() => setHubRetry(n => n + 1)} />
+  }
   const showGuardianPanels = !previewMock && event?.junior_guardian_handoff_enabled && accessToken
   if (journeyLayout && hub && !flowServicesOpen) return <><GuardianConfirmPanel pending={pendingGuardianConfirmations} onConfirm={confirmGuardianPickup} />{showGuardianPanels && <ManageGuardiansPanel token={accessToken} />}<JourneyGuestHubView programmeControl={programmeControl} event={event} hub={hub} journey={journey} previewMock={previewMock} designTheme={designTheme} guestContent={guestContent} onOpenServices={setFlowServicesOpen} moduleVisible={hubModuleVisible} /></>
   if (completeLayout && hub && !flowServicesOpen) return <div data-event-brand={eventBrandingKey(event)} style={eventBrandingStyle(event, designTheme)}><GuardianConfirmPanel pending={pendingGuardianConfirmations} onConfirm={confirmGuardianPickup} />{showGuardianPanels && <ManageGuardiansPanel token={accessToken} />}<CompleteGuestHubView programmeControl={programmeControl} event={event} hub={hub} journey={journey} previewMock={previewMock} designTheme={designTheme} guestContent={guestContent} onOpenServices={setFlowServicesOpen} moduleVisible={hubModuleVisible} /></div>
@@ -3657,6 +3661,7 @@ export default function InvitePage() {
 
   if (isStudioPreview) rsvpPanel = <div className="rounded-2xl border p-6">Design preview. Registration and ticket purchases are disabled here.</div>
   if (!isStudioPreview && new URLSearchParams(location.search).get('recover') === '1' && !hasGuestHub) return <GuestHubRecovery event={event}/>
+  if (import.meta.env.VITE_CUSTOMER_JOURNEY_ENABLED === 'true' && designTheme?.page_config?.communityReview?.enabled && !hasGuestHub) return <ConventionRegistration event={event} config={designTheme.page_config.communityReview} registration={rsvpPanel} />
   if (event.rsvp_landing_layout === 'welcome' && !hasGuestHub) {
     return <WelcomeLanding event={event} title={title} dateLabel={dateLabel} timeLabel={timeLabel}
       venue={venue} host={host} hostWebsite={hostWebsite} about={about} designTheme={designTheme}

@@ -158,6 +158,7 @@ class NavigationItem(BaseModel):
 
 class SiteContent(BaseModel):
     industry_editorial: bool = False
+    convention_editorial: bool = False
     import_history: dict = Field(default_factory=dict)
     speakers_directory_url: HttpUrl | None = None
     schema_version: Literal[1] = 1

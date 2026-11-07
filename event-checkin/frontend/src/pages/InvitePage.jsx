@@ -22,6 +22,7 @@ import PublicTicketCheckout from '../components/PublicTicketCheckout'
 import EventApp from '../components/guesthub/EventApp'
 import WelcomeLanding from '../components/invite/WelcomeLanding'
 import ConventionGuestHub, { ConventionRegistration } from '../components/convention/ConventionReview'
+import { ConventionCreative } from '../components/convention/ConventionCreative'
 import GuestHubRecovery from '../components/invite/GuestHubRecovery'
 import PublicProgrammeEntry from '../components/invite/PublicProgrammeEntry'
 
@@ -3672,6 +3673,7 @@ export default function InvitePage() {
 
   if (isStudioPreview) rsvpPanel = <div className="rounded-2xl border p-6">Design preview. Registration and ticket purchases are disabled here.</div>
   if (!isStudioPreview && new URLSearchParams(location.search).get('recover') === '1' && !hasGuestHub) return <GuestHubRecovery event={event}/>
+  if (import.meta.env.VITE_CUSTOMER_JOURNEY_ENABLED === 'true' && designTheme?.page_config?.communityReview?.enabled && ['designs','flyer','email','donate'].includes(new URLSearchParams(location.search).get('view'))) return <ConventionCreative event={event} config={designTheme.page_config.communityReview} view={new URLSearchParams(location.search).get('view')}/>
   if (import.meta.env.VITE_CUSTOMER_JOURNEY_ENABLED === 'true' && designTheme?.page_config?.communityReview?.enabled && !hasGuestHub) return <ConventionRegistration event={event} config={designTheme.page_config.communityReview} registration={rsvpPanel} />
   if (event.rsvp_landing_layout === 'welcome' && !hasGuestHub) {
     return <WelcomeLanding event={event} title={title} dateLabel={dateLabel} timeLabel={timeLabel}

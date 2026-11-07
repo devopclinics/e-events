@@ -125,3 +125,15 @@ async def test_plan_cap_and_current_group_restriction(ctx):
     denied=await ctx.client.post(f'/api/scan/{qr}/zone',json={'zone_id':i['dinner']})
     assert denied.status_code==200 and denied.json()['denied'],denied.text
     assert (await ctx.client.put(f"/api/events/{i['event']}/guests/{child}/group-pass",json={'enabled':True,'admission_limit':3})).status_code==409
+
+@pytest.mark.asyncio
+async def test_general_group_entry_and_retry(ctx):
+    i=await setup(ctx)
+    request={'request_id':str(uuid.uuid4()),'quantity':2}
+    result=await ctx.client.post(path(i),json=request)
+    assert result.status_code==200,result.text
+    assert result.json()['used']==2
+    assert (await ctx.client.post(path(i),json=request)).json()['replayed']
+    async with _Session() as db:
+        guests=(await db.scalars(select(Guest).where(Guest.event_id==i['event']))).all()
+        assert len(guests)==2 and all(g.admitted for g in guests)

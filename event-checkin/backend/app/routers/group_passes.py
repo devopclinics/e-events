@@ -44,6 +44,8 @@ async def get_config(event_id:str,guest_id:str,db:AsyncSession=Depends(get_db),a
 async def set_config(event_id:str,guest_id:str,body:GroupConfig,db:AsyncSession=Depends(get_db),actor=Depends(require_guest_manage_access)):
     g=await guest_for_event(event_id,guest_id,db)
     c=await db.scalar(select(GuestGroupPass).where(GuestGroupPass.guest_id==guest_id).with_for_update())
+    parent=await db.scalar(select(GroupPassMember).where(GroupPassMember.guest_id==guest_id,GroupPassMember.pass_guest_id!=guest_id))
+    if body.enabled and parent:raise HTTPException(409,'This attendee already belongs to a shared group. Configure the original group pass.')
     event=await db.get(Event,event_id)
     if body.enabled and (g.is_junior or event.junior_guardian_handoff_enabled):raise HTTPException(409,'Use individual passes for guardian-verified attendees.')
     if body.enabled and not body.admission_limit:raise HTTPException(422,'Set a positive admission limit before enabling this shared QR.')
@@ -129,7 +131,7 @@ async def enter_group(qr_token:str,body:GroupEntry,tasks:BackgroundTasks,db:Asyn
             else:
                 slot=len(rows)+1
                 if slot>c.admission_limit:raise HTTPException(409,'The group attendee limit has been reached')
-                member=Guest(event_id=e.id,first_name=g.first_name,last_name=(f'{g.last_name} · Group guest {slot}')[:100],rsvp_status=g.rsvp_status,is_test=g.is_test,household_id=g.household_id,ticket_type_id=g.ticket_type_id,assigned_table_group_id=g.assigned_table_group_id,sms_consent=False,whatsapp_consent=False)
+                member=Guest(event_id=e.id,first_name=g.first_name,last_name=(f'{g.last_name} · Group guest {slot}')[:100],rsvp_status=g.rsvp_status,is_test=g.is_test,is_vip=g.is_vip,household_id=g.household_id,ticket_type_id=g.ticket_type_id,assigned_table_group_id=g.assigned_table_group_id,sms_consent=False,whatsapp_consent=False)
                 db.add(member);await db.flush();row=GroupPassMember(pass_guest_id=g.id,guest_id=member.id,slot=slot);db.add(row);rows.append(row)
                 for rule in (await db.scalars(select(GuestSessionAccess).where(GuestSessionAccess.guest_id==g.id))).all():db.add(GuestSessionAccess(event_id=e.id,guest_id=member.id,zone_id=rule.zone_id,decision=rule.decision))
                 for tag in (await db.scalars(select(GuestTagLink).where(GuestTagLink.guest_id==g.id))).all():db.add(GuestTagLink(guest_id=member.id,tag_id=tag.tag_id))

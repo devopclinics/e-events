@@ -712,7 +712,11 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {}, guidedFlow =
         }),
       })
       const data = await res.json().catch(() => null)
-      if (!res.ok) throw new Error(data?.detail || 'Something went wrong — please try again.')
+      if (!res.ok) {
+        const detail = data?.detail
+        const message = Array.isArray(detail) ? detail.map(item => item.msg || 'Please check the entered details.').join('; ') : typeof detail === 'string' ? detail : detail?.message
+        throw new Error(message || 'Something went wrong — please try again.')
+      }
       onConfirmed(data)
     } catch (err) {
       setError(err.message)
@@ -1231,7 +1235,11 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone, tone, dWording = 
         }),
       })
       const data = await res.json().catch(() => null)
-      if (!res.ok) throw new Error(data?.detail || 'Something went wrong — please try again.')
+      if (!res.ok) {
+        const detail = data?.detail
+        const message = Array.isArray(detail) ? detail.map(item => item.msg || 'Please check the entered details.').join('; ') : typeof detail === 'string' ? detail : detail?.message
+        throw new Error(message || 'Something went wrong — please try again.')
+      }
       onDone(data)
     } catch (err) {
       setError(err.message)

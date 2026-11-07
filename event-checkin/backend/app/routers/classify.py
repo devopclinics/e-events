@@ -278,6 +278,10 @@ async def gate_scan(event_id: str, gid: str, body: GateScanRequest,
     if not guest or guest.event_id != event_id:
         return GateScanResult(status="invalid", message="Invalid QR for this event.")
 
+    from ..services.group_passes import active_group, claim_active
+    if not claim_active.get() and await active_group(db,guest.id):
+        raise HTTPException(409, 'Shared group QR: confirm the number entering in the scanner. For exit, use the individual attendee record.')
+
     zone = await db.get(Zone, gate.zone_id)
     if not zone or not zone.is_active:
         raise HTTPException(404, 'Session is not active')

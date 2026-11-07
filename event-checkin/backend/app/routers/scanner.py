@@ -897,6 +897,8 @@ async def offline_manifest(
         offline_block = "This event has required admission steps. Reconnect to verify them before check-in."
     if event.section_mode_enabled:
         offline_block = "Section admission requires an online connection."
+    from ..models import GuestGroupPass
+    shared_ids=set((await db.scalars(select(GuestGroupPass.guest_id).where(GuestGroupPass.event_id==event_id,GuestGroupPass.enabled.is_(True)))).all())
     needs_live_seating = bool(event.seating_enabled and not await _experience_defers_seating(event, db))
     generated_at = datetime.utcnow()
     return {
@@ -927,7 +929,7 @@ async def offline_manifest(
             "is_vip": bool(g.is_vip),
             "rsvp_status": g.rsvp_status,
             "ticket_type_id": g.ticket_type_id,
-            "offline_admission_block_reason": "Reconnect to assign and validate a seat." if needs_live_seating and not g.seat_number else None,
+            "offline_admission_block_reason": "Shared group admission requires an online connection." if g.id in shared_ids else ("Reconnect to assign and validate a seat." if needs_live_seating and not g.seat_number else None),
         } for g in guests if g.qr_token],
         "zones": [{
             "id": z.id,
@@ -1098,6 +1100,9 @@ async def perform_checkout(
     guardian_guest_id: str | None = None,
 ) -> ScanResult:
     """Record a guest exit for QR and manual checkout through one flow."""
+    from ..services.group_passes import active_group
+    if await active_group(db, guest.id):
+        return ScanResult(status="group_pass_required", message="For group exits, use the individual attendee record, not the shared QR.")
     if not event.checkout_enabled:
         return ScanResult(
             status="checkout_disabled",
@@ -1196,6 +1201,9 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
     """Admit a guest — seat assignment (incl. table-group rules), admitted flags,
     notifications, and SSE broadcast. Shared by QR scan and manual check-in.
     Caller must have already validated the event + access (see checkin_guard)."""
+    from ..services.group_passes import active_group, claim_active
+    if not claim_active.get() and await active_group(db, guest.id):
+        return ScanResult(status="group_pass_required", message="Shared group QR: scan this pass in the scanner and confirm how many people are entering.")
     if event:
         messaging.set_event_context(event.id)
     if guest.rsvp_status == "declined":
@@ -1492,6 +1500,10 @@ async def scan_qr_zone(
     zone = await db.get(Zone, body.zone_id)
     if not zone or zone.event_id != event.id or not zone.is_active:
         raise HTTPException(404, "Zone not found.")
+
+    from ..services.group_passes import active_group, claim_active
+    if not claim_active.get() and await active_group(db, guest.id):
+        raise HTTPException(409, "Shared group QR: confirm the number entering in the scanner. For exit, use the individual attendee record.")
 
     seating_mode = session_seating_mode(event, zone.id)
     if seating_mode in ('event', 'assigned'):

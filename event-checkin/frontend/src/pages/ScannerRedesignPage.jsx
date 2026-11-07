@@ -54,7 +54,7 @@ function extractScanPayload(raw) {
 
 function resultTone(result) {
   if (!result) return ''
-  if (result.denied || ['denied', 'invalid', 'not_active', 'not_assigned', 'no_seat_available', 'not_paid', 'checkin_disabled'].includes(result.status)) return 'red'
+  if (result.denied || ['denied', 'invalid', 'not_active', 'not_assigned', 'no_seat_available', 'not_paid', 'checkin_disabled', 'group_pass_required'].includes(result.status)) return 'red'
   if (result.status === 'pending_required_step' || result.status === 'guardian_required') return 'amber'
   if (/already/.test(result.status || '')) return 'amber'
   if (result.status === 'offline_queued') return 'blue'
@@ -72,6 +72,7 @@ function ResultCard({ result, onStepComplete, stepBusy }) {
       <div className="sc-result-info">
         <strong>{tone === 'red' ? (result.guest_name ? 'Guest found · Entry not recorded' : 'Check-in needs attention') : (result.status || 'Result').replaceAll('_', ' ')}</strong>
         <p>{result.message || (tone === 'green' ? 'The scan was recorded.' : 'The scan could not be completed.')}</p>
+        {result.status === 'group_admitted' && <div><strong>{result.scope}: {result.used} / {result.admission_limit} admitted · {result.remaining} remaining</strong>{result.members.map(member => <p key={member.guest_id}>{member.name}{member.table_name ? ` · ${member.table_name} · Seat ${member.seat_number || '—'}` : ''}</p>)}</div>}
         {name && <div className="sc-result-guest">{name}</div>}
         {(result.table_name || result.seat_number) && (
           <div className="sc-result-table">
@@ -152,6 +153,9 @@ export function TokenScanner({ event, zones, gates, sections, mode, offlineManif
   const [gateId, setGateId] = useState('')
   const [zoneId, setZoneId] = useState('')
   const [direction, setDirection] = useState('in')
+  const [groupEntry, setGroupEntry] = useState(null)
+  const [groupQuantity, setGroupQuantity] = useState(1)
+  const groupPending = useRef(false)
   const [guardianToken, setGuardianToken] = useState('')
   const [guardianStep, setGuardianStep] = useState(null)
   const [guardianSearch, setGuardianSearch] = useState('')
@@ -191,13 +195,24 @@ export function TokenScanner({ event, zones, gates, sections, mode, offlineManif
   }
 
   async function recordGuestScan(value, action, guardianPass = null, guardianGuestId = null) {
-    if (!value || busy) return
+    if (!value || busy || groupPending.current) return
     if (accessMode && mode !== 'checkout' && !gateId && !zoneId) { setError('Scanner setup required: select a configured gate or zone.'); return }
     setBusy(true); setError(''); onResult(null)
     const scanAction = action || (mode === 'checkout' ? 'checkout' : 'checkin')
     const admissionFeedback = scanAction === 'checkin' && !accessMode
     try {
       if (!navigator.onLine) throw new TypeError('Network offline')
+      if (scanAction !== 'checkout' && (!accessMode || activeDirection !== 'out')) {
+        if (accessMode && !gateId && !zoneId) throw new Error('Select a gate or zone before scanning.')
+        const query = accessMode ? (gateId ? { gate_id: gateId } : { zone_id: zoneId }) : {}
+        const info = await api.scanGroupPassInfo(value, query)
+        if (info.enabled) {
+          groupPending.current = true
+          setGroupQuantity(1)
+          setGroupEntry({ ...info, token: value, query, request_id: crypto.randomUUID(), submitted: false })
+          return
+        }
+      }
       let response
       if (scanAction === 'checkout') {
         response = await api.scanCheckout(value, guardianPass, guardianGuestId)
@@ -260,13 +275,30 @@ export function TokenScanner({ event, zones, gates, sections, mode, offlineManif
 
   async function recordScan(rawValue) {
     const { token: value, action } = extractScanPayload(rawValue)
-    if (!value || busy) return
+    if (!value || busy || groupPending.current) return
     if (guardianStep) return recordGuestScan(guardianStep.childToken, guardianStep.action, value)
     return recordGuestScan(value, action)
   }
 
+  async function confirmGroup() {
+    if (!groupEntry || busy) return
+    setBusy(true); setError('')
+    const entry = { ...groupEntry, submitted: true, quantity: groupEntry.quantity || Number(groupQuantity) }
+    setGroupEntry(entry)
+    try {
+      const response = await api.enterGroupPass(entry.token, { ...entry.query, request_id: entry.request_id, quantity: entry.quantity })
+      onResult(response); setGroupEntry(null); groupPending.current = false; setToken('')
+      void onRefreshManifest()
+    } catch (error) {
+      setError(error.message || 'Unable to confirm. Retry the same admission to avoid counting twice.')
+      if (error.status && error.status < 500) setGroupEntry({ ...entry, submitted: false, quantity: null, request_id: crypto.randomUUID() })
+    }
+    finally { setBusy(false) }
+  }
+
   async function submit(e) {
     e.preventDefault()
+    if (groupEntry) return
     if (guardianStep) await recordScan(guardianToken)
     else await recordScan(token)
   }
@@ -290,7 +322,17 @@ export function TokenScanner({ event, zones, gates, sections, mode, offlineManif
       )}
       {!guardianStep && accessMode && activeZone && <div className="sc-session-context"><strong>{activeZone.name}</strong><span>{sessionSeating === 'none' ? 'Attendance only. No table or seat is assigned for this session.' : sessionSeating === 'assigned' ? 'Guests need a preassigned table. Check the table and seat on the result before directing them.' : sessionSeating === 'event' ? 'Uses existing table and seating rules. Check the table and seat on the result before directing the guest.' : 'Check the session and direction before scanning.'}</span></div>}
       {!guardianStep && event.section_mode_enabled && sections.length > 1 && mode !== 'checkout' && <select className="sc-selector" aria-label="Active section" value={sectionId} onChange={(e) => setSectionId(e.target.value)}><option value="">Select section</option>{sections.map((section) => <option key={section.id} value={section.id}>{section.name}</option>)}</select>}
-      {guardianStep ? (
+      {groupEntry && <section className="sc-group-confirm" role="region" aria-label="Confirm group admission">
+        <span className="sc-group-eyebrow">SHARED GROUP PASS · {groupEntry.scope}</span>
+        <h3>{groupEntry.group_name}</h3>
+        <p><strong>{groupEntry.used} of {groupEntry.admission_limit}</strong> admitted · <strong>{groupEntry.remaining}</strong> remaining</p>
+        <p>Count the people entering now. Confirming creates a record for each person. No admission has been recorded by this preview.</p>
+        <label>People entering now<input className="sc-search-input" type="number" min="1" max={Math.min(50, groupEntry.remaining)} step="1" value={groupQuantity} disabled={busy || groupEntry.submitted} onChange={e => setGroupQuantity(e.target.value)}/></label>
+        <div className="sc-search-row"><button type="button" className="rr-btn primary" disabled={busy || !Number.isInteger(Number(groupQuantity)) || Number(groupQuantity) < 1 || Number(groupQuantity) > Math.min(50, groupEntry.remaining)} onClick={confirmGroup}>{busy ? 'Confirming…' : groupEntry.submitted ? 'Retry same admission' : `Admit ${groupQuantity} people`}</button>
+        <button type="button" className="rr-btn secondary" disabled={busy || groupEntry.submitted} onClick={() => { setGroupEntry(null); groupPending.current = false; setError('') }}>Close</button></div>
+        {groupEntry.submitted && <p>After a connection interruption, retry this same admission before starting another. Ask staff to check the group history if the outcome is uncertain.</p>}
+      </section>}
+      {!groupEntry && (guardianStep ? (
         <section className="sc-guardian-handoff" aria-live="polite">
           <strong>Guardian required for {guardianChildName}</strong>
           <p>{event.manual_checkin_enabled ? "Check the guardian’s identity in person, then select their name to complete this handoff. You can also scan or paste their pass." : "Scan or paste the authorized guardian’s pass to complete this handoff."}</p>
@@ -299,7 +341,7 @@ export function TokenScanner({ event, zones, gates, sections, mode, offlineManif
           <div className="sc-search-row sc-token-row"><input className="sc-search-input" aria-label="Guardian pass token" value={guardianToken} onChange={(e) => setGuardianToken(e.target.value)} placeholder="Guardian pass URL or QR token"/><button className="rr-btn primary" disabled={!guardianToken.trim() || busy}>{busy ? 'Verifying…' : 'Verify guardian QR'}</button></div>
           <button type="button" className="rr-btn secondary" onClick={cancelGuardianStep} disabled={busy}>Cancel and scan another guest</button>
         </section>
-      ) : <div className="sc-search-row sc-token-row"><input className="sc-search-input" aria-label="Pass token" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Guest pass URL or QR token"/><button className="rr-btn primary" disabled={!token.trim() || busy || (accessMode && mode !== 'checkout' && !gateId && !zoneId)}>{busy ? 'Recording…' : mode === 'checkout' ? 'Check out' : 'Record scan'}</button></div>}
+      ) : <div className="sc-search-row sc-token-row"><input className="sc-search-input" aria-label="Pass token" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Guest pass URL or QR token"/><button className="rr-btn primary" disabled={!token.trim() || busy || (accessMode && mode !== 'checkout' && !gateId && !zoneId)}>{busy ? 'Recording…' : mode === 'checkout' ? 'Check out' : 'Record scan'}</button></div>)}
       {error && <p className="sc-empty">{error}</p>}
     </form>
   )

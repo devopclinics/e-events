@@ -1615,6 +1615,11 @@ async def list_guests(event_id: str, db: AsyncSession = Depends(get_db), _: User
         g.household_name = household_names.get(g.household_id)
     await _attach_message_status(guests, event_id, db)
     await attach_session_access(guests, event_id, db)
+    from ..models import GuestGroupPass
+    group_configs={row.guest_id:row for row in (await db.scalars(select(GuestGroupPass).where(GuestGroupPass.event_id==event_id))).all()}
+    for guest in guests:
+        config=group_configs.get(guest.id)
+        guest.shared_group_limit=config.admission_limit if config and config.enabled else None
     return guests
 
 

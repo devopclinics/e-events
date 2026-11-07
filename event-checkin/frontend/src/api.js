@@ -1417,6 +1417,10 @@ export const api = {
     req('POST', `/invite/token/${encodeURIComponent(token)}/guardian-authorizations`,
       { child_guest_id: childGuestId, guardian_guest_id: guardianGuestId, relationship: relationship || 'Authorized guardian' }),
   accessMovements: (eventId, limit = 1000) => req('GET', `/events/${eventId}/access/movements?limit=${limit}`),
+  guestGroupPass: (eventId, guestId) => req('GET', `/events/${eventId}/guests/${guestId}/group-pass`),
+  saveGuestGroupPass: (eventId, guestId, body) => req('PUT', `/events/${eventId}/guests/${guestId}/group-pass`, body),
+  scanGroupPassInfo: (token, query = {}) => req('GET', `/scan/${encodeURIComponent(token)}/group-pass?${new URLSearchParams(query)}`),
+  enterGroupPass: (token, body) => req('POST', `/scan/${encodeURIComponent(token)}/group-pass`, body),
   scanZone: (qrToken, body) => req('POST', `/scan/${qrToken}/zone`, body),
 
   // Tag-based zone access (classify module)

@@ -381,3 +381,6 @@ app.include_router(support_web_chat.router,prefix='/api/platform/support/chat',t
 # Register after all routers so every authenticated event route is covered.
 from .staff_permissions import install_staff_feature_guards
 install_staff_feature_guards(app)
+
+from .routers import group_passes
+app.include_router(group_passes.router, prefix="/api", tags=["group-passes"])

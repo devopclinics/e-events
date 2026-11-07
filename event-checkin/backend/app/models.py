@@ -3366,3 +3366,42 @@ class StaffAccessAudit(Base):
     before: Mapped[dict] = mapped_column(JSON)
     after: Mapped[dict] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class GuestGroupPass(Base):
+    __tablename__ = 'guest_group_passes'
+    guest_id: Mapped[str] = mapped_column(ForeignKey('guests.id', ondelete='CASCADE'), primary_key=True)
+    event_id: Mapped[str] = mapped_column(ForeignKey('events.id', ondelete='CASCADE'), index=True)
+    admission_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class GroupPassMember(Base):
+    __tablename__ = 'group_pass_members'
+    __table_args__ = (UniqueConstraint('pass_guest_id', 'slot', name='uq_group_pass_slot'), UniqueConstraint('pass_guest_id', 'guest_id', name='uq_group_pass_guest'))
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    pass_guest_id: Mapped[str] = mapped_column(ForeignKey('guest_group_passes.guest_id', ondelete='CASCADE'), index=True)
+    guest_id: Mapped[str] = mapped_column(ForeignKey('guests.id', ondelete='CASCADE'), index=True)
+    slot: Mapped[int] = mapped_column(Integer)
+
+
+class GroupPassRedemption(Base):
+    __tablename__ = 'group_pass_redemptions'
+    request_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    pass_guest_id: Mapped[str] = mapped_column(ForeignKey('guest_group_passes.guest_id', ondelete='CASCADE'), index=True)
+    scope: Mapped[str] = mapped_column(String(36))
+    actor_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    result: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class GroupPassConfigAudit(Base):
+    __tablename__ = 'group_pass_config_audits'
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    pass_guest_id: Mapped[str] = mapped_column(ForeignKey('guest_group_passes.guest_id', ondelete='CASCADE'), index=True)
+    actor_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    before: Mapped[dict] = mapped_column(JSON)
+    after: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

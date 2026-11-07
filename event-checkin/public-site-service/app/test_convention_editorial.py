@@ -10,7 +10,7 @@ def test_opt_in_renders_mockup_composition_and_all_three_days():
     assert 'Our roots.<br>Our people.<br><em>Our future.</em>' in page
     assert 'Thursday, November 26' in page and 'Friday, November 27' in page and 'Saturday, November 28' in page
     assert 'https://staging.festio.events/rsvp/test' in page
-    assert page.index('ROOTED IN HERITAGE') < page.index('YOUR CONVENTION, DAY BY DAY')
+    assert page.index('Reconnect') < page.index('YOUR CONVENTION, DAY BY DAY')
 
 
 def test_content_is_escaped_and_unsafe_actions_are_not_links():
@@ -23,3 +23,11 @@ def test_content_is_escaped_and_unsafe_actions_are_not_links():
 def test_existing_layouts_do_not_switch_without_opt_in():
     c=content();c['convention_editorial']=False
     assert 'Carrying Ilorin' not in render_site(c,'editorial')
+
+
+def test_generated_visuals_are_separate_from_live_text_and_are_labelled():
+    page=render_site(content(convention_artwork_url='https://staging.festio.events/site-assets/concept.png'),'editorial')
+    assert page.count('<svg class="concept-visual"') == 5
+    assert 'generated promotional imagery' in page
+    assert 'AI-generated design concept' in page
+    assert 'https://staging.festio.events/rsvp/test' in page

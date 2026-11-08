@@ -5,3 +5,6 @@
 .fwc-history{display:flex;flex-direction:column;gap:6px;margin:10px 0 18px}.fwc-history button{padding:10px;border:1px solid #ccd7c5;border-radius:8px;background:#fffefa;text-align:left;color:#193f34;font-size:11px;cursor:pointer}.fwc-chat-reference{font-size:10px!important;letter-spacing:1px;font-weight:bold;margin:12px 0 6px!important}.fwc-chat-log a{color:#17593e;text-decoration:underline;overflow-wrap:anywhere}.fwc-embedded{background:#fcfaf4;min-height:100dvh;margin:0}.fwc-embedded>header{padding:22px 24px;background:#eaf0e4;border-bottom:1px solid #dce4d4}.fwc-embedded header>span{font-size:9px;letter-spacing:2px;font-weight:bold}.fwc-embedded h1{font:30px/1.2 Georgia,serif;color:#173f34;margin:12px 0}.fwc-embedded header p{font:12px/1.6 Arial;color:#4b6255;margin:0}.fwc-embedded .fwc-chat-log{max-height:250px}
 
 .fwc-resume-help{border:1px solid #d5e1cb;border-radius:12px;background:#f0f4e9;padding:12px;margin:12px 0}.fwc-resume-help button{background:#fffefa;border:1px solid #b8c8b0;border-radius:8px;color:#214c3d;padding:10px;font-size:12px;font-weight:bold;cursor:pointer}.fwc-resume-help small{display:block;color:#64715f;font-size:10px;line-height:1.6;margin-top:8px}
+
+/* Separate the embedded chat choices without changing either action. */
+.fwc-embedded .fwc-whatsapp-option{margin-top:14px}.fwc-continue .fwc-channel-icon{flex-shrink:0}

@@ -2313,6 +2313,9 @@ async def unadmit_guest(
         event = await db.get(Event, event_id)
         if event:
             await _notify_unadmit(event, guest, db, background_tasks)
+            # Paid-channel reservations lock the organization wallet. Release
+            # that lock before background email metering opens its own session.
+            await db.commit()
 
     await broadcast(event_id, {
         "type": "unadmitted",

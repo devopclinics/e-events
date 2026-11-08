@@ -147,6 +147,19 @@ function GuardianCandidate({ candidate, manualEnabled, busy, action, onSelect })
   </button>
 }
 
+function GroupAdmissionConfirmation({ groupEntry, groupQuantity, busy, onQuantityChange, onConfirm, onClose }) {
+  return <section className="sc-group-confirm" role="region" aria-label="Confirm group admission">
+        <span className="sc-group-eyebrow">SHARED GROUP PASS · {groupEntry.scope}</span>
+        <h3>{groupEntry.group_name}</h3>
+        <p><strong>{groupEntry.used} of {groupEntry.admission_limit}</strong> admitted · <strong>{groupEntry.remaining}</strong> remaining</p>
+        <p>Count the people entering now. Confirming creates a record for each person. No admission has been recorded by this preview.</p>
+        <label>People entering now<input className="sc-search-input" type="number" min="1" max={Math.min(50, groupEntry.remaining)} step="1" value={groupQuantity} disabled={busy || groupEntry.submitted} onChange={e => onQuantityChange(e.target.value)}/></label>
+        <div className="sc-search-row"><button type="button" className="rr-btn primary" disabled={busy || !Number.isInteger(Number(groupQuantity)) || Number(groupQuantity) < 1 || Number(groupQuantity) > Math.min(50, groupEntry.remaining)} onClick={onConfirm}>{busy ? 'Confirming…' : groupEntry.submitted ? 'Retry same admission' : `Admit ${groupQuantity} people`}</button>
+        <button type="button" className="rr-btn secondary" disabled={busy || groupEntry.submitted} onClick={onClose}>Close</button></div>
+        {groupEntry.submitted && <p>After a connection interruption, retry this same admission before starting another. Ask staff to check the group history if the outcome is uncertain.</p>}
+      </section>
+}
+
 function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, onManifestChange, onQueueChange, onRefreshManifest, onResult }) {
   const [token, setToken] = useState('')
   const [busy, setBusy] = useState(false)
@@ -322,16 +335,7 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
       )}
       {!guardianStep && accessMode && activeZone && <div className="sc-session-context"><strong>{activeZone.name}</strong><span>{sessionSeating === 'none' ? 'Attendance only. No table or seat is assigned for this session.' : sessionSeating === 'assigned' ? 'Guests need a preassigned table. Check the table and seat on the result before directing them.' : sessionSeating === 'event' ? 'Uses existing table and seating rules. Check the table and seat on the result before directing the guest.' : 'Check the session and direction before scanning.'}</span></div>}
       {!guardianStep && event.section_mode_enabled && sections.length > 1 && mode !== 'checkout' && <select className="sc-selector" aria-label="Active section" value={sectionId} onChange={(e) => setSectionId(e.target.value)}><option value="">Select section</option>{sections.map((section) => <option key={section.id} value={section.id}>{section.name}</option>)}</select>}
-      {groupEntry && <section className="sc-group-confirm" role="region" aria-label="Confirm group admission">
-        <span className="sc-group-eyebrow">SHARED GROUP PASS · {groupEntry.scope}</span>
-        <h3>{groupEntry.group_name}</h3>
-        <p><strong>{groupEntry.used} of {groupEntry.admission_limit}</strong> admitted · <strong>{groupEntry.remaining}</strong> remaining</p>
-        <p>Count the people entering now. Confirming creates a record for each person. No admission has been recorded by this preview.</p>
-        <label>People entering now<input className="sc-search-input" type="number" min="1" max={Math.min(50, groupEntry.remaining)} step="1" value={groupQuantity} disabled={busy || groupEntry.submitted} onChange={e => setGroupQuantity(e.target.value)}/></label>
-        <div className="sc-search-row"><button type="button" className="rr-btn primary" disabled={busy || !Number.isInteger(Number(groupQuantity)) || Number(groupQuantity) < 1 || Number(groupQuantity) > Math.min(50, groupEntry.remaining)} onClick={confirmGroup}>{busy ? 'Confirming…' : groupEntry.submitted ? 'Retry same admission' : `Admit ${groupQuantity} people`}</button>
-        <button type="button" className="rr-btn secondary" disabled={busy || groupEntry.submitted} onClick={() => { setGroupEntry(null); groupPending.current = false; setError('') }}>Close</button></div>
-        {groupEntry.submitted && <p>After a connection interruption, retry this same admission before starting another. Ask staff to check the group history if the outcome is uncertain.</p>}
-      </section>}
+      {groupEntry && <GroupAdmissionConfirmation groupEntry={groupEntry} groupQuantity={groupQuantity} busy={busy} onQuantityChange={setGroupQuantity} onConfirm={confirmGroup} onClose={() => { setGroupEntry(null); groupPending.current = false; setError('') }}/>}
       {!groupEntry && (guardianStep ? (
         <section className="sc-guardian-handoff" aria-live="polite">
           <strong>Guardian required for {guardianChildName}</strong>
@@ -346,7 +350,10 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
     </form>
   )
 }
-function ManualMode({ event, sections, zones, onResult, onManifestChange, onQueueChange }) {
+export function ManualMode({ event, sections, zones, onResult, onManifestChange, onQueueChange }) {
+  const [groupEntry, setGroupEntry] = useState(null)
+  const [groupQuantity, setGroupQuantity] = useState(1)
+  const groupPending = useRef(false)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [busyId, setBusyId] = useState('')
@@ -413,11 +420,37 @@ function ManualMode({ event, sections, zones, onResult, onManifestChange, onQueu
     return () => { active = false; window.clearTimeout(timer) }
   }, [event?.id, event?.manual_checkin_enabled, event?.checkout_enabled, query])
 
+  async function confirmGroup() {
+    if (!groupEntry || busyId) return
+    setBusyId(`${groupEntry.guest.id}:group`); setError('')
+    const entry = { ...groupEntry, submitted: true, quantity: groupEntry.quantity || Number(groupQuantity) }
+    setGroupEntry(entry)
+    try {
+      const response = await api.enterGroupPass(entry.token, { ...entry.query, request_id: entry.request_id, quantity: entry.quantity })
+      onResult({ ...response, pass_token: entry.token })
+      setGroupEntry(null); groupPending.current = false
+      setResults(items => items.map(item => item.id === entry.guest.id ? { ...item, admitted: item.admitted || !entry.query.zone_id } : item))
+    } catch (error) {
+      setError(error.message || 'Unable to confirm. Retry the same admission to avoid counting twice.')
+      if (error.status && error.status < 500) setGroupEntry({ ...entry, submitted: false, quantity: null, request_id: crypto.randomUUID() })
+    } finally { setBusyId('') }
+  }
+
   async function checkin(guest, guardianPass = null, guardianGuestId = null) {
-    if (busyId) return
+    if (busyId || groupPending.current) return
     setBusyId(`${guest.id}:checkin`); setError('')
     try {
       if (!navigator.onLine) throw new TypeError('Network offline')
+      if ((zoneOperation && direction === 'in') || (!zoneOperation && operation !== 'checkout')) {
+        if (zoneOperation && !zoneId) throw new Error('Select a zone before checking in.')
+        const query = zoneOperation ? { zone_id: zoneId } : {}
+        const info = await api.scanGroupPassInfo(guest.qr_token, query)
+        if (info.enabled) {
+          groupPending.current = true; setGroupQuantity(1); onResult(null)
+          setGroupEntry({ ...info, token: guest.qr_token, guest, query, request_id: crypto.randomUUID(), submitted: false })
+          return
+        }
+      }
       const response = zoneOperation
         ? await api.scanZone(guest.qr_token, { zone_id: zoneId, direction, guardian_token: guardianPass, guardian_guest_id: guardianGuestId })
         : operation === 'checkout'
@@ -498,7 +531,7 @@ function ManualMode({ event, sections, zones, onResult, onManifestChange, onQueu
       )}
       {!walkin ? <>
         {separatedAccess && (
-          <select className="sc-selector" aria-label="Manual operation" value={operation} disabled={!!busyId} onChange={(e) => { cancelGuardianStep(); setOperation(e.target.value) }}>
+          <select className="sc-selector" aria-label="Manual operation" value={operation} disabled={!!busyId || !!groupEntry} onChange={(e) => { cancelGuardianStep(); setOperation(e.target.value) }}>
             <option value="admission">Convention check-in</option>
             <option value="access">Zone access</option>
             <option value="checkout">Convention check-out</option>
@@ -506,15 +539,16 @@ function ManualMode({ event, sections, zones, onResult, onManifestChange, onQueu
         )}
         {zoneOperation && (
           <div className="sc-search-row sc-access-row">
-            <select className="sc-selector" aria-label="Manual search zone" value={zoneId} disabled={!!busyId} onChange={(e) => { cancelGuardianStep(); setZoneId(e.target.value) }}>
+            <select className="sc-selector" aria-label="Manual search zone" value={zoneId} disabled={!!busyId || !!groupEntry} onChange={(e) => { cancelGuardianStep(); setZoneId(e.target.value) }}>
               <option value="">Select zone</option>
               {zones.filter((zone) => zone.is_active !== false).map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}
             </select>
-            <select className="sc-selector" aria-label="Manual search direction" value={direction} disabled={!!busyId} onChange={(e) => { cancelGuardianStep(); setDirection(e.target.value) }}>
+            <select className="sc-selector" aria-label="Manual search direction" value={direction} disabled={!!busyId || !!groupEntry} onChange={(e) => { cancelGuardianStep(); setDirection(e.target.value) }}>
               <option value="in">Check in to zone</option><option value="out">Check out of zone</option>
             </select>
           </div>
         )}
+        {groupEntry && <GroupAdmissionConfirmation groupEntry={groupEntry} groupQuantity={groupQuantity} busy={!!busyId} onQuantityChange={setGroupQuantity} onConfirm={confirmGroup} onClose={() => { setGroupEntry(null); groupPending.current = false; setError('') }}/>}
         {guardianStep && (
           <section className="sc-guardian-handoff" aria-live="polite">
             <strong>Guardian required for {guardianStep.guest.full_name}</strong>
@@ -522,7 +556,7 @@ function ManualMode({ event, sections, zones, onResult, onManifestChange, onQueu
             {guardianStep.candidates.length > 0 ? <><input className="sc-search-input" aria-label="Search authorized guardians" value={guardianSearch} onChange={(e) => setGuardianSearch(e.target.value)} placeholder="Search authorized guardians"/>
               <div className="sc-guardian-candidates">{guardianCandidates.map((candidate) => <GuardianCandidate key={candidate.guardian_guest_id} candidate={candidate} manualEnabled={event.manual_checkin_enabled} busy={!!busyId} action={zoneOperation ? (direction === 'out' ? 'exit zone' : 'enter zone') : 'check out'} onSelect={() => confirmGuardian(candidate.guardian_guest_id)}/>)}{guardianCandidates.length === 0 && <p className="sc-empty">No confirmed guardian matches that search.</p>}</div></> : <p className="sc-empty">No confirmed guardian is available for this junior. Ask an event administrator to review the authorization.</p>}
             <div className="sc-search-row sc-token-row"><input className="sc-search-input" aria-label="Manual guardian pass token" value={guardianToken} onChange={(e) => setGuardianToken(e.target.value)} placeholder="Guardian pass URL or QR token"/><button className="rr-btn primary" disabled={!guardianToken.trim() || !!busyId} onClick={() => confirmGuardian()}>{busyId ? 'Verifying…' : 'Verify guardian QR'}</button></div>
-            <button type="button" className="rr-btn secondary" onClick={cancelGuardianStep} disabled={!!busyId}>Cancel and choose another guest</button>
+            <button type="button" className="rr-btn secondary" onClick={cancelGuardianStep} disabled={!!busyId || !!groupEntry}>Cancel and choose another guest</button>
           </section>
         )}
         <div className="sc-search-row">
@@ -535,17 +569,17 @@ function ManualMode({ event, sections, zones, onResult, onManifestChange, onQueu
             <div className="sc-guest-info"><strong>{guest.full_name}</strong><small>{guest.phone_masked || 'No phone'}{guest.table_name ? ` · ${guest.table_name}` : ''}</small></div>
             <div className="sc-guest-actions">
               {event.manual_checkin_enabled && (
-                <button className="rr-btn primary" disabled={!!busyId || (zoneOperation && !zoneId) || (separatedAccess && operation === 'checkout' && !guest.admitted)} onClick={() => checkin(guest)}>
+                <button className="rr-btn primary" disabled={!!busyId || !!groupEntry || (zoneOperation && !zoneId) || (separatedAccess && operation === 'checkout' && !guest.admitted)} onClick={() => checkin(guest)}>
                   {busyId === `${guest.id}:checkin` ? 'Recording…' : zoneOperation ? (direction === 'in' ? 'Enter zone' : 'Exit zone') : operation === 'checkout' ? 'Check out' : guest.admitted ? 'Already checked in' : 'Check in'}
                 </button>
               )}
               {!separatedAccess && event.checkout_enabled && guest.admitted && (
-                <button className="rr-btn secondary" disabled={!!busyId || guest.checked_out} onClick={() => checkout(guest)}>
+                <button className="rr-btn secondary" disabled={!!busyId || !!groupEntry || guest.checked_out} onClick={() => checkout(guest)}>
                   {busyId === `${guest.id}:checkout` ? 'Recording…' : guest.checked_out ? 'Checked out' : 'Check out'}
                 </button>
               )}
               {guest.admitted && (
-                <button className="rr-btn secondary" disabled={!!busyId} onClick={() => setUnadmitTarget(guest)}>{event.venue_access_enabled ? 'Correct event admission' : 'Undo check-in'}</button>
+                <button className="rr-btn secondary" disabled={!!busyId || !!groupEntry} onClick={() => setUnadmitTarget(guest)}>{event.venue_access_enabled ? 'Correct event admission' : 'Undo check-in'}</button>
               )}
               {!event.manual_checkin_enabled && !guest.admitted && <span className="sc-guest-state">Not checked in</span>}
             </div>

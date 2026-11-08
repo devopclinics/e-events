@@ -137,3 +137,39 @@ async def test_general_group_entry_and_retry(ctx):
     async with _Session() as db:
         guests=(await db.scalars(select(Guest).where(Guest.event_id==i['event']))).all()
         assert len(guests)==2 and all(g.admitted for g in guests)
+
+
+@pytest.mark.asyncio
+async def test_shared_pass_after_first_individual_admission(ctx):
+    i = await setup(ctx)
+    async with _Session() as db:
+        guest = await db.get(Guest, i['guest'])
+        guest.admitted = True
+        await db.commit()
+    assert (await ctx.client.put(config(i), json={'enabled': True, 'admission_limit': 2})).status_code == 200
+    info = (await ctx.client.get(path(i))).json()
+    assert (info['used'], info['remaining']) == (1, 1)
+    request = {'request_id': str(uuid.uuid4()), 'quantity': 1}
+    response = await ctx.client.post(path(i), json=request)
+    assert response.status_code == 200, response.text
+    assert (response.json()['used'], response.json()['remaining']) == (2, 0)
+    assert (await ctx.client.post(path(i), json=request)).json()['replayed'] is True
+    request['request_id'] = str(uuid.uuid4())
+    assert (await ctx.client.post(path(i), json=request)).status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_feature_scoped_scanner_can_admit_shared_group(ctx):
+    from app.models import Membership, EventUser
+    i = await setup(ctx)
+    async with _Session() as db:
+        db.add(Membership(org_id=ctx.ids['org_a'], user_id=ctx.ids['user_b'].id, role='staff'))
+        db.add(EventUser(event_id=i['event'], user_id=ctx.ids['user_b'].id, event_role='staff',
+                         feature_permissions={'scanner':'manage','guests':'view'}, can_view_guests=True))
+        await db.commit()
+    ctx.login(ctx.ids['user_b'])
+    assert (await ctx.client.get(path(i))).status_code == 200
+    response = await ctx.client.post(path(i), json=body(i, 1))
+    assert response.status_code == 200, response.text
+    assert (await ctx.client.get(config(i))).status_code == 200
+    assert (await ctx.client.put(config(i), json={'enabled':True,'admission_limit':10})).status_code == 403

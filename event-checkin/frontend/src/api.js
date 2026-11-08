@@ -1826,6 +1826,7 @@ export const api = {
   certificateWorkflowDecision: (eventId, linkId, action) => req('POST', `/events/${eventId}/certificate-workflow/${linkId}/${action}`),
   listCertificateTemplates: (eventId) => req('GET', `/events/${eventId}/certificate-templates`),
   createCertificateTemplate: (eventId, body) => req('POST', `/events/${eventId}/certificate-templates`, body),
+  previewCertificate: (eventId, body) => req('POST', `/events/${eventId}/certificate-preview`, body),
   saveCertificateTemplate: (eventId, templateId, body) => req('PUT', `/events/${eventId}/certificate-templates/${templateId}`, body),
   certificateReport: (eventId) => req('GET', `/events/${eventId}/certificates/report`),
   listCertificateCandidates: (eventId, templateId) => req('GET', `/events/${eventId}/certificate-candidates?template_id=${encodeURIComponent(templateId)}`),

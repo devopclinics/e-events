@@ -6,7 +6,7 @@ export const CERTIFICATE_TYPES = [
   {id:'speaker',name:'Speaker',title:'Speaker Recognition',body:'In appreciation of sharing your knowledge and inspiring our community'},
   {id:'volunteer',name:'Volunteer',title:'Volunteer Recognition',body:'In recognition of your generous service and dedication'},
 ]
-export const CERTIFICATE_LAYOUTS = [{id:'classic',name:'Classic frame'},{id:'modern',name:'Modern band'},{id:'editorial',name:'Editorial border'}]
+export const CERTIFICATE_LAYOUTS = [{id:'classic',name:'Classic frame'},{id:'modern',name:'Modern band'},{id:'editorial',name:'Editorial border'}, ...[{id:'royal',name:'Royal Purple'},{id:'heritage',name:'Heritage Gold'},{id:'midnight',name:'Midnight Copper'},{id:'ivory',name:'Ivory Signature'}]]
 export function applyCertificateType(design, id) {
   const type=CERTIFICATE_TYPES.find(type=>type.id===id)
   return type?{...design,kind:id,title:type.title,subtitle:'This certificate is proudly presented to',body:type.body}:{...design,kind:'custom'}

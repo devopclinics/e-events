@@ -8,10 +8,10 @@ async function request(path,body) {
   if(!r.ok)throw new Error(typeof value.detail==='string'?value.detail:'Unable to complete this request. Check the form or ask the organiser for a new link.')
   return value
 }
-export function CertificateProof({src,title}) {
+export function CertificateProof({src,srcDoc,title}) {
   const ref=useRef(null),[scale,setScale]=useState(0.5)
   useEffect(()=>{const observer=new ResizeObserver(([entry])=>setScale(entry.contentRect.width/1120));observer.observe(ref.current);return()=>observer.disconnect()},[])
-  return <div className="cp-proof" ref={ref}><iframe sandbox="" referrerPolicy="no-referrer" title={title} src={src} style={{transform:`scale(${scale})`}}/></div>
+  return <div className="cp-proof" ref={ref}><iframe sandbox="" referrerPolicy="no-referrer" title={title} src={src} srcDoc={srcDoc} style={{transform:`scale(${scale})`}}/></div>
 }
 export function SignaturePad({value,onChange,disabled}) {
   const canvas=useRef(null),active=useRef(null),lines=useRef(value)

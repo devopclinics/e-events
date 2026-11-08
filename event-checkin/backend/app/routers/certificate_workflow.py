@@ -84,7 +84,7 @@ async def resolve(kind, token, db, lock=False):
 def clean_design(design):
     # Public proofs never expose previously uploaded or collected signatures.
     return {k:copy.deepcopy(v) for k,v in (design or {}).items() if k in {
-        'title','subtitle','body','layout','kind','primary_color','accent_color','logo_url','background_url','orientation'}}
+        'title','subtitle','body','layout','kind','primary_color','accent_color','logo_url','background_url','orientation','layout_version','organisation','event_brand','event_brand_accent','event_edition','eyebrow','theme','theme_subtitle','seal_label','seal_edition','footer_brand'}}
 
 
 def proof(row, option):
@@ -158,8 +158,10 @@ async def add_preset(event_id:str,key:str,db=Depends(get_db),user=Depends(requir
     if not row:
         row=Template(event_id=event_id,key='studio-'+key,name=p['name'],design={k:v for k,v in p.items() if k not in ('key','name')},
             eligibility={'minimum_sessions':1,'require_event_checkin':True},created_by_user_id=user.id)
-        row.design={**row.design,'title':'Certificate of Participation','subtitle':'This certificate is presented to','body':'In recognition of participation in this event','signature_name':'Authorised Signatory','orientation':'landscape'}
+        row.design={**row.design,'title':'Certificate of Participation','subtitle':'This certificate is presented to','body':'In recognition of participation in this event','signature_name':'Authorised Signatory','orientation':'landscape','layout_version':2}
         db.add(row);await db.commit();await db.refresh(row)
+    if row.design.get('layout_version')!=2:
+        row.design={**row.design,'layout_version':2};await db.commit();await db.refresh(row)
     return _template_out(row)
 
 

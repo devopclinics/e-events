@@ -410,6 +410,9 @@ def _certificate_html(cert: EventCertificate, preview=False):
     asset = lambda value: _absolute_public_url(str(value)) if str(value or "").startswith("/") else str(value or "")
     logo = html.escape(asset(design.get("logo_url"))); background = html.escape(asset(design.get("background_url"))); signature = html.escape(asset(design.get("signature_url")))
     bg = f"background-image:linear-gradient(#ffffffdd,#ffffffdd),url('{background}');background-size:cover;" if background else ""
+    from ..certificate_originals import original_certificate
+    original = original_certificate(cert, preview=preview, asset=asset, qr=qr)
+    if original is not None: return original
     event_meta = ''
     if layout in ('royal','heritage','midnight','ivory'):
         parts=[]
@@ -426,6 +429,16 @@ def _certificate_html(cert: EventCertificate, preview=False):
     qr_block = '<span>DESIGN PREVIEW<br>Not an issued certificate</span>' if preview else f"<span><img class='qr' src='data:image/png;base64,{qr}'><br>Scan to verify</span>"
 
     return f"""<!doctype html><html><head><meta charset='utf-8'><style>@page{{size:A4 landscape;margin:0}}*{{box-sizing:border-box}}body{{margin:0;font-family:Arial;color:{primary}}}.certificate{{width:1120px;height:790px;padding:58px;text-align:center;border:18px solid {primary};box-shadow:inset 0 0 0 5px {accent};display:flex;flex-direction:column;justify-content:center;{bg}}}.logo{{max-width:130px;max-height:75px;margin:0 auto 10px}}.eyebrow{{letter-spacing:.24em;text-transform:uppercase;color:{accent};font-weight:700}}h1{{font:58px Georgia;margin:18px}}h2{{font:48px Georgia;max-width:100%;overflow-wrap:anywhere;margin:15px;border-bottom:2px solid {accent};display:inline-block;padding:0 30px 10px}}p{{font-size:20px}}footer{{margin-top:30px;display:flex;align-items:end;justify-content:space-around;font-size:13px}}footer img.signature{{display:block;max-width:150px;max-height:50px;margin:auto}}.qr{{width:86px;height:86px}}.event-meta{{font-size:13px;margin:8px 0}}{layout_css}</style></head><body><main class='certificate' data-layout='{layout}'>{f'<img class="logo" src="{logo}">' if logo else ''}<div class='eyebrow'>{html.escape(design.get('title','Certificate of Participation'))}</div><p>{html.escape(design.get('subtitle','This certificate is proudly presented to'))}</p><h2>{html.escape(snap.get('participant_name','Participant'))}</h2><h1>{html.escape(snap.get('event_name','Event'))}</h1><p>{html.escape(design.get('body','For successful participation in this event'))}</p>{event_meta}<footer>{signature_block}{qr_block}<span>{html.escape(cert.certificate_number)}<br>Verification number</span></footer></main></body></html>"""
+
+
+@router.post("/{event_id}/certificate-preview")
+async def certificate_preview(event_id: str, body: TemplateSave, db=Depends(get_db), user=Depends(require_event_admin)):
+    from types import SimpleNamespace
+    from .certificate_workflow import event_context
+    event = await db.get(Event, event_id)
+    if not event: raise HTTPException(404, "Event not found")
+    sample = SimpleNamespace(snapshot={**event_context(event), "design":body.design, "participant_name":"Participant Name"}, certificate_number="DESIGN PREVIEW", verification_token="preview")
+    return {"html":_certificate_html(sample, preview=True)}
 
 
 @router.get("/{event_id}/guest-content/{token}")
@@ -459,6 +472,13 @@ async def verify(token: str, db: AsyncSession = Depends(get_db)):
     if not cert: raise HTTPException(404, "Certificate not found")
     if not cert.viewed_at: cert.viewed_at = datetime.utcnow(); await db.commit()
     return {**_certificate_out(cert), "valid": cert.status == "issued", "snapshot": cert.snapshot or {}}
+
+
+@public_router.get("/{token}/document.html")
+async def certificate_document_html(token: str, db=Depends(get_db)):
+    cert = await db.scalar(select(EventCertificate).where(EventCertificate.verification_token == token))
+    if not cert: raise HTTPException(404, "Certificate not found")
+    return HTMLResponse(_certificate_html(cert), headers={"Cache-Control":"no-store", "Content-Security-Policy":"sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data: https:;", "X-Robots-Tag":"noindex"})
 
 
 @public_router.get("/{token}/document.pdf")

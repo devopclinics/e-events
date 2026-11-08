@@ -146,7 +146,7 @@ footer{{padding:2rem 5vw;border-top:1px solid #ddd;display:flex;justify-content:
 <footer><a href="https://festio.events" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">Powered by Festio</a><div class="footer-links">{footer_links}</div></footer></body></html>'''
 
 
-def render_site(content: dict, family: str, *, preview: bool = False) -> str:
+def _render_event_page(content: dict, family: str, *, preview: bool = False) -> str:
     if content.get("convention_editorial"):
         from .convention_editorial import render
         return render(content, preview=preview)
@@ -218,3 +218,12 @@ def render_site(content: dict, family: str, *, preview: bool = False) -> str:
             return tag if "target=" in tag else tag[:-1] + ' target="_blank" rel="noopener">'
         html = re.sub(r'<a\s[^>]*href="https?://[^>]*>', separate_link, html)
     return html.replace("</head>", style+"</head>")
+
+
+def render_site(content: dict, family: str, *, preview: bool = False) -> str:
+    """Use each event's own logo for browser branding across website layouts."""
+    icon = safe_url(content.get("logo_url"))
+    html = _render_event_page(content, family, preview=preview)
+    if icon:
+        html = html.replace("</head>", f'<link rel="icon" href="{icon}"></head>', 1)
+    return html

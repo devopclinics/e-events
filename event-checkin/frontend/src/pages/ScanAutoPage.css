@@ -9,7 +9,7 @@
 .festio-pass .pass-body .text-slate-400,.festio-pass .pass-body .text-slate-500 {color:#66596d}
 .festio-pass .pass-facts {background:#f7f3f9;border-color:#e2d8e7;line-height:1.6}
 .festio-pass .pass-facts h2 {color:#66596d}
-.festio-pass .pass-qr {max-width:100%;height:auto;aspect-ratio:1;background:#fff}
+.festio-pass .pass-qr {display:block;margin-inline:auto;max-width:100%;height:auto;aspect-ratio:1;background:#fff}
 .festio-pass .pass-footer {position:static;color:var(--pass-footer-ink);padding-bottom:env(safe-area-inset-bottom,0px)}
 .festio-pass .pass-footer a {color:inherit;border-color:currentColor}
 @media(max-width:360px){.festio-pass .pass-body{padding-left:16px;padding-right:16px}.festio-pass .pass-header{padding-left:16px;padding-right:16px}}

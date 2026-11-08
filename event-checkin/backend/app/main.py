@@ -251,6 +251,8 @@ async def _audit_public_api_requests(request, call_next):
         response.headers["Cache-Control"] = "no-store"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-Robots-Tag"] = "noindex, nofollow"
+    if request.url.path.startswith("/api/certificate-workflow/"):
+        response.headers.update({"Cache-Control":"no-store","Referrer-Policy":"no-referrer","X-Robots-Tag":"noindex, nofollow"})
     if request.url.path.startswith("/api/public/v1"):
         api_key_id = getattr(request.state, "api_key_id", None)
         if api_key_id:
@@ -267,6 +269,9 @@ app.include_router(events.router,      prefix="/api/events", tags=["events"])
 app.include_router(public_sites.router, prefix="/api/events", tags=["event-websites"])
 app.include_router(live_content.router, prefix="/api/events", tags=["certificates-presenter-materials"])
 app.include_router(live_content.public_router, prefix="/api/certificates", tags=["certificates-public"])
+from .routers import certificate_workflow
+app.include_router(certificate_workflow.router, prefix="/api/events", tags=["certificate-workflow"])
+app.include_router(certificate_workflow.public_router, prefix="/api/certificate-workflow", tags=["certificate-workflow-public"])
 app.include_router(conference_center.router, prefix="/api/events", tags=["conference-center"])
 app.include_router(conference_center.public_router, prefix="/api/conference-calls", tags=["conference-calls-public"])
 app.include_router(event_forms.router, prefix="/api/events", tags=["event-forms"])

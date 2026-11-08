@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .. import storage
 from ..auth import require_event_admin, require_event_member
 from ..config import settings
+from ..timeutil import to_event_local
 from ..database import get_db
 from ..models import (Event, EventCertificate, EventCertificateTemplate, ExperienceStep,
                       Guest, GuestExperienceProgress, PresenterMaterial, User, ExperienceWorkflow)
@@ -218,12 +219,15 @@ async def auto_issue_eligible_certificates(event: Event, guest: Guest, db: Async
         existing = await db.scalar(select(EventCertificate.id).where(
             EventCertificate.template_id == template.id, EventCertificate.guest_id == guest.id))
         if existing: continue
+        from .certificate_workflow import approved_signatories
+        signatories = await approved_signatories(template, db, strict=False)
+        if signatories is None: continue
         count = candidate[0]
         cert = EventCertificate(event_id=event.id, template_id=template.id, guest_id=guest.id,
             certificate_number=f"FESTIO-{datetime.utcnow():%Y%m}-{uuid.uuid4().hex[:10].upper()}",
             snapshot={"participant_name": f"{guest.first_name} {guest.last_name}".strip(), "event_name": event.name,
-                      "event_date": event.event_date.isoformat() if event.event_date else "", "sessions_attended": count,
-                      "template_name": template.name, "design": template.design or {}, "eligibility": template.eligibility or {}})
+                      "event_date": event.event_date.isoformat() if event.event_date else "", "event_date_local": to_event_local(event.event_date,event.timezone).isoformat() if event.event_date else "", "event_venue": event.venue_name or "", "sessions_attended": count,
+                      "template_name": template.name, "design": template.design or {}, "eligibility": template.eligibility or {}, "signatories": signatories})
         db.add(cert); await db.flush(); created.append(cert)
         if background_tasks is not None and guest.email:
             url = _absolute_public_url(f"/certificates/{cert.verification_token}")
@@ -238,9 +242,11 @@ async def auto_issue_eligible_certificates(event: Event, guest: Guest, db: Async
 async def candidates(event_id: str, template_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_member)):
     template = await db.get(EventCertificateTemplate, template_id)
     if not template or template.event_id != event_id: raise HTTPException(404, "Certificate template not found")
+    from .certificate_workflow import approved_signatories
+    signatures_ready = await approved_signatories(template, db, strict=False) is not None
     issued = set((await db.execute(select(EventCertificate.guest_id).where(EventCertificate.template_id == template_id))).scalars().all())
     return [{"guest_id": g.id, "name": f"{g.first_name} {g.last_name}".strip(), "email": g.email,
-             "admitted": g.admitted, "sessions_attended": count, "eligible": eligible, "issued": g.id in issued}
+             "admitted": g.admitted, "sessions_attended": count, "eligible": eligible and signatures_ready, "signatures_ready": signatures_ready, "issued": g.id in issued}
             for g, count, eligible in await _candidate_rows(event_id, template, db)]
 
 
@@ -250,6 +256,8 @@ async def issue(event_id: str, body: IssueRequest, background_tasks: BackgroundT
     event = await _event(event_id, db)
     template = await db.get(EventCertificateTemplate, body.template_id)
     if not template or template.event_id != event_id or not template.active: raise HTTPException(404, "Active certificate template not found")
+    from .certificate_workflow import approved_signatories
+    signatories = await approved_signatories(template, db)
     selected = set(body.guest_ids)
     created = []
     for guest, count, eligible in await _candidate_rows(event_id, template, db):
@@ -260,8 +268,8 @@ async def issue(event_id: str, body: IssueRequest, background_tasks: BackgroundT
         cert = EventCertificate(event_id=event_id, template_id=template.id, guest_id=guest.id,
             certificate_number=f"FESTIO-{datetime.utcnow():%Y%m}-{uuid.uuid4().hex[:10].upper()}", issued_by_user_id=user.id,
             snapshot={"participant_name": f"{guest.first_name} {guest.last_name}".strip(), "event_name": event.name,
-                      "event_date": event.event_date.isoformat() if event.event_date else "", "sessions_attended": count,
-                      "template_name": template.name, "design": template.design or {}, "eligibility": template.eligibility or {}})
+                      "event_date": event.event_date.isoformat() if event.event_date else "", "event_date_local": to_event_local(event.event_date,event.timezone).isoformat() if event.event_date else "", "event_venue": event.venue_name or "", "sessions_attended": count,
+                      "template_name": template.name, "design": template.design or {}, "eligibility": template.eligibility or {}, "signatories": signatories})
         db.add(cert); await db.flush(); created.append((cert, guest))
     await db.commit()
     for cert, guest in created:
@@ -392,7 +400,7 @@ async def delete_material(event_id: str, material_id: str, db: AsyncSession = De
     row.status = "archived"; await db.commit()
 
 
-def _certificate_html(cert: EventCertificate):
+def _certificate_html(cert: EventCertificate, preview=False):
     snap, design = cert.snapshot or {}, (cert.snapshot or {}).get("design") or {}
     primary, accent = html.escape(design.get("primary_color", "#075845")), html.escape(design.get("accent_color", "#dba92e"))
     from ..certificate_layouts import certificate_layout
@@ -402,7 +410,22 @@ def _certificate_html(cert: EventCertificate):
     asset = lambda value: _absolute_public_url(str(value)) if str(value or "").startswith("/") else str(value or "")
     logo = html.escape(asset(design.get("logo_url"))); background = html.escape(asset(design.get("background_url"))); signature = html.escape(asset(design.get("signature_url")))
     bg = f"background-image:linear-gradient(#ffffffdd,#ffffffdd),url('{background}');background-size:cover;" if background else ""
-    return f"""<!doctype html><html><head><meta charset='utf-8'><style>@page{{size:A4 landscape;margin:0}}*{{box-sizing:border-box}}body{{margin:0;font-family:Arial;color:{primary}}}.certificate{{width:1120px;height:790px;padding:58px;text-align:center;border:18px solid {primary};box-shadow:inset 0 0 0 5px {accent};display:flex;flex-direction:column;justify-content:center;{bg}}}.logo{{max-width:130px;max-height:75px;margin:0 auto 10px}}.eyebrow{{letter-spacing:.24em;text-transform:uppercase;color:{accent};font-weight:700}}h1{{font:58px Georgia;margin:18px}}h2{{font:48px Georgia;margin:15px;border-bottom:2px solid {accent};display:inline-block;padding:0 30px 10px}}p{{font-size:20px}}footer{{margin-top:30px;display:flex;align-items:end;justify-content:space-around;font-size:13px}}footer img.signature{{display:block;max-width:150px;max-height:50px;margin:auto}}.qr{{width:86px;height:86px}}{layout_css}</style></head><body><main class='certificate' data-layout='{layout}'>{f'<img class="logo" src="{logo}">' if logo else ''}<div class='eyebrow'>{html.escape(design.get('title','Certificate of Participation'))}</div><p>{html.escape(design.get('subtitle','This certificate is proudly presented to'))}</p><h2>{html.escape(snap.get('participant_name','Participant'))}</h2><h1>{html.escape(snap.get('event_name','Event'))}</h1><p>{html.escape(design.get('body','For successful participation in this event'))}</p><footer><span>{f'<img class="signature" src="{signature}">' if signature else ''}{html.escape(design.get('signature_name','Event Organizer'))}<br>Authorized signature</span><span><img class='qr' src='data:image/png;base64,{qr}'><br>Scan to verify</span><span>{html.escape(cert.certificate_number)}<br>Verification number</span></footer></main></body></html>"""
+    event_meta = ''
+    if layout in ('royal','heritage','midnight','ivory'):
+        parts=[]
+        try:
+            local_date=datetime.fromisoformat(snap.get('event_date_local') or snap.get('event_date') or '')
+            parts.append(local_date.strftime('%d %B %Y'))
+        except (TypeError,ValueError): pass
+        if snap.get('event_venue'): parts.append(str(snap['event_venue']))
+        if parts: event_meta='<p class="event-meta">'+html.escape(' · '.join(parts))+'</p>'
+    signatories = snap.get('signatories') or []
+    signature_block = ''.join('<span class="collected-signature"><img class="signature" src="'+html.escape(person['signature_png'],quote=True)+'">'+html.escape(person['name'])+'<br><small>'+html.escape(person['title'])+'</small></span>' for person in signatories[:2] if str(person.get('signature_png','')).startswith('data:image/png;base64,'))
+    if not signature_block:
+        signature_block = f'<span>{f"<img class=signature src={signature!r}>" if signature and not preview else ""}{html.escape(design.get("signature_name","Event Organizer"))}<br>Authorized signature</span>'
+    qr_block = '<span>DESIGN PREVIEW<br>Not an issued certificate</span>' if preview else f"<span><img class='qr' src='data:image/png;base64,{qr}'><br>Scan to verify</span>"
+
+    return f"""<!doctype html><html><head><meta charset='utf-8'><style>@page{{size:A4 landscape;margin:0}}*{{box-sizing:border-box}}body{{margin:0;font-family:Arial;color:{primary}}}.certificate{{width:1120px;height:790px;padding:58px;text-align:center;border:18px solid {primary};box-shadow:inset 0 0 0 5px {accent};display:flex;flex-direction:column;justify-content:center;{bg}}}.logo{{max-width:130px;max-height:75px;margin:0 auto 10px}}.eyebrow{{letter-spacing:.24em;text-transform:uppercase;color:{accent};font-weight:700}}h1{{font:58px Georgia;margin:18px}}h2{{font:48px Georgia;max-width:100%;overflow-wrap:anywhere;margin:15px;border-bottom:2px solid {accent};display:inline-block;padding:0 30px 10px}}p{{font-size:20px}}footer{{margin-top:30px;display:flex;align-items:end;justify-content:space-around;font-size:13px}}footer img.signature{{display:block;max-width:150px;max-height:50px;margin:auto}}.qr{{width:86px;height:86px}}.event-meta{{font-size:13px;margin:8px 0}}{layout_css}</style></head><body><main class='certificate' data-layout='{layout}'>{f'<img class="logo" src="{logo}">' if logo else ''}<div class='eyebrow'>{html.escape(design.get('title','Certificate of Participation'))}</div><p>{html.escape(design.get('subtitle','This certificate is proudly presented to'))}</p><h2>{html.escape(snap.get('participant_name','Participant'))}</h2><h1>{html.escape(snap.get('event_name','Event'))}</h1><p>{html.escape(design.get('body','For successful participation in this event'))}</p>{event_meta}<footer>{signature_block}{qr_block}<span>{html.escape(cert.certificate_number)}<br>Verification number</span></footer></main></body></html>"""
 
 
 @router.get("/{event_id}/guest-content/{token}")

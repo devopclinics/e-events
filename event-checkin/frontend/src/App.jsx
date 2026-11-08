@@ -21,6 +21,7 @@ const QuickInvitePublic = lazy(() => import('./pages/QuickInvite').then(m => ({ 
 // must not make users download both implementations at startup.
 const AdminPage = lazy(() => import('./pages/AdminPage'))
 const ScannerPage = lazy(() => import('./pages/ScannerPage'))
+const CertificateWorkflowPage = lazy(() => import('./pages/CertificateWorkflowPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const ResultsPage = lazy(() => import('./pages/ResultsPage'))
 const ScanAutoPage = lazy(() => import('./pages/ScanAutoPage'))
@@ -463,6 +464,8 @@ function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/guest-sheet/:token" element={<SharedGuestSheet />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/certificate-review/:token" element={<CertificateWorkflowPage kind="review" />} />
+      <Route path="/certificate-sign/:token" element={<CertificateWorkflowPage kind="sign" />} />
       <Route path="/scan/:token" element={<ScanAutoPage />} />
       {/* Public self check-in — no auth required */}
       <Route path="/e/:code" element={<SelfCheckinPage />} />

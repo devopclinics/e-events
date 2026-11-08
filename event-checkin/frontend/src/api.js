@@ -1819,6 +1819,11 @@ export const api = {
 
   // Certificates and presenter materials — event data shared by Live and GuestHub.
   listLiveContentSessions: (eventId) => req('GET', `/events/${eventId}/live-content/sessions`),
+  certificateWorkflow: (eventId) => req('GET', `/events/${eventId}/certificate-workflow`),
+  addCertificatePreset: (eventId, key) => req('POST', `/events/${eventId}/certificate-presets/${encodeURIComponent(key)}`),
+  createCertificateReview: (eventId, body) => req('POST', `/events/${eventId}/certificate-reviews`, body),
+  createCertificateSignatureRequest: (eventId, templateId, body) => req('POST', `/events/${eventId}/certificate-templates/${templateId}/signature-requests`, body),
+  certificateWorkflowDecision: (eventId, linkId, action) => req('POST', `/events/${eventId}/certificate-workflow/${linkId}/${action}`),
   listCertificateTemplates: (eventId) => req('GET', `/events/${eventId}/certificate-templates`),
   createCertificateTemplate: (eventId, body) => req('POST', `/events/${eventId}/certificate-templates`, body),
   saveCertificateTemplate: (eventId, templateId, body) => req('PUT', `/events/${eventId}/certificate-templates/${templateId}`, body),

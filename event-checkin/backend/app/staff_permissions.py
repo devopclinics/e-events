@@ -30,6 +30,7 @@ def validate_policy(value):
 
 def route_feature(route, path):
     module = route.endpoint.__module__.rsplit('.',1)[-1]
+    if module == 'certificate_workflow': return 'conference'
     if module == 'group_passes': return 'scanner' if path.startswith('/api/scan/') else 'guests'
     if '/members' in path or '/team' in path: return 'team'
     if '/guests/export' in path: return 'export'

@@ -3388,3 +3388,21 @@ class GroupPassConfigAudit(Base):
     before: Mapped[dict] = mapped_column(JSON)
     after: Mapped[dict] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class CertificateWorkflowLink(Base):
+    """Revocable, expiring design-review or signatory link; tokens stored hashed."""
+    __tablename__ = "certificate_workflow_links"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id", ondelete="CASCADE"), index=True)
+    template_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("event_certificate_templates.id", ondelete="CASCADE"), nullable=True, index=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    slot: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    submission: Mapped[dict] = mapped_column(JSON, default=dict)
+    audit: Mapped[list] = mapped_column(JSON, default=list)
+    created_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)

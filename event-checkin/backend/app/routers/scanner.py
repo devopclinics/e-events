@@ -1594,7 +1594,8 @@ async def scan_qr_zone(
     db.add(scan)
     # Preserve the historical combined admission + zone behavior unless the
     # event explicitly enables the separated convention/zone workflow.
-    if not event.separate_admission_access_enabled and not denied and direction == "in" and not guest.admitted:
+    new_admission = not event.separate_admission_access_enabled and not denied and direction == "in" and not guest.admitted
+    if new_admission:
         guest.admitted = True
         guest.admitted_at = datetime.utcnow()
         guest.admit_notified = True
@@ -1603,8 +1604,17 @@ async def scan_qr_zone(
         if seating_mode == "default" and seating_at_admission(event) and event.seating_enabled and not guest.seat_number and not await _experience_defers_seating(event, db):
             await assign_next_seat(guest, db)
         await sync_guest_progress(event.id, guest.id, db, source="staff", actor_user_id=current_user.id)
-        from .live_content import auto_issue_eligible_certificates
-        await auto_issue_eligible_certificates(event, guest, db, background_tasks)
+    if not denied and direction == "in":
+        from ..services.session_access import record_session_attendance
+        from ..services.experience import ExperienceCompletionError
+        try:
+            attendance_completed = await record_session_attendance(event, guest, zone.id, scan, db, current_user.id)
+        except ExperienceCompletionError as error:
+            await db.rollback()
+            raise HTTPException(409, str(error)) from error
+        if new_admission or attendance_completed:
+            from .live_content import auto_issue_eligible_certificates
+            await auto_issue_eligible_certificates(event, guest, db, background_tasks)
     await db.commit()
 
     if denied:

@@ -92,3 +92,24 @@ async def prepare_session_seating(event, guest, zone_id, db):
         await db.refresh(guest)
         return 'That seat was just taken. Please scan again or visit the seating desk.'
     return None
+
+
+async def record_session_attendance(event, guest, zone_id, scan, db, actor_id=None):
+    """Opt-in zone-to-workflow binding; only accepted entries call this helper.
+
+    The caller owns the admission transaction, so attendance and scan cannot
+    commit independently. No notifications are sent by this completion path.
+    """
+    step_id = (event.setup_preferences or {}).get('session_attendance_steps', {}).get(zone_id)
+    if not step_id:
+        return False
+    from app.models import ExperienceStep, ExperienceWorkflow
+    from app.services.experience import complete_guest_step, ExperienceCompletionError
+    step = await db.get(ExperienceStep, step_id)
+    workflow = await db.get(ExperienceWorkflow, step.workflow_id) if step else None
+    if not step or step.type != 'session_attendance' or not step.enabled or not workflow or workflow.event_id != event.id or workflow.status != 'published':
+        raise ExperienceCompletionError('Session attendance mapping is unavailable. Ask the event administrator to review it.')
+    await db.flush()
+    _, completed = await complete_guest_step(db, event=event, guest=guest, step=step, source='zone_scan',
+        actor_user_id=actor_id, metadata={'zone_id':zone_id,'scan_id':scan.id})
+    return completed

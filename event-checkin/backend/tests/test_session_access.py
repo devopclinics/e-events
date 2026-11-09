@@ -185,3 +185,45 @@ async def test_session_notifications_test_scope_and_no_denied_or_duplicate_recei
         e=await db.get(Event,eid);e.setup_preferences={**e.setup_preferences,'session_checkin_notifications':{**e.setup_preferences['session_checkin_notifications'],'test_guest_ids':[]}};await db.commit()
     await ctx.client.post(f'/api/scan/{qr}/zone',json={'zone_id':conf})
     assert len(emails)==len(whatsapp)==1
+
+
+@pytest.mark.asyncio
+async def test_zone_binding_completes_only_matching_accepted_session(ctx):
+    from app.models import ExperienceWorkflow, ExperienceStep, GuestExperienceProgress
+    eid,gid,qr,conf,dinner,gate=await prep(ctx)
+    async with _Session() as db:
+        e=await db.get(Event,eid);e.experience_enabled=True
+        w=ExperienceWorkflow(event_id=eid,status='published');db.add(w);await db.flush()
+        step=ExperienceStep(workflow_id=w.id,key='conference',type='session_attendance',title='Conference',required=False,enabled=True);db.add(step);await db.flush();sid=step.id
+        e.setup_preferences={**e.setup_preferences,'session_attendance_steps':{conf:sid}}
+        await db.commit()
+    base=f'/api/events/{eid}/session-access'
+    # Denied access never completes attendance.
+    r=await ctx.client.post(f'/api/scan/{qr}/zone',json={'zone_id':conf});assert r.json()['denied']
+    async with _Session() as db:
+        assert not await db.scalar(select(GuestExperienceProgress).where(GuestExperienceProgress.guest_id==gid,GuestExperienceProgress.step_id==sid,GuestExperienceProgress.status=='completed'))
+    template=(await ctx.client.post(f'/api/events/{eid}/certificate-templates',json={'name':'Conference attendance','design':{},'eligibility':{'minimum_sessions':1,'require_event_checkin':True,'required_session_ids':[sid]},'active':True})).json()
+    before=(await ctx.client.get(f'/api/events/{eid}/certificate-candidates',params={'template_id':template['id']})).json()
+    assert not next(row for row in before if row['guest_id']==gid)['eligible']
+    await ctx.client.put(base+'/'+conf,json={'guest_ids':[gid],'decision':'allow'})
+    r=await ctx.client.post(f'/api/scan/{qr}/zone',json={'zone_id':conf});assert r.status_code==200,r.text;assert not r.json()['denied']
+    after=(await ctx.client.get(f'/api/events/{eid}/certificate-candidates',params={'template_id':template['id']})).json()
+    assert next(row for row in after if row['guest_id']==gid)['eligible']
+    async with _Session() as db:
+        p=await db.scalar(select(GuestExperienceProgress).where(GuestExperienceProgress.guest_id==gid,GuestExperienceProgress.step_id==sid));assert p.status=='completed';assert p.completed_by_source=='zone_scan';assert p.progress_metadata['zone_id']==conf
+        finished=p.completed_at
+    await ctx.client.post(f'/api/scan/{qr}/zone',json={'zone_id':conf,'direction':'out'})
+    await ctx.client.post(f'/api/scan/{qr}/zone',json={'zone_id':conf})
+    async with _Session() as db:
+        p=await db.scalar(select(GuestExperienceProgress).where(GuestExperienceProgress.guest_id==gid,GuestExperienceProgress.step_id==sid));assert p.completed_at==finished
+
+
+@pytest.mark.asyncio
+async def test_bad_zone_binding_rolls_back_admission(ctx):
+    eid,gid,qr,conf,dinner,gate=await prep(ctx)
+    async with _Session() as db:
+        e=await db.get(Event,eid);e.setup_preferences={**e.setup_preferences,'session_attendance_steps':{conf:'foreign-or-missing'}};await db.commit()
+    await ctx.client.put(f'/api/events/{eid}/session-access/{conf}',json={'guest_ids':[gid],'decision':'allow'})
+    r=await ctx.client.post(f'/api/scan/{qr}/zone',json={'zone_id':conf});assert r.status_code==409,r.text
+    async with _Session() as db:
+        assert not (await db.scalars(select(ScanEvent).where(ScanEvent.event_id==eid,ScanEvent.zone_id==conf))).all()

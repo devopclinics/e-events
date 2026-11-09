@@ -10,7 +10,7 @@ export const STAFF_FEATURES = [
   ['donations','Donations'], ['ticketing','Tickets & registration'],
 ]
 export function staffRouteFeature(path, search='') {
-  if (/^\/(events(?:-redesign)?|help(?:-redesign)?|support-chat)$/.test(path)) return null
+  if (/^\/(events(?:-redesign)?|help(?:-redesign)?|support-chat|training)$/.test(path)) return null
   if (path === '/guest-export') return 'export'
   const tab = new URLSearchParams(search).get('tab')
   if (/addons/.test(path)) return tab || 'settings'

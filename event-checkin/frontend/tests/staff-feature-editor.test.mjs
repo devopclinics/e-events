@@ -45,3 +45,12 @@ test('event manager invitation does not grant an organization administrator role
  assert.ok(source.includes("api.inviteOrgMember(eventId, { email, role: 'staff' })"))
  assert.ok(!source.includes("role === 'manager' ? 'admin'"))
 })
+
+test('Academy uses its own grant rather than event settings permission',()=>{
+ const event={my_feature_permissions:{guests:'view',scanner:'manage'}}
+ assert.equal(staffRouteFeature('/training'),null)
+ assert.equal(canSeeStaffFeature(event,staffRouteFeature('/training')),true)
+ assert.equal(canSeeStaffFeature(event,staffRouteFeature('/setup-redesign')),false)
+ assert.equal(canSeeStaffFeature(event,staffRouteFeature('/team-redesign')),false)
+ assert.equal(canSeeStaffFeature(event,staffRouteFeature('/training-admin')),false)
+})

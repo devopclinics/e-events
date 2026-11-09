@@ -475,3 +475,20 @@
 .sc-result-table{margin-top:12px;padding:12px 16px;border:1px solid currentColor;border-radius:10px;font-size:1.25rem;font-weight:700;line-height:1.5}.sc-session-context{display:flex;flex-direction:column;gap:6px;padding:14px 16px;border:1px solid #cddcce;border-radius:10px;background:#edf3e8;color:#234d3e;margin-block:12px}.sc-session-context strong{font-size:18px}.sc-session-context span{font-size:13px;line-height:1.6}
 
 .sc-group-confirm{background:#f6f8ef;border:1px solid #ccd9c9;border-radius:16px;padding:24px;color:#163d32}.sc-group-confirm h3{font-size:24px;margin:10px 0}.sc-group-confirm p{line-height:1.6}.sc-group-confirm label{display:grid;gap:8px;margin:16px 0}.sc-group-eyebrow{font-size:11px;font-weight:700;letter-spacing:1.5px}
+
+/* A readable decision at arm's length, including on a phone in dark mode. */
+.sc-command-arrival .sc-command-guest { padding: 22px 18px; gap: 14px; align-items: flex-start; }
+.sc-command-arrival .sc-command-status-headline { font-size: clamp(24px, 2.4vw, 30px); line-height: 1.2; font-weight: 900; text-transform: none; letter-spacing: -.02em; margin-bottom: 10px; align-items: flex-start; overflow-wrap: anywhere; }
+.sc-command-status-headline svg { flex-shrink: 0; margin-top: 3px; }
+.sc-command-arrival .sc-command-guest strong { font-size: 18px; line-height: 1.4; overflow-wrap: anywhere; }
+.sc-command-arrival .sc-command-guest small { font-size: 14px; line-height: 1.55; margin-top: 6px; }
+.sc-command-arrival .sc-command-guidance span { font-size: 13px; }
+.sc-command-arrival .sc-command-guidance strong { font-size: 17px; line-height: 1.4; overflow-wrap: anywhere; }
+.sc-command-arrival .sc-command-ready { max-width: 48%; white-space: normal; text-align: right; }
+.sc-admission-popup .sc-command-status-headline { display: inline-flex; }
+.sc-command-group-count { font-weight: 800; color: var(--ink) !important; }
+@media(max-width:480px) {
+  .sc-command-arrival .sc-command-guest { padding: 20px 14px; gap: 10px; }
+  .sc-command-arrival .sc-command-avatar { width: 34px; height: 34px; }
+  .sc-command-arrival .sc-command-status-headline { font-size: 25px; }
+}

@@ -1,3 +1,4 @@
+import { scannerResultHeadline } from '../lib/scannerResultHeadline.mjs'
 import ScannerActionSettings from '../components/ScannerActionSettings'
 import {scannerPresentedResult} from '../lib/scannerPresentation.mjs'
 import PassLabels from '../components/PassLabels'
@@ -83,7 +84,7 @@ function ResultCard({ result, onStepComplete, stepBusy }) {
             {result.seat_number ? ` · Seat ${result.seat_number}` : ''}
           </div>
         )}
-        {result.zone_name && <div className="sc-result-guest">{result.direction?.toUpperCase()} · {result.zone_name}</div>}
+        {result.zone_name && <div className="sc-result-guest">{result.direction === 'out' ? 'Exit' : 'Entry'} · {result.zone_name}</div>}
         {result.guardian_name && <div className="sc-result-guest">Guardian: {result.guardian_name}{result.guardian_verification_method?.startsWith('guardian_manual') ? ' / Verified by staff' : result.guardian_verification_method ? ' / QR verified' : ''}</div>}
         {!!result.experience_next_steps?.length && (
           <div className="sc-experience-steps">
@@ -894,7 +895,7 @@ export function CommandResultPanel({ result, onStepComplete, stepBusy }) {
   const guest = result?.guest || {}
   const name = result?.guest_name || [guest.first_name, guest.last_name].filter(Boolean).join(' ')
   const initials = name ? name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() : '?'
-  const status = result ? (result.denied ? 'Denied' : (result.status || 'Result').replaceAll('_', ' ')) : ''
+  const status = scannerResultHeadline(result)
   const nextSteps = result?.experience_next_steps || []
   const requiredSteps = nextSteps.filter(({ step }) => step.required)
   const optionalSteps = nextSteps.filter(({ step }) => !step.required)
@@ -903,7 +904,7 @@ export function CommandResultPanel({ result, onStepComplete, stepBusy }) {
     <aside className="sc-command-panel sc-command-arrival" data-testid={result ? 'scan-result' : undefined} role={result ? 'status' : undefined}>
       <div className="sc-command-panel-head">
         <div><span>Latest scan</span><strong>Guest guidance</strong></div>
-        <span className={`sc-command-ready sc-command-ready-${tone || 'idle'}`}>{result ? status : 'Waiting'}</span>
+        <span className={`sc-command-ready sc-command-ready-${tone || 'idle'}`}>{result ? (tone === 'green' ? 'Confirmed' : tone === 'red' ? 'Denied' : tone === 'blue' ? 'Offline' : 'Review') : 'Waiting'}</span>
       </div>
       {!result ? (
         <div className="sc-command-result-empty">
@@ -916,9 +917,10 @@ export function CommandResultPanel({ result, onStepComplete, stepBusy }) {
           <div className={`sc-command-guest sc-command-guest-${tone}`}>
             <span className="sc-command-avatar">{initials}</span>
             <div>
-              <span className={`sc-command-status-headline sc-command-status-${tone}`}><Icon name={tone === 'green' ? 'check' : tone === 'red' ? 'shield' : 'info'} size={13}/>{status}</span>
+              <span className={`sc-command-status-headline sc-command-status-${tone}`}><Icon name={tone === 'green' ? 'check' : tone === 'red' ? 'shield' : 'info'} size={24}/>{status}</span>
               <strong>{name || 'Guest identity not confirmed'}</strong>
-              <small>{result.message || 'The scan was processed.'}</small>
+              <small>{result.message || (tone === 'red' ? 'Do not admit. Review the reason below or contact the event supervisor.' : tone === 'green' ? 'Attendance recorded successfully.' : 'Review the scan details before continuing.')}</small>
+              {result.admission_limit != null && <small className="sc-command-group-count">Group admissions: {result.used ?? 0} / {result.admission_limit} admitted{result.remaining != null ? ` · ${result.remaining} remaining` : ''}</small>}
             </div>
           </div>
           <div className="sc-command-guidance">
@@ -928,7 +930,7 @@ export function CommandResultPanel({ result, onStepComplete, stepBusy }) {
                 <span>Seating assignment<strong>{result.table_name ? `Table ${result.table_name}` : 'Table not assigned'}{result.seat_number ? ` · Seat ${result.seat_number}` : ''}</strong></span>
               </div>
             )}
-            {result.zone_name && <div><Icon name="external" size={16}/><span>Access decision<strong>{result.direction?.toUpperCase()} · {result.zone_name}</strong></span></div>}
+            {result.zone_name && <div><Icon name="external" size={16}/><span>Access decision<strong>{result.direction === 'out' ? 'Exit' : 'Entry'} · {result.zone_name}</strong></span></div>}
             {result.deny_reason && <div><Icon name="shield" size={16}/><span>Reason<strong>{result.deny_reason}</strong></span></div>}
             {result.guardian_name && <div><Icon name="users" size={16}/><span>Guardian verification<strong>{result.guardian_name} · {result.guardian_verification_method?.startsWith('guardian_manual') ? 'Verified by staff' : 'QR verified'}</strong></span></div>}
           </div>

@@ -269,6 +269,8 @@ app.include_router(events.router,      prefix="/api/events", tags=["events"])
 app.include_router(public_sites.router, prefix="/api/events", tags=["event-websites"])
 app.include_router(live_content.router, prefix="/api/events", tags=["certificates-presenter-materials"])
 app.include_router(live_content.public_router, prefix="/api/certificates", tags=["certificates-public"])
+from .routers import scanner_settings
+app.include_router(scanner_settings.router, prefix="/api/events", tags=["scanner-settings"])
 from .routers import certificate_workflow
 app.include_router(certificate_workflow.router, prefix="/api/events", tags=["certificate-workflow"])
 app.include_router(certificate_workflow.public_router, prefix="/api/certificate-workflow", tags=["certificate-workflow-public"])

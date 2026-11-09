@@ -19,9 +19,9 @@ with tempfile.TemporaryDirectory() as tmp:
   page.evaluate('window.fail=true');panel.get_by_role('button',name='Admit 1 people').click();expect(panel.get_by_role('button',name='Retry same admission')).to_be_visible();page.evaluate('window.fail=false');panel.get_by_role('button',name='Retry same admission').click();expect(panel).to_have_count(0)
   calls=page.evaluate('calls.filter(c=>c.name==="enterGroupPass")');assert calls[0]['args'][1]==calls[1]['args'][1]
   button.click();expect(panel).to_contain_text('0 remaining');expect(panel.get_by_role('button',name='Admit 1 people')).to_be_disabled();panel.get_by_role('button',name='Close',exact=True).click()
-  page.evaluate('window.used=0');page.get_by_label('Manual operation').select_option('access');page.get_by_label('Manual search zone').select_option('dinner');page.get_by_role('button',name='Enter zone',exact=True).click();panel.get_by_role('button',name='Admit 1 people').click();expect(page.get_by_text('Dinner access blocked',exact=True)).to_be_visible();assert page.evaluate('used')==0
+  page.evaluate('window.used=0');page.get_by_label('Manual operation').select_option('access');page.get_by_label('Manual search zone').select_option('dinner');page.get_by_role('button',name='Check in to Dinner',exact=True).click();panel.get_by_role('button',name='Admit 1 people').click();expect(page.get_by_text('Dinner access blocked',exact=True)).to_be_visible();assert page.evaluate('used')==0
   panel.get_by_role('button',name='Close',exact=True).click()
-  page.evaluate('window.shared=false');page.get_by_role('button',name='Enter zone',exact=True).click()
+  page.evaluate('window.shared=false');page.get_by_role('button',name='Check in to Dinner',exact=True).click()
   assert page.evaluate('calls.at(-1).name')=='scanZone'
   page.get_by_label('Manual operation').select_option('admission');button.click()
   assert page.evaluate('calls.at(-1).name')=='manualCheckin'

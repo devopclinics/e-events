@@ -1704,6 +1704,8 @@ async def update_guest_step_progress(
     if not step:
         raise HTTPException(404, "Step not found")
     await _ensure_step_permission(event, step, current_user, db)
+    if data.status == "completed" and step.type == "session_attendance" and step.id in (event.setup_preferences or {}).get("session_attendance_steps", {}).values():
+        raise HTTPException(409, "This session is recorded at its check-in zone. Select that zone and scan the guest pass so access and seating are checked.")
     guest = await db.get(Guest, guest_id)
     if not guest or guest.event_id != event_id:
         raise HTTPException(404, "Guest not found")

@@ -54,3 +54,18 @@ test('Academy uses its own grant rather than event settings permission',()=>{
  assert.equal(canSeeStaffFeature(event,staffRouteFeature('/team-redesign')),false)
  assert.equal(canSeeStaffFeature(event,staffRouteFeature('/training-admin')),false)
 })
+test('real protected route renders Academy for restricted staff and still denies settings',async()=>{
+ const {MemoryRouter}=await import('react-router-dom')
+ const event={id:'pamcon',my_feature_permissions:{guests:'view',scanner:'manage'}}
+ const auth={user:{id:'staff',role:'official'},loading:false}
+ const modules={react:React,'react-router-dom':require('react-router-dom'),'../context/AuthContext':{useAuth:()=>auth},'../api':{api:{listEvents:async()=>[event]}},'../hooks/useCurrentEvent':{useCurrentEvent:()=>['pamcon',()=>{}]},'../pages/organizerGuidance.mjs':{eventIdentityFromQuery:()=>({id:null,conflict:false})},'../lib/staffFeatures':{canSeeStaffFeature,staffRouteFeature}}
+ const code=transformSync(readFileSync(new URL('../src/components/ProtectedRoute.jsx',import.meta.url),'utf8'),{loader:'jsx',jsx:'automatic',format:'cjs'}).code,module={exports:{}}
+ runInNewContext(code,{module,exports:module.exports,window:{addEventListener(){},removeEventListener(){}},require:n=>modules[n]??require(n),URLSearchParams})
+ const Guard=module.exports.default
+ for(const [path,allowed]of[['/training',true],['/setup-redesign',false]]){
+  let tree;await act(async()=>{tree=create(React.createElement(MemoryRouter,{initialEntries:[path]},React.createElement(Guard,null,React.createElement('p',null,'Academy content'))))})
+  assert.equal(text(tree.toJSON()).includes('Academy content'),allowed)
+  if(!allowed)assert.match(text(tree.toJSON()),/not included in your staff access/)
+  await act(async()=>tree.unmount())
+ }
+})

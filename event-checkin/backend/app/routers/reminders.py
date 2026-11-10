@@ -10,6 +10,7 @@ only manages the EventReminder rows an organizer authors.
 """
 import re
 import logging
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +19,7 @@ from ..database import get_db
 from ..models import Event, EventReminder, User
 from ..schemas import (
     EventReminderCreate, EventReminderUpdate, EventReminderOut,
-    ReminderPreviewRequest, ReminderPreviewOut, ReminderTestSendRequest,
+    ReminderPreviewRequest, ReminderPreviewOut, ReminderTestSendRequest, ReminderSendNowRequest,
 )
 from ..auth import require_paid_event_admin, require_paid_event_member
 from ..services.reminders import compute_fire_at
@@ -111,7 +112,8 @@ async def create_reminder(event_id: str, data: EventReminderCreate, db: AsyncSes
 async def update_reminder(event_id: str, reminder_id: str, data: EventReminderUpdate,
                           db: AsyncSession = Depends(get_db), user: User = Depends(require_paid_event_admin)):
     event = await _reminder_event(event_id, db)
-    reminder = await _get_reminder(event_id, reminder_id, db)
+    reminder = await _locked_reminder(event_id, reminder_id, db)
+    _assert_editable(reminder)
     # A fired reminder already sent to its audience -- everything except
     # `enabled` (a no-op here since it already fired) is immutable. An admin
     # who wants to resend duplicates the reminder instead, so this stays a
@@ -137,7 +139,8 @@ async def update_reminder(event_id: str, reminder_id: str, data: EventReminderUp
 async def delete_reminder(event_id: str, reminder_id: str, db: AsyncSession = Depends(get_db),
                           _: User = Depends(require_paid_event_admin)):
     await _reminder_event(event_id, db)
-    reminder = await _get_reminder(event_id, reminder_id, db)
+    reminder = await _locked_reminder(event_id, reminder_id, db)
+    _assert_editable(reminder)
     await db.delete(reminder)
     await db.commit()
 
@@ -214,3 +217,54 @@ async def test_send_reminder(event_id: str, reminder_id: str, data: ReminderTest
     reference = result.get('provider_message_id') if isinstance(result, dict) else None
     logger.info("Reminder test accepted event=%s reminder=%s channel=%s provider_message_id=%s", event_id, reminder_id, data.channel, reference)
     return {"ok": True, "status": "accepted", "channel": data.channel, "to": destination, "provider_message_id": reference}
+
+
+async def _locked_reminder(event_id, reminder_id, db):
+    row = await db.scalar(select(EventReminder).where(EventReminder.id == reminder_id, EventReminder.event_id == event_id).with_for_update().execution_options(populate_existing=True))
+    if not row:
+        raise HTTPException(404, 'Reminder not found')
+    return row
+
+
+def _assert_editable(row):
+    if row.fired_at or row.status != 'pending' or (row.enabled and row.fire_at_utc <= datetime.utcnow()):
+        raise HTTPException(409, 'This reminder is queued, sending or completed. It cannot be edited or sent again.')
+
+
+@router.get('/{event_id}/reminders/{reminder_id}/send-summary')
+async def reminder_send_summary(event_id: str, reminder_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
+    event = await _reminder_event(event_id, db)
+    row = await _get_reminder(event_id, reminder_id, db)
+    from ..services.reminder_dispatch import dispatch_summary
+    return await dispatch_summary(event, row, db)
+
+
+@router.post('/{event_id}/reminders/{reminder_id}/send-now', status_code=202)
+async def send_reminder_now(event_id: str, reminder_id: str, data: ReminderSendNowRequest, db: AsyncSession = Depends(get_db), user: User = Depends(require_paid_event_admin)):
+    event = await _reminder_event(event_id, db)
+    row = await _locked_reminder(event_id, reminder_id, db)
+    _assert_editable(row)
+    from ..services.reminder_dispatch import dispatch_summary
+    summary = await dispatch_summary(event, row, db)
+    if summary['confirmation_token'] != data.confirmation_token:
+        raise HTTPException(409, 'The saved reminder or audience changed. Review the updated send summary before confirming.')
+    if summary['blockers'] or not summary['reachable_guests']:
+        raise HTTPException(422, '; '.join(summary['blockers']) or 'No guests can receive this reminder.')
+    # Durable queue: the existing replica-safe scheduler claims this row once.
+    row.enabled = True
+    row.fire_at_utc = datetime.utcnow()
+    row.updated_by = user.id
+    row.last_error = None
+    await db.commit()
+    return {'status': 'queued', 'reminder_id': row.id, 'audience': summary['audience'], 'reachable_guests': summary['reachable_guests']}
+
+
+@router.get('/{event_id}/reminders/{reminder_id}/send-progress')
+async def reminder_send_progress(event_id: str, reminder_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_member)):
+    await _reminder_event(event_id, db)
+    row = await _get_reminder(event_id, reminder_id, db)
+    from ..models import EventReminderSend, Guest
+    results = (await db.execute(select(EventReminderSend, Guest.first_name, Guest.last_name).join(Guest, Guest.id == EventReminderSend.guest_id).where(EventReminderSend.reminder_id == row.id))).all()
+    channels = {channel: sum(channel in (result.channels_sent or []) for result, _, _ in results) for channel in row.channels}
+    failures = [{'name': first + ' ' + last, 'error': result.error or 'No channel accepted this reminder'} for result, first, last in results if result.error or not result.channels_sent]
+    return {'status': row.status, 'processed': len(results), 'accepted_guests': sum(bool(result.channels_sent) for result, _, _ in results), 'channels_accepted': channels, 'failures': failures, 'last_error': row.last_error, 'complete': row.fired_at is not None}

@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import and_, or_, select
 
 from ..database import AsyncSessionLocal
-from ..models import Event, EventReminder
+from ..models import Event, EventReminder, EventReminderSend
 from .reminder_send import send_reminder
 
 logger = logging.getLogger("reminder_outbox")
@@ -87,8 +87,12 @@ async def process_claimed(reminder_id: str) -> None:
             reminder.last_error = str(exc)[:2000]
             await db.commit()
             return
-        reminder.guests_targeted = targeted
-        reminder.guests_sent = sent
+        # Include already-processed guests when resuming after a restart.
+        results = (await db.scalars(select(EventReminderSend).where(EventReminderSend.reminder_id == reminder.id))).all()
+        reminder.guests_targeted = len(results)
+        reminder.guests_sent = sum(bool(result.channels_sent) for result in results)
+        failures = sum(bool(result.error) or not result.channels_sent for result in results)
+        reminder.last_error = f'{failures} guests had failed or partially failed submissions. Review send progress.' if failures else None
         reminder.status = "sent"
         reminder.fired_at = datetime.utcnow()
         await db.commit()

@@ -935,6 +935,11 @@ export function RealRemindersContent({ eventId, event, notify }) {
   const [testBusy, setTestBusy] = useState(false)
   const [testResult, setTestResult] = useState(null)
   const testInFlight = useRef(false)
+  const [sendReview, setSendReview] = useState(null)
+  const [sendBusy, setSendBusy] = useState(false)
+  const [sendError, setSendError] = useState('')
+  const [progress, setProgress] = useState({})
+  const sendInFlight = useRef(false)
 
   async function load() {
     if (!eventId) { setReminders([]); return }
@@ -945,6 +950,42 @@ export function RealRemindersContent({ eventId, event, notify }) {
     catch { setWaApprovedTemplates([]) }
   }
   useEffect(() => { load() }, [eventId])
+
+  useEffect(() => {
+    const active = (reminders || []).filter(r => r.status === 'sending' || (r.enabled && !r.fired_at && new Date(r.fire_at_utc + (r.fire_at_utc.endsWith('Z') ? '' : 'Z')) <= new Date()) || r.fired_at)
+    if (!active.length) return
+    let stopped = false
+    async function refreshProgress() {
+      try {
+        const rows = await Promise.all(active.map(async r => [r.id, await api.reminderSendProgress(eventId, r.id)]))
+        if (!stopped) {
+          setProgress(Object.fromEntries(rows))
+          if (active.some(r => !r.fired_at)) setReminders(await api.listReminders(eventId))
+        }
+      } catch (error) { if (!stopped) setSendError(error.message || 'Send progress could not be loaded.') }
+    }
+    refreshProgress()
+    const timer = active.some(r => !r.fired_at) ? window.setInterval(refreshProgress, 5000) : null
+    return () => { stopped = true; if (timer) window.clearInterval(timer) }
+  }, [eventId, JSON.stringify((reminders || []).map(r => [r.id, r.status, r.enabled, r.fired_at]))])
+
+  async function reviewSend(row) {
+    if (sendBusy) return
+    setSendBusy(true); setSendError('')
+    try { setSendReview({ row, summary: await api.reminderSendSummary(eventId, row.id) }) }
+    catch (error) { setSendError(error.message || 'Could not prepare the send summary.') }
+    finally { setSendBusy(false) }
+  }
+
+  async function confirmSendNow() {
+    if (!sendReview || sendInFlight.current) return
+    sendInFlight.current = true; setSendBusy(true); setSendError('')
+    try {
+      await api.sendReminderNow(eventId, sendReview.row.id, { confirmation_token: sendReview.summary.confirmation_token })
+      setSendReview(null); await load(); notify('Reminder queued. Progress appears below; provider acceptance is not delivery confirmation.')
+    } catch (error) { setSendError(error.message || 'Reminder could not be queued.'); }
+    finally { sendInFlight.current = false; setSendBusy(false) }
+  }
 
   function openEditor(item = null) {
     setPreview(null)
@@ -1049,6 +1090,7 @@ export function RealRemindersContent({ eventId, event, notify }) {
     <div className="ad-toolbar">
       <button className="rr-btn primary" onClick={() => openEditor()}><Icon name="plus" size={14} /> New reminder</button>
     </div>
+    {sendError && !sendReview && <div role="alert" className="rr-panel" style={{ padding: 14, color: 'var(--danger)' }}>{sendError}</div>}
     <div className="rr-panel"><div className="rd-panel-head"><h3>Reminder series</h3><p>{reminders.length} reminder{reminders.length === 1 ? '' : 's'}</p></div><div className="rd-panel-body">
       {reminders.length === 0 ? <EmptyState icon="clock" title="No reminders scheduled" message="Add a reminder to start nudging guests before your event." /> : reminders.map((r) => (
         <div className="ad-registry-item" key={r.id}>
@@ -1058,7 +1100,8 @@ export function RealRemindersContent({ eventId, event, notify }) {
               {' · '}{new Date(r.fire_at_utc).toLocaleString(undefined, {timeZone: event?.timezone || 'UTC'})} ({event?.timezone || 'UTC'})
               {' · '}{(r.channels || []).map((c) => REMINDER_CHANNELS.find((rc) => rc.id === c)?.label || c).join(', ')}
               {' · '}{REMINDER_AUDIENCE_PRESETS.find((p) => p.id === audiencePresetId(r.audience_rsvp_statuses))?.label}
-              {r.status === 'sent' && <small> · Sent to {r.guests_sent}/{r.guests_targeted}</small>}
+              {r.status === 'sent' && <small> · Finished: {r.guests_sent}/{r.guests_targeted} guests accepted by at least one provider</small>}
+              {!r.fired_at && r.enabled && <small> · {r.status === 'sending' ? 'Sending' : 'Scheduled / queued'}</small>}
               {r.status === 'failed' && <small style={{ color: 'var(--danger)' }}> · Failed: {r.last_error}</small>}
             </span>
           </div>
@@ -1067,14 +1110,31 @@ export function RealRemindersContent({ eventId, event, notify }) {
               <button className="rr-link-btn" onClick={() => openEditor({ ...r, id: 'new' })}>Duplicate</button>
             ) : (
               <>
-                <button className="rr-link-btn" onClick={() => openEditor(r)}>Edit</button>
-                <button className="rr-link-btn gr-danger-link" onClick={() => setDeleteTarget(r)}>Delete</button>
+                <button type="button" className="rr-btn primary" disabled={sendBusy || r.status !== 'pending' || (r.enabled && new Date(r.fire_at_utc + (r.fire_at_utc.endsWith('Z') ? '' : 'Z')) <= new Date())} onClick={() => reviewSend(r)}>Send now</button>
+                <button className="rr-link-btn" disabled={r.status !== 'pending' || (r.enabled && new Date(r.fire_at_utc + (r.fire_at_utc.endsWith('Z') ? '' : 'Z')) <= new Date())} onClick={() => openEditor(r)}>Edit</button>
+                <button className="rr-link-btn gr-danger-link" disabled={r.status !== 'pending' || (r.enabled && new Date(r.fire_at_utc + (r.fire_at_utc.endsWith('Z') ? '' : 'Z')) <= new Date())} onClick={() => setDeleteTarget(r)}>Delete</button>
               </>
             )}
           </div>
+          {progress[r.id] && <div role="status" style={{ marginTop: 12 }}>
+            <strong>{progress[r.id].complete ? 'Finished' : 'Sending'} · {progress[r.id].processed} guests processed</strong>
+            <p>{Object.entries(progress[r.id].channels_accepted).map(([channel, count]) => `${channel}: ${count} accepted`).join(' · ')}. Delivery is not yet confirmed.</p>
+            {progress[r.id].last_error && <p style={{ color: 'var(--danger)' }}>{progress[r.id].last_error}</p>}
+            {progress[r.id].failures.length > 0 && <details><summary>{progress[r.id].failures.length} guest failures / partial failures</summary>{progress[r.id].failures.map((failure, i) => <p key={i}>{failure.name}: {failure.error}</p>)}</details>}
+          </div>}
         </div>
       ))}
     </div></div>
+    {sendReview && <Modal title="Send this reminder now?" onClose={() => { if (!sendBusy) setSendReview(null) }} width={520}>
+      <p><strong>{sendReview.row.label}</strong></p>
+      <p>This sends the saved reminder immediately to <strong>{sendReview.summary.reachable_guests} guests</strong> out of {sendReview.summary.audience} matching the saved audience.</p>
+      <ul>{Object.entries(sendReview.summary.channels).map(([channel, count]) => <li key={channel}>{channel}: <strong>{count}</strong> eligible recipients</li>)}</ul>
+      <p>{sendReview.summary.unreachable_guests} have no eligible selected channel. {sendReview.summary.excluded_test_guests} test guests are excluded.</p>
+      <p>This replaces the scheduled send time. Repeated clicks will not queue another send. Provider acceptance does not guarantee delivery.</p>
+      {sendReview.summary.blockers.map(message => <p key={message} role="alert" style={{ color: 'var(--danger)' }}>{message}</p>)}
+      {sendError && <p role="alert" style={{ color: 'var(--danger)' }}>{sendError}</p>}
+      <div className="gr-actions"><button className="rr-btn secondary" disabled={sendBusy} onClick={() => setSendReview(null)}>Cancel</button><button type="button" className="rr-btn primary" disabled={sendBusy || !!sendReview.summary.blockers.length || !sendReview.summary.reachable_guests} onClick={confirmSendNow}>{sendBusy ? 'Queueing…' : 'Confirm send now'}</button></div>
+    </Modal>}
     {editing && <Modal title={editing === 'new' ? 'New reminder' : `Edit ${editing.label}`} onClose={() => setEditing(null)} width={620}>
       <label className="rd-field-label">Quick start</label>
       <div className="rd-row2" style={{ marginBottom: 14, flexWrap: 'wrap' }}>

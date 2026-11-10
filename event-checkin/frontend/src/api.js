@@ -1506,6 +1506,9 @@ export const api = {
   updateReminder: (eventId, id, data) => req('PUT', `/events/${eventId}/reminders/${id}`, data),
   deleteReminder: (eventId, id) => req('DELETE', `/events/${eventId}/reminders/${id}`),
   previewReminder: (eventId, id, data) => req('POST', `/events/${eventId}/reminders/${id}/preview`, data),
+  reminderSendSummary: (eventId, id) => req('GET', `/events/${eventId}/reminders/${id}/send-summary`),
+  sendReminderNow: (eventId, id, data) => req('POST', `/events/${eventId}/reminders/${id}/send-now`, data),
+  reminderSendProgress: (eventId, id) => req('GET', `/events/${eventId}/reminders/${id}/send-progress`),
   testSendReminder: (eventId, id, data) => req('POST', `/events/${eventId}/reminders/${id}/test-send`, data, 45000),
 
   // Unified Guest Communication scheduler

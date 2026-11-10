@@ -17,6 +17,18 @@ from services.templates import build_context, render
 logger = logging.getLogger("reminder_send")
 
 
+async def _send_with_receipt(ledger_id, send_func, **kwargs):
+    # The credit helper reconciles the ledger but intentionally returns None.
+    # Capture the adapter receipt without changing that shared interface.
+    receipt = None
+    async def capture(**args):
+        nonlocal receipt
+        receipt = await send_func(**args)
+        return receipt
+    await send_with_credit_ledger(ledger_id, capture, **kwargs)
+    return receipt
+
+
 async def send_reminder(event: Event, reminder: EventReminder, db: AsyncSession) -> tuple[int, int]:
     """Fan out to the reminder's CURRENT audience (rsvp_status filter
     evaluated now, not at reminder-creation time -- a guest who confirmed
@@ -31,7 +43,7 @@ async def send_reminder(event: Event, reminder: EventReminder, db: AsyncSession)
         select(EventReminderSend.guest_id).where(EventReminderSend.reminder_id == reminder.id)
     )).all())
 
-    q = select(Guest).where(Guest.event_id == event.id)
+    q = select(Guest).where(Guest.event_id == event.id, Guest.is_test.is_not(True))
     statuses = reminder.audience_rsvp_statuses or None
     if statuses:
         q = q.where(Guest.rsvp_status.in_(statuses))
@@ -44,14 +56,14 @@ async def send_reminder(event: Event, reminder: EventReminder, db: AsyncSession)
         targeted += 1
         try:
             fired_channels = await _send_to_guest(event, reminder, guest, db)
-        except Exception:
+        except Exception as error:
             logger.exception("reminder send crashed guest=%s reminder=%s", guest.id, reminder.id)
-            db.add(EventReminderSend(reminder_id=reminder.id, guest_id=guest.id, channels_sent=[], error="send crashed"))
+            db.add(EventReminderSend(reminder_id=reminder.id, guest_id=guest.id, channels_sent=[], error=str(error)[:500] or "send crashed"))
             await db.commit()
             continue
         if fired_channels:
             sent += 1
-        db.add(EventReminderSend(reminder_id=reminder.id, guest_id=guest.id, channels_sent=fired_channels))
+        db.add(EventReminderSend(reminder_id=reminder.id, guest_id=guest.id, channels_sent=fired_channels, error="; ".join(getattr(reminder, "_last_channel_errors", [])) or None))
         await db.commit()
     return targeted, sent
 
@@ -99,6 +111,8 @@ async def _send_to_guest(
     extras = {**_reminder_extras(event, guest), **(extra_context or {}), **session_extras}
     ctx = build_context(event, guest, extras=extras)
     fired: list[str] = []
+    errors = []
+    reminder._last_channel_errors = errors
 
     if (
         "email" in reminder.channels and "email" not in blocked
@@ -120,8 +134,11 @@ async def _send_to_guest(
             # pg_stat_activity during staging verification -- one session
             # "idle in transaction" holding the lock, the other stuck on
             # wait_event_type=Lock for the same row.
-            await send_simple_email(guest.email, subject, body, event.id, None, guest.id, f"reminder:{reminder.id}")
-            fired.append("email")
+            accepted = await send_simple_email(guest.email, subject, body, event.id, None, guest.id, f"reminder:{reminder.id}")
+            if accepted:
+                fired.append("email")
+            else:
+                errors.append("Email was not accepted by the provider")
 
     if not (guest.phone and can_use_paid_channels(event)):
         return fired
@@ -132,11 +149,15 @@ async def _send_to_guest(
     ):
         body = render(reminder.sms_body, ctx)
         if body and await reserve_message_credit(event, "sms", db=db, reason=f"reminder:{reminder.id}", guest_id=guest.id):
-            await send_with_credit_ledger(
+            await db.commit()  # Persist the reservation before separate-session reconciliation.
+            result = await _send_with_receipt(
                 last_credit_ledger_id(event), messaging.send_custom_sms,
                 phone=guest.phone, body=body,
             )
-            fired.append("sms")
+            if result and result.get("provider_message_id") and result.get("status") not in ("failed", "rejected", "blocked", "undeliverable"):
+                fired.append("sms")
+            else:
+                errors.append("Sms was not accepted by the provider")
 
     if (
         "mms" in reminder.channels and "mms" not in blocked
@@ -145,11 +166,15 @@ async def _send_to_guest(
         body = render(getattr(reminder, "mms_body", None), ctx)
         media_url = render(getattr(reminder, "mms_media_url", None), ctx)
         if body and media_url and await reserve_message_credit(event, "mms", db=db, reason=f"reminder:{reminder.id}", guest_id=guest.id):
-            await send_with_credit_ledger(
+            await db.commit()  # Persist the reservation before separate-session reconciliation.
+            result = await _send_with_receipt(
                 last_credit_ledger_id(event), messaging.send_mms,
                 phone=guest.phone, body=body, media_url=media_url,
             )
-            fired.append("mms")
+            if result and result.get("provider_message_id") and result.get("status") not in ("failed", "rejected", "blocked", "undeliverable"):
+                fired.append("mms")
+            else:
+                errors.append("Mms was not accepted by the provider")
 
     if (
         "whatsapp" in reminder.channels and "whatsapp" not in blocked
@@ -164,8 +189,9 @@ async def _send_to_guest(
         body = render(reminder.whatsapp_body, ctx)
         has_content = body or (wa_template_ref and wa_template_vars)
         if has_content and await reserve_message_credit(event, "whatsapp", db=db, reason=f"reminder:{reminder.id}", guest_id=guest.id):
+            await db.commit()  # Provider/refund helpers use a separate database session.
             if getattr(reminder, "communication_type", None) == "consent_reminder":
-                await send_with_credit_ledger(
+                result = await _send_with_receipt(
                     last_credit_ledger_id(event), messaging.send_consent_reminder_whatsapp,
                     phone=guest.phone, first_name=guest.first_name or "Guest", event_name=event.name,
                     consent_link=ctx.get("consent_link", ""), event_date=event.event_date,
@@ -177,15 +203,18 @@ async def _send_to_guest(
                 # broadcasts (see routers/events.py::broadcast_message).
                 var_keys = list(wa_template_vars.keys())
                 params = [render(wa_template_vars[k], ctx) for k in var_keys]
-                await send_with_credit_ledger(
+                result = await _send_with_receipt(
                     last_credit_ledger_id(event), messaging.send_custom_template_whatsapp,
                     phone=guest.phone, template_ref=wa_template_ref, params=params, var_keys=var_keys,
                 )
             else:
-                await send_with_credit_ledger(
+                result = await _send_with_receipt(
                     last_credit_ledger_id(event), messaging.send_custom_whatsapp,
                     phone=guest.phone, body=body,
                 )
-            fired.append("whatsapp")
+            if result and result.get("provider_message_id") and result.get("status") not in ("failed", "rejected", "blocked", "undeliverable"):
+                fired.append("whatsapp")
+            else:
+                errors.append("Whatsapp was not accepted by the provider")
 
     return fired

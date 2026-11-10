@@ -1990,6 +1990,10 @@ class EventReminderOut(BaseModel):
     sort_order: int = 0
 
 
+class ReminderSendNowRequest(BaseModel):
+    confirmation_token: str
+
+
 class ReminderPreviewRequest(BaseModel):
     sample_session_access: Literal['conference_dinner', 'conference_only'] = 'conference_dinner'
     channel: ReminderChannel

@@ -1,3 +1,4 @@
+import DeliveryReportBreakdown from './redesign/results/DeliveryReportBreakdown'
 import FestioLogo from '../components/branding/FestioLogo'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
@@ -187,8 +188,7 @@ function ExecutiveResultsOverview({ event, data, attendance, setActiveTab, setOv
   const onSite = attendance.on_site ?? Math.max(Number(attendance.checked_in || 0) - Number(attendance.checked_out || 0), 0)
   const arrivalRate = pct(attendance.checked_in, attendance.expected), responseRate = pct(funnel.responded, funnel.guests)
   const criticalCount = alerts.filter(alert => alert.severity === 'critical').length, warningCount = alerts.length - criticalCount
-  const rates = ['email','sms','whatsapp','mms'].map(channel => communication[channel]).filter(item => Number(item?.sent || 0) > 0 && Number.isFinite(Number(item?.rate))).map(item => Number(item.rate))
-  const deliveryRate = rates.length ? Math.round(rates.reduce((sum, value) => sum + value, 0) / rates.length) : null
+  const deliveryRate = communication.overall?.rate ?? null
   const currentProgram = data.program?.in_progress?.[0], nextProgram = data.program?.up_next
   const healthLabel = criticalCount ? 'Needs attention' : warningCount ? 'Watch items' : 'On track'
   const healthTone = criticalCount ? 'danger' : warningCount ? 'warning' : 'success'
@@ -199,7 +199,7 @@ function ExecutiveResultsOverview({ event, data, attendance, setActiveTab, setOv
       <MetricTile icon="check" label="Checked in" value={attendance.checked_in ?? 0} detail={`${arrivalRate}% arrival rate`} tone="green"/>
       <MetricTile icon="users" label="On site now" value={onSite} detail={`${attendance.checked_out ?? 0} checked out`} tone="teal"/>
       <MetricTile icon="send" label="RSVP response" value={`${responseRate}%`} detail={`${funnel.responded ?? 0} of ${funnel.guests ?? 0}`} tone="blue"/>
-      <MetricTile icon="mail" label="Delivery health" value={deliveryRate == null ? '—' : `${deliveryRate}%`} detail={deliveryRate == null ? 'No sends recorded' : 'Average active channels'} tone="teal"/>
+      <MetricTile icon="mail" label="Delivery health" value={deliveryRate == null ? '—' : `${deliveryRate}%`} detail={deliveryRate == null ? 'No sends recorded' : 'Confirmed deliveries / tracked messages'} tone="teal"/>
       <MetricTile icon="info" label="Action queue" value={alerts.length} detail={`${criticalCount} critical · ${warningCount} other`} tone={criticalCount ? 'red' : warningCount ? 'amber' : 'green'}/>
     </div>
     <div className="er-executive-grid">
@@ -686,6 +686,7 @@ function OverviewDashboard({
                   </>
                 )
               })()}
+              <DeliveryReportBreakdown comm={data.communication} compact />
               <div className="er-ops-card-foot"><span>Credits remaining</span><b>{data.communication.credits_remaining}</b></div>
               <div className="er-ops-quick-actions">
                 <a href="/scanner-redesign"><Icon name="ticket" size={14} />Open scanner<Icon name="arrow" size={12} /></a>

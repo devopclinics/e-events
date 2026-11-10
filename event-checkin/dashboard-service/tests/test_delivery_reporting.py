@@ -17,10 +17,10 @@ class _DeliveryDb:
     def __init__(self):
         self._results = iter([
             _Rows([
-                ("sms-delivered", "sms", "reserve", "delivered", "sms-1", "invite"),
-                ("sms-failed", "sms", "reserve", "invalid_recipient", None, "invite"),
-                ("wa-accepted", "whatsapp", "reserve", "accepted", "wa-1", "invite"),
-                ("wa-delivered", "whatsapp", "reserve", "delivered", "wa-2", "broadcast"),
+                ("sms-delivered", "sms", "reserve", "delivered", "sms-1", "invite", False),
+                ("sms-failed", "sms", "reserve", "invalid_recipient", None, "invite", False),
+                ("wa-accepted", "whatsapp", "reserve", "accepted", "wa-1", "invite", False),
+                ("wa-delivered", "whatsapp", "reserve", "delivered", "wa-2", "broadcast", False),
             ]),
             _Rows([]),
         ])
@@ -36,6 +36,6 @@ async def test_organization_reservations_are_reported_as_delivery_attempts():
         SimpleNamespace(id="event-a", message_credits=50),
     )
 
-    assert result["sms"] == {"sent": 2, "delivered": 1, "failed": 1, "rate": 50}
-    assert result["whatsapp"] == {"sent": 2, "delivered": 1, "failed": 0, "rate": 50}
-    assert result["broadcast"]["whatsapp"] == {"sent": 1, "delivered": 1, "failed": 0, "rate": 100}
+    assert result["sms"] == {"sent": 2, "delivered": 1, "failed": 1, "pending":0, "unknown":0, "rate": 50}
+    assert result["whatsapp"] == {"sent": 2, "delivered": 1, "failed": 0, "pending":1, "unknown":0, "rate": 50}
+    assert result["broadcast"]["whatsapp"] == {"sent": 1, "delivered": 1, "failed": 0, "pending":0, "unknown":0, "rate": 100}

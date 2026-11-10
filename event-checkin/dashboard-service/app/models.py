@@ -96,6 +96,7 @@ class Guest(Base):
     rsvp_status: Mapped[str] = mapped_column(String(20), default="invited")
     admitted: Mapped[bool] = mapped_column(Boolean, default=False)
     admitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    is_test: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     is_walk_in: Mapped[bool] = mapped_column(Boolean, default=False)
     meal_served: Mapped[bool] = mapped_column(Boolean, default=False)
     ticket_type_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("ticket_types.id"), nullable=True)
@@ -263,6 +264,7 @@ class MessageCreditLedger(Base):
     __tablename__ = "message_credit_ledger"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    guest_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
     action: Mapped[str] = mapped_column(String(30))
     status: Mapped[str | None] = mapped_column(String(30), nullable=True)
@@ -276,6 +278,7 @@ class EmailDeliveryEvent(Base):
     __tablename__ = "email_delivery_events"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    guest_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     event_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("events.id"), nullable=True)
     provider_event_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     provider_email_id: Mapped[str | None] = mapped_column(String(255), nullable=True)

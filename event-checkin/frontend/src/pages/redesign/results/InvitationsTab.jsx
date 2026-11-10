@@ -1,3 +1,4 @@
+import DeliveryReportBreakdown from './DeliveryReportBreakdown'
 import { useEffect, useState } from 'react'
 import { LoadingSkeleton } from '../RedesignPrimitives'
 import { api } from '../../../api'
@@ -61,26 +62,7 @@ function CommHealthPanel({ comm }) {
     <div className="rd-panel">
       <div className="rd-panel-head"><h3>Communication health</h3></div>
       <div className="rd-panel-body">
-        {['email', 'sms', 'whatsapp', 'mms'].filter((ch) => comm[ch]).map((ch) => {
-          const c = comm[ch]
-          const label = ch === 'email' ? 'Email' : ch === 'sms' ? 'SMS' : ch === 'mms' ? 'MMS' : 'WhatsApp'
-          const deliv = ch === 'email' ? c.reached : c.delivered
-          return (
-            <div key={ch} className="er-chan-row">
-              <span>{label}</span>
-              <div className="rd-mini-bar" style={{ flex: 1, margin: '0 10px' }}><i style={{ width: `${c.rate ?? 0}%` }} /></div>
-              <b>{c.rate ?? 0}%</b> <span className="rd-rowlink">({deliv}/{c.sent})</span>
-            </div>
-          )
-        })}
-        {comm.email?.breakdown?.tracked > 0 && (
-          <p className="rd-rowlink" style={{ marginTop: 6 }}>
-            Email: {comm.email.breakdown.delivered} delivered · {comm.email.breakdown.opened + comm.email.breakdown.clicked} engaged · {comm.email.breakdown.bounced + comm.email.breakdown.failed} failed
-          </p>
-        )}
-        {comm.sms?.sent > 0 && <p className="rd-rowlink">SMS: {comm.sms.delivered} delivered · {comm.sms.failed} failed</p>}
-        {comm.mms?.sent > 0 && <p className="rd-rowlink">MMS: {comm.mms.delivered} delivered · {comm.mms.failed} failed</p>}
-        {comm.whatsapp?.sent > 0 && <p className="rd-rowlink">WhatsApp: {comm.whatsapp.delivered} delivered · {comm.whatsapp.failed} failed</p>}
+        <DeliveryReportBreakdown comm={comm} />
         <div className="er-provider-row" style={{ marginTop: 8 }}><span>Credits remaining</span><b>{comm.credits_remaining?.toLocaleString?.() ?? comm.credits_remaining}</b></div>
       </div>
     </div>

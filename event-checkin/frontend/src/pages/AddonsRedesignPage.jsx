@@ -993,6 +993,18 @@ export function RealRemindersContent({ eventId, event, notify }) {
     setPreviewBusy(true)
     try {
       const body = testChannel === 'email' ? form.email_body : testChannel === 'sms' ? form.sms_body : form.whatsapp_body
+      if (testChannel === 'whatsapp' && form.whatsapp_use_approved) {
+        const template = waApprovedTemplates.find(t => t.ref === form.whatsapp_template_ref)
+        if (!template) throw new Error('The selected approved template is unavailable. Refresh the template list.')
+        const sample = { first_name: 'Ada', guest_first_name: 'Ada', guest_name: 'Ada Okafor', event_name: event?.name || 'Your event', ticket_link: 'https://festio.events/scan/sample-pass', guest_hub_link: 'https://festio.events/r/sample#guest-hub' }
+        const values = Object.fromEntries((template.variables || []).map(key => {
+          const value = (form.whatsapp_template_vars?.[key] || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (match, field) => sample[field] ?? match)
+          if (!value.trim() || value.includes('{{')) throw new Error(`Choose a sample value for ${key} before previewing.`)
+          return [key, value]
+        }))
+        setPreview({ body: template.body.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, key) => values[key] ?? match) })
+        return
+      }
       const result = await api.previewReminder(eventId, editing.id, {
         channel: testChannel, subject: testChannel === 'email' ? form.subject : null, body, sample_session_access: sampleAccess,
       })
@@ -1146,7 +1158,7 @@ export function RealRemindersContent({ eventId, event, notify }) {
             <small>Live reminders use each guest’s saved permissions. This selector changes no guest access.</small>
           </label>}
           <div className="rd-row2" style={{ alignItems: 'center' }}>
-            <select className="rd-field" style={{ flex: 'none', width: 130 }} value={testChannel} onChange={(e) => { setTestChannel(e.target.value); setPreview(null) }}>
+            <select aria-label="Preview channel" className="rd-field" style={{ flex: 'none', width: 130 }} value={testChannel} onChange={(e) => { setTestChannel(e.target.value); setPreview(null) }}>
               {form.channels.map((c) => <option key={c} value={c}>{REMINDER_CHANNELS.find((rc) => rc.id === c)?.label}</option>)}
             </select>
             <button type="button" className="rr-btn secondary" disabled={previewBusy} onClick={runPreview}>{previewBusy ? 'Rendering…' : 'Preview'}</button>

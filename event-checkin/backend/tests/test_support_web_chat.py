@@ -79,3 +79,24 @@ async def test_event_facts_outage_does_not_block_human_handover(ctx,monkeypatch)
     async def unavailable(slug):raise HTTPException(503,'Published event information unavailable')
     monkeypatch.setattr(web,'published_profile',unavailable)
     r=await ctx.client.post(P+'/messages',headers=h,json={'body':'human','request_id':str(uuid.uuid4())});assert r.status_code==200 and r.json()['mode']=='human'
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('question',['What are the services offered by festio','What services do you offer?','Show me Festio features','What servcices does Festio provide?'])
+async def test_services_overview_after_seating_in_event_chat(ctx,monkeypatch,question):
+    from app.routers import support_web_chat as web
+    async def initial_profile(_):return {'id':'site-one','name':'Example event','approved':True,'aliases':[],'answers':{'venue':'Example Hall'}}
+    monkeypatch.setattr(web,'published_profile',initial_profile)
+    async with _Session() as db:
+        db.add(SupportAutomationConfig(id='main',payload={**defaults(),'enabled':True},updated_by='test'));await db.commit()
+    r=await ctx.client.post(P+'/session',json={'page':'event','site_slug':'public-event'})
+    h={'Authorization':'Bearer '+r.json()['token']}
+    await ctx.client.post(P+'/messages',headers=h,json={'body':'How do I arrange tables and seating?','request_id':str(uuid.uuid4())})
+    async def must_not_fetch(_):raise AssertionError('Product question must not retrieve event facts')
+    monkeypatch.setattr(web,'published_profile',must_not_fetch)
+    r=await ctx.client.post(P+'/messages',headers=h,json={'body':question,'request_id':str(uuid.uuid4())})
+    assert r.status_code==200,r.text
+    result=r.json();body=result['messages'][-1]['body']
+    assert result['mode']=='auto'
+    for feature in ['Invitations','QR check-in','Planner','Menu management','Messaging','Registry','Festio Live']:assert feature in body
+    assert 'Are you asking' not in body and 'Do you already have an event?' not in body
+    assert '/setup-redesign?view=wizard' in body

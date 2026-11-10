@@ -91,7 +91,12 @@ async def _send_to_guest(
     -- it's already enforced one layer down inside messaging._channel_ready()
     and email_service's own send path, same as every other automatic send."""
     blocked = set(event.blocked_messaging_channels or [])
-    extras = {**_reminder_extras(event, guest), **(extra_context or {})}
+    session_extras = {}
+    from .reminder_session_access import TOKENS, reminder_session_context
+    if any('{{' + token + '}}' in (reminder.email_body or '') for token in TOKENS):
+        # Resolve before dispatching any channel; never guess unresolved access.
+        session_extras = await reminder_session_context(event, guest, db)
+    extras = {**_reminder_extras(event, guest), **(extra_context or {}), **session_extras}
     ctx = build_context(event, guest, extras=extras)
     fired: list[str] = []
 

@@ -781,7 +781,7 @@ export const api = {
       force,
     }),
   updateGuest: (eventId, guestId, data, ifUnmodifiedSince) =>
-    req('PATCH', `/events/${eventId}/guests/${guestId}${ifUnmodifiedSince || protectAssigned ? `?${new URLSearchParams({...ifUnmodifiedSince && {if_unmodified_since:ifUnmodifiedSince},...protectAssigned && {protect_assigned:'true'}})}` : ''}`, data),
+    req('PATCH', `/events/${eventId}/guests/${guestId}${ifUnmodifiedSince ? `?${new URLSearchParams({if_unmodified_since:ifUnmodifiedSince})}` : ''}`, data),
   guestRsvpAnswers: (eventId, guestId) => req('GET', `/events/${eventId}/guests/${guestId}/rsvp-answers`),
   deleteGuest: (eventId, guestId) => req('DELETE', `/events/${eventId}/guests/${guestId}`),
   resendInvite: (eventId, guestId) => req('POST', `/events/${eventId}/guests/${guestId}/resend-invite`),

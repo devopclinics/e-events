@@ -1512,6 +1512,11 @@ export default function GuestsRedesignPage() {
     window.setTimeout(() => setToast(null), 2600)
   }
 
+  async function loadQuestions() {
+    if (!eventId) { setRsvpQuestions([]); return }
+    setRsvpQuestions((await api.listRSVPQuestions(eventId)).map(adaptQuestion))
+  }
+
   async function loadHouseholds() {
     if (!eventId) { setHouseholds([]); setHouseholdsLoading(false); return }
     setHouseholdsLoading(true)

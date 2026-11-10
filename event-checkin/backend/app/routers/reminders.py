@@ -37,6 +37,18 @@ async def _reminder_event(event_id: str, db: AsyncSession) -> Event:
     return ev
 
 
+def _preview_context(event, sample_access, body='', subject=''):
+    from ..services.reminder_session_access import TOKENS, session_reminder_wording
+    ctx = {**sample_context(event), 'guest_hub_link': 'https://events.example/r/sample#guest-hub'}
+    ctx['first_name'] = ctx.get('guest_first_name') or 'Ada'
+    if any('{{' + token + '}}' in (body + (subject or '')) for token in TOKENS):
+        try:
+            ctx.update(session_reminder_wording((event.setup_preferences or {}).get('reminder_session_access') or {}, sample_access == 'conference_dinner'))
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+    return ctx
+
+
 def _out(reminder: EventReminder) -> EventReminderOut:
     return EventReminderOut(
         id=reminder.id, event_id=reminder.event_id, label=reminder.label,
@@ -138,7 +150,7 @@ async def preview_reminder(event_id: str, reminder_id: str, data: ReminderPrevie
     # reminder-specific, see services/reminder_send.py::_reminder_extras),
     # so sample_context() doesn't know about it -- add a sample value here
     # rather than growing the shared placeholder list for every template.
-    ctx = {**sample_context(event), "guest_hub_link": "https://events.example/r/sample#guest-hub"}
+    ctx = _preview_context(event, data.sample_session_access, data.body, data.subject)
     return ReminderPreviewOut(
         subject=render(data.subject, ctx) if data.subject else None,
         body=render(data.body, ctx),
@@ -160,7 +172,7 @@ async def test_send_reminder(event_id: str, reminder_id: str, data: ReminderTest
     if not recipient_allowed(data.channel, data.to):
         raise HTTPException(403, "Recipient blocked by the environment outbound-safety policy")
     messaging.set_event_context(event.id)
-    ctx = {**sample_context(event), "guest_hub_link": "https://events.example/r/sample#guest-hub"}
+    ctx = _preview_context(event, data.sample_session_access, data.body, data.subject)
     body = render(data.body, ctx)
     if data.channel == "email":
         subject = render(data.subject, ctx) if data.subject else f"Test reminder — {event.name}"

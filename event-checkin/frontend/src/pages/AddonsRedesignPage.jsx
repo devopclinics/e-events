@@ -807,7 +807,7 @@ const REMINDER_CHANNELS = [
 // build_context()'s defaults) -- listed here for the editor's chip palette.
 const REMINDER_PLACEHOLDERS = [
   'guest_first_name', 'guest_full_name', 'event_name', 'event_date', 'venue_name',
-  'rsvp_link', 'guest_hub_link', 'ticket_link',
+  'rsvp_link', 'guest_hub_link', 'ticket_link', 'session_access_label', 'session_access_schedule',
 ]
 
 // Calendar-only math -- no UTC-instant conversion needed for display, just
@@ -884,7 +884,7 @@ function audiencePresetId(statuses) {
 
 // Renders a preview the way the guest will actually see it, not a plain
 // text box -- an email-shell card for email, a chat bubble for SMS/WhatsApp.
-function ReminderPreviewFrame({ channel, preview }) {
+export function ReminderPreviewFrame({ channel, preview }) {
   if (channel === 'email') {
     return (
       <div style={{ marginTop: 10, borderRadius: 11, background: 'var(--surface-2)', border: '1px solid var(--line)', padding: 14 }}>
@@ -893,7 +893,9 @@ function ReminderPreviewFrame({ channel, preview }) {
           <div>From: {'{{organizer_name}}'}</div>
         </div>
         <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 8 }}>{preview.subject || '(no subject)'}</div>
-        <div style={{ whiteSpace: 'pre-wrap', fontSize: 12, lineHeight: 1.6 }}>{preview.body}</div>
+        {/<!doctype|<html|<table|<p[ >]|<div[ >]/i.test(preview.body || '')
+          ? <iframe title="Reminder email preview" sandbox="" srcDoc={preview.body} style={{ width: '100%', height: 650, border: 0, background: '#fff' }} />
+          : <div style={{ whiteSpace: 'pre-wrap', fontSize: 12, lineHeight: 1.6 }}>{preview.body}</div>}
       </div>
     )
   }
@@ -911,7 +913,7 @@ function ReminderPreviewFrame({ channel, preview }) {
   )
 }
 
-function RealRemindersContent({ eventId, event, notify }) {
+export function RealRemindersContent({ eventId, event, notify }) {
   const blank = {
     label: '7 days before', offset_days: 7, send_time_local: '09:00',
     channels: ['email', 'sms'], audience: 'non-responders',
@@ -929,6 +931,7 @@ function RealRemindersContent({ eventId, event, notify }) {
   const [previewBusy, setPreviewBusy] = useState(false)
   const [testTo, setTestTo] = useState('')
   const [testChannel, setTestChannel] = useState('email')
+  const [sampleAccess, setSampleAccess] = useState('conference_dinner')
   const [testBusy, setTestBusy] = useState(false)
 
   async function load() {
@@ -991,7 +994,7 @@ function RealRemindersContent({ eventId, event, notify }) {
     try {
       const body = testChannel === 'email' ? form.email_body : testChannel === 'sms' ? form.sms_body : form.whatsapp_body
       const result = await api.previewReminder(eventId, editing.id, {
-        channel: testChannel, subject: testChannel === 'email' ? form.subject : null, body,
+        channel: testChannel, subject: testChannel === 'email' ? form.subject : null, body, sample_session_access: sampleAccess,
       })
       setPreview(result)
     } catch (e) { notify(e.message || 'Preview failed', true) }
@@ -1004,7 +1007,7 @@ function RealRemindersContent({ eventId, event, notify }) {
     try {
       const body = testChannel === 'email' ? form.email_body : testChannel === 'sms' ? form.sms_body : form.whatsapp_body
       await api.testSendReminder(eventId, editing.id, {
-        channel: testChannel, to: testTo.trim(), subject: testChannel === 'email' ? form.subject : null, body,
+        channel: testChannel, to: testTo.trim(), subject: testChannel === 'email' ? form.subject : null, body, sample_session_access: sampleAccess,
       })
       notify(`Test ${testChannel} sent`)
     } catch (e) { notify(e.message || 'Test send failed', true) }
@@ -1136,6 +1139,12 @@ function RealRemindersContent({ eventId, event, notify }) {
 
       {editing !== 'new' && form.channels.length > 0 && (
         <div className="rr-panel" style={{ marginTop: 14 }}><div className="rd-panel-body">
+          {testChannel === 'email' && /{{session_access_/.test(form.email_body + form.subject) && <label className="rd-field-label">Sample access (preview and test only)
+            <select aria-label="Sample reminder access" className="rd-field" value={sampleAccess} onChange={e => { setSampleAccess(e.target.value); setPreview(null) }}>
+              <option value="conference_dinner">Conference + Dinner</option><option value="conference_only">Conference Only</option>
+            </select>
+            <small>Live reminders use each guest’s saved permissions. This selector changes no guest access.</small>
+          </label>}
           <div className="rd-row2" style={{ alignItems: 'center' }}>
             <select className="rd-field" style={{ flex: 'none', width: 130 }} value={testChannel} onChange={(e) => { setTestChannel(e.target.value); setPreview(null) }}>
               {form.channels.map((c) => <option key={c} value={c}>{REMINDER_CHANNELS.find((rc) => rc.id === c)?.label}</option>)}

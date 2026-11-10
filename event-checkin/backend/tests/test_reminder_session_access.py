@@ -34,3 +34,20 @@ async def test_group_restriction_wins(monkeypatch):
     monkeypatch.setattr('app.services.reminder_session_access.session_decision',AsyncMock(side_effect=[(True,None),(False,'Group blocked')]))
     with pytest.raises(ValueError,match='unresolved'):
         await reminder_session_context(*fixture('allow'))
+
+@pytest.mark.parametrize('choice,label,has_dinner',[('conference_dinner','Conference + Dinner',True),('conference_only','Conference Only',False)])
+def test_preview_context_uses_selected_sample_without_guest_changes(choice,label,has_dinner):
+    from app.routers.reminders import _preview_context
+    from services.templates import render
+    e,_,_=fixture('allow')
+    body='Hello {{first_name}}: {{session_access_label}} {{session_access_schedule}}'
+    ctx=_preview_context(e,choice,body,'{{session_access_label}}')
+    rendered=render(body,ctx)
+    assert 'Hello Ada' in rendered and label in rendered
+    assert ('Gala Dinner' in rendered)==has_dinner
+    assert ('4:00 PM' in rendered)==has_dinner
+    assert '{{' not in rendered
+
+def test_plain_reminder_preview_does_not_require_session_configuration():
+    from app.routers.reminders import _preview_context
+    assert _preview_context(NS(setup_preferences={}), 'conference_dinner', 'Hello {{first_name}}')['first_name']=='Ada'

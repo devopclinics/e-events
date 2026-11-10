@@ -30,7 +30,10 @@ async def reminder_session_context(event, guest, db):
         decisions[key] = decision
     if decisions['conference'] != 'allow' or decisions['dinner'] not in ('allow', 'block'):
         raise ValueError('Session access unresolved; review before sending this reminder.')
-    both = decisions['dinner'] == 'allow'
+    return session_reminder_wording(config, decisions['dinner'] == 'allow')
+
+def session_reminder_wording(config, both):
+    """Shared wording for real decisions and explicitly labelled preview samples."""
     conference_time = escape(config.get('conference_time', ''))
     dinner_time = escape(config.get('dinner_time', ''))
     timezone = escape(config.get('timezone_label', ''))

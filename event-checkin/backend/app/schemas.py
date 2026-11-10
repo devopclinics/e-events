@@ -1991,6 +1991,7 @@ class EventReminderOut(BaseModel):
 
 
 class ReminderPreviewRequest(BaseModel):
+    sample_session_access: Literal['conference_dinner', 'conference_only'] = 'conference_dinner'
     channel: ReminderChannel
     subject: Optional[str] = None
     body: str = ""
@@ -2002,6 +2003,7 @@ class ReminderPreviewOut(BaseModel):
 
 
 class ReminderTestSendRequest(BaseModel):
+    sample_session_access: Literal['conference_dinner', 'conference_only'] = 'conference_dinner'
     channel: ReminderChannel
     to: str
     subject: Optional[str] = None

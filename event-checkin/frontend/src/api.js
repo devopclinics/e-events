@@ -1506,7 +1506,7 @@ export const api = {
   updateReminder: (eventId, id, data) => req('PUT', `/events/${eventId}/reminders/${id}`, data),
   deleteReminder: (eventId, id) => req('DELETE', `/events/${eventId}/reminders/${id}`),
   previewReminder: (eventId, id, data) => req('POST', `/events/${eventId}/reminders/${id}/preview`, data),
-  testSendReminder: (eventId, id, data) => req('POST', `/events/${eventId}/reminders/${id}/test-send`, data),
+  testSendReminder: (eventId, id, data) => req('POST', `/events/${eventId}/reminders/${id}/test-send`, data, 45000),
 
   // Unified Guest Communication scheduler
   listScheduledCommunications: (eventId) => req('GET', `/events/${eventId}/communications/scheduled`),

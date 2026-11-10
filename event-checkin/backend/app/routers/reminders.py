@@ -8,6 +8,8 @@ Delivery itself is handled by services/reminder_outbox.py (scheduler) and
 services/reminder_send.py (per-guest fan-out), not this router -- this file
 only manages the EventReminder rows an organizer authors.
 """
+import re
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,6 +28,7 @@ from services.outbound_safety import recipient_allowed
 from services.templates import render, sample_context
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 async def _reminder_event(event_id: str, db: AsyncSession) -> Event:
@@ -169,23 +172,45 @@ async def test_send_reminder(event_id: str, reminder_id: str, data: ReminderTest
     reminder = await _get_reminder(event_id, reminder_id, db)
     if not (data.to or "").strip():
         raise HTTPException(400, "A destination address/number is required")
-    if not recipient_allowed(data.channel, data.to):
+    destination = data.to.strip()
+    valid = re.fullmatch(r"[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+", destination) if data.channel == 'email' else re.fullmatch(r"\+[1-9]\d{7,14}", destination)
+    if not valid:
+        raise HTTPException(422, 'Enter one email address or one phone number with its country code for the selected channel.')
+    if data.channel not in ('email', 'sms', 'whatsapp'):
+        raise HTTPException(422, 'This channel does not support reminder tests.')
+    if not recipient_allowed(data.channel, destination):
         raise HTTPException(403, "Recipient blocked by the environment outbound-safety policy")
     messaging.set_event_context(event.id)
     ctx = _preview_context(event, data.sample_session_access, data.body, data.subject)
     body = render(data.body, ctx)
+    result = None
+    logger.info("Reminder test requested event=%s reminder=%s channel=%s", event_id, reminder_id, data.channel)
     if data.channel == "email":
+        if not body.strip():
+            raise HTTPException(422, "Add an email body before sending a test.")
         subject = render(data.subject, ctx) if data.subject else f"Test reminder — {event.name}"
-        await send_simple_email(data.to, subject, body)
+        result = await send_simple_email(destination, subject, body, event_id=event.id, message_kind="reminder_test")
+        if not result:
+            raise HTTPException(502, "Email test was not accepted. Check email delivery records for the failure reason.")
     elif data.channel == "sms":
-        await messaging.send_custom_sms(phone=data.to, body=body)
+        if not body.strip():
+            raise HTTPException(422, "Add an SMS body before sending a test.")
+        result = await messaging.send_custom_sms(phone=destination, body=body)
     elif data.channel == "whatsapp":
-        wa_ref = data.whatsapp_template_ref if data.whatsapp_template_ref is not None else reminder.whatsapp_template_ref
+        wa_ref = data.whatsapp_template_ref if "whatsapp_template_ref" in data.model_fields_set else reminder.whatsapp_template_ref
         wa_vars = data.whatsapp_template_vars if data.whatsapp_template_vars is not None else reminder.whatsapp_template_vars
         if wa_ref and wa_vars:
             var_keys = list(wa_vars.keys())
             params = [render(wa_vars[k], ctx) for k in var_keys]
-            await messaging.send_custom_template_whatsapp(phone=data.to, template_ref=wa_ref, params=params, var_keys=var_keys)
+            if any(not value.strip() for value in params):
+                raise HTTPException(422, "Fill in all WhatsApp template variables before sending a test.")
+            result = await messaging.send_custom_template_whatsapp(phone=destination, template_ref=wa_ref, params=params, var_keys=var_keys)
         else:
-            await messaging.send_custom_whatsapp(phone=data.to, body=body)
-    return {"ok": True, "channel": data.channel, "to": data.to}
+            if not body.strip():
+                raise HTTPException(422, "Select an approved WhatsApp template before sending a test.")
+            result = await messaging.send_custom_whatsapp(phone=destination, body=body)
+    if data.channel != 'email' and (not result or result.get('status') in ('failed', 'rejected', 'blocked', 'skipped', 'undeliverable') or not result.get('provider_message_id')):
+        raise HTTPException(502, "The messaging provider did not accept this test. Check the channel configuration and approved template.")
+    reference = result.get('provider_message_id') if isinstance(result, dict) else None
+    logger.info("Reminder test accepted event=%s reminder=%s channel=%s provider_message_id=%s", event_id, reminder_id, data.channel, reference)
+    return {"ok": True, "status": "accepted", "channel": data.channel, "to": destination, "provider_message_id": reference}

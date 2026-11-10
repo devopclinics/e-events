@@ -933,6 +933,8 @@ export function RealRemindersContent({ eventId, event, notify }) {
   const [testChannel, setTestChannel] = useState('email')
   const [sampleAccess, setSampleAccess] = useState('conference_dinner')
   const [testBusy, setTestBusy] = useState(false)
+  const [testResult, setTestResult] = useState(null)
+  const testInFlight = useRef(false)
 
   async function load() {
     if (!eventId) { setReminders([]); return }
@@ -946,6 +948,8 @@ export function RealRemindersContent({ eventId, event, notify }) {
 
   function openEditor(item = null) {
     setPreview(null)
+    setTestResult(null)
+    setTestTo('')
     setEditing(item || 'new')
     setForm(item ? {
       label: item.label, offset_days: item.offset_days, send_time_local: item.send_time_local,
@@ -1014,16 +1018,28 @@ export function RealRemindersContent({ eventId, event, notify }) {
   }
 
   async function sendTest() {
-    if (editing === 'new' || !testTo.trim() || testBusy) return
+    if (editing === 'new' || !testTo.trim() || testInFlight.current) return
+    const destination = testTo.trim()
+    const valid = testChannel === 'email' ? /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(destination) : /^\+[1-9]\d{7,14}$/.test(destination)
+    if (!valid) {
+      setTestResult({ error: true, message: testChannel === 'email' ? 'Enter one email address for this test.' : 'Enter one phone number with its country code, for example +18327941707.' })
+      return
+    }
+    testInFlight.current = true
     setTestBusy(true)
+    setTestResult({ message: `Submitting test ${testChannel} to ${destination}…` })
     try {
       const body = testChannel === 'email' ? form.email_body : testChannel === 'sms' ? form.sms_body : form.whatsapp_body
-      await api.testSendReminder(eventId, editing.id, {
-        channel: testChannel, to: testTo.trim(), subject: testChannel === 'email' ? form.subject : null, body, sample_session_access: sampleAccess,
+      const result = await api.testSendReminder(eventId, editing.id, {
+        channel: testChannel, to: destination, subject: testChannel === 'email' ? form.subject : null, body, sample_session_access: sampleAccess,
+        whatsapp_template_ref: form.whatsapp_use_approved ? form.whatsapp_template_ref : null,
+        whatsapp_template_vars: form.whatsapp_use_approved ? form.whatsapp_template_vars : null,
       })
-      notify(`Test ${testChannel} sent`)
-    } catch (e) { notify(e.message || 'Test send failed', true) }
-    finally { setTestBusy(false) }
+      if (!result?.ok) throw new Error('The test was not accepted. Sign in again if your session has expired, then retry.')
+      setTestResult({ message: `Test ${testChannel} accepted for ${destination}. Delivery is not yet confirmed.${result.provider_message_id ? ` Reference: ${result.provider_message_id}` : ''}` })
+    } catch (e) {
+      setTestResult({ error: true, message: e.message || 'Test send failed. No success was confirmed.' })
+    } finally { testInFlight.current = false; setTestBusy(false) }
   }
 
   if (!eventId) return <EmptyState icon="clock" title="Select an event" message="Choose an event before scheduling reminders." />
@@ -1158,13 +1174,15 @@ export function RealRemindersContent({ eventId, event, notify }) {
             <small>Live reminders use each guest’s saved permissions. This selector changes no guest access.</small>
           </label>}
           <div className="rd-row2" style={{ alignItems: 'center' }}>
-            <select aria-label="Preview channel" className="rd-field" style={{ flex: 'none', width: 130 }} value={testChannel} onChange={(e) => { setTestChannel(e.target.value); setPreview(null) }}>
+            <select aria-label="Preview channel" className="rd-field" style={{ flex: 'none', width: 130 }} value={testChannel} disabled={testBusy} onChange={(e) => { setTestChannel(e.target.value); setPreview(null); setTestResult(null); setTestTo('') }}>
               {form.channels.map((c) => <option key={c} value={c}>{REMINDER_CHANNELS.find((rc) => rc.id === c)?.label}</option>)}
             </select>
             <button type="button" className="rr-btn secondary" disabled={previewBusy} onClick={runPreview}>{previewBusy ? 'Rendering…' : 'Preview'}</button>
-            <input className="rd-field" placeholder="Send test to…" value={testTo} onChange={(e) => setTestTo(e.target.value)} />
+            <input aria-label="Test recipient" className="rd-field" disabled={testBusy} placeholder={testChannel === 'email' ? 'Email address' : '+Country code and phone number'} value={testTo} onChange={(e) => { setTestTo(e.target.value); setTestResult(null) }} />
             <button type="button" className="rr-btn secondary" disabled={testBusy || !testTo.trim()} onClick={sendTest}>{testBusy ? 'Sending…' : 'Send test'}</button>
           </div>
+          <p className="rd-hint">Send one test at a time. Choose a channel and enter its email address or phone number. This does not send to guests.</p>
+          {testResult && <div role={testResult.error ? 'alert' : 'status'} style={{ padding: 12, marginTop: 10, border: '1px solid var(--line)', borderRadius: 8, color: testResult.error ? 'var(--danger)' : 'var(--ink)', overflowWrap: 'anywhere' }}>{testResult.message}</div>}
           {preview && <ReminderPreviewFrame channel={testChannel} preview={preview} />}
         </div></div>
       )}

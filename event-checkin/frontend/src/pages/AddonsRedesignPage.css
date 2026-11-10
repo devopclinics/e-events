@@ -284,3 +284,49 @@
 .ad-chart-picker-name small { font-size: 10px; color: var(--faint); font-weight: 400; }
 
 .ad-fund-ledger-note{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:18px;padding:14px 16px;border:1px solid #d8c8a8;border-radius:12px;background:#fbf6ea}.ad-fund-ledger-note strong,.ad-fund-ledger-note p{display:block;margin:0}.ad-fund-ledger-note p{margin-top:3px;color:#6d6254;font-size:12px}.ad-registry-progress small{color:#9a5b24}@media(max-width:700px){.ad-fund-ledger-note{align-items:stretch;flex-direction:column}}
+
+/* Reminder send review: one audience, distinct delivery channels. */
+.ad-send-review { display:grid; gap:16px; }
+.ad-send-review-heading { padding:2px 0 0; }
+.ad-send-review-kicker { color:var(--teal); font-size:10px; font-weight:800; letter-spacing:.12em; }
+.ad-send-review-heading h2 { margin:7px 0 0; font-size:19px; line-height:1.35; letter-spacing:-.02em; overflow-wrap:anywhere; }
+.ad-send-review-audience { display:flex; align-items:center; gap:14px; padding:21px; border:1px solid var(--line); background:var(--surface-2); border-radius:16px; flex-wrap:wrap; }
+.ad-send-review-audience-icon { display:grid; place-items:center; width:46px; height:46px; border-radius:14px; background:var(--teal-soft); color:var(--teal); flex:none; }
+.ad-send-review-audience > div { display:flex; flex-direction:column; gap:4px; }
+.ad-send-review-audience > div > strong { font-size:46px; line-height:1; letter-spacing:-.055em; color:var(--ink); }
+.ad-send-review-audience > div > span { font-size:12px; font-weight:600; color:var(--muted); }
+.ad-send-review-audience-total { flex-basis:100%; padding-top:10px; border-top:1px solid var(--line); color:var(--muted); font-size:11px; }
+.ad-send-review-channels { display:grid; grid-template-columns:repeat(auto-fit,minmax(155px,1fr)); gap:12px; }
+.ad-send-review-channel { display:flex; flex-direction:column; align-items:flex-start; padding:17px 18px; border:1px solid var(--line); border-radius:14px; background:var(--surface); }
+.ad-send-review-channel-title { display:flex; align-items:center; gap:9px; font-size:13px; margin-bottom:15px; }
+.ad-send-review-channel-title > span { display:grid; place-items:center; width:32px; height:32px; border-radius:10px; background:var(--teal-soft); color:var(--teal); }
+.ad-send-review-channel-whatsapp .ad-send-review-channel-title > span { background:var(--success-soft); color:var(--success); }
+.ad-send-review-channel-count { font-size:32px; line-height:1.1; letter-spacing:-.035em; color:var(--ink); }
+.ad-send-review-caption { margin-top:4px; font-size:11px; color:var(--muted); }
+.ad-send-review-overlap { margin:-5px 0 0; color:var(--muted); font-size:11px; line-height:1.55; }
+.ad-send-review-coverage { display:flex; align-items:flex-start; gap:8px; padding:11px 13px; border-radius:10px; background:var(--success-soft); color:var(--success); font-size:12px; line-height:1.5; }
+.ad-send-review-coverage svg { flex:none; margin-top:1px; }
+.ad-send-review-notes { display:grid; gap:14px; padding:2px 0; }
+.ad-send-review-notes > div { display:flex; align-items:flex-start; gap:10px; }
+.ad-send-review-notes > div > svg { flex:none; color:var(--muted); margin-top:2px; }
+.ad-send-review-notes p { display:flex; flex-direction:column; gap:3px; margin:0; }
+.ad-send-review-notes strong { font-size:12px; color:var(--ink); }
+.ad-send-review-notes span { font-size:11px; line-height:1.5; color:var(--muted); }
+.ad-send-review-disclaimer { margin:0; padding-top:14px; border-top:1px solid var(--line); color:var(--muted); font-size:11px; line-height:1.65; }
+.ad-send-review-error { margin:0; padding:12px; border-radius:10px; background:var(--danger-soft); color:var(--danger); font-size:12px; }
+.ad-send-review-actions { display:flex; justify-content:flex-end; gap:10px; padding-top:2px; }
+.ad-send-review-actions .rr-btn { min-height:42px; }
+@media(max-width:480px) {
+  .ad-send-review { gap:14px; }
+  .ad-send-review-heading h2 { font-size:17px; }
+  .ad-send-review-audience { padding:16px; gap:12px; }
+  .ad-send-review-audience > div > strong { font-size:40px; }
+  .ad-send-review-channels { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+  .ad-send-review-channel { padding:14px 12px; }
+  .ad-send-review-channel-title { gap:6px; font-size:12px; }
+  .ad-send-review-channel-title > span { width:28px; height:28px; }
+  .ad-send-review-actions { display:grid; grid-template-columns:1fr 1.6fr; }
+  .ad-send-review-actions .rr-btn { justify-content:center; padding:11px 10px; }
+}
+
+.ad-send-review-coverage-warning { background:var(--warning-soft); color:var(--warning); }

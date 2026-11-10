@@ -1125,15 +1125,38 @@ export function RealRemindersContent({ eventId, event, notify }) {
         </div>
       ))}
     </div></div>
-    {sendReview && <Modal title="Send this reminder now?" onClose={() => { if (!sendBusy) setSendReview(null) }} width={520}>
-      <p><strong>{sendReview.row.label}</strong></p>
-      <p>This sends the saved reminder immediately to <strong>{sendReview.summary.reachable_guests} guests</strong> out of {sendReview.summary.audience} matching the saved audience.</p>
-      <ul>{Object.entries(sendReview.summary.channels).map(([channel, count]) => <li key={channel}>{channel}: <strong>{count}</strong> eligible recipients</li>)}</ul>
-      <p>{sendReview.summary.unreachable_guests} have no eligible selected channel. {sendReview.summary.excluded_test_guests} test guests are excluded.</p>
-      <p>This replaces the scheduled send time. Repeated clicks will not queue another send. Provider acceptance does not guarantee delivery.</p>
-      {sendReview.summary.blockers.map(message => <p key={message} role="alert" style={{ color: 'var(--danger)' }}>{message}</p>)}
-      {sendError && <p role="alert" style={{ color: 'var(--danger)' }}>{sendError}</p>}
-      <div className="gr-actions"><button className="rr-btn secondary" disabled={sendBusy} onClick={() => setSendReview(null)}>Cancel</button><button type="button" className="rr-btn primary" disabled={sendBusy || !!sendReview.summary.blockers.length || !sendReview.summary.reachable_guests} onClick={confirmSendNow}>{sendBusy ? 'Queueing…' : 'Confirm send now'}</button></div>
+    {sendReview && <Modal title="Review your reminder" onClose={() => { if (!sendBusy) setSendReview(null) }} width={580}>
+      <div className="ad-send-review">
+        <div className="ad-send-review-heading">
+          <span className="ad-send-review-kicker">{sendReview.summary.blockers.length ? 'REVIEW REQUIRED' : 'READY FOR YOUR APPROVAL'}</span>
+          <h2>{sendReview.row.label.replace(/\s*[—–-]\s*DRAFT$/i, '')}</h2>
+        </div>
+        <div className="ad-send-review-audience">
+          <span className="ad-send-review-audience-icon"><Icon name="users" size={24} /></span>
+          <div><strong>{sendReview.summary.reachable_guests}</strong><span>guests to notify</span></div>
+          <span className="ad-send-review-audience-total">of {sendReview.summary.audience} matching guests</span>
+        </div>
+        <div className="ad-send-review-channels" aria-label="Recipients by channel">
+          {Object.entries(sendReview.summary.channels).map(([channel, count]) => <div key={channel} className={`ad-send-review-channel ad-send-review-channel-${channel}`}>
+            <div className="ad-send-review-channel-title"><span><Icon name={channel === 'email' ? 'mail' : channel === 'whatsapp' ? 'whatsapp' : 'message'} size={19} /></span><strong>{REMINDER_CHANNELS.find(c => c.id === channel)?.label || channel}</strong></div>
+            <strong className="ad-send-review-channel-count">{count}</strong><span className="ad-send-review-caption">eligible recipients</span>
+          </div>)}
+        </div>
+        <p className="ad-send-review-overlap">Guests eligible for more than one channel may receive both messages.</p>
+        <div className={`ad-send-review-coverage${sendReview.summary.unreachable_guests ? ' ad-send-review-coverage-warning' : ''}`}>
+          <Icon name={sendReview.summary.unreachable_guests ? 'info' : 'check'} size={17} />
+          <span>{sendReview.summary.unreachable_guests ? `${sendReview.summary.unreachable_guests} guests cannot be reached on the selected channels.` : 'All matching guests have an eligible contact channel.'}</span>
+        </div>
+        {sendReview.summary.excluded_test_guests > 0 && <p className="ad-send-review-overlap">{sendReview.summary.excluded_test_guests} test guests excluded.</p>}
+        <div className="ad-send-review-notes">
+          <div><Icon name="clock" size={17} /><p><strong>Send immediately</strong><span>This replaces the scheduled send time.</span></p></div>
+          <div><Icon name="check" size={17} /><p><strong>Protected against repeat clicks</strong><span>Confirming again won’t queue another send.</span></p></div>
+        </div>
+        <p className="ad-send-review-disclaimer">Provider acceptance is not delivery confirmation. Review progress and failures after sending.</p>
+        {sendReview.summary.blockers.map(message => <p key={message} role="alert" className="ad-send-review-error">{message}</p>)}
+        {sendError && <p role="alert" className="ad-send-review-error">{sendError}</p>}
+        <div className="ad-send-review-actions"><button className="rr-btn secondary" disabled={sendBusy} onClick={() => setSendReview(null)}>Cancel</button><button type="button" className="rr-btn primary" disabled={sendBusy || !!sendReview.summary.blockers.length || !sendReview.summary.reachable_guests} onClick={confirmSendNow}><Icon name="send" size={16} />{sendBusy ? 'Queueing…' : 'Confirm send now'}</button></div>
+      </div>
     </Modal>}
     {editing && <Modal title={editing === 'new' ? 'New reminder' : `Edit ${editing.label}`} onClose={() => setEditing(null)} width={620}>
       <label className="rd-field-label">Quick start</label>

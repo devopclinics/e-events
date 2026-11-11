@@ -89,3 +89,56 @@ async def test_sheet_session_does_not_cross_events_and_invalid_batches_are_atomi
     assert (await ctx.client.post(base+'/rows',headers=h,json=payload([]))).status_code==422
     assert (await ctx.client.get(base+'/rows?offset=-1',headers=h)).status_code==422
     assert (await ctx.client.post('/api/guest-sheets/not-a-link/unlock',json={'pin':'123456'})).status_code==404
+
+@pytest.mark.asyncio
+async def test_sheet_defaults_grant_both_only_to_new_guests_and_replay_is_safe(ctx):
+    from app.models import Zone,GuestSessionAccess
+    token,h,_=await setup(ctx);eid=ctx.ids['event_a'];base=f'/api/guest-sheets/{token}'
+    async with _Session() as db:
+        zones=[Zone(event_id=eid,name=n)for n in ['Conference','Dinner']];db.add_all(zones);await db.flush();ids=[z.id for z in zones];await db.commit()
+    settings=f'/api/events/{eid}/guest-sheet'
+    r=await ctx.client.put(settings,json={'default_zone_ids':ids,'allow_edit':True});assert r.status_code==200,r.text
+    # Routine enable/edit saves must preserve selected zone defaults.
+    assert (await ctx.client.put(settings,json={'allow_edit':True})).json()['default_zone_ids']==ids
+    body=payload([row()]);assert (await ctx.client.post(base+'/rows',headers=h,json=body)).status_code==200
+    assert (await ctx.client.post(base+'/rows',headers=h,json=body)).json()['already_saved']
+    async with _Session()as db:
+        g=await db.scalar(select(Guest).where(Guest.first_name=='Ada'));gid=g.id
+        access=(await db.scalars(select(GuestSessionAccess).where(GuestSessionAccess.guest_id==gid))).all()
+        assert {a.zone_id for a in access}==set(ids) and all(a.decision=='allow'for a in access)
+        access[0].decision='block';await db.commit()
+    records=(await ctx.client.get(base+'/rows',headers=h)).json()['rows'];edit=next(r for r in records if r['id']==gid);edit['phone']='+2348032396576'
+    assert (await ctx.client.post(base+'/rows',headers=h,json=payload([edit]))).status_code==200
+    async with _Session()as db:
+        access=(await db.scalars(select(GuestSessionAccess).where(GuestSessionAccess.guest_id==gid))).all();assert len(access)==2 and sum(a.decision=='block'for a in access)==1
+    # Public contributors cannot choose or elevate zones.
+    assert (await ctx.client.post(base+'/rows',headers=h,json=payload([row(default_zone_ids=ids)]))).status_code==422
+
+@pytest.mark.asyncio
+async def test_sheet_defaults_reject_foreign_or_inactive_zones_and_rollback(ctx):
+    from app.models import Zone
+    token,h,_=await setup(ctx);eid=ctx.ids['event_a'];base=f'/api/guest-sheets/{token}'
+    async with _Session()as db:
+        foreign=Event(org_id=ctx.ids['org_a'],name='Other',couples_name='Other',event_date=datetime(2026,11,11),checkin_base_url='http://test',status='active');db.add(foreign);await db.flush()
+        other=Zone(event_id=foreign.id,name='Foreign');local=Zone(event_id=eid,name='Dinner');db.add_all([other,local]);await db.flush();foreign_id=other.id;local_id=local.id;await db.commit()
+    settings=f'/api/events/{eid}/guest-sheet'
+    assert (await ctx.client.put(settings,json={'default_zone_ids':[foreign_id]})).status_code==422
+    assert (await ctx.client.put(settings,json={'default_zone_ids':[local_id]})).status_code==200
+    async with _Session()as db:
+        z=await db.get(Zone,local_id);z.is_active=False;await db.commit()
+    r=await ctx.client.post(base+'/rows',headers=h,json=payload([row()]));assert r.status_code==409,r.text
+    async with _Session()as db:assert await db.scalar(select(Guest).where(Guest.first_name=='Ada')) is None
+
+@pytest.mark.asyncio
+async def test_sheet_zone_defaults_require_access_management(ctx):
+    from app.models import User,Membership,EventUser
+    await setup(ctx);eid=ctx.ids['event_a']
+    async with _Session()as db:
+        u=User(name='Guest editor',email='sheet-editor@example.test',role='official');db.add(u);await db.flush();uid=u.id
+        db.add(Membership(org_id=ctx.ids['org_a'],user_id=uid,role='staff'))
+        db.add(EventUser(event_id=eid,user_id=uid,event_role='staff',can_manage_guests=True,feature_permissions={'settings':'manage','guests':'manage'}));await db.commit()
+    ctx.login(u)
+    url=f'/api/events/{eid}/guest-sheet'
+    r=await ctx.client.put(url,json={'default_zone_ids':[]});assert r.status_code==403,r.text
+    # Ordinary sheet controls keep their original permission requirements.
+    assert (await ctx.client.put(url,json={'allow_edit':True})).status_code==200

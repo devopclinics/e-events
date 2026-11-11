@@ -9,8 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import get_db
-from ..models import Event, Organization, Guest, SharedGuestSheet, GuestSheetSession, GuestSheetBatch, User
-from ..auth import require_guest_manage_access
+from ..models import Event, Organization, Guest, SharedGuestSheet, GuestSheetSession, GuestSheetBatch, User, Zone, GuestSessionAccess, EventUser
+from ..auth import require_guest_manage_access, _org_role
 from ..entitlements import assert_within_guest_cap
 from ..ratelimit import rate_limit
 from .guests import _normalize_phone, _norm_person_name
@@ -31,6 +31,7 @@ class Settings(Strict):
     enabled: bool = True
     allow_edit: bool = False
     reset_pin: bool = False
+    default_zone_ids: list[str] | None = Field(default=None, max_length=100)
 
 class Unlock(Strict):
     pin: str = Field(pattern=r'^[0-9]{6}$')
@@ -75,19 +76,30 @@ def no_cache(response):
     response.headers['Cache-Control']='no-store'
     response.headers['Referrer-Policy']='no-referrer'
 
-def config(row):
-    return {'enabled':row.enabled,'allow_edit':row.allow_edit,'url':'/guest-sheet/'+row.token}
+def config(row, event):
+    defaults=(event.setup_preferences or {}).get('guest_sheet_defaults') or {}
+    return {'enabled':row.enabled,'allow_edit':row.allow_edit,'url':'/guest-sheet/'+row.token,'default_zone_ids':defaults.get('zone_ids',[])}
 
 @router.get('/events/{event_id}/guest-sheet')
 async def get_settings(event_id: str, response: Response, db: AsyncSession=Depends(get_db), _:User=Depends(require_guest_manage_access)):
     no_cache(response)
     row=await db.get(SharedGuestSheet,event_id)
-    return config(row) if row else {'enabled':False,'allow_edit':False,'url':None}
+    event=await db.get(Event,event_id)
+    return config(row,event) if row else {'enabled':False,'allow_edit':False,'url':None,'default_zone_ids':[]}
 
 @router.put('/events/{event_id}/guest-sheet')
 async def save_settings(event_id: str, body:Settings, response:Response, db:AsyncSession=Depends(get_db), _:User=Depends(require_guest_manage_access)):
     no_cache(response)
-    await db.execute(select(Event).where(Event.id==event_id).with_for_update())
+    event=await db.scalar(select(Event).where(Event.id==event_id).with_for_update())
+    if body.default_zone_ids is not None:
+        if not _.is_platform_superadmin and await _org_role(_,event.org_id,db) not in ('owner','admin'):
+            eu=await db.scalar(select(EventUser).where(EventUser.event_id==event_id,EventUser.user_id==_.id))
+            permitted=eu and not eu.guest_service_scoped and (eu.access_level or 'edit')=='edit' and (eu.feature_permissions.get('access')=='manage' if eu.feature_permissions is not None else eu.event_role=='manager')
+            if not permitted:raise HTTPException(403,'Manage venue access permission is required to set guest sheet zone defaults')
+        ids=list(dict.fromkeys(body.default_zone_ids))
+        valid=set((await db.scalars(select(Zone.id).where(Zone.event_id==event_id,Zone.is_active.is_(True),Zone.id.in_(ids)))).all())
+        if set(ids)!=valid:raise HTTPException(422,'Choose active zones from this event')
+        event.setup_preferences={**(event.setup_preferences or {}),'guest_sheet_defaults':{'zone_ids':ids,'updated_by':_.id}}
     row=await db.get(SharedGuestSheet,event_id);pin=None
     if not row:
         pin=f'{secrets.randbelow(1000000):06d}'
@@ -99,7 +111,7 @@ async def save_settings(event_id: str, body:Settings, response:Response, db:Asyn
     if row.enabled!=body.enabled: row.version+=1
     row.enabled=body.enabled;row.allow_edit=body.allow_edit
     await db.commit()
-    return {**config(row),'pin':pin}
+    return {**config(row,event),'pin':pin}
 
 async def available(token, db, lock=False):
     sheet=await db.scalar(select(SharedGuestSheet).where(SharedGuestSheet.token==token))
@@ -162,6 +174,11 @@ async def save_rows(token:str,body:Batch,response:Response,x_guest_sheet_session
         return {**previous.result,'already_saved':True}
     existing=(await db.scalars(select(Guest).where(Guest.event_id==event.id))).all()
     by_id={g.id:g for g in existing};by_name={(_norm_person_name(g.first_name),_norm_person_name(g.last_name)):g.id for g in existing}
+    defaults=(event.setup_preferences or {}).get('guest_sheet_defaults') or {}
+    zone_ids=list(dict.fromkeys(defaults.get('zone_ids') or []))
+    if zone_ids and any(not r.id for r in body.rows):
+        valid=set((await db.scalars(select(Zone.id).where(Zone.event_id==event.id,Zone.is_active.is_(True),Zone.id.in_(zone_ids)))).all())
+        if set(zone_ids)!=valid:raise HTTPException(409,'Guest sheet access settings need organiser review before adding guests')
     added=updated=0;duplicates=[];seen=set()
     for index,row in enumerate(body.rows):
         key=(_norm_person_name(row.first_name),_norm_person_name(row.last_name))
@@ -179,7 +196,10 @@ async def save_rows(token:str,body:Batch,response:Response,x_guest_sheet_session
             if key in by_name: duplicates.append(index+1);continue
             assert_within_guest_cap(event,len(existing)+added)
             g=Guest(event_id=event.id,first_name=row.first_name,last_name=row.last_name,email=row.email,phone=row.phone or None,is_test=event.is_test is True)
-            db.add(g);await db.flush();by_name[key]=g.id;added+=1
+            db.add(g);await db.flush()
+            for zone_id in zone_ids:
+                db.add(GuestSessionAccess(event_id=event.id,guest_id=g.id,zone_id=zone_id,decision='allow',updated_by=defaults.get('updated_by')))
+            by_name[key]=g.id;added+=1
     result={'added':added,'updated':updated,'duplicate_rows':duplicates}
     db.add(GuestSheetBatch(event_id=event.id,request_key=body.request_key,payload_hash=fingerprint,result=result))
     await db.commit()

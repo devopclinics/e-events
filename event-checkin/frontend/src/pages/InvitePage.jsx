@@ -3405,8 +3405,11 @@ export default function InvitePage() {
         ? `/api/invite/link/${rsvpToken}`
         : `/api/invite/${eventId}`
     fetch(url, { cache: 'no-store', signal: controller.signal })
-      .then((r) => {
-        if (r.status === 410) throw new Error('This event has ended.')
+      .then(async (r) => {
+        if (r.status === 410) {
+          const failure = await r.json().catch(() => ({}))
+          throw new Error(failure.detail?.startsWith('Invitation unavailable.') ? 'Invitation unavailable' : 'This event has ended.')
+        }
         if (r.status === 404) throw new Error(tokenMode || rsvpLinkMode ? 'This RSVP link is not valid.' : 'Event not found.')
         if (!r.ok) throw new Error('Something went wrong.')
         return r.json()
@@ -3477,6 +3480,19 @@ export default function InvitePage() {
     <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-900">
       <div className="text-slate-500 text-sm animate-pulse">Loading…</div>
     </div>
+  )
+
+  if (error === 'Invitation unavailable') return (
+    <main className="min-h-screen flex items-center justify-center px-5 py-12" style={{ background: '#f0f3ed', color: '#173e33' }}>
+      <section className="w-full max-w-md rounded-3xl border p-8 sm:p-10 text-center shadow-sm" style={{ background: '#fffdf7', borderColor: '#d8e2d7' }}>
+        <div className="text-xs uppercase tracking-[0.22em] font-bold mb-8">Festio · Invitation safety</div>
+        <svg aria-hidden="true" viewBox="0 0 48 56" className="w-14 h-16 mx-auto mb-6" fill="none"><path d="M24 2 44 10 41 34 24 53 7 34 4 10Z" fill="#214e40"/><path d="M24 16v13" stroke="#fffdf7" strokeWidth="3" strokeLinecap="round"/><circle cx="24" cy="36" r="2" fill="#fffdf7"/></svg>
+        <h1 className="text-3xl mb-4" style={{ fontFamily: 'Georgia, serif' }}>Invitation unavailable</h1>
+        <p className="text-sm leading-6">This invitation has been removed or is not available for public access.</p>
+        <p className="text-sm leading-6 mt-5" style={{ color: '#62756a' }}>If you received an unexpected request to verify an account or payment, do not follow its instructions.</p>
+        <a href="/" className="inline-block mt-8 rounded-xl px-6 py-3 text-sm font-bold text-white" style={{ background: '#214e40' }}>Return to Festio</a>
+      </section>
+    </main>
   )
 
   if (error) return (

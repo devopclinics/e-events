@@ -74,6 +74,12 @@ async def process_claimed(reminder_id: str) -> None:
         # creation). Terminal state, not a retry: an organizer who disables
         # Reminders shouldn't have it silently keep firing in the background,
         # nor should a disabled reminder tick forever waiting to be re-enabled.
+        from .public_event_policy import event_communications_blocked
+        if not reminder.enabled or await event_communications_blocked(event, db):
+            reminder.status = "failed"
+            reminder.last_error = "Event communications are blocked or this reminder was disabled"
+            await db.commit()
+            return
         if not event.reminders_enabled:
             reminder.status = "failed"
             reminder.last_error = "Reminders add-on was disabled before this reminder fired"

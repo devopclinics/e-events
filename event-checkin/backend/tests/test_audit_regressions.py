@@ -69,7 +69,7 @@ async def test_draft_public_registration_is_blocked_without_creating_guest(ctx):
         event=await db.get(Event,eid);event.status='draft';event.rsvp_enabled=True;event.invite_mode='open';event.rsvp_token='audit-draft'
         await db.commit();before=await db.scalar(select(func.count()).select_from(Guest))
     result=await ctx.client.post('/api/invite/link/audit-draft/rsvp',json={'first_name':'Demo','last_name':'Draft','email':'draft@example.com'})
-    assert result.status_code==409,result.text
+    assert result.status_code==404,result.text
     async with _Session() as db:
         assert await db.scalar(select(func.count()).select_from(Guest))==before
 

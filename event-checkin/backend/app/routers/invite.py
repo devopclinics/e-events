@@ -31,6 +31,7 @@ from ..schemas import (
     GuardianSearchResult, GuardianAddRequest, MyJunior, MyJuniorGuardian,
     MyJuniorsOut, MyPartyMember,
 )
+from ..services.public_event_policy import require_public_invitation
 from .access import _entry_is_usable
 from services import messaging
 from services.credit_ledger import send_with_credit_ledger
@@ -53,8 +54,7 @@ async def _get_public_event(event_id: str, db: AsyncSession) -> Event:
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
-    if event.status == "ended":
-        raise HTTPException(410, "This event has ended")
+    await require_public_invitation(event, db)
     return event
 
 
@@ -64,8 +64,7 @@ async def _get_public_event_by_rsvp_token(rsvp_token: str, db: AsyncSession) -> 
     )).scalar_one_or_none()
     if not event:
         raise HTTPException(404, "RSVP link not found")
-    if event.status == "ended":
-        raise HTTPException(410, "This event has ended")
+    await require_public_invitation(event, db)
     return event
 
 
@@ -1040,8 +1039,9 @@ async def _get_guest_by_token(invite_token: str, db: AsyncSession) -> tuple[Gues
     if not guest:
         raise HTTPException(404, "Invite not found")
     event = await db.get(Event, guest.event_id)
-    if not event or event.status == "ended":
-        raise HTTPException(410, "This event has ended")
+    if not event:
+        raise HTTPException(404, "Invite not found")
+    await require_public_invitation(event, db)
     return guest, event
 
 

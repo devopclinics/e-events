@@ -92,6 +92,16 @@ _engine = create_async_engine(
 )
 _Session = async_sessionmaker(_engine, expire_on_commit=False)
 
+@pytest.fixture(autouse=True)
+def _background_safety_gate_uses_test_database(monkeypatch):
+    # Provider-time safety checks use their own session, like real workers.
+    # Keep these sessions on the same isolated DB as the HTTP fixtures.
+    from app import database
+    from services import credit_ledger
+    monkeypatch.setattr(database, "AsyncSessionLocal", _Session)
+    monkeypatch.setattr(credit_ledger, "AsyncSessionLocal", _Session)
+
+
 # The "logged-in" user for the current request (set via ctx.login()).
 _current = {"user": None}
 

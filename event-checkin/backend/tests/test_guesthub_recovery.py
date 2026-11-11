@@ -2,6 +2,7 @@
 from unittest.mock import AsyncMock
 
 import pytest
+import pytest_asyncio
 from datetime import datetime
 
 from conftest import _Session
@@ -9,6 +10,14 @@ from app import database, ratelimit
 from app.config import settings
 from app.models import Event, Guest
 from app.services import guesthub_recovery as recovery
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def published_event(ctx):
+    # Recovery is a public guest feature; exercise it on a published event.
+    async with _Session() as db:
+        (await db.get(Event,ctx.ids['event_a'])).status='active'
+        await db.commit()
 
 
 @pytest.fixture

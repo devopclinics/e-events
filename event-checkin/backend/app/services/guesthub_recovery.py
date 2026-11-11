@@ -40,7 +40,8 @@ async def send_recovery_email(event_id: str, data: GuestHubRecoveryRequest) -> N
     try:
         async with AsyncSessionLocal() as db:
             event = await db.get(Event, event_id)
-            if not event or event.status == "ended":
+            from .public_event_policy import event_communications_blocked
+            if not event or event.status != "active" or await event_communications_blocked(event, db):
                 return
             query = select(Guest).where(
                 Guest.event_id == event_id,

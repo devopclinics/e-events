@@ -45,6 +45,14 @@ class InviteDraft(BaseModel):
     envelope: bool = False
     request_id: uuid.UUID
 
+    @field_validator("message")
+    @classmethod
+    def safe_message(cls, value):
+        from ..services.public_event_policy import invitation_content_blocked
+        if invitation_content_blocked(value):
+            raise ValueError("This invitation contains a blocked destination. Remove it before saving or publishing.")
+        return value
+
     @field_validator("name")
     @classmethod
     def clean_name(cls, value):
@@ -156,6 +164,8 @@ async def invitation(token, db, *, lock=False):
     org = await db.get(Organization, event.org_id) if event else None
     if not event or not preferences(event) or not org or not org.is_active:
         raise HTTPException(404, "Invitation not found")
+    from ..services.public_event_policy import require_public_invitation
+    await require_public_invitation(event, db)
     if event.cancelled or event.status != "active":
         raise HTTPException(410, "This invitation is no longer accepting replies")
     if event.event_date < datetime.utcnow():
@@ -226,6 +236,8 @@ async def workspace(event, db):
 async def create(data: InviteDraft, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), user: User = Depends(require_admin)):
     if data.event_date.tzinfo is None:
         raise HTTPException(422, "The event date must include its timezone offset")
+    from ..services.public_event_policy import validate_invitation_content
+    validate_invitation_content(data.message)
     when = data.event_date.astimezone(timezone.utc).replace(tzinfo=None)
     if when <= datetime.utcnow(): raise HTTPException(422, "Choose a future event date")
     # Lock the same organization used by standard event creation. A retry of

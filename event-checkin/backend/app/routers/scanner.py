@@ -54,6 +54,8 @@ async def _guest_by_token(qr_token: str, db: AsyncSession) -> tuple[Guest, Event
     if not guest:
         raise HTTPException(404, "Guest ticket not found")
     event = await db.get(Event, guest.event_id)
+    from ..services.public_event_policy import require_safe_event_communications
+    await require_safe_event_communications(event, db)
     if not event:
         raise HTTPException(404, "Event not found")
     return guest, event
@@ -551,6 +553,8 @@ async def view_ticket(qr_token: str, db: AsyncSession = Depends(get_db)):
         return TicketView(status="invalid")
 
     event = await db.get(Event, guest.event_id)
+    from ..services.public_event_policy import require_safe_event_communications
+    await require_safe_event_communications(event, db)
     event_brief = EventBrief(
         external_website_url=event.external_website_url,
         guest_hub_layout=event.guest_hub_layout,
@@ -786,6 +790,8 @@ async def ticket_qr_image(qr_token: str, db: AsyncSession = Depends(get_db)):
     if not guest:
         return Response(status_code=404)
     event = await db.get(Event, guest.event_id)
+    from ..services.public_event_policy import require_safe_event_communications
+    await require_safe_event_communications(event, db)
     base_url = event.checkin_base_url if event else "https://festio.events"
     return Response(content=generate_qr_bytes(qr_token, base_url), media_type="image/png")
 
@@ -797,6 +803,8 @@ async def ticket_checkout_qr_image(qr_token: str, db: AsyncSession = Depends(get
     if not guest:
         return Response(status_code=404)
     event = await db.get(Event, guest.event_id)
+    from ..services.public_event_policy import require_safe_event_communications
+    await require_safe_event_communications(event, db)
     if not event or not event.checkout_enabled:
         return Response(status_code=404)
     return Response(content=generate_qr_for_url(f"festio-checkout:{qr_token}"), media_type="image/png")
@@ -817,6 +825,8 @@ async def ticket_card_image(
     if not guest:
         return Response(status_code=404)
     event = await db.get(Event, guest.event_id)
+    from ..services.public_event_policy import require_safe_event_communications
+    await require_safe_event_communications(event, db)
     if not event:
         return Response(status_code=404)
 

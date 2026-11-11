@@ -23,6 +23,17 @@ async def send_with_credit_ledger(
     {"provider": "twilio", "provider_message_id": "...", "status": "queued"}.
     If a provider reports immediate failure, refund the debit.
     """
+    # Recheck at execution time: permission at queue time is insufficient
+    # when an operator has since contained an abusive tenant/event.
+    if ledger_id:
+        from app.services.public_event_policy import event_communications_blocked
+        async with AsyncSessionLocal() as db:
+            ledger = await db.get(MessageCreditLedger, ledger_id)
+            event = await db.get(Event, ledger.event_id) if ledger else None
+            blocked = not ledger or await event_communications_blocked(event, db)
+        if blocked:
+            await refund_ledger_by_id(ledger_id, reason="event_communications_blocked")
+            return
     try:
         result = await send_func(**kwargs)
     except Exception:

@@ -377,6 +377,17 @@ async def _charge_email_credit(msg: MIMEMultipart) -> bool:
 
 
 async def _send(msg: MIMEMultipart) -> bool:
+    event_id = (msg["X-Festio-Event-Id"] or "").strip()
+    if event_id:
+        from app.database import AsyncSessionLocal
+        from app.models import Event
+        from app.services.public_event_policy import event_communications_blocked
+        async with AsyncSessionLocal() as db:
+            blocked = await event_communications_blocked(await db.get(Event, event_id), db)
+        if blocked:
+            await _record_email_delivery(msg, provider="internal", event_type="email.blocked",
+                status="blocked_event_safety", payload={"source": "event_communications_gate"})
+            return False
     if not (msg["To"] or "").strip():
         logger.info("Skipping email — recipient has no email address (likely a VVIP walk-in)")
         return False

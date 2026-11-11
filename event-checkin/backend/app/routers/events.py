@@ -9,6 +9,7 @@ import uuid as _uuid
 from urllib.parse import quote
 import httpx
 from ..services.credit_balance import available_credits, credit_scope
+from ..services.public_event_policy import validate_invitation_content
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, func, or_, select, update
@@ -761,6 +762,7 @@ async def update_event(
     # previously saved end date, venue, hotel, note, or description.  Omitted
     # fields remain unchanged.
     payload = data.model_dump(exclude_unset=True)
+    validate_invitation_content(payload.get("invite_message"))
     for required_field in ("name", "event_date", "timezone", "checkin_base_url"):
         if payload.get(required_field) is None:
             payload.pop(required_field, None)
@@ -1537,6 +1539,7 @@ async def update_invite_settings(
         raise HTTPException(404, "Event not found")
     if not event.rsvp_token:
         event.rsvp_token = str(_uuid.uuid4())
+    validate_invitation_content(data.invite_message)
     synced_limit_rules = None
     for field, value in data.model_dump(exclude_none=True).items():
         if field == "rsvp_multi_invitee_limit":

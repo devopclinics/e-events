@@ -1,3 +1,5 @@
+import WholeEventOverview, { WholeEventTotals } from './redesign/results/WholeEventOverview'
+import { occupancyPresentation, eventTime, utcDate } from './redesign/results/resultsSummary.mjs'
 import DeliveryReportBreakdown from './redesign/results/DeliveryReportBreakdown'
 import FestioLogo from '../components/branding/FestioLogo'
 import { useState, useEffect, useRef, useCallback } from 'react'
@@ -75,9 +77,9 @@ function pct(part, total) {
 
 function fmtEventDate(event) {
   if (!event?.event_date) return 'Date to be announced'
-  return new Date(event.event_date).toLocaleDateString(undefined, {
+  return utcDate(event.event_date).toLocaleDateString(undefined, {
     month: 'short', day: 'numeric', year: 'numeric',
-    ...(event.timezone && { timeZone: event.timezone }),
+    timeZone: event.timezone || 'UTC',
   })
 }
 
@@ -85,20 +87,20 @@ function fmtEventTime(event) {
   if (!event?.event_date) return ''
   const options = {
     hour: 'numeric', minute: '2-digit',
-    ...(event.timezone && { timeZone: event.timezone }),
+    timeZone: event.timezone || 'UTC',
   }
-  const start = new Date(event.event_date).toLocaleTimeString([], options)
+  const start = utcDate(event.event_date).toLocaleTimeString([], options)
   if (!event.event_end_date) return start
-  return `${start} – ${new Date(event.event_end_date).toLocaleTimeString([], options)}`
+  return `${start} – ${utcDate(event.event_end_date).toLocaleTimeString([], options)}`
 }
 
 function fmtActivityTime(value, timezone) {
   if (!value) return '—'
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return '—'
+  const parsed = utcDate(value)
+  if (!parsed || Number.isNaN(parsed.getTime())) return '—'
   return parsed.toLocaleTimeString([], {
     hour: 'numeric', minute: '2-digit',
-    ...(timezone && { timeZone: timezone }),
+    timeZone: timezone || 'UTC',
   })
 }
 
@@ -137,7 +139,7 @@ function MetricTile({ icon, label, value, detail, values, tone = 'teal', title }
 
 function ResultsSidebar({ event, activeView, onChange, exceptionCount }) {
   const eventRange = event?.event_end_date
-    ? `${fmtEventDate(event)} – ${new Date(event.event_end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: event.timezone || 'UTC' })}`
+    ? `${fmtEventDate(event)} – ${utcDate(event.event_end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: event.timezone || 'UTC' })}`
     : fmtEventDate(event)
   return <aside className="er-results-sidebar" aria-label="Results sections">
     <div className="er-results-event-mini"><strong>{event?.name || 'Selected event'}</strong><span>{eventRange} · {event?.status || 'Draft'}</span></div>
@@ -183,38 +185,8 @@ function CloseoutResultsView({ event, data }) {
   return <section className="er-closeout-view"><article><span>Event closeout</span><h2>Finish with a complete, auditable record.</h2><p>Complete each step in order. Every action remains in the service that owns its source record.</p><div className="er-closeout-list">{checks.map(item=><div className={item.done?'done':'pending'} key={item.label}><i>{item.done?'✓':'!'}</i><strong>{item.label}</strong><small>{item.detail}</small></div>)}</div></article><aside><span>Closeout readiness</span><strong>{complete}/{checks.length}</strong><p>Required reviews completed</p><button type="button" onClick={()=>window.print()}><Icon name="download" size={14}/> Export current report</button><a href="/setup-redesign?view=closeout">Open guided closeout<Icon name="arrow" size={13}/></a></aside></section>
 }
 
-function ExecutiveResultsOverview({ event, data, attendance, setActiveTab, setOverviewLayout }) {
-  const alerts = data.alerts || [], funnel = data.rsvp_funnel || {}, communication = data.communication || {}
-  const onSite = attendance.on_site ?? Math.max(Number(attendance.checked_in || 0) - Number(attendance.checked_out || 0), 0)
-  const arrivalRate = pct(attendance.checked_in, attendance.expected), responseRate = pct(funnel.responded, funnel.guests)
-  const criticalCount = alerts.filter(alert => alert.severity === 'critical').length, warningCount = alerts.length - criticalCount
-  const deliveryRate = communication.overall?.rate ?? null
-  const currentProgram = data.program?.in_progress?.[0], nextProgram = data.program?.up_next
-  const healthLabel = criticalCount ? 'Needs attention' : warningCount ? 'Watch items' : 'On track'
-  const healthTone = criticalCount ? 'danger' : warningCount ? 'warning' : 'success'
-  return <section className="er-executive">
-    <div className="er-executive-lead"><div><span className="er-section-eyebrow">Event performance</span><h2>{event?.name || 'Event'} at a glance</h2><p>One decision-ready view of guest response, arrivals, communication reach, programme status, and items that need action.</p></div><div className={`er-health-badge ${healthTone}`}><span>Overall status</span><strong>{healthLabel}</strong><small>{alerts.length ? `${alerts.length} open action${alerts.length === 1 ? '' : 's'}` : 'No open actions'}</small></div></div>
-    <div className="er-executive-kpis">
-      <MetricTile icon="users" label="Expected guests" value={attendance.expected ?? 0} detail={`${funnel.confirmed ?? 0} confirmed`} tone="neutral"/>
-      <MetricTile icon="check" label="Checked in" value={attendance.checked_in ?? 0} detail={`${arrivalRate}% arrival rate`} tone="green"/>
-      <MetricTile icon="users" label="On site now" value={onSite} detail={`${attendance.checked_out ?? 0} checked out`} tone="teal"/>
-      <MetricTile icon="send" label="RSVP response" value={`${responseRate}%`} detail={`${funnel.responded ?? 0} of ${funnel.guests ?? 0}`} tone="blue"/>
-      <MetricTile icon="mail" label="Delivery health" value={deliveryRate == null ? '—' : `${deliveryRate}%`} detail={deliveryRate == null ? 'No sends recorded' : 'Confirmed deliveries / tracked messages'} tone="teal"/>
-      <MetricTile icon="info" label="Action queue" value={alerts.length} detail={`${criticalCount} critical · ${warningCount} other`} tone={criticalCount ? 'red' : warningCount ? 'amber' : 'green'}/>
-    </div>
-    <div className="er-executive-grid">
-      <article className="er-summary-card"><div className="er-summary-card-head"><div><span>Guest journey</span><h3>Invitation to arrival</h3></div><button onClick={() => setActiveTab('invitations')}>Details <Icon name="arrow" size={12}/></button></div>
-        {[['Invited',funnel.invited,funnel.guests],['Responded',funnel.responded,funnel.guests],['Confirmed',funnel.confirmed,funnel.guests],['Checked in',funnel.checked_in,funnel.confirmed || funnel.guests]].map(([label,value,total]) => <div className="er-summary-progress-row" key={label}><div><span>{label}</span><b>{value ?? 0}</b></div><div className="er-summary-track"><i style={{width:`${pct(value,total)}%`}}/></div><small>{pct(value,total)}%</small></div>)}
-      </article>
-      <article className="er-summary-card"><div className="er-summary-card-head"><div><span>Programme now</span><h3>Current and next</h3></div><button onClick={() => setActiveTab('program')}>Programme <Icon name="arrow" size={12}/></button></div>
-        {currentProgram ? <div className="er-now-card"><span>Live now · {currentProgram.start_time || 'Time not set'}</span><strong>{currentProgram.topic}</strong><small>{currentProgram.room || 'Room not specified'}{currentProgram.speaker ? ` · ${currentProgram.speaker}` : ''}</small></div> : <div className="er-summary-empty">No programme item is currently in progress.</div>}
-        {nextProgram && <div className="er-next-card"><span>Next up · {nextProgram.start_time || 'Time not set'}</span><strong>{nextProgram.topic}</strong></div>}
-      </article>
-      <article className="er-summary-card"><div className="er-summary-card-head"><div><span>Attention required</span><h3>Priority action queue</h3></div><button onClick={() => setOverviewLayout('command')}>Command center <Icon name="arrow" size={12}/></button></div>
-        {alerts.length ? alerts.slice(0,4).map(alert => <div className={`er-summary-alert er-severity-${alert.severity}`} key={alert.id}><span><Icon name="info" size={13}/></span><div><strong>{alert.title}</strong><small>{alert.description}</small></div><b>{alert.count}</b></div>) : <div className="er-summary-clear"><Icon name="check" size={18}/><strong>All clear</strong><span>No operational exceptions need attention.</span></div>}
-      </article>
-    </div>
-  </section>
+function ExecutiveResultsOverview(props) {
+  return <WholeEventOverview {...props}/>
 }
 
 function ServiceResultCard({ icon, title, state='Available', metric, detail, action, onOpen, tone='teal' }) {
@@ -225,12 +197,12 @@ function AllServicesResultsSnapshot({ event, data, attendance, setActiveTab }) {
   const funnel=data.rsvp_funnel||{}, communication=data.communication||{}
   const cards=[
     {key:'registration',icon:'users',title:'Registration & RSVP',metric:`${funnel.confirmed??0} confirmed`,detail:`${funnel.responded??0} responses from ${funnel.guests??0} guests`,action:'Open invitations',tab:'invitations',enabled:true},
-    {key:'attendance',icon:'check',title:'Attendance & access',metric:`${attendance.checked_in??0} checked in`,detail:`${attendance.on_site??Math.max(Number(attendance.checked_in||0)-Number(attendance.checked_out||0),0)} currently on site`,action:'Open attendance',tab:'attendance',enabled:true,tone:'green'},
+    {key:'attendance',icon:'check',title:'Attendance & access',metric:`${attendance.checked_in??0} checked in`,detail:occupancyPresentation(attendance,data.event_summary,event?.timezone).detail,action:'Open attendance',tab:'attendance',enabled:true,tone:'green'},
     {key:'communications',icon:'send',title:'Guest communications',metric:`${communication.credits_remaining??0} credits`,detail:`${communication.email?.sent??0} email · ${communication.sms?.sent??0} SMS · ${communication.whatsapp?.sent??0} WhatsApp`,action:'Open invitations',tab:'invitations',enabled:true,tone:'blue'},
     {key:'program',icon:'calendar',title:'Programme & sessions',metric:`${data.program?.in_progress?.length??0} live now`,detail:data.program?.up_next?.topic?`Next: ${data.program.up_next.topic}`:'No next session scheduled',action:'Open programme',tab:'program',enabled:event?.experience_enabled!==false},
     {key:'experience',icon:'layers',title:'Guest experience',metric:data.consent?`${data.consent.rate??pct(data.consent.signed,data.consent.eligible)}% consent`:'Workflow results',detail:data.consent?`${data.consent.signed} of ${data.consent.eligible} signed`:'Review journey completion and blockers',action:'Open experience',tab:'experience',enabled:!!event?.experience_enabled,tone:'purple'},
-    {key:'meals',icon:'card',title:'Meals & orders',metric:data.meals?`${data.meals.served_total??0} served`:'Service results',detail:data.meals?`${data.meals.eligible_total??0} eligible guests`:'Review selections and fulfilment',action:'Open meals',tab:'meals',enabled:!!event?.menu_enabled,tone:'amber'},
-    {key:'seating',icon:'chair',title:'Seating & venue',metric:`${data.table_group_capacity?.length??0} groups`,detail:'Capacity, assignment, and venue readiness',action:'Open operations',tab:'operations',enabled:!!(event?.seating_enabled||event?.venue_access_enabled),tone:'amber'},
+    {key:'meals',icon:'card',title:'Meals & orders',metric:data.meals?.categories?.length?`${data.meals.served_total??0} served`:'Tracking not configured',detail:data.meals?.categories?.length?`${data.meals.eligible_total??0} eligible guests`:'No meal-service outcome is inferred',action:'Open meals',tab:'meals',enabled:!!event?.menu_enabled,tone:'amber'},
+    {key:'seating',icon:'chair',title:'Seating & venue',metric:data.event_summary?.seating?`${data.event_summary.seating.tables} tables`:'Seating inventory',detail:data.event_summary?.seating?`${data.event_summary.seating.seats} seats · ${data.event_summary.seating.assigned} assigned`:'Capacity, assignment, and venue readiness',action:'Open operations',tab:'operations',enabled:!!(event?.seating_enabled||event?.venue_access_enabled),tone:'amber'},
     {key:'live',icon:'trend',title:'Festio Live',metric:'Live participation',detail:'Activities, participants, responses, and displays',action:'Open operations',tab:'operations',enabled:!!event?.engagement_enabled,tone:'green'},
     {key:'gifts',icon:'card',title:'Gifts & giving',metric:'Giving workspace',detail:'Registry, pledges, confirmed gifts, and reconciliation',action:'Open gift list',href:'/addons-redesign?tab=registry',enabled:!!event?.registry_enabled,tone:'purple'},
     {key:'speakers',icon:'users',title:'Speakers',metric:'Speaker workspace',detail:'Profiles, programme assignments, and presenter materials',action:'Open speakers',href:'/addons-redesign?tab=speakers',enabled:!!event?.speaker_enabled,tone:'blue'},
@@ -384,7 +356,7 @@ function ResultsHero({ event, events, eventId, connected, now, updatedAt, onEven
             </div>
           )}
         </div>
-        <time>{now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time>
+        <time>{eventTime(now, event?.timezone, true)} · {event?.timezone || 'UTC'}</time>
       </div>
     </header>
   )
@@ -464,11 +436,12 @@ function OverviewDashboard({
   }, [])
   const reverseGap = cumulative.map((value) => Math.max(Number(attendance.expected || 0) - value, 0))
   const arrivalRate = pct(attendance.checked_in, attendance.expected)
-  const onSite = attendance.on_site ?? Math.max(Number(attendance.checked_in || 0) - Number(attendance.checked_out || 0), 0)
+  const occupancy = occupancyPresentation(attendance, data.event_summary, event?.timezone)
+  const onSite = occupancy.value
   const selectedVenue = zones.find((zone) => zone.id === venueId)
-  const occupancyCapacity = selectedVenue?.capacity || attendance.expected || 0
-  const occupancyRate = pct(onSite, occupancyCapacity)
-  const capacityRemaining = occupancyCapacity ? Math.max(occupancyCapacity - onSite, 0) : null
+  const occupancyCapacity = selectedVenue?.capacity ?? null
+  const occupancyRate = occupancy.usable && occupancyCapacity > 0 ? pct(onSite, occupancyCapacity) : null
+  const capacityRemaining = occupancy.usable && occupancyCapacity != null ? Math.max(occupancyCapacity - onSite, 0) : null
   const alerts = data.alerts || []
   const groups = data.table_group_capacity || []
   const currentProgram = data.program?.in_progress?.[0]
@@ -512,10 +485,10 @@ function OverviewDashboard({
     <>
     <section className="er-ops-dashboard">
       <aside className="er-ops-rail">
-        <div className="er-ops-rail-title"><i /><span>Live status</span></div>
+        <div className="er-ops-rail-title"><i /><span>Recorded status</span></div>
         {[
-          ['On site now', onSite, 'users', `${occupancyRate}% of ${selectedVenue ? 'capacity' : 'expected'}`, 'green'],
-          ['Checked in', attendance.checked_in, 'check', `${arrivalRate}% of expected`, 'teal'],
+          [occupancy.label, onSite, 'users', occupancy.detail, 'green'],
+          ['Checked in', attendance.checked_in, 'check', `${arrivalRate}% of event guest records`, 'teal'],
           ['Arrival rate', `${arrivalRate}%`, 'trend', `${attendance.checked_in} arrivals`, 'amber'],
           [arrivalGapLabel, attendance.confirmed_not_here, 'clock', 'Still expected', 'red'],
           ['Walk-ins', attendance.walk_ins, 'plus', 'Added at the door', 'green'],
@@ -540,11 +513,11 @@ function OverviewDashboard({
         </div>
 
         <div className="er-ops-kpis">
-          <MetricTile icon="users" label="Expected" value={attendance.expected} detail="Event total" tone="neutral"
+          <MetricTile icon="users" label="Expected" value={attendance.expected} detail="Event total, not zone eligibility" tone="neutral"
             title="Invited guests who have not declined." />
           <MetricTile icon="check" label="Checked in" value={attendance.checked_in} detail={`${attendance.first_time ?? attendance.checked_in} first arrivals`}
             values={cumulative} tone="green" title="Distinct guests with an accepted entry or legacy admission." />
-          <MetricTile icon="trend" label="Arrival rate" value={`${arrivalRate}%`} detail={`${attendance.checked_in} of ${attendance.expected}`}
+          <MetricTile icon="trend" label="Arrival rate" value={`${arrivalRate}%`} detail={`${attendance.checked_in} of ${attendance.expected} event guest records`}
             values={cumulative.map((value) => pct(value, attendance.expected))} tone="teal" />
           <MetricTile icon="clock" label={arrivalGapLabel} value={attendance.confirmed_not_here} detail="Still expected"
             values={reverseGap} tone="amber" />
@@ -564,14 +537,14 @@ function OverviewDashboard({
 
           <div className="er-ops-stack">
             <article className="er-ops-panel er-ops-occupancy-card">
-              <div className="er-ops-panel-head"><div><h2>Venue occupancy</h2><p>{selectedVenue?.name || 'Current event occupancy'}</p></div></div>
+              <div className="er-ops-panel-head"><div><h2>Venue occupancy</h2><p>{selectedVenue?.name || 'All entrances'} · {occupancy.detail}</p></div></div>
               <div className="er-ops-donut-row">
-                <div className="er-ops-donut" style={{ '--er-value': `${occupancyRate * 3.6}deg` }}>
-                  <div><strong>{onSite ?? '—'}</strong><span>On site now</span></div>
+                <div className="er-ops-donut" style={{ '--er-value': `${(occupancyRate || 0) * 3.6}deg` }}>
+                  <div><strong>{onSite ?? '—'}</strong><span>{occupancy.label}</span></div>
                 </div>
                 <div className="er-ops-occupancy-numbers">
-                  <strong>{occupancyRate}%</strong><span>of {selectedVenue ? 'capacity' : 'expected'}</span>
-                  <b>{occupancyCapacity || '—'}</b><span>{selectedVenue ? 'Venue capacity' : 'Expected guests'}</span>
+                  <strong>{occupancyRate == null ? '—' : `${occupancyRate}%`}</strong><span>{occupancyRate == null ? 'Capacity ratio unavailable' : 'of configured capacity'}</span>
+                  <b>{occupancyCapacity ?? '—'}</b><span>{selectedVenue ? 'Configured venue capacity' : 'No event-wide venue capacity'}</span>
                 </div>
               </div>
               <div className="er-ops-card-foot"><span>Capacity remaining</span><b>{capacityRemaining ?? '—'}</b></div>
@@ -583,7 +556,7 @@ function OverviewDashboard({
                 {groups.length ? groups.slice(0, 5).map((group) => (
                   <CapacityRow key={group.id} name={group.name} value={group.checked_in} capacity={group.capacity}
                     detail={`${group.assigned} assigned`} />
-                )) : <div className="er-ops-empty compact">No table groups configured.</div>}
+                )) : <div className="er-ops-empty compact">{data.event_summary?.seating ? `${data.event_summary.seating.tables} tables · ${data.event_summary.seating.seats} seats · ${data.event_summary.seating.assigned} assigned. No table groups configured.` : 'No table groups configured.'}</div>}
               </div>
             </article>
 
@@ -772,6 +745,16 @@ export default function EventResultsRedesignPage() {
   const [updatedAt, setUpdatedAt] = useState(null)
   const [now, setNow] = useState(() => new Date())
   const esRef = useRef(null)
+  const loadSequence = useRef(0)
+  useEffect(() => {
+    if (currentEventId && currentEventId !== eventId) {
+      ++loadSequence.current
+      setEventId(currentEventId)
+      setDay('')
+      setVenueId('')
+      setData(null)
+    }
+  }, [currentEventId]) // Event selector in the shared navigation.
 
   useEffect(() => {
     api.listEvents().then((evs) => {
@@ -787,12 +770,15 @@ export default function EventResultsRedesignPage() {
 
   const load = useCallback(async (id, d, v) => {
     if (!id) return
+    const sequence = ++loadSequence.current
     try {
-      setData(await api.resultsCommandCenter(id, { day: d || undefined, venueId: v || undefined }))
+      const result = await api.resultsCommandCenter(id, { day: d || undefined, venueId: v || undefined })
+      if (sequence !== loadSequence.current) return
+      setData(result)
       setUpdatedAt(new Date())
       setError('')
     } catch (err) {
-      setError(err.message || 'Results are temporarily unavailable.')
+      if (sequence === loadSequence.current) setError(err.message || 'Results are temporarily unavailable.')
     }
   }, [])
 
@@ -833,6 +819,8 @@ export default function EventResultsRedesignPage() {
   const hasScopeFilter = Boolean(day || venueId)
   const arrivalGapLabel = venueId ? 'Confirmed, not in zone' : a?.arrival_gap_mode === 'expected' ? 'Not yet in' : 'Confirmed, not here'
   function changeEvent(nextEventId) {
+    ++loadSequence.current
+    setData(null)
     setEventId(nextEventId)
     setCurrentEventId(nextEventId)
     setDay('')
@@ -848,13 +836,15 @@ export default function EventResultsRedesignPage() {
           <ResultsSidebar event={event} activeView={activeView} onChange={setActiveView} exceptionCount={(data.alerts || []).length} />
           <main className="er-results-content">
             <ResultsPageHeader activeView={activeView} />
+            {['executive','command'].includes(activeView) && <WholeEventTotals event={event} data={data}/> }
             {(days.length > 1 || zones.length > 0) && (
-              <div className="er-scope-bar">
-                {days.length > 1 && <div className="er-scope-days"><button className={!day ? 'active' : ''} onClick={() => setDay('')}>Entire event</button>{days.map((d, i) => <button key={d.day} className={day === d.day ? 'active' : ''} onClick={() => setDay(d.day)}>Day {i + 1} · {fmtDay(d.day)}</button>)}</div>}
-                {zones.length > 0 && <select className="rr-select" style={{ marginBottom: 0 }} value={venueId} onChange={(e) => setVenueId(e.target.value)}><option value="">All venues</option>{zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}</select>}
+              <div className="er-scope-bar" aria-label="Operational scope">
+                <span className="er-whole-scope-label">Operational filter · event totals above stay unchanged</span>
+                {days.length > 1 && <div className="er-scope-days"><button className={!day ? 'active' : ''} onClick={() => setDay('')}>Event dates</button>{days.map((d, i) => <button key={d.day} className={day === d.day ? 'active' : ''} onClick={() => setDay(d.day)}>Day {i + 1} · {fmtDay(d.day)}</button>)}</div>}
+                {zones.length > 0 && <select className="rr-select" style={{ marginBottom: 0 }} value={venueId} onChange={(e) => setVenueId(e.target.value)}><option value="">All zones</option>{zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}</select>}
               </div>
             )}
-            {activeView === 'executive' && a && <ExecutiveResultsOverview event={event} data={data} attendance={a} setActiveTab={setActiveTab} setOverviewLayout={setOverviewLayout} />}
+            {activeView === 'executive' && a && <ExecutiveResultsOverview event={event} data={data} attendance={a} setActiveTab={setActiveTab} setOverviewLayout={setOverviewLayout} venueId={venueId} />}
             {activeView === 'command' && a && <><ResultsHero event={event} events={events} eventId={eventId} connected={connected} now={now} updatedAt={updatedAt} onEventChange={changeEvent}/><OverviewDashboard event={event} eventId={eventId} data={data} attendance={a} zones={zones} venueId={venueId} hasScopeFilter={hasScopeFilter} arrivalGapLabel={arrivalGapLabel} autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh} setActiveTab={setActiveTab}/></>}
             {activeView === 'services' && a && <AllServicesResultsSnapshot event={event} data={data} attendance={a} setActiveTab={setActiveTab} />}
             {activeView === 'exceptions' && <ExceptionsResultsView data={data} />}

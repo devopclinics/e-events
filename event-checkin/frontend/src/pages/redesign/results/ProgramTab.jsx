@@ -26,7 +26,7 @@ function fmtDay(iso) {
   return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
-const STATE_LABEL = { in_progress: 'in progress', upcoming: 'upcoming', ended: 'ended' }
+const STATE_LABEL = { in_progress: 'in progress', upcoming: 'upcoming', ended: 'ended', unknown: 'Status unknown' }
 const STATE_COLOR = {
   in_progress: 'var(--success, #16a34a)',
   upcoming: 'var(--muted, #64748b)',
@@ -157,10 +157,11 @@ export default function ProgramTab({ eventId, day }) {
       <div className="rr-grid4">
         <div className="rr-panel er-stat"><span>In progress</span><strong>{program.in_progress_count}</strong></div>
         <div className="rr-panel er-stat"><span>Upcoming</span><strong>{program.upcoming_count}</strong></div>
-        <div className="rr-panel er-stat"><span>Completed</span><strong>{program.ended_count}</strong></div>
+        <div className="rr-panel er-stat"><span>Schedule ended</span><strong>{program.ended_count}</strong></div>
         <div className="rr-panel er-stat"><span>Program items</span><strong>{program.sessions.length}</strong></div>
       </div>
 
+      {program.unknown_count > 0 && <p className="er-whole-notice">{program.unknown_count} programme item(s) have an incomplete schedule. Status is unknown; no completion is inferred.</p>}
       <div className="rd-panel" style={{ marginTop: 14 }}>
         <div className="rd-panel-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
           <h3>Complete program</h3>

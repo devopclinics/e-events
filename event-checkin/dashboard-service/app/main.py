@@ -14,7 +14,7 @@ import httpx
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .auth import current_user, require_dashboard_access
@@ -24,6 +24,7 @@ from .models import (
     Organization, BroadcastLog, EmailDeliveryEvent, Event, ExperienceStep, ExperienceWorkflow, Guest,
     GuestExperienceProgress, GuestMealService, GuestMenuChoice, MealService, MenuCategory,
     MessageCreditLedger, ScanEvent, SeatingTable, TableGroup, TableGroupTable, User, Zone,
+    GuestGroupPass, GroupPassMember,
 )
 from .timeutil import event_tz, to_event_local, to_utc_naive
 
@@ -284,6 +285,13 @@ async def attendance_stats(db: AsyncSession, event: Event, scope: Scope) -> dict
     if not zid and legacy_admitted and not has_scan_entries and occupancy_mode != "future":
         on_site = len(legacy_admitted)
 
+    exit_where = [ScanEvent.event_id == event.id, ScanEvent.direction == "out",
+                  ScanEvent.denied.is_(False), ScanEvent.scanned_at <= (occupancy_as_of or now)]
+    if zid:
+        exit_where.append(ScanEvent.zone_id == zid)
+    exit_tracking_recorded = bool(await db.scalar(
+        select(func.count()).select_from(ScanEvent).where(*exit_where)))
+
     declined = await db.scalar(select(func.count()).select_from(Guest).where(
         Guest.event_id == event.id, Guest.rsvp_status == "declined")) or 0
     confirmed_ids = set((await db.execute(select(Guest.id).where(
@@ -328,6 +336,7 @@ async def attendance_stats(db: AsyncSession, event: Event, scope: Scope) -> dict
         "expected": expected,
         "checked_in": len(checked_in_ids),
         "on_site": on_site,
+        "exit_tracking_recorded": exit_tracking_recorded,
         "occupancy_mode": occupancy_mode,
         "occupancy_as_of": occupancy_as_of.isoformat() + "Z" if occupancy_as_of else None,
         "first_time": len(first_time_ids),
@@ -550,7 +559,9 @@ async def program_sessions(db: AsyncSession, event: Event, day: str | None = Non
         # checked into the session. Approximate — see plan doc Track A/A3.
         attended = attended_by_step.get(step.id, 0)
         registered = registered_by_step.get(step.id, 0)
-        state = "upcoming"
+        # A past start without an end is not an upcoming session, nor proof
+        # of completion. Keep that uncertainty visible instead of inventing it.
+        state = "upcoming" if start and start > now else "unknown"
         if start and end:
             if start <= now <= end:
                 state = "in_progress"
@@ -589,6 +600,7 @@ async def get_program(
         "in_progress_count": sum(1 for s in sessions if s["state"] == "in_progress"),
         "upcoming_count": sum(1 for s in sessions if s["state"] == "upcoming"),
         "ended_count": sum(1 for s in sessions if s["state"] == "ended"),
+        "unknown_count": sum(1 for s in sessions if s["state"] == "unknown"),
         "attendance_tracked_count": sum(1 for s in sessions if s["attendance_tracked"]),
         # Lets a session's speaker (speaker_id, above) render as a link — every
         # session belongs to the same event, so this is carried once here
@@ -676,12 +688,20 @@ async def rsvp_funnel(db: AsyncSession, event: Event) -> dict:
     )
     checked_in_ids = accepted_scan_ids.union(admitted_guest_ids).subquery()
     checked_in = await db.scalar(select(func.count()).select_from(checked_in_ids)) or 0
+    confirmed_arrived = await db.scalar(
+        select(func.count()).select_from(Guest)
+        .where(Guest.event_id == event.id, Guest.rsvp_status == "confirmed",
+               Guest.id.in_(select(checked_in_ids.c.guest_id)))
+    ) or 0
     return {
         "guests": guests,
         "invited": invited,
         "responded": confirmed + declined + pending,
         "confirmed": confirmed,
         "checked_in": checked_in,
+        "confirmed_arrived": confirmed_arrived,
+        "confirmed_not_arrived": max(confirmed - confirmed_arrived, 0),
+        "other_arrivals": max(checked_in - confirmed_arrived, 0),
     }
 
 
@@ -1291,6 +1311,66 @@ async def get_experience_step_guests(
     return {"guests": await _guest_rows(db, ids), "step_title": step.title}
 
 
+async def whole_event_summary(db: AsyncSession, event: Event, funnel: dict) -> dict:
+    """Unfiltered event totals and separately labelled zone periods.
+
+    A zone filter must never replace the event total. Group by guest/zone first
+    to deduplicate re-entries, and count overlapping visitors without adding
+    zones together. Existing operational endpoints retain their contracts.
+    """
+    event_scope = await resolve_scope(db, event, None, None, None, None)
+    zones = (await db.execute(select(Zone).where(
+        Zone.event_id == event.id, Zone.is_active.is_(True)
+    ).order_by(Zone.sort_order, Zone.name))).scalars().all()
+    pairs = (await db.execute(
+        select(ScanEvent.guest_id, ScanEvent.zone_id,
+               func.max(case(((ScanEvent.scanned_at >= event_scope.start_at)
+                              & (ScanEvent.scanned_at < event_scope.end_at), 1), else_=0)))
+        .where(ScanEvent.event_id == event.id, ScanEvent.denied.is_(False),
+               ScanEvent.direction == "in", ScanEvent.zone_id.in_([z.id for z in zones]))
+        .group_by(ScanEvent.guest_id, ScanEvent.zone_id)
+    )).all() if zones else []
+    counts, all_counts = defaultdict(int), defaultdict(int)
+    visits, all_visits = defaultdict(set), defaultdict(set)
+    for guest_id, zone_id, during_event in pairs:
+        all_counts[zone_id] += 1
+        all_visits[guest_id].add(zone_id)
+        if during_event:
+            counts[zone_id] += 1
+            visits[guest_id].add(zone_id)
+    def rows(source):
+        return [{"id": z.id, "name": z.name, "unique_arrivals": source[z.id],
+                 "capacity": z.capacity} for z in zones]
+    inventory = (await db.execute(select(
+        func.count(SeatingTable.id), func.coalesce(func.sum(SeatingTable.capacity), 0)
+    ).where(SeatingTable.event_id == event.id))).one()
+    table_ids = select(SeatingTable.id).where(SeatingTable.event_id == event.id)
+    assigned = await db.scalar(select(func.count()).select_from(Guest).where(
+        Guest.event_id == event.id, Guest.table_id.in_(table_ids))) or 0
+    exits = await db.scalar(select(func.count()).select_from(ScanEvent).where(
+        ScanEvent.event_id == event.id, ScanEvent.denied.is_(False), ScanEvent.direction == "out")) or 0
+    denied = (await db.execute(select(func.count(), func.count(func.distinct(ScanEvent.guest_id)))
+        .select_from(ScanEvent).where(ScanEvent.event_id == event.id, ScanEvent.denied.is_(True)))).one()
+    passes = (await db.execute(select(func.count(), func.coalesce(func.sum(GuestGroupPass.admission_limit), 0))
+        .select_from(GuestGroupPass).where(GuestGroupPass.event_id == event.id))).one()
+    members = await db.scalar(select(func.count()).select_from(GroupPassMember).where(
+        GroupPassMember.pass_guest_id.in_(select(GuestGroupPass.guest_id).where(
+            GuestGroupPass.event_id == event.id)))) or 0
+    return {
+        "rsvp": funnel,
+        "zones": rows(counts), "zones_all_time": rows(all_counts),
+        "zone_period": {"start_at": event_scope.start_at.isoformat() + "Z",
+                        "end_at": event_scope.end_at.isoformat() + "Z", "timezone": event_scope.timezone},
+        "zone_overlap": sum(len(z) > 1 for z in visits.values()),
+        "zone_overlap_all_time": sum(len(z) > 1 for z in all_visits.values()),
+        "zone_unique_arrivals": len(visits), "zone_unique_arrivals_all_time": len(all_visits),
+        "seating": {"tables": int(inventory[0]), "seats": int(inventory[1]), "assigned": assigned},
+        "exit_scans": exits, "exit_tracking_recorded": exits > 0,
+        "denied_scans": {"attempts": int(denied[0]), "affected_guests": int(denied[1])},
+        "shared_passes": {"passes": int(passes[0]), "admission_slots": int(passes[1]), "members": members},
+    }
+
+
 # ── command-center composite endpoint ─────────────────────────────────────────
 
 @app.get("/api/results/events/{event_id}/command-center")
@@ -1307,7 +1387,10 @@ async def command_center(
     sessions = await program_sessions(db, event, day)
     funnel = await experience_funnel(db, event)
     meals = await meals_breakdown(db, event)
+    rsvp = await rsvp_funnel(db, event)
+    summary = await whole_event_summary(db, event, rsvp)
     return {
+        "event_summary": summary,
         "scope": attendance["scope"],
         "attendance": {k: v for k, v in attendance.items() if k != "scope"},
         "attendance_by_day": await attendance_by_day(db, event),
@@ -1329,10 +1412,11 @@ async def command_center(
             "in_progress": [s for s in sessions if s["state"] == "in_progress"],
             "in_progress_count": sum(1 for s in sessions if s["state"] == "in_progress"),
             "up_next": next((s for s in sessions if s["state"] == "upcoming"), None),
+            "status_unknown": [s for s in sessions if s["state"] == "unknown"],
         },
         "table_group_capacity": await table_group_capacity(db, event),
         "experience": {"steps": funnel[:6]},
-        "rsvp_funnel": await rsvp_funnel(db, event),
+        "rsvp_funnel": rsvp,
         "communication": await communication_health(db, event),
         "recent_activity": await recent_activity(db, event, scope),
         # Reuses the Operations tab's own helper — same eligible/signed/rate

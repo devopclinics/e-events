@@ -302,3 +302,19 @@ class BroadcastLog(Base):
     skipped_no_consent: Mapped[int] = mapped_column(Integer)
     skipped_no_credits: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class GuestGroupPass(Base):
+    """Read-only shared-pass configuration; slots are not guest arrivals."""
+    __tablename__ = "guest_group_passes"
+    guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"), primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
+    admission_limit: Mapped[int] = mapped_column(Integer, default=1)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class GroupPassMember(Base):
+    __tablename__ = "group_pass_members"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    pass_guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"))
+    guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"))

@@ -1,3 +1,4 @@
+import { occupancyPresentation } from './resultsSummary.mjs'
 import { useEffect, useState } from 'react'
 import { LoadingSkeleton } from '../RedesignPrimitives'
 import { api } from '../../../api'
@@ -87,13 +88,9 @@ export default function AttendanceTab({ eventId, day, venueId }) {
       ? "Invited guests who haven't declined and haven't been scanned in yet — this event doesn't track RSVP confirmation, so it can't be narrowed to just those who said yes."
       : "Guests who confirmed they're coming (accepted RSVP) but have not been scanned in yet — excludes declined and no-response guests."
 
-  const occupancyLabel = a.occupancy_mode === 'historical' ? 'Occupancy at day close'
-    : a.occupancy_mode === 'future' ? 'On-site (not started)' : 'On-site now'
-  const occupancyHint = a.occupancy_mode === 'historical'
-    ? 'Net entries minus exits as of the end of this past day — not a live count.'
-    : a.occupancy_mode === 'future'
-      ? "This day hasn't happened yet, so there's no occupancy to show."
-      : 'Net entries minus exits right now: guests scanned in who have not since been scanned out.'
+  const occupancy = occupancyPresentation(a, null, a.scope?.timezone)
+  const occupancyLabel = occupancy.label
+  const occupancyHint = occupancy.detail
 
   return (
     <div>
@@ -110,7 +107,7 @@ export default function AttendanceTab({ eventId, day, venueId }) {
         />
         <StatTile
           label={occupancyLabel}
-          value={a.occupancy_mode === 'future' ? '—' : a.on_site}
+          value={occupancy.value ?? '—'}
           hint={occupancyHint}
         />
         <StatTile

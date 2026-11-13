@@ -29,6 +29,10 @@ async def seed():
   db.add(Event(id='qa-event',org_id='qa-org',name='Certificate Workflow QA',couples_name='QA',checkin_base_url=f'http://127.0.0.1:{port}',event_date=datetime(2026,11,11),is_paid=True));await db.flush()
   db.add(Guest(event_id='qa-event',first_name='QA',last_name='Participant',email='participant@example.test',admitted=True));await db.commit()
 asyncio.run(seed())
+async def seed_registration_without_attendance():
+ async with _Session() as db:
+  db.add(Guest(event_id='qa-event',first_name='Registered',last_name='Absent',email='absent@example.test',admitted=False));await db.commit()
+asyncio.run(seed_registration_without_attendance())
 from app.routers import live_content
 sent_emails=[]
 async def capture_certificate_email(*args,**kwargs):

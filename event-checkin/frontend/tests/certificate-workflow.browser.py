@@ -81,6 +81,15 @@ async def main():
   emails=(await admin.request.get(BASE+'/fixture-emails'));assert len(await emails.json())==1
   assert len(await (await admin.request.get(BASE+'/api/events/qa-event/certificates')).json())==1
   checks.append('Selecting an already issued participant and Issue & email sends the existing credential once; no duplicate certificate')
+  await admin.get_by_role('button',name='Select all registered (2)',exact=True).click()
+  assert await admin.locator('.lc-candidates tbody input[type=checkbox]:checked').count()==2
+  await expect(admin.get_by_text('All-registration selection:',exact=False)).to_contain_text('2 selected')
+  await admin.get_by_role('button',name='Issue & email',exact=True).click()
+  await expect(admin.get_by_text('Issued 1 certificate; queued 2 certificate emails.',exact=True)).to_be_visible()
+  assert len(await (await admin.request.get(BASE+'/api/events/qa-event/certificates')).json())==2
+  await admin.get_by_role('button',name='Clear selection',exact=True).click()
+  assert await admin.locator('.lc-candidates tbody input[type=checkbox]:checked').count()==0
+  checks.append('Select all registered clears search and selects issued registrations; clear selection restores attendance mode')
   for page in [admin,client]:assert not await page.evaluate('document.documentElement.scrollWidth>innerWidth')
   await admin.set_viewport_size({'width':390,'height':900});await admin.screenshot(path=str(out/'studio-mobile.png'),full_page=True)
   assert not await admin.evaluate('document.documentElement.scrollWidth>innerWidth')

@@ -1,3 +1,5 @@
+import AcademyExperience from './academy/AcademyExperience'
+import { ACADEMY_GIVING_TOKEN } from './academy/academyExperience.mjs'
 import FestioLogo from './branding/FestioLogo'
 import { useEffect, useMemo, useState } from 'react'
 import './LiveBroadcastCanvas.css'
@@ -633,6 +635,11 @@ function SpotlightWheelScene({ state, settings }) {
 }
 
 function DonationTrackerScene({ settings }) {
+  if ([ACADEMY_GIVING_TOKEN, 'academy'].includes(settings.donation_token)) return <AcademyExperience token={settings.donation_token} mode={settings.donation_presentation || 'live'}/>
+  return <StandardDonationTrackerScene settings={settings}/>
+}
+
+function StandardDonationTrackerScene({ settings }) {
   const [campaign, setCampaign] = useState(settings.donation_snapshot || null)
   const token = settings.donation_token || ''
   useEffect(() => {

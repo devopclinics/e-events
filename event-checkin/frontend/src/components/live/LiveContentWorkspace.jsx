@@ -1,3 +1,4 @@
+import { presentationDeckSource } from './presentationDeck.mjs'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../../api'
 import './LiveContentWorkspace.css'
@@ -39,14 +40,15 @@ export function PresenterMaterialsWorkspace({ eventId, sessions = [], displays =
     const next = { ...current, ...patch, material: row }
     setBusy(true)
     try {
-      await api.liveUpdateDisplay(eventId, target, { scene: 'presentation', assigned_activity_id: null, settings: { control_mode: 'manual', follow_activity: false, presentation: { material_id: row.id, title: row.title, url: row.metadata?.present_url || row.source_url, content_type: row.content_type, kind: row.kind, page: next.page, blackout: next.blackout, autoplay: row.kind === 'video', total_pages: row.metadata?.page_count || null } } })
-      setDisplayId(target); setPresenting(next); setNotice({ type: 'success', text: `${row.title} is live on ${displays.find((item) => item.id === target)?.name || 'the selected display'}.` })
+      const source = presentationDeckSource(row, next.page, window.location.origin)
+      await api.liveUpdateDisplay(eventId, target, { scene: 'presentation', assigned_activity_id: null, settings: { control_mode: 'manual', follow_activity: false, presentation: { material_id: row.id, title: row.title, url: source.url, content_type: row.content_type, kind: row.kind, page: next.page, blackout: next.blackout, autoplay: row.kind === 'video', total_pages: source.total_pages } } })
+      setDisplayId(target); setPresenting({...next,total_pages:source.total_pages}); setNotice({ type: 'success', text: `${row.title} is live on ${displays.find((item) => item.id === target)?.name || 'the selected display'}.` })
     } catch (error) { setNotice({ type: 'error', text: error.message }) } finally { setBusy(false) }
   }
   return <section className="lc-workspace">
     <header className="lc-hero"><div><span>Presenter library</span><h2>Session materials</h2><p>Collect, review, present, and release every deck and handout from one event-scoped workspace.</p></div><div className="lc-stat"><strong>{materials.length}</strong><small>materials</small></div></header>
     <Notice value={notice}/>
-    {!!displays.length && <div className="lc-presenter-bar"><Field label="Presentation display"><select value={displayId || displays[0]?.id || ''} onChange={e=>setDisplayId(e.target.value)}>{displays.map(display=><option key={display.id} value={display.id}>{display.name}{display.connected?' · connected':' · offline'}</option>)}</select></Field>{presenting&&<><div><small>Now presenting</small><strong>{presenting.material.title}</strong></div><button disabled={busy||presenting.page<=1} onClick={()=>present(presenting.material,{page:Math.max(1,presenting.page-1)})}>← Previous</button><b>Page {presenting.page}</b><button disabled={busy} onClick={()=>present(presenting.material,{page:presenting.page+1})}>Next →</button><button className={presenting.blackout?'active':''} disabled={busy} onClick={()=>present(presenting.material,{blackout:!presenting.blackout})}>{presenting.blackout?'Restore screen':'Blackout'}</button></>}</div>}
+    {!!displays.length && <div className="lc-presenter-bar"><Field label="Presentation display"><select value={displayId || displays[0]?.id || ''} onChange={e=>setDisplayId(e.target.value)}>{displays.map(display=><option key={display.id} value={display.id}>{display.name}{display.connected?' · connected':' · offline'}</option>)}</select></Field>{presenting&&<><div><small>Now presenting</small><strong>{presenting.material.title}</strong></div><button disabled={busy||presenting.page<=1} onClick={()=>present(presenting.material,{page:Math.max(1,presenting.page-1)})}>← Previous</button><b>Page {presenting.page}</b><button disabled={busy||!!presenting.total_pages&&presenting.page>=presenting.total_pages} onClick={()=>present(presenting.material,{page:presenting.page+1})}>Next →</button><button className={presenting.blackout?'active':''} disabled={busy} onClick={()=>present(presenting.material,{blackout:!presenting.blackout})}>{presenting.blackout?'Restore screen':'Blackout'}</button></>}</div>}
     <div className="lc-grid">
       <form className="lc-card lc-form" onSubmit={submit}>
         <div className="lc-card-head"><div><b>Add material</b><small>Files stay private until you approve their visibility.</small></div><div className="lc-switch"><button type="button" className={mode==='upload'?'active':''} onClick={()=>setMode('upload')}>Upload</button><button type="button" className={mode==='link'?'active':''} onClick={()=>setMode('link')}>Link</button></div></div>

@@ -9,6 +9,7 @@ import { LoadingSkeleton } from './redesign/RedesignPrimitives'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { api } from '../api'
 import { auth } from '../firebase'
+import GenerateEventReport from './redesign/results/GenerateEventReport'
 import CertificatesTab from './redesign/results/CertificatesTab'
 import AttendanceTab from './redesign/results/AttendanceTab'
 import InvitationsTab from './redesign/results/InvitationsTab'
@@ -839,6 +840,7 @@ export default function EventResultsRedesignPage() {
           <ResultsSidebar event={event} activeView={activeView} onChange={setActiveView} exceptionCount={(data.alerts || []).length} />
           <main className="er-results-content">
             <ResultsPageHeader activeView={activeView} />
+            <GenerateEventReport key={eventId} eventId={eventId} event={event} />
             {['executive','command'].includes(activeView) && <WholeEventTotals event={event} data={data}/> }
             {activeView !== 'certificates' && (days.length > 1 || zones.length > 0) && (
               <div className="er-scope-bar" aria-label="Operational scope">

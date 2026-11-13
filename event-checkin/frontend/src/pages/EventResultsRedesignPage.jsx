@@ -9,6 +9,7 @@ import { LoadingSkeleton } from './redesign/RedesignPrimitives'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { api } from '../api'
 import { auth } from '../firebase'
+import CertificatesTab from './redesign/results/CertificatesTab'
 import AttendanceTab from './redesign/results/AttendanceTab'
 import InvitationsTab from './redesign/results/InvitationsTab'
 import ProgramTab from './redesign/results/ProgramTab'
@@ -33,6 +34,7 @@ const RESULTS_NAV = [
     { id: 'attendance', label: 'Attendance & access', icon: 'check' },
     { id: 'programme', label: 'Programme', icon: 'calendar' },
     { id: 'experience', label: 'Experience', icon: 'layers' },
+    { id: 'certificates', label: 'Certificates', icon: 'file' },
     { id: 'engagement', label: 'Festio Live', icon: 'trend' },
     { id: 'team', label: 'Team Management', icon: 'users' },
     { id: 'operations', label: 'Operations', icon: 'settings' },
@@ -56,6 +58,7 @@ const VIEW_META = {
   communications: ['Communications', 'Channel delivery, broadcasts, failures, and guest reach.'],
   attendance: ['Attendance & access', 'Arrivals, zones, credentials, capacity, and attendance gaps.'],
   programme: ['Programme', 'Session status, attendance, rooms, speakers, and schedule delivery.'],
+  certificates: ['Certificate issuance', 'Issued credentials, participant coverage, email requests, views, and revocations.'],
   experience: ['Experience', 'Guest journeys, programme workflows, consent, feedback, and completion.'],
   engagement: ['Festio Live', 'Participation, activities, responses, moderation, displays, and insights.'],
   team: ['Team Management', 'Event access, roles, permissions, ownership, tasks, and handoff.'],
@@ -847,6 +850,7 @@ export default function EventResultsRedesignPage() {
             {activeView === 'executive' && a && <ExecutiveResultsOverview event={event} data={data} attendance={a} setActiveTab={setActiveTab} setOverviewLayout={setOverviewLayout} venueId={venueId} />}
             {activeView === 'command' && a && <><ResultsHero event={event} events={events} eventId={eventId} connected={connected} now={now} updatedAt={updatedAt} onEventChange={changeEvent}/><OverviewDashboard event={event} eventId={eventId} data={data} attendance={a} zones={zones} venueId={venueId} hasScopeFilter={hasScopeFilter} arrivalGapLabel={arrivalGapLabel} autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh} setActiveTab={setActiveTab}/></>}
             {activeView === 'services' && a && <AllServicesResultsSnapshot event={event} data={data} attendance={a} setActiveTab={setActiveTab} />}
+            {['executive','services','certificates'].includes(activeView) && <CertificatesTab eventId={eventId} registered={data.event_summary?.rsvp?.guests} timezone={event?.timezone || 'UTC'} compact={activeView!=='certificates'} onOpen={()=>setActiveView('certificates')}/> }
             {activeView === 'exceptions' && <ExceptionsResultsView data={data} />}
             {activeView === 'registration' && <InvitationsTab eventId={eventId} />}
             {activeView === 'communications' && <InvitationsTab eventId={eventId} />}

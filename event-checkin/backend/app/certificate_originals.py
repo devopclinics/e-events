@@ -47,12 +47,16 @@ def original_certificate(cert, preview=False, asset=lambda value: value, qr=''):
         eyebrow=esc(design.get('eyebrow') or 'LEARNING · CONNECTION · PROFESSIONAL GROWTH'), heading=heading,
         subtitle=esc(design.get('subtitle') or 'This certificate is presented to'), participant=esc(name), citation=citation,
         theme_label='EVENT THEME' if design.get('theme') else '', theme=esc(design.get('theme')), theme_subtitle=esc(design.get('theme_subtitle')),
-        signatory_1=signatory(0), signatory_2=signatory(1),
+        signatory_1=signatory(0), signatory_2=signatory(1) if len(people) != 1 else '',
         seal=('<small>'+esc(design.get('seal_label') or 'EVENT')+'</small><b>'+esc(design.get('seal_edition') or '★')+'</b><span>'+esc(date[-4:])+'</span>') if preview else '<img src="data:image/png;base64,'+qr+'" alt="Scan to verify">',
         footer_brand=esc(design.get('footer_brand') or event_name), number='DESIGN PREVIEW · NOT ISSUED' if preview else esc(cert.certificate_number),
         primary=colour(design.get('primary_color'),'#3c074a'), accent=colour(design.get('accent_color'),'#e98000'), name_size=42 if len(name)<35 else 32 if len(name)<60 else 25)
     source = Path(__file__).with_name('certificate_templates').joinpath(layout+'.html').read_text()
     result = re.sub(r'@@([a-z_0-9]+)@@', lambda match: str(fields[match[1]]), source)
+    if len(people) == 1:
+        # Use the captured signatory list, never today's mutable approvals.
+        result = result.replace('class="signatures"', 'class="signatures single-signatory"', 1)
+        result = result.replace('</style>', '.signatures.single-signatory{grid-template-columns:minmax(0,360px) 100px;justify-content:center;gap:42px}</style>', 1)
     if not design.get('logo_url'):
         result = re.sub(r'<img class="logo"[^>]*>', '', result)
     return result

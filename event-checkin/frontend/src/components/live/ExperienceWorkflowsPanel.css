@@ -38,3 +38,8 @@
 }
 
 .wf-stage .wf-scene p{color:#c5d3e8}
+/* The generic activity toolbar must not cover the experience being reviewed. */
+.fl-workspace-main:has(.wf-builder:not(.wf-library)) .fl-operator-bar{position:static}
+.wf-builder{overflow:clip}
+.wf-stage{position:sticky;top:130px}
+@container (max-width:640px){.wf-stage{position:static}}

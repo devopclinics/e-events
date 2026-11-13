@@ -123,3 +123,21 @@
 .wf-theme-legacy_cinematic .wf-diagram-node{width:100%;gap:7px;padding:15px 14px 13px;border:1px solid color-mix(in srgb,var(--node) 62%,#e7bd68);background:linear-gradient(145deg,color-mix(in srgb,var(--node) 17%,#0b1834),#07142de8);box-shadow:0 18px 46px #0008,0 0 28px color-mix(in srgb,var(--node) 18%,transparent);clip-path:polygon(10px 0,calc(100% - 10px) 0,100% 10px,100% calc(100% - 10px),calc(100% - 10px) 100%,10px 100%,0 calc(100% - 10px),0 10px)}.wf-theme-legacy_cinematic .wf-diagram-node i{font-size:25px;height:auto}.wf-theme-legacy_cinematic .wf-diagram-node b{width:auto;height:auto;border:0;background:none;box-shadow:none;padding:0;font-family:Georgia,serif;font-size:clamp(15px,1.25vw,20px);color:#fff}.wf-theme-legacy_cinematic .wf-diagram-node small{color:#aebcd2;font-size:11px;text-align:center;line-height:1.25}.wf-theme-legacy_cinematic .wf-node-top .wf-diagram-node,.wf-theme-legacy_cinematic .wf-node-middle .wf-diagram-node{max-width:190px}.wf-theme-legacy_cinematic .wf-node-bottom .wf-diagram-node{min-width:300px}
 @media(max-width:1000px){.wf-diagram-composition{grid-template-columns:1fr;gap:22px;text-align:center}.wf-diagram-composition .wf-diagram-subtitle{margin:12px auto 0!important}.wf-theme-legacy_cinematic .wf-diagram-map{max-width:760px}.wf-theme-legacy_cinematic.wf-diagram>main{padding-top:60px}.wf-diagram-composition .wf-diagram-copy h2{font-size:clamp(38px,5vw,58px)}}
 @media(max-height:760px){.wf-theme-legacy_cinematic>main{padding-top:62px;padding-bottom:48px}.wf-theme-legacy_cinematic h2{font-size:clamp(28px,3.4vw,48px)}.wf-theme-legacy_cinematic .wf-options>div{min-height:54px!important}.wf-theme-legacy_cinematic .wf-prompts div{padding:10px}.wf-theme-legacy_cinematic .wf-diagram-node{padding:9px}.wf-diagram-composition{gap:28px}}
+
+/* Audience joining is part of the slide layout, never over the answer choices. */
+.wf-scene:has(>.wf-join) main{min-height:0;padding:12px 0}
+.wf-display:has(>.wf-join){height:100dvh;box-sizing:border-box}
+.wf-scene .wf-join{position:relative!important;inset:auto;align-self:center;flex-shrink:0;display:flex;align-items:center;gap:22px;width:max-content;max-width:100%;box-sizing:border-box;margin:12px auto 18px;padding:14px 24px 14px 14px;border:1px solid #ffffff50;border-radius:18px;background:#050d20f2;text-align:left;box-shadow:0 12px 32px #0004}
+.wf-scene .wf-join img{width:clamp(140px,17vh,200px);height:clamp(140px,17vh,200px);flex-shrink:0;padding:8px;background:#fff;border-radius:10px}
+.wf-scene .wf-join small{display:block;margin-bottom:8px;font-size:15px;font-weight:800;letter-spacing:.1em;color:#c9eae4;text-transform:uppercase}
+.wf-scene .wf-join a{display:block;font-size:clamp(26px,2.6vw,42px);font-weight:950;line-height:1.15;letter-spacing:-.02em;color:#fff;text-decoration:none;overflow-wrap:anywhere}
+.wf-scene .wf-join a:hover{text-decoration:underline}
+.wf-scene .wf-join a:focus-visible{outline:3px solid #ffd15c;outline-offset:5px}
+.wf-scene .wf-join span{margin-top:10px;color:#ffd15c;font-size:24px;letter-spacing:.12em;font-weight:900}
+@media(max-width:600px){
+ .wf-scene .wf-join{gap:12px;padding:10px;max-width:100%;margin:10px auto}
+ .wf-scene .wf-join img{width:96px;height:96px;padding:5px}
+ .wf-scene .wf-join small{font-size:10px;margin-bottom:5px}
+ .wf-scene .wf-join a{font-size:20px}
+ .wf-scene .wf-join span{font-size:16px;margin-top:6px}
+}

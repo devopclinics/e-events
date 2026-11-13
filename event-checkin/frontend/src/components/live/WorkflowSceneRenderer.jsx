@@ -207,7 +207,7 @@ export default function WorkflowSceneRenderer({ step, mode = 'display', eventId 
       {type === 'prompt' && <><h2>{title}</h2><p>{config.prompt || step.subtitle}</p></>}
       {type === 'big_number' && <><h2>{title}</h2><div className="wf-bignum">{(responseData?.metrics || config.metrics || []).map((metric, index) => <div key={metric.label} style={{ '--option': COLORS[index % COLORS.length] }}><b>{metric.value}</b><span>{metric.label}</span></div>)}</div>{config.footer_line && <p className="wf-bignum-footer">{config.footer_line}</p>}</>}
     </main>
-    {eventId && NEEDS_JOIN.has(type) && !showingResults && <div className="wf-join"><img src={`/api/events/${encodeURIComponent(eventId)}/live/join-qr.png`} alt="QR code to join Festio Live"/><div><small>Scan to vote</small><strong>{joinCode ? `${joinHost}/l/${joinCode}` : `${joinHost}/l`}</strong>{joinCode && <span>Code: {joinCode}</span>}</div></div>}
+    {eventId && NEEDS_JOIN.has(type) && !showingResults && <div className="wf-join" aria-label="Audience participation"><img src={`/api/events/${encodeURIComponent(eventId)}/live/join-qr.png`} alt="QR code to join Festio Live"/><div><small>Scan to participate</small><a href={joinCode ? `/l/${encodeURIComponent(joinCode)}` : '/l'} target="_blank" rel="noopener noreferrer">{joinCode ? `${joinHost}/l/${joinCode}` : `${joinHost}/l`}</a>{joinCode && <span>Code: {joinCode}</span>}</div></div>}
     <footer><span>{config.footer || step.theme?.event_line || 'FESTIO LIVE'}</span>{responseData?.response_count != null && <b>{responseData.response_count} responses</b>}</footer>
   </section>
 }

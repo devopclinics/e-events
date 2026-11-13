@@ -197,3 +197,44 @@ async def test_changed_event_details_also_require_fresh_sign_off(ctx):
         e=await db.get(Event,ctx.ids['event_a']);e.venue_name='New venue';await db.commit()
     assert (await sign(ctx,r)).status_code==409
     assert not (await ctx.client.get(admin(ctx,'certificate-workflow'))).json()['links'][0]['current_design']
+
+@pytest.mark.asyncio
+async def test_issue_then_email_reuses_existing_certificate_without_bulk_resends(ctx,monkeypatch):
+    from app.routers import live_content
+    sent=[]
+    async def capture(*args,**kwargs):sent.append(args)
+    monkeypatch.setattr(live_content,'send_simple_email',capture)
+    ctx.login(ctx.ids['user_a'])
+    r=await ctx.client.post(admin(ctx,'certificate-templates'),json={'name':'Email regression','design':{},'eligibility':{'minimum_sessions':0,'require_event_checkin':False},'active':True})
+    assert r.status_code==201,r.text
+    tid=r.json()['id']
+    async with _Session() as db:
+        guests=list((await db.scalars(select(Guest).where(Guest.event_id==ctx.ids['event_a']))).all())
+        guest=guests[0];guest.email='certificate@example.test';gid=guest.id;await db.commit()
+    body={'template_id':tid,'guest_ids':[gid],'eligible_only':True,'send_email':False}
+    first=(await ctx.client.post(admin(ctx,'certificates/issue'),json=body)).json()
+    assert first['issued']==1 and first['email_queued']==0 and not sent
+    original=first['certificates'][0]
+    async with _Session() as db:
+        cert=await db.get(EventCertificate,original['id']);snapshot=copy.deepcopy(cert.snapshot)
+    # UI-driven retry sends the original credential, even if attendance rules changed.
+    async with _Session() as db:
+        t=await db.get(EventCertificateTemplate,tid);t.eligibility={'minimum_sessions':99};await db.commit()
+    retry=await ctx.client.post(admin(ctx,'certificates/issue'),json={**body,'send_email':True})
+    assert retry.status_code==200,retry.text
+    assert retry.json()['issued']==0 and retry.json()['email_queued']==1 and len(sent)==1
+    assert sent[0][0]=='certificate@example.test' and original['verification_url'] in sent[0][2]
+    async with _Session() as db:
+        certs=list((await db.scalars(select(EventCertificate).where(EventCertificate.template_id==tid))).all())
+        assert len(certs)==1 and certs[0].id==original['id'] and certs[0].snapshot==snapshot and certs[0].sent_at
+    # No explicit selection means no resend of historical certificates.
+    bulk=await ctx.client.post(admin(ctx,'certificates/issue'),json={**body,'guest_ids':[],'send_email':True})
+    assert bulk.json()['email_queued']==0 and len(sent)==1
+    async with _Session() as db:
+        cert=await db.get(EventCertificate,original['id']);cert.status='revoked';await db.commit()
+    revoked=await ctx.client.post(admin(ctx,'certificates/issue'),json={**body,'send_email':True})
+    assert revoked.json()['email_queued']==0 and len(sent)==1
+    candidates=(await ctx.client.get(admin(ctx,'certificate-candidates'),params={'template_id':tid})).json()
+    assert next(c for c in candidates if c['guest_id']==gid)['certificate_status']=='revoked'
+    ctx.login(ctx.ids['user_b'])
+    assert (await ctx.client.post(admin(ctx,'certificates/issue'),json={**body,'send_email':True})).status_code in (403,404)

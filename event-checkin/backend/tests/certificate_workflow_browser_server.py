@@ -29,6 +29,14 @@ async def seed():
   db.add(Event(id='qa-event',org_id='qa-org',name='Certificate Workflow QA',couples_name='QA',checkin_base_url=f'http://127.0.0.1:{port}',event_date=datetime(2026,11,11),is_paid=True));await db.flush()
   db.add(Guest(event_id='qa-event',first_name='QA',last_name='Participant',email='participant@example.test',admitted=True));await db.commit()
 asyncio.run(seed())
+from app.routers import live_content
+sent_emails=[]
+async def capture_certificate_email(*args,**kwargs):
+ sent_emails.append({'to':args[0],'subject':args[1],'html':args[2]})
+live_content.send_simple_email=capture_certificate_email
+@app.get('/fixture-emails')
+async def fixture_emails():return sent_emails
+
 async def actor():return user
 app.dependency_overrides[get_db]=local_db;app.dependency_overrides[get_current_user]=actor
 @app.get('/studio')

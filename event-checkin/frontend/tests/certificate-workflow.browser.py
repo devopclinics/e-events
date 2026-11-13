@@ -73,6 +73,14 @@ async def main():
   await admin.screenshot(path=str(out/'studio-desktop.png'),full_page=True)
   await admin.get_by_role('button',name='Issue selected',exact=True).click()
   await expect(admin.get_by_text('Issued 1 certificate.',exact=True)).to_be_visible();checks.append('Local fixture participant certificate issued only after signature approval; no email')
+  await admin.get_by_label('Search participants',exact=True).fill('participant@example.test')
+  await admin.locator('.lc-candidates tbody input[type=checkbox]').check()
+  await expect(admin.get_by_role('button',name='Issue selected',exact=True)).to_be_disabled()
+  await admin.get_by_role('button',name='Issue & email',exact=True).click()
+  await expect(admin.get_by_text('Issued 0 certificates; queued 1 certificate email.',exact=True)).to_be_visible()
+  emails=(await admin.request.get(BASE+'/fixture-emails'));assert len(await emails.json())==1
+  assert len(await (await admin.request.get(BASE+'/api/events/qa-event/certificates')).json())==1
+  checks.append('Selecting an already issued participant and Issue & email sends the existing credential once; no duplicate certificate')
   for page in [admin,client]:assert not await page.evaluate('document.documentElement.scrollWidth>innerWidth')
   await admin.set_viewport_size({'width':390,'height':900});await admin.screenshot(path=str(out/'studio-mobile.png'),full_page=True)
   assert not await admin.evaluate('document.documentElement.scrollWidth>innerWidth')

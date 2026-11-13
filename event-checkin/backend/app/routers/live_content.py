@@ -244,9 +244,9 @@ async def candidates(event_id: str, template_id: str, db: AsyncSession = Depends
     if not template or template.event_id != event_id: raise HTTPException(404, "Certificate template not found")
     from .certificate_workflow import approved_signatories
     signatures_ready = await approved_signatories(template, db, strict=False) is not None
-    issued = set((await db.execute(select(EventCertificate.guest_id).where(EventCertificate.template_id == template_id))).scalars().all())
+    issued = dict((await db.execute(select(EventCertificate.guest_id, EventCertificate.status).where(EventCertificate.template_id == template_id))).all())
     return [{"guest_id": g.id, "name": f"{g.first_name} {g.last_name}".strip(), "email": g.email,
-             "admitted": g.admitted, "sessions_attended": count, "eligible": eligible and signatures_ready, "signatures_ready": signatures_ready, "issued": g.id in issued}
+             "admitted": g.admitted, "sessions_attended": count, "eligible": eligible and signatures_ready, "signatures_ready": signatures_ready, "issued": g.id in issued, "certificate_status": issued.get(g.id)}
             for g, count, eligible in await _candidate_rows(event_id, template, db)]
 
 
@@ -257,22 +257,31 @@ async def issue(event_id: str, body: IssueRequest, background_tasks: BackgroundT
     template = await db.get(EventCertificateTemplate, body.template_id)
     if not template or template.event_id != event_id or not template.active: raise HTTPException(404, "Active certificate template not found")
     from .certificate_workflow import approved_signatories
-    signatories = await approved_signatories(template, db)
+    signatories = None
     selected = set(body.guest_ids)
-    created = []
+    created, email_targets = [], []
     for guest, count, eligible in await _candidate_rows(event_id, template, db):
         if selected and guest.id not in selected: continue
-        if body.eligible_only and not eligible: continue
         existing = await db.scalar(select(EventCertificate).where(EventCertificate.template_id == template.id, EventCertificate.guest_id == guest.id))
-        if existing: continue
+        if existing:
+            # Reuse the immutable credential only for explicitly selected recipients.
+            # An unselected bulk issuance must not resend every historical certificate.
+            if body.send_email and selected and existing.status == "issued":
+                email_targets.append((existing, guest))
+            continue
+        if body.eligible_only and not eligible: continue
+        if signatories is None:
+            signatories = await approved_signatories(template, db)
         cert = EventCertificate(event_id=event_id, template_id=template.id, guest_id=guest.id,
             certificate_number=f"FESTIO-{datetime.utcnow():%Y%m}-{uuid.uuid4().hex[:10].upper()}", issued_by_user_id=user.id,
             snapshot={"participant_name": f"{guest.first_name} {guest.last_name}".strip(), "event_name": event.name,
                       "event_date": event.event_date.isoformat() if event.event_date else "", "event_date_local": to_event_local(event.event_date,event.timezone).isoformat() if event.event_date else "", "event_venue": event.venue_name or "", "sessions_attended": count,
                       "template_name": template.name, "design": template.design or {}, "eligibility": template.eligibility or {}, "signatories": signatories})
         db.add(cert); await db.flush(); created.append((cert, guest))
+        email_targets.append((cert, guest))
     await db.commit()
-    for cert, guest in created:
+    email_queued = 0
+    for cert, guest in email_targets:
         await db.refresh(cert)
         if body.send_email and guest.email:
             url = _absolute_public_url(f"/certificates/{cert.verification_token}")
@@ -280,8 +289,9 @@ async def issue(event_id: str, body: IssueRequest, background_tasks: BackgroundT
                 f"<p>Hello {html.escape(guest.first_name)},</p><p>Your certificate is ready.</p><p><a href='{url}'>View and download certificate</a></p>",
                 event.id, None, guest.id, "event_certificate")
             cert.sent_at = datetime.utcnow()
-    if created: await db.commit()
-    return {"issued": len(created), "certificates": [_certificate_out(c, g) for c, g in created]}
+            email_queued += 1
+    if email_queued: await db.commit()
+    return {"issued": len(created), "email_queued": email_queued, "certificates": [_certificate_out(c, g) for c, g in created]}
 
 
 @router.get("/{event_id}/certificates")

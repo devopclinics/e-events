@@ -26,7 +26,7 @@ with tempfile.TemporaryDirectory(prefix='workflow-preview-') as out:
    for width,height in [(1920,1080),(1280,720)]:
     page.set_viewport_size({'width':width,'height':height});page.goto('http://127.0.0.1:9137/?screen');page.wait_for_timeout(800)
     qr=page.locator('.wf-join img').bounding_box();assert qr['width']>=140
-    dock=page.locator('.wf-join').bounding_box();choices=page.locator('.wf-options').bounding_box();assert choices['y']+choices['height']<=dock['y']
+    dock=page.locator('.wf-join').bounding_box();assert .10 <= dock['width']*dock['height']/(width*height) <= .18;choices=page.locator('.wf-options').bounding_box();assert choices['y']+choices['height']<=dock['y']
     assert dock['y']+dock['height']<=height
     assert float(page.locator('.wf-join a').evaluate('el=>getComputedStyle(el).fontWeight'))>=900
     page.screenshot(path=f'/tmp/workflow-question-{width}.png')

@@ -840,7 +840,7 @@ export default function EventResultsRedesignPage() {
           <main className="er-results-content">
             <ResultsPageHeader activeView={activeView} />
             {['executive','command'].includes(activeView) && <WholeEventTotals event={event} data={data}/> }
-            {(days.length > 1 || zones.length > 0) && (
+            {activeView !== 'certificates' && (days.length > 1 || zones.length > 0) && (
               <div className="er-scope-bar" aria-label="Operational scope">
                 <span className="er-whole-scope-label">Operational filter · event totals above stay unchanged</span>
                 {days.length > 1 && <div className="er-scope-days"><button className={!day ? 'active' : ''} onClick={() => setDay('')}>Event dates</button>{days.map((d, i) => <button key={d.day} className={day === d.day ? 'active' : ''} onClick={() => setDay(d.day)}>Day {i + 1} · {fmtDay(d.day)}</button>)}</div>}

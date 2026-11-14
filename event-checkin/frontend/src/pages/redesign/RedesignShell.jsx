@@ -10,6 +10,8 @@ import { api } from '../../api'
 import { RedesignShellBoundary, RedesignRouteBoundary } from './RedesignErrorBoundaries'
 import { logFallbackToLegacy, logRenderError } from './redesignTelemetry'
 import './RedesignShell.css'
+import FeatureSearch from './FeatureSearch'
+import { featureCatalog } from './featureSearch.mjs'
 import { workspaceNavigation } from './workspaceNavigation.mjs'
 
 // ── shared dialog primitives, used across every redesign page ──────────
@@ -554,6 +556,17 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
   const setupHref=guideHref(currentEventId,user?.id)
   const visibleTopLinks = TOP_LINKS.filter((l) => canSeeStaffFeature(event, staffRouteFeature(l.to?.split('?')[0] || '', l.to?.split('?')[1] || '')) && (!l.gate || l.gate({ user: event?.my_feature_permissions != null ? {...user,role:'event_manager'} : user, event, ticketingMaster })))
 
+  const searchableSidebar = SIDEBAR_NAV.flatMap(([icon, label, to, id, count, gate, discoverable]) => {
+    if (!to || !canSeeStaffFeature(event, staffRouteFeature(to.split('?')[0], to.split('?')[1] || ''))) return []
+    const accessMissing = gate && !flags[gate]
+    if (accessMissing && !discoverable && !['admin', 'event_manager'].includes(user?.role)) return []
+    return [{ id, label, icon, to: accessMissing ? '/communications-redesign?tab=settings' : to,
+      description: accessMissing ? `Enable ${label} in Features & messaging` : `Open ${label}` }]
+  })
+  const searchableFeatures = featureCatalog(visibleTopLinks, searchableSidebar, {
+    hasEvent: !!event, setupHref,
+    canAccess: to => canSeeStaffFeature(event, staffRouteFeature(to.split('?')[0], to.split('?')[1] || '')),
+  })
   const navigation = workspaceNavigation(visibleTopLinks, location, topActive)
   const destination = (link) => link.id === 'guide' ? setupHref : link.to
   useEffect(() => {
@@ -614,6 +627,7 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
           )}
 
           <div className="rr-topbar-right">
+            <FeatureSearch entries={searchableFeatures} eventName={event?.name} />
             {canSeeStaffFeature(event, 'scanner') && <Link className="rr-scanner-shortcut" to="/scanner-redesign"><Icon name="ticket" size={14} /><span>Open scanner</span></Link>}
             {user && (
               <details className="rr-account" ref={accountRef}>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import InvoiceLibrary from './InvoiceLibrary'
 import ProposalGenerator from '../proposals/ProposalGenerator'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
@@ -21,6 +22,7 @@ import { MEDIA_COVERS } from './covers.mjs'
 
 const COLLECTIONS = [
   ['templates', 'Create & reuse', 'A fresh version for every audience.'],
+  ['invoices', 'Invoices', 'Saved client invoices and PDF downloads.'],
   ['uploads', 'Shared uploads', 'Images and files for every event in your organization.'],
   [
     'presentations',
@@ -429,7 +431,7 @@ export default function MediaLibrary() {
           <h2>{active[1]}</h2>
           <p>{active[2]}</p>
         </div>
-        <div className="ml-tools" hidden={collection === "uploads"}>
+        <div className="ml-tools" hidden={["uploads", "invoices"].includes(collection)}>
           <label className="ml-search">
             <span className="sr-only">Search media</span>
             <input
@@ -461,6 +463,7 @@ export default function MediaLibrary() {
           {status}
         </p>
       )}
+      {collection === 'invoices' && <InvoiceLibrary embedded />}
       {collection === 'uploads' && <SharedMediaCollection />}
       {collection === 'templates' && (
         <>

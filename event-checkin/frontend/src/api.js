@@ -2126,6 +2126,18 @@ export const api = {
   website: (eventId) => req('GET', `/events/${eventId}/website`),
   websiteConnections: (eventId) => req('GET', `/events/${eventId}/website/connections`),
   websiteContentSources: (eventId) => req('GET', `/events/${eventId}/website/content-sources`),
+  listInvoiceFiles: () => req('GET', '/media/invoices'),
+  downloadInvoiceFile: async (id) => {
+    const token = await getToken()
+    const res = await fetch(`${BASE}/media/invoices/${encodeURIComponent(id)}/download`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}, cache: 'no-store',
+    })
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}))
+      throw new Error(error.detail || 'Could not download this invoice. Please sign in and try again.')
+    }
+    return res.blob()
+  },
   listSharedMedia: (eventId) => req('GET', `/events/${encodeURIComponent(eventId)}/media-library`),
   renameSharedMedia: (eventId, assetId, title) => req('PATCH', `/events/${encodeURIComponent(eventId)}/media-library/${encodeURIComponent(assetId)}`, {title}),
   removeSharedMedia: (eventId, assetId) => req('DELETE', `/events/${encodeURIComponent(eventId)}/media-library/${encodeURIComponent(assetId)}`),

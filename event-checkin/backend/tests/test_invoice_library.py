@@ -1,3 +1,4 @@
+import hashlib
 import pytest
 from app.routers.invoice_library import FILES
 
@@ -20,6 +21,10 @@ async def test_catalog_and_exact_download(ctx):
     current = next(r for r in rows if r['id'] == 'honeybols-50th-birthday-150')
     assert current['total'] == 275000 and current['currency'] == 'NGN'
     assert current['event_date'] is None
+    assert current['status'] == 'Issued'
+    assert current['reference'] == 'FES-20261115-H150'
+    assert current['issued_date'] == '2026-11-15'
+    assert current['sha256'] == hashlib.sha256((FILES / current['filename']).read_bytes()).hexdigest()
     for row in rows:
         result = await ctx.client.get(BASE + '/' + row['id'] + '/download')
         assert result.status_code == 200

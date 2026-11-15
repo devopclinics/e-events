@@ -9,12 +9,15 @@
     "currency": "NGN",
     "event_date": null,
     "prepared": "2026-11-15",
-    "status": "Draft"
+    "status": "Issued",
+    "reference": "FES-20261115-H150",
+    "issued_date": "2026-11-15",
+    "sha256": "28a9e8bc76ab541872897abf82750404bf8b4ecae53bb0a6d9288104efe547d7"
   },
   {
     "id": "honeybols-birthday-500-2027",
     "client": "Honeybols Events",
-    "title": "Birthday celebration \u00b7 22 May 2027",
+    "title": "Birthday celebration · 22 May 2027",
     "filename": "Honeybols-Birthday-500-Guests-Invoice.pdf",
     "guests": 500,
     "total": 400000,

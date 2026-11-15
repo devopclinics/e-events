@@ -2126,7 +2126,7 @@ export const api = {
   website: (eventId) => req('GET', `/events/${eventId}/website`),
   websiteConnections: (eventId) => req('GET', `/events/${eventId}/website/connections`),
   websiteContentSources: (eventId) => req('GET', `/events/${eventId}/website/content-sources`),
-  listInvoiceFiles: () => req('GET', '/media/invoices'),
+  listInvoiceFiles: () => req('GET', `/media/invoices?updated=${Date.now()}`),
   downloadInvoiceFile: async (id) => {
     const token = await getToken()
     const res = await fetch(`${BASE}/media/invoices/${encodeURIComponent(id)}/download`, {

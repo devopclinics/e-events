@@ -3696,7 +3696,12 @@ export default function InvitePage() {
   if (designTheme?.page_config?.communityReview?.enabled && !hasGuestHub) return <ConventionRegistration event={event} config={designTheme.page_config.communityReview} registration={isStudioPreview ? rsvpPanel : <><PublicTicketCheckout eventId={event.id} tone={tone} onAvailabilityChange={setPaidTicketsAvailable}/>{paidTicketsAvailable === false && rsvpPanel}</>}/>
   if (designTheme?.page_config?.foundingEdition?.enabled) {
     return <FoundingEditionLanding event={event} config={designTheme.page_config.foundingEdition}
-      preview={isStudioPreview} registration={rsvpPanel}
+      preview={isStudioPreview} ticketing={paidTicketsAvailable === true}
+      registration={isStudioPreview ? rsvpPanel : <>
+        <PublicTicketCheckout eventId={event.id} tone={{text:'#142032',muted:'#536172',border:'#d9d0be',accent:'#edcb92',card:'#fffdf6',background:'#fffdf6'}} onAvailabilityChange={setPaidTicketsAvailable} />
+        {paidTicketsAvailable === null && <p role="status">Loading registration options…</p>}
+        {paidTicketsAvailable === false && rsvpPanel}
+      </>}
       response={confirmed || (tokenMeta.already_responded ? guest : prior)} />
   }
   if (event.rsvp_landing_layout === 'welcome' && !hasGuestHub) {

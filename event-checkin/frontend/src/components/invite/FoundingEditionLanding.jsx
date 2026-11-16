@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import './FoundingEditionLanding.css'
 
 /** Opt-in artwork-led invitation; registration remains the event's real RSVP flow. */
-export default function FoundingEditionLanding({ event, config, registration, response, preview = false }) {
+export default function FoundingEditionLanding({ event, config, registration, response, ticketing = false, preview = false }) {
   const dialog = useRef(null)
   const [open, setOpen] = useState(false)
   const completed = !!response && ['confirmed', 'pending', 'waitlisted', 'declined'].includes(response.rsvp_status)
@@ -17,9 +17,9 @@ export default function FoundingEditionLanding({ event, config, registration, re
 
   useEffect(() => {
     const previous = document.title
-    document.title = `${event.name} · Free RSVP`
+    document.title = `${event.name} · ${ticketing ? 'Tickets' : 'Free RSVP'}`
     return () => { document.title = previous }
-  }, [event.name])
+  }, [event.name, ticketing])
 
   const responseTitle = response?.rsvp_status === 'waitlisted' ? "You're on the waitlist."
     : response?.rsvp_status === 'pending' ? 'Your RSVP has been received.'
@@ -40,12 +40,12 @@ export default function FoundingEditionLanding({ event, config, registration, re
       <section className="founding-facts" aria-label="At a glance">
         <div><span>Where</span><strong>Greater Houston</strong></div>
         <div><span>The experience</span><strong>Guided conversation + networking</strong></div>
-        <div><span>Admission</span><strong>Free · First 50 places</strong></div>
+        <div><span>Admission</span><strong>{ticketing ? 'Ticketed · 50 places' : 'Free · First 50 places'}</strong></div>
       </section>
       <section className="founding-details" aria-label="Event details">
         <div className="founding-cta-row">
           <h2>{config.invitation || 'Be one of the first 50'}</h2>
-          <button type="button" className="founding-rsvp" onClick={() => setOpen(true)}>{completed ? 'YOUR RSVP' : 'FREE RSVP'}<span aria-hidden="true"> ↗</span></button>
+          <button type="button" className="founding-rsvp" onClick={() => setOpen(true)}>{completed ? 'YOUR RSVP' : ticketing ? 'GET TICKETS' : 'FREE RSVP'}<span aria-hidden="true"> ↗</span></button>
         </div>
         <p className="founding-welcome">A room for new connections.</p>
         <p className="founding-programme">{config.programme || '90 minutes of guided conversation, then open networking.'}</p>
@@ -59,8 +59,8 @@ export default function FoundingEditionLanding({ event, config, registration, re
     <dialog className="founding-dialog" ref={dialog} onCancel={() => setOpen(false)} onClose={() => setOpen(false)} aria-labelledby="founding-rsvp-heading">
       <button className="founding-close" type="button" onClick={() => setOpen(false)} aria-label="Close RSVP form">×</button>
       <p className="founding-dialog-edition">Houston / Founding Edition</p>
-      <h2 id="founding-rsvp-heading">{completed ? responseTitle : 'Reserve your place'}</h2>
-      <p className="founding-dialog-intro">{event.name} · Free RSVP</p>
+      <h2 id="founding-rsvp-heading">{completed ? responseTitle : ticketing ? 'Get your tickets' : 'Reserve your place'}</h2>
+      <p className="founding-dialog-intro">{event.name} · {ticketing ? 'Tickets' : 'Free RSVP'}</p>
       {pendingDate && <p className="founding-date-note">Date & venue announced soon. Watch this group for updates.</p>}
       {completed && pendingDate ? <div className="founding-response" role="status">
         <p>Thank you{response.first_name ? `, ${response.first_name}` : ''}. {response.rsvp_status === 'waitlisted' ? 'The first 50 places have been claimed. Your waitlist response has been saved.' : response.rsvp_status === 'declined' ? 'We appreciate you letting us know.' : 'Your response has been saved for the Houston founding edition.'}</p>

@@ -825,11 +825,11 @@ async def delete_event(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
-    await db.execute(delete(FestioMeOutbox).where(FestioMeOutbox.event_id == event_id))
-    # Detach payments (org-level financial audit records) so the FK doesn't
-    # block deletion — any event with an initiated checkout was undeletable.
-    await db.execute(update(Payment).where(Payment.event_id == event_id).values(event_id=None))
-    await db.delete(event)
+    # Serialize deletion with event updates and foreign-key inserts. All cleanup
+    # and the event deletion commit together, or roll back together on failure.
+    await db.execute(select(Event.id).where(Event.id == event_id).with_for_update())
+    from ..services.event_deletion import delete_event_data
+    await delete_event_data(db, event_id)
     await db.commit()
 
 

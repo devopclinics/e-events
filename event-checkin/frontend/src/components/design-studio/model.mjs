@@ -31,14 +31,21 @@ export function toPublicTheme(draft, templates, eventId) {
  const t=draft.theme_config||{},a=draft.asset_config||{};
  return {event_id:eventId,template_id:tpl.id,is_default:!draft.selected_template_id,colors:{...tpl.defaultColors,...t.colors},font_pairing:t.fontPairing||tpl.fontPairing,button_style:t.buttonStyle||tpl.buttonStyle,layout:tpl.layout||{},wording:draft.wording_config||{},page_config:draft.page_config||{},pass_options:t.passOptions||{},hub_layout:t.hubLayout||{},hub_style:t.hubStyle||'wallet-pass',guest_app_theme:t.guestAppTheme||'event',cover_image_url:a.cover_image_url||null,flyer_image_url:a.flyer_image_url||null,logo_image_url:a.logo_image_url||null,image_settings:a.image_settings||{}};
 }
-export function writeDraftPreview(key,eventId,theme){
- localStorage.setItem(`festio:studio:${key}`,JSON.stringify({event_id:eventId,theme,expires:Date.now()+15*60*1000}));
+// Draft events are intentionally unavailable on public invitation endpoints.
+// Carry only guest-visible event fields from the authenticated Studio into its
+// expiring, read-only preview; never persist organization or financial data.
+const PREVIEW_EVENT_FIELDS = ['id','name','couples_name','event_type','event_date','event_end_date','timezone','description','venue_name','venue_address','hotel_name','hotel_address','admission_note','invite_theme','invite_message','rsvp_token','invite_cover_image','logo_url','guest_hub_layout','rsvp_landing_layout','rsvp_collect_phone','rsvp_collect_email','rsvp_email_required','rsvp_phone_required','rsvp_capacity','invite_mode','rsvp_deadline','event_time_tbd','experience_enabled','live_program_enabled','festiome_addon_enabled','festiome_enabled','engagement_enabled','rsvp_multi_invitee_enabled','rsvp_multi_invitee_limit','rsvp_invitee_type_options','rsvp_invitee_age_options','rsvp_invitee_contact_exempt_types'];
+export function writeDraftPreview(key,eventId,theme,event){
+ const previewEvent = event?.id===eventId ? {...Object.fromEntries(PREVIEW_EVENT_FIELDS.filter(k=>k in event).map(k=>[k,event[k]])),rsvp_enabled:false,rsvp_count:0,questions:[]} : null;
+ localStorage.setItem(`festio:studio:${key}`,JSON.stringify({event_id:eventId,theme,event:previewEvent,expires:Date.now()+15*60*1000}));
 }
-export function readDraftPreview(key,eventId){
+function previewRecord(key,eventId){
  if(!/^[a-f0-9-]{36}$/.test(key||''))return null;
- try {const value=JSON.parse(localStorage.getItem(`festio:studio:${key}`));if(value?.event_id===eventId&&value.expires>Date.now()&&value.theme)return value.theme;}catch{}
+ try {const value=JSON.parse(localStorage.getItem(`festio:studio:${key}`));if(value?.event_id===eventId&&value.expires>Date.now()&&value.theme)return value;}catch{}
  return null;
 }
+export function readDraftPreview(key,eventId){return previewRecord(key,eventId)?.theme||null;}
+export function readDraftPreviewEvent(key,eventId){const event=previewRecord(key,eventId)?.event;return event?.id===eventId?event:null;}
 export function imagePresentation(theme,surface){
  const image=theme?.image_settings||{};
  return {visible:image.surfaces?.[surface]!==false,alt:typeof image.alt==='string'?image.alt:'',style:{objectFit:image.fit==='contain'?'contain':'cover',objectPosition:['center','top','bottom','left','right'].includes(image.position)?image.position:'center'}};

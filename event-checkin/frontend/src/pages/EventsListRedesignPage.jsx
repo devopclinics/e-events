@@ -129,7 +129,7 @@ export default function EventsListRedesignPage() {
               <div className="ev-row-icon"><Icon name="calendar" size={16} /></div>
               <div className="ev-row-main">
                 <strong>{event.name}</strong>
-                <span>{event.event_date ? new Date(event.event_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}{event.venue_name ? ` · ${event.venue_name}` : ''}</span>
+                <span>{event.setup_preferences?.date_pending ? 'Date to be announced' : event.event_date ? new Date(event.event_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}{event.venue_name ? ` · ${event.venue_name}` : ''}</span>
               </div>
               <span className={`rd-status-chip ${STATUS_BADGE[event.status] || ''}`}>{event.status}</span>
               <div className="ev-row-menu-wrap">

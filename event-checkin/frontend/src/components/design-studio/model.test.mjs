@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {createDesignSaver,toPublicTheme,payloadOf,readDraftPreview,writeDraftPreview,imagePresentation} from './model.mjs';
+import {createDesignSaver,toPublicTheme,payloadOf,readDraftPreview,writeDraftPreview,readDraftPreviewEvent,imagePresentation} from './model.mjs';
 const draft=title=>({...payloadOf({}),wording_config:{eventTitle:title}});
 test('serializes saves and never acknowledges newer text with an older response',async()=>{let release;const calls=[],states=[];const s=createDesignSaver({...draft('Initial'),revision:4},async data=>{calls.push(data);if(calls.length===1)await new Promise(r=>release=r);return {...data,revision:4+calls.length}},v=>states.push(v));s.edit(draft('Older'));const pending=s.flush();s.edit(draft('Newest'));s.flush();assert.equal(calls.length,1);release();await pending;assert.equal(calls.length,2);assert.equal(calls[1].wording_config.eventTitle,'Newest');assert.equal(calls[1].expected_revision,5);assert.equal(states.filter(s=>s.status==='saved').length,1);assert.equal(states.at(-1).saved.wording_config.eventTitle,'Newest');});
 test('failure keeps draft and retry sends newest edit',async()=>{let fails=true;const calls=[];const s=createDesignSaver(draft('Initial'),async data=>{calls.push(data);if(fails)throw Error('Offline');return {...data,revision:1}});s.edit(draft('First'));await assert.rejects(s.flush());s.edit(draft('Latest'));fails=false;await s.flush();assert.equal(calls.at(-1).wording_config.eventTitle,'Latest')});
@@ -15,4 +15,13 @@ test('RSVP format is retained in the public preview alongside existing page conf
   assert.equal(theme.layout.rsvpFormat,'editorial');
   assert.equal(theme.colors.primary,'#123456');
   assert.equal(theme.page_config.experience.guestHubLayout,'app');
+});
+
+test('unpublished event previews carry only public fields and cannot open registration',()=>{
+ const values=new Map();globalThis.localStorage={setItem:(k,v)=>values.set(k,v),getItem:k=>values.get(k)};
+ const key='12345678-1234-1234-1234-123456789abc';
+ writeDraftPreview(key,'draft-event',{colors:{}},{id:'draft-event',name:'Draft',event_date:'2099-01-01',rsvp_enabled:true,org_id:'private-org',setup_preferences:{private:'secret'},message_credits:900});
+ const event=readDraftPreviewEvent(key,'draft-event');assert.equal(event.name,'Draft');assert.equal(event.rsvp_enabled,false);assert.equal(event.org_id,undefined);assert.equal(event.setup_preferences,undefined);assert.equal(event.message_credits,undefined);
+ assert.equal(readDraftPreviewEvent(key,'other-event'),null);
+ const name=`festio:studio:${key}`,record=JSON.parse(values.get(name));record.expires=Date.now()-1;values.set(name,JSON.stringify(record));assert.equal(readDraftPreviewEvent(key,'draft-event'),null);
 });

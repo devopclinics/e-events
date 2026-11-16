@@ -6,7 +6,7 @@ import OrganizerContacts from '../components/invite/OrganizerContacts';
 import { personalEnvelopeScope } from '../components/invitations/envelopePersonalization.mjs'
 import EventWebsiteLink from '../components/guesthub/EventWebsiteLink'
 import GuestSpeakers from '../components/guesthub/GuestSpeakers'
-import { readDraftPreview } from '../components/design-studio/model.mjs'
+import { readDraftPreview, readDraftPreviewEvent } from '../components/design-studio/model.mjs'
 import ProgrammeAudience from '../components/guesthub/ProgrammeAudience.jsx';
 import { filterProgramme } from '../components/guesthub/programmeAudience.mjs';
 import InvitationOpening, { shouldShowEnvelope, rememberEnvelope, envelopeVisitKey } from '../components/invitations/InvitationOpening'
@@ -3400,6 +3400,15 @@ export default function InvitePage() {
     setCompletedEnvelope(null)
     setTokenMeta({ deadline_passed: false, already_responded: false })
     try { const raw = storageKey ? localStorage.getItem(storageKey) : null; setPrior(raw ? JSON.parse(raw) : null) } catch { setPrior(null) }
+    if (isStudioPreview && eventId && !tokenMode) {
+      const snapshot = readDraftPreviewEvent(new URLSearchParams(window.location.search).get('studio-key'), eventId)
+      if (snapshot) {
+        setEvent(snapshot)
+        setLoadedInviteKey(inviteRequestKey)
+        setLoading(false)
+        return () => { cancelled = true; controller.abort() }
+      }
+    }
     const url = tokenMode
       ? `/api/invite/token/${token}`
       : rsvpLinkMode

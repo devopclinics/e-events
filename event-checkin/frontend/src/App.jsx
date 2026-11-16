@@ -549,7 +549,7 @@ function AppRoutes() {
           valid user back through /login to the legacy admin. */}
       <Route path="/admin-redesign" element={<ProtectedRoute><AdminRedesignPage /></ProtectedRoute>} />
       <Route path="/events-redesign" element={<ProtectedRoute><EventsListRedesignPage /></ProtectedRoute>} />
-      <Route path="/events-redesign/:eventId/rsvp-preview" element={<ProtectedRoute adminOnly><EventRsvpPreviewPage /></ProtectedRoute>} />
+      <Route path="/events-redesign/:eventId/rsvp-preview" element={<EventRsvpPreviewPage />} />
       <Route path="/guest-export" element={<ProtectedRoute><GuestExportPage /></ProtectedRoute>} />
       <Route path="/guests-redesign" element={<ProtectedRoute><GuestsRedesignPage /></ProtectedRoute>} />
       <Route path="/communications-redesign" element={<ProtectedRoute><CommunicationsRedesignPage /></ProtectedRoute>} />

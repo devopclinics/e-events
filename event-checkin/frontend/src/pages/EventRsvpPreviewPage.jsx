@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api'
+import ProtectedRoute from '../components/ProtectedRoute'
 import { toPublicTheme, writeDraftPreview } from '../components/design-studio/model.mjs'
 
 // A bookmarkable entry to an authorized event's saved RSVP draft. Each visit
 // creates a new short-lived, read-only snapshot; public registration stays off.
-export default function EventRsvpPreviewPage() {
+function SavedDraftPreview() {
   const { eventId } = useParams()
   const [error, setError] = useState('')
   useEffect(() => {
@@ -35,4 +36,32 @@ export default function EventRsvpPreviewPage() {
       <Link to="/events-redesign" className="font-semibold underline">Back to events</Link>
     </section>
   </main>
+}
+
+
+// Previously shared event links must take guests to registration once live.
+// Unpublished drafts still pass through the existing organizer sign-in guard.
+export default function EventRsvpPreviewPage() {
+  const { eventId } = useParams()
+  const [draft, setDraft] = useState(false)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    const controller = new AbortController()
+    setDraft(false); setError('')
+    fetch(`/api/invite/${encodeURIComponent(eventId)}`, {cache:'no-store',signal:controller.signal})
+      .then(async response => {
+        if (response.ok) {
+          const event = await response.json()
+          if (event.rsvp_enabled && event.rsvp_token) {
+            window.location.replace(`/rsvp/${encodeURIComponent(event.rsvp_token)}`)
+            return
+          }
+        } else if (![404,410].includes(response.status)) throw new Error('The RSVP page is temporarily unavailable. Please try again.')
+        if (!controller.signal.aborted) setDraft(true)
+      })
+      .catch(failure => { if (!controller.signal.aborted) setError(failure.message) })
+    return () => controller.abort()
+  }, [eventId])
+  if (draft) return <ProtectedRoute adminOnly><SavedDraftPreview /></ProtectedRoute>
+  return <main className="min-h-screen bg-slate-50 p-8 text-slate-900"><p role={error?'alert':'status'}>{error || 'Opening the RSVP page…'}</p></main>
 }

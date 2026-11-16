@@ -23,6 +23,7 @@ import './GuestHubThemes.css'
 import PublicTicketCheckout from '../components/PublicTicketCheckout'
 import EventApp from '../components/guesthub/EventApp'
 import WelcomeLanding from '../components/invite/WelcomeLanding'
+import FoundingEditionLanding from '../components/invite/FoundingEditionLanding'
 import GuestHubRecovery from '../components/invite/GuestHubRecovery'
 import PublicProgrammeEntry from '../components/invite/PublicProgrammeEntry'
 
@@ -3675,7 +3676,7 @@ export default function InvitePage() {
             This event is at capacity — RSVPs below join the waitlist and we'll notify you if a spot opens up.
           </div>
         )}
-        <RSVPForm event={event} theme={theme} onConfirmed={handleConfirmed} tone={tone} dWording={dWording} guidedFlow={event.rsvp_landing_layout === 'welcome' || ['complete', 'app'].includes(event.guest_hub_layout)} />
+        <RSVPForm event={event} theme={theme} onConfirmed={handleConfirmed} tone={tone} dWording={dWording} guidedFlow={(event.rsvp_landing_layout === 'welcome' && !designTheme?.page_config?.foundingEdition?.enabled) || ['complete', 'app'].includes(event.guest_hub_layout)} />
       </div>
     )
   }
@@ -3684,6 +3685,11 @@ export default function InvitePage() {
   if (!isStudioPreview && new URLSearchParams(location.search).get('recover') === '1' && !hasGuestHub) return <GuestHubRecovery event={event}/>
   if (designTheme?.page_config?.communityReview?.enabled && ['designs','flyer','email','donate'].includes(new URLSearchParams(location.search).get('view'))) return <ConventionCreative event={event} config={designTheme.page_config.communityReview} view={new URLSearchParams(location.search).get('view')}/>
   if (designTheme?.page_config?.communityReview?.enabled && !hasGuestHub) return <ConventionRegistration event={event} config={designTheme.page_config.communityReview} registration={isStudioPreview ? rsvpPanel : <><PublicTicketCheckout eventId={event.id} tone={tone} onAvailabilityChange={setPaidTicketsAvailable}/>{paidTicketsAvailable === false && rsvpPanel}</>}/>
+  if (designTheme?.page_config?.foundingEdition?.enabled) {
+    return <FoundingEditionLanding event={event} config={designTheme.page_config.foundingEdition}
+      preview={isStudioPreview} registration={rsvpPanel}
+      response={confirmed || (tokenMeta.already_responded ? guest : prior)} />
+  }
   if (event.rsvp_landing_layout === 'welcome' && !hasGuestHub) {
     return <WelcomeLanding event={event} title={title} dateLabel={dateLabel} timeLabel={timeLabel}
       venue={venue} host={host} hostWebsite={hostWebsite} about={about} designTheme={designTheme}

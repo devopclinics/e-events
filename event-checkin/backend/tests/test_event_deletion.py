@@ -7,7 +7,7 @@ from sqlalchemy import select, text
 from app.models import (
     Event, EventGuestMessagingSettings, EventMessageThread, EventMessage,
     EventMessageRead, EventMessageDeliveryLog, Guest, Payment, QuickInviteAlias,
-    Task, TaskActivity, Subtask, OrganizationInvoice,
+    Task, TaskActivity, Subtask, OrganizationInvoice, EmailDeliveryEvent,
 )
 from conftest import _Session, _engine
 
@@ -42,6 +42,7 @@ async def test_delete_configured_event_with_foreign_keys(ctx):
             db.add_all([
                 EventMessageRead(event_id=event_id, message_id=message.id, guest_id=guest_id),
                 EventMessageDeliveryLog(event_id=event_id, message_id=message.id, guest_id=guest_id),
+                EmailDeliveryEvent(guest_id=guest_id, event_id=None, event_type='delivered', status='delivered'),
                 TaskActivity(task_id=task.id, body='Test task activity'),
                 Subtask(task_id=task.id, title='Test subtask'),
             ])
@@ -58,6 +59,7 @@ async def test_delete_configured_event_with_foreign_keys(ctx):
             assert (await db.get(QuickInviteAlias, 'reserved-alias')).event_id is None
             for model in (Guest, EventGuestMessagingSettings, EventMessageThread, EventMessage, EventMessageRead, EventMessageDeliveryLog, Task):
                 assert await db.scalar(select(model.id).where(model.event_id == event_id)) is None
+            assert await db.scalar(select(EmailDeliveryEvent.id)) is None
             assert await db.scalar(select(TaskActivity.id)) is None
             assert await db.scalar(select(Subtask.id)) is None
         assert (await ctx.client.delete(f'/api/events/{event_id}')).status_code == 404

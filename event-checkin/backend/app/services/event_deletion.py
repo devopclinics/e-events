@@ -1,5 +1,5 @@
 """Delete event-owned rows in foreign-key order, within the caller's transaction."""
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import and_, delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import Base, Event, Payment, QuickInviteAlias
@@ -38,14 +38,19 @@ async def delete_event_data(db: AsyncSession, event_id: str) -> None:
             if parents.intersection(pending):
                 continue
             event_fk = next((fk for fk in table.foreign_keys if fk.column.table is root), None)
+            child_scopes = [
+                fk.parent.in_(select(fk.column).where(scopes[fk.column.table]))
+                for fk in table.foreign_keys
+                if fk.column.table in scopes and fk.column.table not in {table, root}
+            ]
             if event_fk is not None:
                 scope = event_fk.parent == event_id
+                # Some delivery receipts identify only their guest. They still
+                # belong to that guest's event when event_id is absent.
+                if event_fk.parent.nullable and child_scopes:
+                    scope = or_(scope, and_(event_fk.parent.is_(None), or_(*child_scopes)))
             else:
-                scope = or_(*(
-                    fk.parent.in_(select(fk.column).where(scopes[fk.column.table]))
-                    for fk in table.foreign_keys
-                    if fk.column.table in scopes and fk.column.table is not table
-                ))
+                scope = or_(*child_scopes)
             ready.append((table, scope))
         if not ready:
             raise RuntimeError(

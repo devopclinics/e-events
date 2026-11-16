@@ -23,7 +23,7 @@ export function featureCatalog(topLinks, sidebarLinks, {hasEvent=false,canAccess
   for(const [view,label,keywords] of [['attendance','Attendance results','arrivals check in scans'],['communications','Communication results','email whatsapp sms delivery messages'],['programme','Programme results','sessions schedule speaker attendance'],['giving','Giving results','donations pledges fundraising'],['revenue','Ticket revenue results','sales payments money'],['feedback','Feedback results','satisfaction ratings survey']]) entries.push({id:'results-'+view,label,to:'/event-results-redesign?view='+view,description:'Review '+label.toLowerCase(),keywords})
   entries.push({id:'certificate-results',label:'Certificate results',description:'Review issued certificates, email requests and views',to:'/event-results-redesign?view=certificates',keywords:'certificate issuance report analytics'})
  }
- if(topLinks.some(x=>x.id==='media')) entries.push({id:'invoices',label:'Invoices',to:'/invoices',description:'Find and download saved client invoices',keywords:'invoice billing client pdf download Honeybols'})
+ if(topLinks.some(x=>['org','media'].includes(x.id))) entries.push({id:'invoices',label:'Invoices',to:'/invoices',description:'Create, issue and download organization invoices',keywords:'invoice billing client pdf download Honeybols'})
  const seen=new Set()
  return entries.filter(x=>x.to&&canAccess(x.to)&&!seen.has(x.description.startsWith('Enable ')?x.id:x.to)&&seen.add(x.description.startsWith('Enable ')?x.id:x.to))
 }

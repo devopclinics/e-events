@@ -2126,16 +2126,20 @@ export const api = {
   website: (eventId) => req('GET', `/events/${eventId}/website`),
   websiteConnections: (eventId) => req('GET', `/events/${eventId}/website/connections`),
   websiteContentSources: (eventId) => req('GET', `/events/${eventId}/website/content-sources`),
-  listInvoiceFiles: () => req('GET', `/media/invoices?updated=${Date.now()}`),
-  downloadInvoiceFile: async (id) => {
-    const token = await getToken()
-    const res = await fetch(`${BASE}/media/invoices/${encodeURIComponent(id)}/download`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {}, cache: 'no-store',
-    })
-    if (!res.ok) {
-      const error = await res.json().catch(() => ({}))
-      throw new Error(error.detail || 'Could not download this invoice. Please sign in and try again.')
-    }
+  invoiceOrganizations: () => req('GET', '/organization-invoices/organizations'),
+  listOrgInvoices: (org) => req('GET', `/organization-invoices?org_id=${encodeURIComponent(org)}&updated=${Date.now()}`),
+  getOrgInvoice: (org, id) => req('GET', `/organization-invoices/${encodeURIComponent(id)}?org_id=${encodeURIComponent(org)}`),
+  saveOrgInvoice: (org, id, payload, version=1) => req(id ? 'PUT' : 'POST', `/organization-invoices${id ? '/'+encodeURIComponent(id) : ''}?org_id=${encodeURIComponent(org)}`, {payload,version}),
+  deleteOrgInvoice: (org,id,version) => req('DELETE', `/organization-invoices/${encodeURIComponent(id)}?org_id=${encodeURIComponent(org)}&version=${version}`),
+  issueOrgInvoice: async (org,id,version,blob) => {
+    const token=await getToken(),form=new FormData();form.append('version',String(version));form.append('file',blob,'invoice.pdf')
+    const res=await fetch(`${BASE}/organization-invoices/${encodeURIComponent(id)}/issue?org_id=${encodeURIComponent(org)}`,{method:'POST',headers:token?{Authorization:`Bearer ${token}`}:{},body:form})
+    if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.detail||'Could not issue invoice')}
+    return res.json()
+  },
+  downloadOrgInvoice: async (org,id) => {
+    const token=await getToken(),res=await fetch(`${BASE}/organization-invoices/${encodeURIComponent(id)}/download?org_id=${encodeURIComponent(org)}`,{headers:token?{Authorization:`Bearer ${token}`}:{},cache:'no-store'})
+    if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.detail||'Could not download invoice')}
     return res.blob()
   },
   listSharedMedia: (eventId) => req('GET', `/events/${encodeURIComponent(eventId)}/media-library`),

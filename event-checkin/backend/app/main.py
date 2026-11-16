@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from .database import engine
 from .config import settings
 from .engagement_config import engagement_settings
-from .routers import invoice_library, support_whatsapp, event_forms, prospect_webhooks, guest_sheets, media_library, quick_invites
+from .routers import organization_invoices, invoice_library, support_whatsapp, event_forms, prospect_webhooks, guest_sheets, media_library, quick_invites
 from .services import quick_invite_outbox
 from .routers import guest_services, events, guests, scanner, dashboard, seating, menu, logistics, registry, speakers, partners, reminders, scheduled_communications, access, trials, demo, classify, messaging, meta_whatsapp, resend_webhooks, templates as templates_router, self_checkin, experience, tasks, public_sites, donations, live_content, conference_center
 from .routers import auth as auth_router
@@ -264,6 +264,7 @@ async def _audit_public_api_requests(request, call_next):
                 await db.commit()
     return response
 
+app.include_router(organization_invoices.router, prefix="/api/organization-invoices", tags=["organization-invoices"])
 app.include_router(invoice_library.router, prefix="/api/media/invoices", tags=["staff-invoices"])
 app.include_router(auth_router.router, prefix="/api/auth",   tags=["auth"])
 app.include_router(events.router,      prefix="/api/events", tags=["events"])

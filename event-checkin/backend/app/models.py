@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, BigInteger, Boolean, DateTime, ForeignKey, Integer, Float, Text, UniqueConstraint, CheckConstraint, Index, text, JSON
+from sqlalchemy import String, LargeBinary, BigInteger, Boolean, DateTime, ForeignKey, Integer, Float, Text, UniqueConstraint, CheckConstraint, Index, text, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 
@@ -3406,3 +3406,21 @@ class CertificateWorkflowLink(Base):
     created_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     expires_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class OrganizationInvoice(Base):
+    """Tenant-owned drafts and immutable issued PDF snapshots."""
+    __tablename__ = "organization_invoices"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    reference: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    payload: Mapped[dict] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(20), default="draft")
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    has_pdf: Mapped[bool] = mapped_column(Boolean, default=False)
+    pdf_bytes: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_by: Mapped[str] = mapped_column(String(36))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    issued_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

@@ -6,6 +6,7 @@ import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useBilling } from '../hooks/useEventResources'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
+import InvoiceLibrary from '../components/media-library/InvoiceLibrary'
 import './BillingRedesignPage.css'
 
 const WEBHOOK_EVENT_TYPES = [
@@ -18,6 +19,7 @@ function TabsStrip({ tab, goTab }) {
   return (
     <div className="rr-tabs">
       <button className={tab === 'billing' ? 'active' : ''} onClick={() => goTab('billing')}>Billing</button>
+      <button className={tab === 'invoices' ? 'active' : ''} onClick={() => goTab('invoices')}>Invoices</button>
       <button className={tab === 'org' ? 'active' : ''} onClick={() => goTab('org')}>Org Settings</button>
     </div>
   )
@@ -1122,7 +1124,7 @@ export default function BillingRedesignPage() {
   const [orgIdentity, setOrgIdentity] = useState(null)
 
   const tabParam = searchParams.get('tab')
-  const tab = tabParam === 'org' ? 'org' : 'billing'
+  const tab = ['org','invoices'].includes(tabParam) ? tabParam : 'billing'
 
   useEffect(() => {
     if (tab !== 'org') return
@@ -1198,6 +1200,8 @@ export default function BillingRedesignPage() {
       </div>
     </Modal>
   )
+
+  if (tab === 'invoices') return <RedesignShell topActive="org" withEventSidebar={false}><TabsStrip tab={tab} goTab={goTab}/><InvoiceLibrary/></RedesignShell>
 
   if (tab === 'org') {
     return (

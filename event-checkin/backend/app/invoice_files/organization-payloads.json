@@ -1,0 +1,127 @@
+{
+  "honeybols-50th-birthday-150": {
+    "client": "Honeybols Events",
+    "issuerName": "Festio",
+    "issuerContact": "festio.events · events@festio.events",
+    "currency": "NGN",
+    "deposit": 60,
+    "bank": "Providus Bank LTD",
+    "accountName": "FOHMA INTEGRATED SOLUTIONS LTD",
+    "accountNumber": "1310138643",
+    "brand": "#173f34",
+    "accent": "#a96742",
+    "balanceDays": 7,
+    "dueDate": "",
+    "discount": 0,
+    "title": "50th birthday celebration",
+    "date": "",
+    "issuedDate": "2026-11-15",
+    "guests": 150,
+    "fees": [
+      {
+        "id": "service-0",
+        "label": "Standard Event Pass · Up to 150 guests",
+        "description": "900 messaging credits and the guest experience inclusions below",
+        "amount": 200000,
+        "complimentary": false
+      },
+      {
+        "id": "service-1",
+        "label": "Personalised event website & GuestHub",
+        "description": "Birthday branding, photos, event details, venue directions and one guest access link",
+        "amount": 0,
+        "complimentary": true
+      },
+      {
+        "id": "service-2",
+        "label": "Invitation & RSVP page",
+        "description": "Digital invitation, attendance responses and agreed guest questions",
+        "amount": 0,
+        "complimentary": true
+      },
+      {
+        "id": "service-3",
+        "label": "Guest communication · Email & WhatsApp",
+        "description": "Three messages per guest on each channel: RSVP invitation, reminder and check-in confirmation — 450 emails + 450 WhatsApp messages.",
+        "amount": 0,
+        "complimentary": true
+      },
+      {
+        "id": "service-4",
+        "label": "Guest-list setup & personal QR passes",
+        "description": "Import the approved guest list and prepare personal passes for confirmed guests",
+        "amount": 0,
+        "complimentary": true
+      },
+      {
+        "id": "service-5",
+        "label": "Check-in tools & attendance report",
+        "description": "QR scanning, guest lookup, duplicate-scan alerts and post-event attendance export",
+        "amount": 0,
+        "complimentary": true
+      },
+      {
+        "id": "service-6",
+        "label": "Two event-day check-in staff",
+        "description": "Up to six hours including setup · 2 × ₦37,500",
+        "amount": 75000,
+        "complimentary": false
+      },
+      {
+        "id": "service-7",
+        "label": "Table & seat assignment",
+        "description": "Table configuration, guest-to-table and seat assignments, and seating guidance at check-in",
+        "amount": 0,
+        "complimentary": true
+      }
+    ],
+    "exclusions": "One 50th birthday event in Nigeria. Event date and venue tentative. Three emails and three WhatsApp messages per guest: RSVP invitation, reminder and check-in confirmation. Includes table and seat assignment and two check-in staff for up to six hours including setup. Additional credits, travel, accommodation, equipment hire, overtime and taxes require separate agreement."
+  },
+  "honeybols-birthday-500-2027": {
+    "client": "Honeybols Events",
+    "issuerName": "Festio",
+    "issuerContact": "festio.events · events@festio.events",
+    "currency": "NGN",
+    "deposit": 60,
+    "bank": "Providus Bank LTD",
+    "accountName": "FOHMA INTEGRATED SOLUTIONS LTD",
+    "accountNumber": "1310138643",
+    "brand": "#173f34",
+    "accent": "#a96742",
+    "balanceDays": 7,
+    "dueDate": "2027-05-15",
+    "discount": 200000,
+    "title": "Birthday celebration · 22 May 2027",
+    "date": "2027-05-22",
+    "issuedDate": "2026-11-04",
+    "guests": 500,
+    "fees": [
+      {
+        "id": "package",
+        "label": "Festio guest experience & event support package",
+        "amount": 600000,
+        "complimentary": false,
+        "description": "Scale Event Pass, 3,000 credits and four check-in operators"
+      },
+      {
+        "id": "website",
+        "label": "Birthday website, invitation & RSVP setup",
+        "amount": 0,
+        "complimentary": true
+      },
+      {
+        "id": "seating",
+        "label": "Seating module & floor-plan setup",
+        "amount": 0,
+        "complimentary": true
+      },
+      {
+        "id": "report",
+        "label": "Attendance report & guest-data handover",
+        "amount": 0,
+        "complimentary": true
+      }
+    ],
+    "exclusions": "Previously prepared package. The saved PDF is the authoritative document."
+  }
+}

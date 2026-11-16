@@ -558,7 +558,7 @@ function AppRoutes() {
       <Route path="/guest-services" element={<ProtectedRoute><GuestServicesPage /></ProtectedRoute>} />
       <Route path="/checkin-redesign" element={<ProtectedRoute><CheckinRedesignPage /></ProtectedRoute>} />
       <Route path="/superadmin-redesign" element={<ProtectedRoute platformSuperadminOnly><SuperadminRedesignPage /></ProtectedRoute>} />
-      <Route path="/invoices" element={<ProtectedRoute platformSuperadminOnly><InvoicesPage /></ProtectedRoute>} />
+      <Route path="/invoices" element={<ProtectedRoute><InvoicesPage /></ProtectedRoute>} />
       <Route path="/media-redesign" element={<ProtectedRoute platformSuperadminOnly><MediaRedesignPage /></ProtectedRoute>} />
       <Route path="/marketing" element={<ProtectedRoute><MarketingPage /></ProtectedRoute>} />
       <Route path="/lead-form/:token" element={<MarketingLeadFormPage />} />

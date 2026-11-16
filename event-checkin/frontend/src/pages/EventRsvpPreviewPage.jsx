@@ -16,6 +16,10 @@ export default function EventRsvpPreviewPage() {
         if (cancelled) return
         const event = events.find(row => row.id === eventId)
         if (!event) throw new Error('This event is unavailable to your account.')
+        if (event.status === 'active' && event.rsvp_enabled && event.rsvp_token && design.is_published) {
+          window.location.replace(`/rsvp/${encodeURIComponent(event.rsvp_token)}`)
+          return
+        }
         const key = crypto.randomUUID()
         writeDraftPreview(key, eventId, toPublicTheme(design, catalog.templates || catalog || [], eventId), event)
         window.location.replace(`/invite/${encodeURIComponent(eventId)}?studio-preview=1&studio-key=${key}&studio-surface=rsvp`)

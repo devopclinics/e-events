@@ -139,7 +139,7 @@ export default function EventsListRedesignPage() {
                 {openMenuId === event.id && (
                   <div className="ev-row-menu">
                     <button onClick={() => { setOpenMenuId(''); openEvent(event) }}>Open</button>
-                    {user?.is_platform_superadmin && <button onClick={() => navigate(`/events-redesign/${encodeURIComponent(event.id)}/rsvp-preview`)}>Open RSVP preview</button>}
+                    {user?.is_platform_superadmin && <button onClick={() => navigate(`/events-redesign/${encodeURIComponent(event.id)}/rsvp-preview`)}>{event.status === 'active' && event.rsvp_enabled ? 'Open RSVP page' : 'Open RSVP preview'}</button>}
                     {event.status === 'archived'
                       ? <button onClick={() => { setOpenMenuId(''); unarchiveEvent(event) }}>Unarchive</button>
                       : <button className="ev-danger" onClick={() => { setOpenMenuId(''); setArchiveTarget(event) }}>Archive</button>}

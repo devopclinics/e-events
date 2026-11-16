@@ -40,7 +40,7 @@ export default function FoundingEditionLanding({ event, config, registration, re
       <section className="founding-facts" aria-label="At a glance">
         <div><span>Where</span><strong>Greater Houston</strong></div>
         <div><span>The experience</span><strong>Guided conversation + networking</strong></div>
-        <div><span>Admission</span><strong>{ticketing ? 'Ticketed · 50 places' : 'Free · First 50 places'}</strong></div>
+        <div><span>Admission</span><strong>{ticketing ? 'First 50 free · Paid thereafter' : 'Free · First 50 places'}</strong></div>
       </section>
       <section className="founding-details" aria-label="Event details">
         <div className="founding-cta-row">

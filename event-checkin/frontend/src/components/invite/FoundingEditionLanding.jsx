@@ -37,11 +37,17 @@ export default function FoundingEditionLanding({ event, config, registration, re
       </header>
       <img className="founding-photo" src={event.invite_cover_image || '/events/nigerian-hub/houston-connections.png'}
         alt="Five Nigerian professionals connecting at a Houston networking gathering" fetchPriority="high" />
+      <section className="founding-facts" aria-label="At a glance">
+        <div><span>Where</span><strong>Greater Houston</strong></div>
+        <div><span>The experience</span><strong>Guided conversation + networking</strong></div>
+        <div><span>Admission</span><strong>Free · First 50 places</strong></div>
+      </section>
       <section className="founding-details" aria-label="Event details">
         <div className="founding-cta-row">
           <h2>{config.invitation || 'Be one of the first 50'}</h2>
-          <button type="button" className="founding-rsvp" onClick={() => setOpen(true)}>{completed ? 'YOUR RSVP' : 'FREE RSVP'}</button>
+          <button type="button" className="founding-rsvp" onClick={() => setOpen(true)}>{completed ? 'YOUR RSVP' : 'FREE RSVP'}<span aria-hidden="true"> ↗</span></button>
         </div>
+        <p className="founding-welcome">A room for new connections.</p>
         <p className="founding-programme">{config.programme || '90 minutes of guided conversation, then open networking.'}</p>
         <p className="founding-schedule">{pendingDate ? 'Date & venue announced soon.' : config.schedule}<br />{config.updates || 'Watch this group for updates.'}</p>
       </section>

@@ -28,3 +28,48 @@
 @media(min-width:1081px){.founding-page{padding:32px 0}.founding-artwork{box-shadow:0 8px 60px #0003}}
 @media(max-width:600px){.founding-heading{padding-top:28px;padding-bottom:24px}.founding-edition{font-size:11px;letter-spacing:1.6px;margin-bottom:20px}.founding-rule{width:28px;height:3px;margin-bottom:15px}.founding-heading h1{font-size:11.8cqw;line-height:.98;margin-bottom:12px}.founding-tagline{font-size:4cqw;line-height:1.4;margin-bottom:7px}.founding-intro{font-size:14px;line-height:1.5;max-width:30em}.founding-photo{aspect-ratio:1.8;object-fit:cover}.founding-details{padding-top:20px;padding-bottom:28px}.founding-cta-row{flex-wrap:wrap;gap:14px}.founding-cta-row h2{font-size:7cqw;line-height:1.2}.founding-rsvp{font-size:14px;padding:12px 22px;min-height:44px}.founding-programme{font-size:16px;line-height:1.5;margin:18px 0}.founding-schedule{font-size:15px;line-height:1.5}.founding-vendor{padding-top:22px;padding-bottom:24px}.founding-vendor h2{font-size:17px;line-height:1.4;margin-bottom:10px}.founding-vendor p{font-size:14px;line-height:1.5;overflow-wrap:anywhere}.founding-dialog{padding:30px 22px}.founding-dialog h2{font-size:30px}}
 @media(prefers-reduced-motion:reduce){.founding-page *{scroll-behavior:auto!important}}
+
+/* A considered invitation, with comfortable reading sizes on every screen. */
+.founding-page{box-sizing:border-box;width:100%;padding:40px 24px 48px;background:radial-gradient(ellipse at top,#20334b 0,#101c2b 65%)}
+.founding-artwork{max-width:1040px;border:1px solid #eac78f26;border-radius:18px;overflow:hidden;box-shadow:0 24px 80px #0004}
+.founding-heading{padding:48px 52px 36px}
+.founding-rule{width:44px;height:3px;margin-bottom:20px}
+.founding-edition{font-size:12px;letter-spacing:3px;line-height:1.5;margin-bottom:28px}
+.founding-heading h1{font-size:clamp(46px,8.7cqw,92px);line-height:1;letter-spacing:-.045em;margin:0 0 20px -3px}
+.founding-tagline{font-size:clamp(21px,3cqw,32px);line-height:1.35;margin-bottom:12px}
+.founding-intro{font-size:clamp(16px,1.9cqw,20px);line-height:1.6;max-width:38em}
+.founding-photo{aspect-ratio:2.24;border-bottom:1px solid #eac78f66}
+.founding-facts{display:grid;grid-template-columns:1fr 1.5fr 1fr;padding:24px 52px;gap:24px;border-bottom:1px solid #eac78f26;background:#ffffff03}
+.founding-facts div{display:flex;flex-direction:column;gap:7px}
+.founding-facts span{font-size:10px;letter-spacing:1.8px;text-transform:uppercase;color:#d9bc8c}
+.founding-facts strong{font-size:14px;line-height:1.5;font-weight:500}
+.founding-details{padding:36px 52px 40px}
+.founding-cta-row{gap:24px}.founding-cta-row h2{font-size:clamp(29px,4.2cqw,44px);line-height:1.2}
+.founding-rsvp{font-size:14px;padding:16px 24px;border-radius:6px;min-height:50px;box-shadow:0 4px 20px #0002;transition:background .15s,transform .15s;display:inline-flex;gap:18px;align-items:center}
+.founding-rsvp:hover{transform:translateY(-2px)}
+.founding-welcome{color:#eac78f;font-size:15px;margin:22px 0 8px;letter-spacing:.1px}
+.founding-programme{font-size:17px;line-height:1.7;max-width:38em;margin:0 0 22px;color:#e0e3eb}
+.founding-schedule{font-size:14px;line-height:1.7;color:#bdc7d5}
+.founding-vendor{padding:28px 52px 30px;background:#edcb92}
+.founding-vendor h2{font-size:19px;line-height:1.5;margin-bottom:8px;max-width:38em}
+.founding-vendor p{font-size:14px;line-height:1.7}.founding-vendor a{text-decoration:underline;text-underline-offset:3px}
+.founding-dialog{border-radius:14px}.founding-dialog input:focus-visible{outline:2px solid #9f773c;outline-offset:2px}
+@media(max-width:600px){
+ .founding-page{padding:0;background:#121f30}
+ .founding-artwork{border:0;border-radius:0;box-shadow:none}
+ .founding-heading{padding:30px 24px 26px}
+ .founding-edition{font-size:10px;letter-spacing:2px;margin-bottom:22px}
+ .founding-heading h1{font-size:clamp(40px,11.8cqw,70px);margin-bottom:16px}
+ .founding-tagline{font-size:clamp(18px,4.8cqw,27px)}
+ .founding-intro{font-size:15px;line-height:1.6}
+ .founding-photo{aspect-ratio:1.8}
+ .founding-facts{grid-template-columns:1fr 1fr;padding:22px 24px;gap:20px 16px}
+ .founding-facts div:nth-child(2){grid-column:1/-1;grid-row:2}
+ .founding-facts strong{font-size:13px}
+ .founding-details{padding:28px 24px 32px}
+ .founding-cta-row{align-items:stretch;gap:20px;flex-direction:column}
+ .founding-cta-row h2{font-size:32px}.founding-rsvp{justify-content:space-between;width:100%;font-size:14px}
+ .founding-welcome{margin-top:24px}.founding-programme{font-size:16px}
+ .founding-vendor{padding:24px}.founding-vendor h2{font-size:17px}
+ .founding-dialog{padding:32px 22px}
+}

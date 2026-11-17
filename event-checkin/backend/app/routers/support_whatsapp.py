@@ -1,7 +1,15 @@
 """Festio-management-only WhatsApp support. Never scoped by event membership."""
 import json
+import asyncio, secrets, os
+from urllib.parse import quote
+from fastapi import File, UploadFile
+from fastapi.responses import FileResponse, StreamingResponse
+from app import storage
+from app.models import SupportAttachment
+from app.routers.media_library import validate_file, MAX_FILE
+
 from datetime import datetime,timedelta,timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 from fastapi import APIRouter,Depends,HTTPException,Request,Response,Query
 from pydantic import BaseModel,Field
 from sqlalchemy import select,func,or_,exists
@@ -21,7 +29,10 @@ def enabled():
 
 
 def message_out(m):
-    return {k:getattr(m,k) for k in ['id','direction','body','kind','status','occurred_at','received_at','error','sent_by','request_id']}
+    result = {k:getattr(m,k) for k in ['id','direction','body','kind','status','occurred_at','received_at','error','sent_by','request_id']}
+    result['attachments'] = [dict(id=a.get('id'),filename=a.get('filename','Attachment'),content_type=a.get('content_type','application/octet-stream')) for a in (m.attachments or ([dict(id='0',filename=m.kind+' attachment')] if m.direction=='incoming' and m.kind in ('image','file','audio','video') else []))]
+    if result['attachments'] and result['body']=='['+m.kind+' message — view attachment in Bird]':result['body']=''
+    return result
 
 
 def unread_for(user):
@@ -98,32 +109,106 @@ async def change_state(ident:str,data:StateBody,db:AsyncSession=Depends(get_db),
     c.status=data.status;await db.commit();return {'ok':True}
 
 
+
+def attachment_response(a):
+    headers={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Content-Disposition':"attachment; filename*=UTF-8''"+quote(a.filename)}
+    if storage.s3_enabled():
+        result=storage.open_stream(a.storage_path)
+        if not result:raise HTTPException(404,'Attachment file unavailable')
+        stream,_=result
+        return StreamingResponse(stream,media_type=a.content_type,headers=headers)
+    path=os.path.join(storage.UPLOADS_DIR,a.storage_path)
+    if not os.path.isfile(path):raise HTTPException(404,'Attachment file unavailable')
+    return FileResponse(path,media_type=a.content_type,headers=headers)
+
+
+@router.post('/conversations/{ident}/attachments',dependencies=[Depends(enabled),Depends(rate_limit(limit=20,window=60,scope='support-upload'))],status_code=201)
+async def upload_attachment(ident:str,file:UploadFile=File(...),db:AsyncSession=Depends(get_db),user:User=Depends(require_support_agent)):
+    c=await db.get(Conversation,ident)
+    if not c:raise HTTPException(404,'Conversation not found')
+    if c.channel_id!=settings.bird_whatsapp_channel_id:raise HTTPException(409,'This conversation belongs to a different WhatsApp line')
+    if not c.last_incoming_at or datetime.utcnow()>=c.last_incoming_at+timedelta(hours=24):raise HTTPException(409,'The 24-hour reply window has closed')
+    raw=await file.read(MAX_FILE+1)
+    content_type=(file.content_type or '').lower()
+    data,_,_=await asyncio.to_thread(validate_file,raw,content_type)
+    filename=(file.filename or 'Attachment').replace('\\','/').split('/')[-1]
+    filename=''.join(ch for ch in filename if ch.isprintable())[:200] or 'Attachment'
+    a=SupportAttachment(conversation_id=ident,uploaded_by=user.id,filename=filename,content_type=content_type,byte_size=len(data),storage_path='support-inbox/'+str(uuid4())+'/file',fetch_token=secrets.token_urlsafe(32))
+    await asyncio.to_thread(storage.save,a.storage_path,data,content_type)
+    db.add(a)
+    try:await db.commit()
+    except Exception:
+        await db.rollback();await asyncio.to_thread(storage.delete,a.storage_path);raise
+    return dict(id=a.id,filename=a.filename,content_type=a.content_type,byte_size=a.byte_size)
+
+
+@router.get('/attachments/{aid}/content',dependencies=[Depends(enabled)])
+async def provider_attachment(aid:str,token:str=Query(...,max_length=100),db:AsyncSession=Depends(get_db)):
+    a=await db.get(SupportAttachment,aid)
+    if not a or not secrets.compare_digest(a.fetch_token,token) or datetime.utcnow()>=a.created_at+timedelta(hours=24):raise HTTPException(404,'Attachment not found')
+    return await asyncio.to_thread(attachment_response,a)
+
+
+@router.get('/conversations/{ident}/messages/{mid}/attachments/{index}',dependencies=[Depends(enabled)])
+async def download_attachment(ident:str,mid:str,index:int,db:AsyncSession=Depends(get_db),user:User=Depends(require_support_agent)):
+    m=await db.get(Message,mid)
+    if not m or m.conversation_id!=ident or index<0:raise HTTPException(404,'Attachment not found')
+    if m.direction=='incoming' and not m.attachments and m.provider_id:
+        response=await service.bird('GET',service.channel_path()+'/'+m.provider_id)
+        if response.status_code==200:
+            data=service.normalize(response.json())
+            if data and data['provider_id']==m.provider_id:
+                m.attachments=data['attachments'] or None
+                await db.commit()
+    if index>=len(m.attachments or []):raise HTTPException(404,'Attachment not found')
+    item=m.attachments[index]
+    if m.direction=='outgoing':
+        a=await db.get(SupportAttachment,item.get('id'))
+        if not a or a.conversation_id!=ident:raise HTTPException(404,'Attachment not found')
+        return await asyncio.to_thread(attachment_response,a)
+    data=await service.fetch_media(item.get('url',''))
+    return Response(data,media_type='application/octet-stream',headers={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Content-Disposition':"attachment; filename*=UTF-8''"+quote(item.get('filename','Attachment'))})
+
+
 class ReplyBody(BaseModel):
-    body:str=Field(min_length=1,max_length=4096)
+    body:str=Field(default='',max_length=4096)
+    attachment_id:UUID|None=None
     request_id:UUID
 
 
 @router.post('/conversations/{ident}/reply',dependencies=[Depends(enabled),Depends(rate_limit(limit=30,window=60,scope='support-reply'))])
 async def reply(ident:str,data:ReplyBody,db:AsyncSession=Depends(get_db),user:User=Depends(require_support_agent)):
     text=data.body.strip()
-    if not text:raise HTTPException(422,'Enter a reply')
+    if not text and not data.attachment_id:raise HTTPException(422,'Enter a reply or attach a file')
+    if data.attachment_id and len(text)>1024:raise HTTPException(422,'Attachment captions must be 1024 characters or fewer')
     c=await db.scalar(select(Conversation).where(Conversation.id==ident).with_for_update())
     if not c:raise HTTPException(404,'Conversation not found')
     existing=await db.scalar(select(Message).where(Message.request_id==str(data.request_id)))
     if existing:
-        if existing.conversation_id!=ident or existing.body!=text or existing.sent_by!=user.id:raise HTTPException(409,'This send reference was already used')
+        if existing.conversation_id!=ident or existing.body!=text or existing.sent_by!=user.id or [a.get('id') for a in (existing.attachments or [])] != ([str(data.attachment_id)] if data.attachment_id else []):raise HTTPException(409,'This send reference was already used')
         return message_out(existing)
     if c.channel_id!=settings.bird_whatsapp_channel_id:raise HTTPException(409,'This conversation belongs to a different WhatsApp line')
     if not c.last_incoming_at or datetime.utcnow()>=c.last_incoming_at+timedelta(hours=24):
         raise HTTPException(409,'The 24-hour reply window has closed. Ask the customer to message again or use an approved WhatsApp template. No message was sent.')
     if not recipient_allowed('whatsapp',c.phone):raise HTTPException(403,'Sending to this number is blocked by the staging recipient guard')
+    attachment = await db.get(SupportAttachment,str(data.attachment_id)) if data.attachment_id else None
+    if data.attachment_id and (not attachment or attachment.conversation_id!=ident or attachment.uploaded_by!=user.id):
+        raise HTTPException(404,'Attachment not found for this conversation')
+    if attachment and datetime.utcnow()>=attachment.created_at+timedelta(hours=24):
+        raise HTTPException(409,'This attachment expired. Attach the file again before sending.')
     from app.services.support_automation import pause
     await pause(db,ident)
     number=c.phone
-    m=Message(conversation_id=ident,request_id=str(data.request_id),direction='outgoing',body=text,kind='text',status='submitting',sent_by=user.id,occurred_at=datetime.utcnow())
+    m=Message(conversation_id=ident,request_id=str(data.request_id),direction='outgoing',body=text,kind=('image' if attachment.content_type.startswith('image/') else 'file') if attachment else 'text',attachments=[dict(id=attachment.id,filename=attachment.filename,content_type=attachment.content_type)] if attachment else None,status='submitting',sent_by=user.id,occurred_at=datetime.utcnow())
     db.add(m);await db.commit() # Durable send intent before contacting the provider. Never retry automatically.
     try:
-        response=await service.bird('POST',service.channel_path(),json={'receiver':{'contacts':[{'identifierKey':'phonenumber','identifierValue':number}]},'body':{'type':'text','text':{'text':text}},'reference':'festio-support:'+m.id})
+        body={'type':'text','text':{'text':text}}
+        if attachment:
+            base=(settings.public_base_url or 'https://festio.events').rstrip('/')
+            url=base+'/api/platform/support/whatsapp/attachments/'+attachment.id+'/content?token='+attachment.fetch_token
+            kind='image' if attachment.content_type.startswith('image/') else 'file'
+            body={'type':kind,kind:{('images' if kind=='image' else 'files'):[{'mediaUrl':url,**({'filename':attachment.filename} if kind=='file' else {})}],**({'text':text} if text else {})}}
+        response=await service.bird('POST',service.channel_path(),json={'receiver':{'contacts':[{'identifierKey':'phonenumber','identifierValue':number}]},'body':body,'reference':'festio-support:'+m.id})
         if response.status_code in (200,201,202):
             payload=response.json();m.provider_id=payload.get('id');m.status=payload.get('status') or 'accepted'
             if not m.provider_id:m.status='unknown';m.error='Bird accepted the request without a message reference. Verify in Bird before sending again.'

@@ -1,0 +1,12 @@
+import {useRef,useState} from 'react'
+const EMOJIS=[['😀','Grinning face'],['😊','Smiling face'],['🙂','Slight smile'],['😂','Laughing'],['😍','Heart eyes'],['🥳','Celebration'],['🎉','Party popper'],['🎂','Birthday cake'],['❤️','Heart'],['💚','Green heart'],['👍','Thumbs up'],['🙏','Thank you'],['👋','Wave'],['✅','Check mark'],['📍','Location'],['📅','Calendar'],['🎟️','Ticket'],['✨','Sparkles'],['💐','Flowers'],['🤝','Handshake'],['👏','Applause'],['💯','Hundred']]
+export default function SupportReplyTools({inputId,value,onChange,disabled,maxLength=4096,onFile,uploading,attachment,onRemove}){
+ const [open,setOpen]=useState(false),file=useRef()
+ function insert(emoji){const input=document.getElementById(inputId),start=input?.selectionStart??value.length,end=input?.selectionEnd??value.length,next=value.slice(0,start)+emoji+value.slice(end);if(next.length>maxLength)return;onChange(next);setOpen(false);requestAnimationFrame(()=>{input?.focus();input?.setSelectionRange(start+emoji.length,start+emoji.length)})}
+ return <section className="mwa-reply-tools" aria-label="Reply tools">
+  <div className="mwa-tool-buttons"><button type="button" aria-label="Choose an emoji" aria-expanded={open} disabled={disabled} onClick={()=>setOpen(v=>!v)}>☺ <span>Emoji</span></button>
+  {onFile&&<><input ref={file} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" hidden onChange={e=>{const chosen=e.target.files?.[0];e.target.value='';if(chosen)onFile(chosen)}}/><button type="button" disabled={disabled||uploading} onClick={()=>file.current?.click()} aria-label="Attach a file"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m8 12 6-6a4 4 0 0 1 6 6l-8 8a6 6 0 0 1-8-8l8-8m-5 11 8-8a2 2 0 0 1 3 3l-8 8"/></svg> <span>{uploading?'Uploading…':'Attach file'}</span></button><small>PDF up to 20 MB · JPG, PNG, WebP up to 5 MB</small></>}</div>
+  {open&&<div className="mwa-emoji-picker" role="group" aria-label="Emoji picker">{EMOJIS.map(([emoji,label])=><button type="button" key={label} aria-label={label} title={label} onClick={()=>insert(emoji)}>{emoji}</button>)}</div>}
+  {attachment&&<div className="mwa-attachment-chip"><span>📎 {attachment.filename}</span><small>{Math.ceil(attachment.byte_size/1024)} KB · Ready to send</small><button type="button" disabled={disabled} aria-label="Remove attachment" onClick={onRemove}>×</button></div>}
+ </section>
+}

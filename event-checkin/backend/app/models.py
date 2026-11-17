@@ -3280,6 +3280,21 @@ class SupportMessage(Base):
     occurred_at: Mapped[datetime] = mapped_column(DateTime, index=True)
     received_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     error: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    attachments: Mapped[list | None] = mapped_column(JSON, nullable=True)
+
+
+class SupportAttachment(Base):
+    __tablename__ = 'support_attachments'
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    conversation_id: Mapped[str] = mapped_column(ForeignKey('support_conversations.id', ondelete='CASCADE'), index=True)
+    uploaded_by: Mapped[str] = mapped_column(String(36))
+    filename: Mapped[str] = mapped_column(String(255))
+    content_type: Mapped[str] = mapped_column(String(100))
+    byte_size: Mapped[int] = mapped_column(Integer)
+    storage_path: Mapped[str] = mapped_column(String(500))
+    fetch_token: Mapped[str] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
 
 
 class SupportRead(Base):

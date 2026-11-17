@@ -88,6 +88,22 @@ def channel_path():
     return '/channels/'+settings.bird_whatsapp_channel_id+'/messages'
 
 
+async def fetch_media(url):
+    from urllib.parse import urlsplit
+    parts=urlsplit(url)
+    if parts.scheme!='https' or parts.hostname not in ('api.bird.com','media.api.bird.com') or parts.port not in (None,443) or parts.username or parts.password or not parts.path.startswith('/workspaces/'+settings.bird_workspace_id+'/'):
+        raise HTTPException(409,'This attachment cannot be downloaded here. Open it in Bird.')
+    async with httpx.AsyncClient(timeout=30,follow_redirects=False) as client:
+        async with client.stream('GET',url,headers={'Authorization':'AccessKey '+settings.bird_access_key}) as response:
+            if response.status_code!=200:raise HTTPException(502,'Bird attachment is unavailable or expired')
+            chunks=[];size=0
+            async for chunk in response.aiter_bytes():
+                size+=len(chunk)
+                if size>20*1024*1024:raise HTTPException(413,'Attachment is too large to download here')
+                chunks.append(chunk)
+    return b''.join(chunks)
+
+
 def normalize(message):
     if message.get('direction') != 'incoming':
         return None
@@ -107,10 +123,15 @@ def normalize(message):
     body = message.get('body') or {}; kind = body.get('type', 'unknown')
     content = body.get(kind) or {}
     value = content.get('text') if isinstance(content, dict) else None
+    attachments=[]
+    if isinstance(content,dict):
+        for index,item in enumerate(content.get({'file':'files','image':'images','audio':'audios','video':'videos'}.get(kind,''),[])[:10]):
+            if isinstance(item,dict) and isinstance(item.get('mediaUrl'),str):
+                attachments.append(dict(id=str(index),url=item['mediaUrl'],filename=str(item.get('filename') or (item.get('metadata') or {}).get('filename') or (kind+' attachment'))[:200],content_type=str(item.get('contentType') or 'application/octet-stream')[:100]))
     if not isinstance(value, str):
-        value = '['+str(kind)[:30]+' message — view attachment in Bird]'
+        value = '' if attachments else '['+str(kind)[:30]+' message — view attachment in Bird]'
     return dict(provider_id=ident, phone=number, name=str(contact.get('displayName') or (contact.get('annotations') or {}).get('name') or '')[:255],
-                body=value[:10000], kind=str(kind)[:30], occurred_at=when,
+                body=value[:10000], attachments=attachments, kind=str(kind)[:30], occurred_at=when,
                 status=str(message.get('status') or 'received')[:40])
 
 
@@ -146,7 +167,7 @@ async def ingest(db, message):
             thread.last_message_at = max(thread.last_message_at, data['occurred_at'])
             if data['name'] and not thread.name: thread.name=data['name']
             db.add(SupportMessage(conversation_id=thread.id, direction='incoming', provider_id=data['provider_id'],
-                                  body=data['body'], kind=data['kind'], status=data['status'], occurred_at=data['occurred_at']))
+                                  body=data['body'], attachments=data['attachments'] or None, kind=data['kind'], status=data['status'], occurred_at=data['occurred_at']))
             await db.flush()
         return True
     except IntegrityError:

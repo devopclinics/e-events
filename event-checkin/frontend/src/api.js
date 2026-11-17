@@ -575,6 +575,17 @@ export const api = {
   supportWhatsAppThread: (id,before) => req('GET', `/platform/support/whatsapp/conversations/${encodeURIComponent(id)}${before?'?before='+encodeURIComponent(before):''}`),
   supportWhatsAppRead: (id,data) => req('POST', `/platform/support/whatsapp/conversations/${encodeURIComponent(id)}/read`,data),
   supportWhatsAppState: (id,status) => req('PATCH', `/platform/support/whatsapp/conversations/${encodeURIComponent(id)}`,{status}),
+  supportWhatsAppUpload: async(id,file) => {
+    const token=await getToken(),form=new FormData();form.append('file',file)
+    const res=await fetch(`${BASE}/platform/support/whatsapp/conversations/${encodeURIComponent(id)}/attachments`,{method:'POST',headers:{Authorization:`Bearer ${token}`},body:form})
+    if(!res.ok){const error=await res.json().catch(()=>({}));throw new Error(error.detail||'Attachment upload failed')}
+    return res.json()
+  },
+  supportWhatsAppDownload: async(id,message,index) => {
+    const token=await getToken(),res=await fetch(`${BASE}/platform/support/whatsapp/conversations/${encodeURIComponent(id)}/messages/${encodeURIComponent(message)}/attachments/${index}`,{headers:{Authorization:`Bearer ${token}`}})
+    if(!res.ok){const error=await res.json().catch(()=>({}));throw new Error(error.detail||'Attachment download failed')}
+    return res.blob()
+  },
   supportWhatsAppReply: (id,data) => req('POST', `/platform/support/whatsapp/conversations/${encodeURIComponent(id)}/reply`,data,25000),
   supportWhatsAppSync: page_token => req('POST','/platform/support/whatsapp/sync',{page_token},60000),
   customizeQuickInviteLink: (id, data) => req('POST', `/quick-invites/manage/${encodeURIComponent(id)}/link`, data),

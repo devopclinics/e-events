@@ -9,6 +9,7 @@ import { marketingGroups, marketingTab } from './marketingNavigation.mjs'
 import './MarketingVisual.css'
 import './MarketingWorkflow.css'
 import OrganizerHandoffs from './OrganizerHandoffs'
+import SocialPublishing from './SocialPublishing'
 
 const TAB_DESCRIPTIONS = {
   dashboard: 'Welcome verified clients, guide their first event and review replies.',
@@ -2487,6 +2488,7 @@ function Analytics({ overview, commerce }) {
 }
 
 const SOCIAL_CONNECTION_FIELDS = {
+  youtube: [["client_id", "Google OAuth client ID"], ["client_secret", "Google OAuth client secret", true], ["refresh_token", "Refresh token", true], ["channel_id", "YouTube channel ID"]],
   linkedin: [
     ["access_token", "Access token", true], ["refresh_token", "Refresh token", true],
     ["client_id", "Client ID"], ["client_secret", "Client secret", true], ["author_urn", "Organization author URN"],
@@ -2508,7 +2510,7 @@ function SocialSettings() {
   useEffect(() => { load(); }, []);
   const change = (platform, field, value) => setDrafts((all) => ({...all, [platform]: {...(all[platform] || {}), [field]: value}}));
   return <div className="mk-workspace">
-    <SectionIntro eyebrow="SOCIAL CONNECTIONS" title="Connect every publishing channel." copy="Securely manage LinkedIn, Facebook, and Instagram credentials. Existing secrets stay masked and are never returned to the browser." />
+    <SectionIntro eyebrow="SOCIAL CONNECTIONS" title="Connect every publishing channel." copy="Connect Facebook, Instagram and YouTube for approved publishing. Save your developer app credentials, then authorize the account. TikTok uses manual publishing from the content calendar." />
     {notice && <div className="mk-notice" role="status">{notice}</div>}
     <div className="mk-social-settings">
       {connections.map((connection) => <form key={connection.platform} onSubmit={async (event) => {
@@ -2520,7 +2522,8 @@ function SocialSettings() {
         <div className="mk-social-fields">
           {SOCIAL_CONNECTION_FIELDS[connection.platform].map(([field, label, secret]) => <label key={field}><span>{label}</span><input type={secret ? "password" : "text"} autoComplete="off" value={drafts[connection.platform]?.[field] || ""} onChange={(event) => change(connection.platform, field, event.target.value)} placeholder={connection.configured_fields[field] ? (connection.identifiers?.[field] || "Saved securely ••••••••") : `Enter ${label.toLowerCase()}`} /><small>{connection.configured_fields[field] ? "Saved. Leave blank to keep the current value." : "Not configured"}</small></label>)}
         </div>
-        <footer><button disabled={busy === connection.platform}>{busy === connection.platform ? "Saving..." : "Save credentials"}</button><button type="button" className="secondary" disabled={!!busy || !connection.configured_fields.access_token} onClick={async () => { setBusy(connection.platform); setNotice(""); try { const result = await api.marketingTestSocialConnection(connection.platform); setNotice(`${connection.platform[0].toUpperCase() + connection.platform.slice(1)} connected${result.account ? ` as ${result.account}` : ""}.`); } catch (error) { setNotice(error.message); } finally { setBusy(""); } }}>Test connection</button></footer>
+        <footer><button disabled={busy === connection.platform}>{busy === connection.platform ? "Saving..." : "Save credentials"}</button><button type="button" className="secondary" disabled={!!busy || !(connection.configured_fields.access_token || connection.configured_fields.refresh_token)} onClick={async () => { setBusy(connection.platform); setNotice(""); try { const result = await api.marketingTestSocialConnection(connection.platform); setNotice(`${connection.platform[0].toUpperCase() + connection.platform.slice(1)} connected${result.account ? ` as ${result.account}` : ""}.`); } catch (error) { setNotice(error.message); } finally { setBusy(""); } }}>Test connection</button></footer>
+        {['facebook', 'youtube'].includes(connection.platform) && <div className="sp-actions"><button type="button" disabled={!!busy} onClick={async () => { setBusy(connection.platform); setNotice(''); try { const result = await api.socialOAuthStart(connection.platform); window.location.assign(result.url); } catch (error) { setNotice(error.message); setBusy(''); } }}>Authorize {connection.platform === 'facebook' ? 'Facebook + linked Instagram' : 'YouTube'}</button><small>Register this redirect URI in your app: {window.location.origin}/api/marketing/social/oauth/{connection.platform}/callback</small></div>}
         {connection.updated_at && <p className="mk-social-updated">Last changed by {connection.updated_by} on {new Date(connection.updated_at).toLocaleString()}</p>}
       </form>)}
     </div>
@@ -4271,6 +4274,8 @@ export default function MarketingPage() {
               <Tags />
             ) : tab === 'analytics' ? (
               <Analytics overview={dash} commerce={commerce} />
+            ) : tab === 'content' ? (
+              <SocialPublishing legacy={<Module module="content" />} />
             ) : tab === 'social-settings' ? (
               <SocialSettings />
             ) : tab === 'audit' ? (

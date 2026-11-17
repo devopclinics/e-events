@@ -45,6 +45,7 @@ FRONTEND_FILES = {
     "Dockerfile.scoped-release", "package.json", "package-lock.json",
     "index.html", "nginx.conf", "vite.config.js", "tailwind.config.js",
     "postcss.config.js", "jsconfig.json", "scripts/gen-guide-html.mjs",
+    "scripts/gen-brand-assets.mjs", "scripts/gen-invitation-share-html.mjs",
 }
 SOURCE_SUFFIXES = {".js", ".jsx", ".mjs", ".ts", ".tsx", ".json", ".css", ".md"}
 ASSET_SUFFIXES = {

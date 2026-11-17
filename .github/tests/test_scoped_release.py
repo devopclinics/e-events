@@ -335,6 +335,12 @@ class ConfigurationTests(unittest.TestCase):
         release.validate_public_config(PUBLIC_CONFIG | {"VITE_CHATWOOT_BASE_URL": "https://192.0.2.1/"})
         release.validate_public_config(PUBLIC_CONFIG | {"VITE_CHATWOOT_BASE_URL": "https://[2001:db8::1]/"})
 
+    def test_frontend_build_hooks_are_explicit_required_inputs(self):
+        for path in ("scripts/gen-brand-assets.mjs", "scripts/gen-invitation-share-html.mjs"):
+            self.assertTrue(release.allowed("frontend", path))
+            self.assertIn(path, release.REQUIRED["frontend"])
+        self.assertFalse(release.allowed("frontend", "scripts/unreviewed-hook.mjs"))
+
     def test_sensitive_names_and_path_traversal_fail_allowlist(self):
         for path in ("/src/app.js", "src/../../escape.js", "public/.ENV", "src/secret.json", "src/credentials.backup.json", "src/token-store.js", "public/service_account.json", "public/id_rsa", "public/key.pem", "public/.npmrc", "public/node_modules/x.js"):
             with self.subTest(path=path):

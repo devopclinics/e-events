@@ -474,7 +474,7 @@ async function marketingReq(method, path, body) {
     ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(15000),
   })
   if (!res.ok) {
-    const data = await res.json().catch(() => ({})); const error = new Error(data.detail || res.statusText)
+    const data = await res.json().catch(() => ({})); const detail = Array.isArray(data.detail) ? data.detail.map(item => item.msg).join('; ') : data.detail; const error = new Error(detail || res.statusText)
     error.status = res.status; throw error
   }
   return res.status === 204 ? null : res.json()
@@ -2080,6 +2080,15 @@ export const api = {
     return evidence
   },
   setSetupProgress: (eventId, stepKey, status) => req('POST', `/setup/progress`, { event_id: eventId, step_key: stepKey, status }),
+  socialCapabilities: () => marketingReq('GET', '/social/capabilities'),
+  socialPosts: () => marketingReq('GET', '/social/posts'),
+  socialCreatePost: body => marketingReq('POST', '/social/posts', body),
+  socialEditPost: (id, body) => marketingReq('PUT', `/social/posts/${encodeURIComponent(id)}`, body),
+  socialPostAction: (id, action, body) => marketingReq('POST', `/social/posts/${encodeURIComponent(id)}/${action}`, body),
+  socialDeliveryAction: (id, action, body) => marketingReq('POST', `/social/deliveries/${encodeURIComponent(id)}/${action}`, body),
+  socialAssets: () => marketingReq('GET', '/social/assets'),
+  socialUploadAsset: file => marketingUpload('/social/assets', file),
+  socialOAuthStart: platform => marketingReq('POST', `/social/oauth/${platform}/start`),
   marketingMe: () => marketingReq('GET', '/me'),
   marketingDashboard: () => marketingReq('GET', '/dashboard'),
   marketingHandoffs: (includeResolved=false) => marketingReq('GET', `/handoffs?include_resolved=${includeResolved}`),

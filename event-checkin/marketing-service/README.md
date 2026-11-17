@@ -22,7 +22,9 @@ authentication or event operations. The service accepts no main-database connect
 
 All outbound marketing is disabled unless `MARKETING_OUTBOUND_ENABLED=true` is
 explicitly configured. This gate covers lifecycle email, campaign email, SMS,
-and manual/scheduled social publishing. Dry-run previews still work. Leave the
+and legacy manual/scheduled social publishing. The new approval-based social
+workspace uses separate, default-off switches documented in
+[Social publishing](docs/social-publishing.md). Dry-run previews still work. Leave the
 gate off until provider credentials, channel-specific consent, approved content,
 reply routing and staging verification have been reviewed. Provider readiness
 includes `outbound_enabled`; configured credentials alone do not enable sends.

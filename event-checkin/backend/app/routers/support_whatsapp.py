@@ -207,7 +207,7 @@ async def reply(ident:str,data:ReplyBody,db:AsyncSession=Depends(get_db),user:Us
             base=(settings.public_base_url or 'https://festio.events').rstrip('/')
             url=base+'/api/platform/support/whatsapp/attachments/'+attachment.id+'/content?token='+attachment.fetch_token
             kind='image' if attachment.content_type.startswith('image/') else 'file'
-            body={'type':kind,kind:{('images' if kind=='image' else 'files'):[{'mediaUrl':url,**({'filename':attachment.filename} if kind=='file' else {})}],**({'text':text} if text else {})}}
+            body={'type':kind,kind:{('images' if kind=='image' else 'files'):[{'mediaUrl':url,**({'filename':attachment.filename,'contentType':attachment.content_type} if kind=='file' else {})}],**({'text':text} if text else {})}}
         response=await service.bird('POST',service.channel_path(),json={'receiver':{'contacts':[{'identifierKey':'phonenumber','identifierValue':number}]},'body':body,'reference':'festio-support:'+m.id})
         if response.status_code in (200,201,202):
             payload=response.json();m.provider_id=payload.get('id');m.status=payload.get('status') or 'accepted'
@@ -215,7 +215,7 @@ async def reply(ident:str,data:ReplyBody,db:AsyncSession=Depends(get_db),user:Us
         elif response.status_code>=500:
             m.status='unknown';m.error='Bird returned a server error. Verify in Bird before sending again.'
         else:
-            m.status='failed';m.error='Bird rejected this reply (HTTP '+str(response.status_code)+'). Check the WhatsApp channel and reply window.'
+            m.status='failed';m.error=service.rejection_detail(response)
     except Exception:
         m.status='unknown';m.error='Delivery could not be confirmed. Refresh or check Bird before sending again.'
     c=await db.get(Conversation,ident);c.last_message_at=max(c.last_message_at,m.occurred_at);c.status='open'

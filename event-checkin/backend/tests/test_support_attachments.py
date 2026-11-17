@@ -32,7 +32,7 @@ async def test_pdf_emoji_reply_private_download_and_retry(ctx,monkeypatch):
  body={'body':'Here is your proposal 🎉 😊','attachment_id':asset['id'],'request_id':str(uuid.uuid4())}
  for _ in range(2):
   r=await ctx.client.post(PREFIX+'/conversations/'+ident+'/reply',json=body);assert r.status_code==200,r.text
- assert len(sent)==1;assert sent[0]['body']['file']['text']==body['body'];url=sent[0]['body']['file']['files'][0]['mediaUrl'];message=r.json();assert message['attachments'][0]['filename']=='proposal.pdf'
+ assert len(sent)==1;assert sent[0]['body']['file']['text']==body['body'];assert sent[0]['body']['file']['files'][0]['contentType']=='application/pdf';url=sent[0]['body']['file']['files'][0]['mediaUrl'];message=r.json();assert message['attachments'][0]['filename']=='proposal.pdf'
  download=PREFIX+'/conversations/'+ident+'/messages/'+message['id']+'/attachments/0';r=await ctx.client.get(download);assert r.content==PDF
  assert (await ctx.client.get(url.replace('https://festio.events',''))).content==PDF
  async with _Session() as db:
@@ -56,7 +56,7 @@ async def test_image_attachment_only_and_caption_validation(ctx,monkeypatch):
  async def bird(*a,**kw):sent.append(kw['json']);return httpx.Response(202,json={'id':str(uuid.uuid4()),'status':'accepted'})
  monkeypatch.setattr(service,'bird',bird)
  body={'body':'x'*1025,'attachment_id':asset['id'],'request_id':str(uuid.uuid4())};assert (await ctx.client.post(PREFIX+'/conversations/'+ident+'/reply',json=body)).status_code==422
- body['body']='';r=await ctx.client.post(PREFIX+'/conversations/'+ident+'/reply',json=body);assert r.status_code==200,r.text;assert sent[0]['body']['type']=='image';assert 'text' not in sent[0]['body']['image']
+ body['body']='';r=await ctx.client.post(PREFIX+'/conversations/'+ident+'/reply',json=body);assert r.status_code==200,r.text;assert sent[0]['body']['type']=='image';assert 'text' not in sent[0]['body']['image'];assert 'contentType' not in sent[0]['body']['image']['images'][0]
  body['attachment_id']=str(uuid.uuid4());assert (await ctx.client.post(PREFIX+'/conversations/'+ident+'/reply',json=body)).status_code==409
 
 @pytest.mark.asyncio
@@ -102,3 +102,23 @@ async def test_no_provider_send_after_attachment_window_expires(ctx,monkeypatch)
  async def never(*a,**kw):raise AssertionError('Must not send expired attachment')
  monkeypatch.setattr(service,'bird',never)
  r=await ctx.client.post(PREFIX+'/conversations/'+ident+'/reply',json={'body':'Proposal','attachment_id':asset['id'],'request_id':str(uuid.uuid4())});assert r.status_code==409
+
+def test_provider_validation_error_is_actionable_without_leaking_payload():
+ response=httpx.Response(422,json={'code':'InvalidPayload','details':{'.body.file.files[0]':['property "contentType" is missing'],'body.file.files[0].mediaUrl':['https://private.example/file?token=secret'],'.':['property "receiver" is missing']}})
+ error=service.rejection_detail(response)
+ assert 'contentType missing' in error and 'InvalidPayload' in error and 'No message was sent' in error
+ assert 'private.example' not in error and 'secret' not in error and len(error)<=300
+
+@pytest.mark.asyncio
+async def test_rejected_pdf_reports_validation_and_is_not_resent(ctx,monkeypatch):
+ ident=await seed();ctx.login(ctx.ids['superadmin']);asset=(await upload(ctx,ident)).json();calls=[]
+ async def bird(*args,**kw):
+  file=kw['json']['body']['file']['files'][0]
+  assert file['contentType']=='application/pdf'
+  assert file['filename']=='proposal.pdf'
+  calls.append(kw['json'])
+  return httpx.Response(422,json={'code':'InvalidPayload','details':{'.body.file.files[0]':['property "contentType" is missing']}})
+ monkeypatch.setattr(service,'bird',bird);body={'body':'Proposal','attachment_id':asset['id'],'request_id':str(uuid.uuid4())}
+ for _ in range(2):
+  r=await ctx.client.post(PREFIX+'/conversations/'+ident+'/reply',json=body);assert r.status_code==200;assert r.json()['status']=='failed' and 'contentType missing' in r.json()['error']
+ assert len(calls)==1

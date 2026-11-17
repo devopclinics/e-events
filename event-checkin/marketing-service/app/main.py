@@ -341,11 +341,13 @@ def db_session():
 
 
 SOCIAL_FIELDS = {
+    "youtube": ("client_id", "client_secret", "refresh_token", "channel_id"),
     "linkedin": ("access_token", "refresh_token", "client_id", "client_secret", "author_urn"),
     "facebook": ("access_token", "app_id", "app_secret", "page_id"),
     "instagram": ("access_token", "app_id", "app_secret", "user_id"),
 }
 SOCIAL_ENV = {
+    "youtube": {"client_id":"YOUTUBE_CLIENT_ID", "client_secret":"YOUTUBE_CLIENT_SECRET", "refresh_token":"YOUTUBE_REFRESH_TOKEN", "channel_id":"YOUTUBE_CHANNEL_ID"},
     "linkedin": {"access_token":"LINKEDIN_ACCESS_TOKEN", "refresh_token":"LINKEDIN_REFRESH_TOKEN", "client_id":"LINKEDIN_CLIENT_ID", "client_secret":"LINKEDIN_CLIENT_SECRET", "author_urn":"LINKEDIN_AUTHOR_URN"},
     "facebook": {"access_token":"META_ACCESS_TOKEN", "app_id":"META_APP_ID", "app_secret":"META_APP_SECRET", "page_id":"META_FACEBOOK_PAGE_ID"},
     "instagram": {"access_token":"META_ACCESS_TOKEN", "app_id":"META_APP_ID", "app_secret":"META_APP_SECRET", "user_id":"META_INSTAGRAM_USER_ID"},
@@ -372,7 +374,7 @@ def social_credentials(db: Session, platform: str) -> dict[str, str]:
 
 def social_connection_out(db: Session, platform: str) -> dict:
     credentials = social_credentials(db, platform); saved = saved_social_credentials(db, platform); row = db.get(SocialConnection, platform)
-    identifiers = {key: value for key, value in credentials.items() if key in {"client_id","author_urn","app_id","page_id","user_id"}}
+    identifiers = {key: value for key, value in credentials.items() if key in {"client_id","author_urn","app_id","page_id","user_id","channel_id"}}
     return {"platform":platform, "configured_fields":{key:bool(value) for key,value in credentials.items()}, "saved_in_festio":bool(saved), "identifiers":identifiers, "updated_by":row.updated_by if row else None, "updated_at":row.updated_at if row else None}
 
 
@@ -1783,14 +1785,41 @@ def save_social_connection(platform:str, body:dict, identity:Identity=Depends(re
 @app.post("/api/marketing/social-connections/{platform}/test")
 async def test_social_connection(platform:str, identity:Identity=Depends(require_superadmin), db:Session=Depends(db_session)):
     if platform not in SOCIAL_FIELDS: raise HTTPException(404,"Social platform not found")
-    credentials=social_credentials(db,platform);token=credentials.get("access_token")
-    if not token: raise HTTPException(400,"Save an access token before testing")
-    async with httpx.AsyncClient(timeout=20) as client:
-        if platform=="linkedin": response=await client.get("https://api.linkedin.com/v2/userinfo",headers={"Authorization":f"Bearer {token}"})
-        else: response=await client.get("https://graph.facebook.com/v23.0/me",params={"fields":"id,name","access_token":token})
-    if response.status_code>=400: raise HTTPException(502,f"{platform.title()} rejected these credentials")
-    audit(db,identity,"social.connection_tested","provider",platform);db.commit()
-    details=response.json();return {"platform":platform,"connected":True,"account":details.get("name") or details.get("localizedFirstName") or details.get("sub") or details.get("id")}
+    from . import social_providers as providers
+    credentials = social_credentials(db, platform)
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            if platform == "youtube":
+                token = await providers.youtube_token(client, credentials)
+                details = providers.checked(await client.get("https://www.googleapis.com/youtube/v3/channels",
+                    headers={"Authorization": f"Bearer {token}"}, params={"part": "id,snippet", "mine": "true"}))
+                channel = next((c for c in details.get("items", []) if c["id"] == credentials["channel_id"]), None)
+                if not channel: raise HTTPException(422, "Authorized channel does not match the configured YouTube channel")
+                account = channel.get("snippet", {}).get("title") or channel["id"]
+            elif platform == "linkedin":
+                if not credentials.get("access_token"): raise HTTPException(400, "Save an access token before testing")
+                details = providers.checked(await client.get("https://api.linkedin.com/v2/userinfo", headers={"Authorization": f"Bearer {credentials['access_token']}"}))
+                account = details.get("name") or details.get("sub")
+            else:
+                if not all(credentials.get(k) for k in ("access_token", "app_id", "app_secret")):
+                    raise HTTPException(400, "Save or authorize the Meta app credentials before testing")
+                token = credentials["access_token"]
+                debug = providers.checked(await client.get("https://graph.facebook.com/"+os.getenv("MARKETING_META_GRAPH_VERSION", "v23.0")+"/debug_token",
+                    headers={"Authorization": "Bearer "+credentials["app_id"]+"|"+credentials["app_secret"]}, params={"input_token": token})).get("data", {})
+                required = {"pages_manage_posts", "pages_read_engagement"} if platform == "facebook" else {"instagram_basic", "instagram_content_publish"}
+                if not debug.get("is_valid") or not required.issubset(set(debug.get("scopes", []))):
+                    raise HTTPException(422, "Token is invalid or missing publishing permissions")
+                object_id = credentials.get("page_id" if platform == "facebook" else "user_id")
+                if not object_id: raise HTTPException(400, "Configure the target account ID")
+                details = providers.checked(await client.get(providers.graph_url(object_id),
+                    headers={"Authorization": f"Bearer {token}"}, params={"fields": "id,name" if platform == "facebook" else "id,username,account_type"}))
+                if str(details.get("id")) != object_id: raise HTTPException(422, "Authorized account does not match the configured account")
+                account = details.get("name") or details.get("username") or object_id
+    except (providers.DeliveryError, httpx.HTTPError):
+        raise HTTPException(502, "Provider rejected this connection. Check credentials and publishing permissions.")
+    audit(db, identity, "social.connection_tested", "provider", platform); db.commit()
+    return {"platform": platform, "connected": True, "account": account}
+
 
 
 async def refreshed_social_token(platform: str, db: Session) -> str:
@@ -2279,3 +2308,9 @@ async def stop_onboarding_scheduler():
     clock = getattr(app.state, "onboarding_scheduler", None)
     if clock:
         await asyncio.to_thread(clock.stop)
+
+
+# Dedicated social publishing does not enable email or legacy outbound workers.
+from .social_publishing import install as install_social_publishing
+import sys as _sys
+install_social_publishing(_sys.modules[__name__])

@@ -133,6 +133,7 @@
           },
           "action": {
             "enum": [
+              "convention_checkin",
               "dropoff",
               "screening",
               "assign_wristband",
@@ -2370,6 +2371,18 @@
             "maxItems": 100,
             "title": "Classrooms",
             "type": "array"
+          },
+          "dropoff_start_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dropoff Start Date"
           },
           "enabled": {
             "title": "Enabled",

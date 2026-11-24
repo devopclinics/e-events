@@ -1,4 +1,4 @@
-"""Staff-only Junior Programme. Verified drop-offs atomically record convention and dated JP entry."""
+"""Staff-only Junior Programme. Convention admission and dated JP drop-off follow the event schedule."""
 from datetime import datetime, date, timezone
 from typing import Literal
 from zoneinfo import ZoneInfo
@@ -78,7 +78,7 @@ async def audit(db, event, child, actor, action, *, request_id, before=None, **d
     await shared.refresh_contacts(event,child,db)
     movement = JuniorMovement(event_id=event.id, child_id=child.id, request_id=request_id,
         action=action, from_location=before or child.location, to_location=child.location,
-        actor_id=actor.id, occurred_at=days.utcnow(),programme_date=(child.programme_date if action not in ('intake','correction','contact') else None) or days.day(event),wristbands={'screening':bool(child.screening_wristband_assigned),'allergy':bool(child.allergy and child.allergy_cleared),'accommodation':bool(child.accommodation and child.accommodation_cleared)}, **details)
+        actor_id=actor.id, occurred_at=days.utcnow(),programme_date=(child.programme_date if action not in ('intake','correction','contact','convention_checkin') else None) or days.day(event),wristbands={'screening':bool(child.screening_wristband_assigned),'allergy':bool(child.allergy and child.allergy_cleared),'accommodation':bool(child.accommodation and child.accommodation_cleared)}, **details)
     db.add(movement)
     await db.flush()
     # A missing contact still produces two visible setup-required records.
@@ -92,7 +92,7 @@ async def audit(db, event, child, actor, action, *, request_id, before=None, **d
         'assign_wristband':'Screening wristband recorded', 'return':'Returned from '+('clinic' if movement.from_location=='clinic' else 'temporary departure')+' to Junior Platform', 'outing_depart':'Departed for outing',
         'outing_return':'Returned from outing', 'release':'Released to authorized adult',
         'intake':'Child record created', 'correction':'Child record updated', 'screening':'Screening recorded',
-        'contact':'Guardian details updated'}
+        'convention_checkin':'Checked into the convention (JP drop-off is separate)', 'contact':'Guardian details updated'}
     # Never copy medical notes, free-text movement reasons or phone numbers into messages.
     body = f'{event.name} / Junior Platform: {child.name}. {labels.get(action, action)}. {local:%b %d, %I:%M %p %Z}.'
     if movement.programme_date!=local.date().isoformat():
@@ -123,6 +123,7 @@ class ConfigIn(BaseModel):
     classrooms: list[str] = Field(default_factory=list, max_length=100)
     staff: dict[str, Role] = Field(default_factory=dict)
     notifications_enabled: bool = False
+    dropoff_start_date: date | None = None
 
 
 @router.get('/config')
@@ -142,6 +143,7 @@ async def config_get(event_id: str, db=Depends(get_db), actor=Depends(require_ev
         'classrooms':config.classrooms if config else [],
         'staff':config.staff if config and admin else {},
         'notifications_enabled':bool(config and config.notifications_enabled),'today':days.day(event),
+        'dropoff_start_date':config.dropoff_start_date if config else None,
         'available_staff':[{'id':u.id,'name':u.name,'view_only':eu.access_level=='view'} for eu,u in
             (await db.execute(select(EventUser,User).join(User,User.id==EventUser.user_id).where(EventUser.event_id==event_id))).all()] if admin else []}
 
@@ -151,6 +153,8 @@ async def config_put(event_id: str, body: ConfigIn, db=Depends(get_db), actor=De
     event,config,_,admin = await access(event_id,actor,db,enabled=False,roles=['supervisor'])
     if not admin:
         raise HTTPException(403,'Only the event administrator can configure this module')
+    if body.dropoff_start_date and not (days.day(event,event.event_date)<=body.dropoff_start_date.isoformat()<=days.day(event,event.event_end_date or event.event_date)):
+        raise HTTPException(400,'Drop-off start date must be within the event dates')
     assigned = set((await db.scalars(select(EventUser.user_id).where(EventUser.event_id == event_id))).all())
     if not set(body.staff).issubset(assigned):
         raise HTTPException(400,'Junior staff must already be assigned to this event')
@@ -183,6 +187,9 @@ async def config_put(event_id: str, body: ConfigIn, db=Depends(get_db), actor=De
     config.classrooms=classrooms
     config.staff=body.staff
     config.notifications_enabled=body.notifications_enabled
+    if 'dropoff_start_date' in body.model_fields_set:
+        config.dropoff_start_date=body.dropoff_start_date.isoformat() if body.dropoff_start_date else None
+        db.add(JuniorAudit(event_id=event_id,actor_id=actor.id,action='dropoff_schedule_updated',detail={'dropoff_start_date':config.dropoff_start_date}))
     await db.commit()
     return await config_get(event_id,db,actor)
 
@@ -468,7 +475,7 @@ async def contact_remove(event_id: str, child_id: str, contact_id: str, db=Depen
 class ActionIn(BaseModel):
     request_id: str = Field(min_length=8,max_length=80)
     version: int
-    action: Literal['dropoff','screening','assign_wristband','clear_allergy','clear_accommodation','classroom','clinic','other','return','outing_depart','outing_return','release']
+    action: Literal['convention_checkin','dropoff','screening','assign_wristband','clear_allergy','clear_accommodation','classroom','clinic','other','return','outing_depart','outing_return','release']
     adult_name: str | None = Field(default=None,max_length=255)
     relationship: Relationship | None = None
     phone: str | None = Field(default=None,pattern=r'^\+[1-9]\d{7,14}$')
@@ -486,7 +493,7 @@ class ActionIn(BaseModel):
 
 @router.post('/children/{child_id}/actions')
 async def action(event_id: str, child_id: str, body: ActionIn, background_tasks: BackgroundTasks, db=Depends(get_db), actor=Depends(require_event_member)):
-    event,_,role,_=await access(event_id,actor,db,roles=['scanner','intake','support','supervisor'])
+    event,config,role,_=await access(event_id,actor,db,roles=['scanner','intake','support','supervisor'])
     child=await child_for(event_id,child_id,db,True)
     prior=await db.scalar(select(JuniorMovement).where(JuniorMovement.event_id==event_id,JuniorMovement.request_id==body.request_id))
     if prior:
@@ -503,26 +510,33 @@ async def action(event_id: str, child_id: str, body: ActionIn, background_tasks:
     if days.view(child,event)['prior_day_unresolved'] and role!='supervisor':
         raise HTTPException(409,'Previous-day custody is still open. Ask a supervisor to reconcile it before today’s drop-off.')
     newly_admitted=False
-    if a=='dropoff':
+    if a in ('dropoff','convention_checkin'):
         guest=await db.get(Guest,child.guest_id)
         if not shared.is_junior(event,guest):raise HTTPException(409,'Confirm junior status in Guest List before a new drop-off')
         if body.programme_date and body.programme_date!=today:raise HTTPException(409,'The event day changed. Refresh and record today’s drop-off.')
-        if before not in ('not_arrived','released'):raise HTTPException(409,'Child is already in JP custody; reconcile the previous handoff before a new drop-off')
         if event.daily_checkin_enabled and not (days.day(event,event.event_date)<=today<=days.day(event,event.event_end_date or event.event_date)):
-            raise HTTPException(409,'Daily drop-off can only be recorded on an event date. Check the event schedule before proceeding.')
-        adult_name,relationship,phone=body.adult_name,body.relationship,body.phone
-        dropoff_contact=None
-        if body.contact_id:
-            dropoff_contact=await db.scalar(select(JuniorContact).where(JuniorContact.id==body.contact_id,JuniorContact.child_id==child.id))
-            if not dropoff_contact or not await shared.refresh_contact(event,child,dropoff_contact,db):
-                raise HTTPException(409,'This guardian is no longer linked to this child. Refresh and choose the person present.')
-            adult_name=dropoff_contact.name
-            relationship=dropoff_contact.relationship if dropoff_contact.relationship in ('parent','chaperone','adult_sibling') else body.relationship
-            phone=dropoff_contact.phone
-        if not adult_name or not adult_name.strip() or not relationship or not body.identity_checked:
-            raise HTTPException(400,'Record the dropping-off adult, relationship and staff verification')
-        if relationship=='adult_sibling' and not body.adult_verified:
-            raise HTTPException(400,'Verify sibling is 18 or older')
+            raise HTTPException(409,'Attendance can only be recorded on an event date. Check the event schedule before proceeding.')
+        if a=='convention_checkin':
+            if before not in ('not_arrived','released'):raise HTTPException(409,'Child is already in JP custody')
+            if not body.identity_checked:raise HTTPException(400,'Verify the child’s convention registration in person')
+        else:
+            if config and config.dropoff_start_date:
+                if today<config.dropoff_start_date:raise HTTPException(409,'Convention check-in only today. JP drop-off starts on '+config.dropoff_start_date+'.')
+                if not guest.admitted:raise HTTPException(409,'Check this child into the convention before recording JP drop-off.')
+            if before not in ('not_arrived','released'):raise HTTPException(409,'Child is already in JP custody; reconcile the previous handoff before a new drop-off')
+            adult_name,relationship,phone=body.adult_name,body.relationship,body.phone
+            dropoff_contact=None
+            if body.contact_id:
+                dropoff_contact=await db.scalar(select(JuniorContact).where(JuniorContact.id==body.contact_id,JuniorContact.child_id==child.id))
+                if not dropoff_contact or not await shared.refresh_contact(event,child,dropoff_contact,db):
+                    raise HTTPException(409,'This guardian is no longer linked to this child. Refresh and choose the person present.')
+                adult_name=dropoff_contact.name
+                relationship=dropoff_contact.relationship if dropoff_contact.relationship in ('parent','chaperone','adult_sibling') else body.relationship
+                phone=dropoff_contact.phone
+            if not adult_name or not adult_name.strip() or not relationship or not body.identity_checked:
+                raise HTTPException(400,'Record the dropping-off adult, relationship and staff verification')
+            if relationship=='adult_sibling' and not body.adult_verified:
+                raise HTTPException(400,'Verify sibling is 18 or older')
         from .scanner import checkin_guard,perform_admission
         blocked=await checkin_guard(event,actor,db,guest=guest,operation='checkin')
         if blocked:raise HTTPException(409,'Convention check-in: '+blocked.message)
@@ -542,16 +556,17 @@ async def action(event_id: str, child_id: str, body: ActionIn, background_tasks:
                     await db.flush()
             except IntegrityError:
                 if not await db.scalar(select(AttendanceRecord.id).where(AttendanceRecord.event_id==event_id,AttendanceRecord.guest_id==guest.id,AttendanceRecord.scope=='daily',AttendanceRecord.scope_key==today)):raise
-        child.programme_date=today
-        child._programme_today=today
         child._convention_admitted=True
-        child.screening_wristband_assigned=body.screening_wristband_assigned
-        child.allergy=body.allergy
-        child.accommodation=body.accommodation
-        child.allergy_cleared=False
-        child.accommodation_cleared=False
-        child.location='support_desk' if body.allergy or body.accommodation else 'reception'
-        details={'adult_name':adult_name.strip(),'relationship':relationship,'phone':phone,'contact_id':dropoff_contact.id if dropoff_contact else None}
+        if a=='dropoff':
+            child.programme_date=today
+            child._programme_today=today
+            child.screening_wristband_assigned=body.screening_wristband_assigned
+            child.allergy=body.allergy
+            child.accommodation=body.accommodation
+            child.allergy_cleared=False
+            child.accommodation_cleared=False
+            child.location='support_desk' if body.allergy or body.accommodation else 'reception'
+            details={'adult_name':adult_name.strip(),'relationship':relationship,'phone':phone,'contact_id':dropoff_contact.id if dropoff_contact else None}
     elif a=='screening':
         if before not in ('reception','support_desk'):raise HTTPException(409,'Screening requires a child at reception or support desk')
         if body.allergy is None or body.accommodation is None:raise HTTPException(400,'Answer both screening questions')

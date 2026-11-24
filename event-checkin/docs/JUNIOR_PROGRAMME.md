@@ -2,9 +2,10 @@
 
 Staff-only, event-scoped child roster and custody/movement workspace at `/junior-platform`.
 Parents receive updates without using Festio. Guest List owns child and guardian identities and contact details. JP attaches its
-operational profile to the same guest IDs. A verified daily drop-off atomically
-completes convention admission if needed, records the shared dated attendance mark,
-and starts JP custody for that day. Existing explicitly recognized juniors appear
+operational profile to the same guest IDs. With a configured JP start date, convention
+arrival is recorded separately before daily drop-off begins. Without that setting,
+a verified drop-off can also complete convention admission. Each drop-off records
+shared dated attendance and starts JP custody for that day. Existing explicitly recognized juniors appear
 automatically, without creating duplicate guests.
 
 ## Event setup
@@ -45,7 +46,7 @@ Names corrected through either screen appear in both. Guardians are selected fro
 Guest List or created once there. Guardian verification/notification policy remains
 in JP; pickup grants use the existing event guardian authorization map.
 
-1. Find/add child, record dropping-off adult and relationship (optional drop-off phone).
+1. Find/add child and record convention check-in. For NCNMO, JP drop-off starts the next day. On each JP day, record dropping-off adult and relationship (optional drop-off phone).
 2. Answer both screening questions. Yes routes to support; each required referral
    needs restricted details and wristband confirmation before classroom placement.
 3. Record actual arrival into the assigned classroom.
@@ -137,10 +138,14 @@ Drop-off defaults to an existing linked guardian (parents listed first). Staff c
 
 ## Convention admission and daily programme start
 
-Adding names, linking a guardian, opening a record, or beginning a new calendar day does not admit anyone. Confirming a witnessed drop-off invokes the existing convention admission rules when the child has not already been admitted. Cancelled passes, inactive events, required check-in steps, group-pass rules and seating policies remain in force. If daily attendance is enabled, its event-date window also applies. No event schedule or general daily-scanner feature switch is changed by JP.
+Adding names, linking a guardian, opening a record, or beginning a new calendar day does not admit anyone. Convention check-in invokes the existing admission rules. With no separate JP start date configured, a witnessed drop-off can also admit a child who has not already been admitted. Cancelled passes, inactive events, required check-in steps, group-pass rules and seating policies remain in force. If daily attendance is enabled, its event-date window also applies. No event schedule or general daily-scanner feature switch is changed by JP.
 
 The verified drop-off explicitly opts that junior into the canonical AttendanceRecord daily ledger: one mark per guest/event/local date, reused if a normal daily scan already recorded it. Convention admission, daily attendance, JP movement and guardian notice creation share one transaction. Conventional admission messages are suppressed for this JP path; the independently controlled guardian outbox handles JP notices. Existing convention admission timestamps and seats are preserved on subsequent days or re-entry. Broadcast occurs only after commit.
 
 Programme dates use the event timezone. A child released on an earlier day appears as Not arrived today, with fresh screening and wristband confirmation required. This is a read view, not a destructive midnight reset: stored release, original admission, restricted profile notes and dated movement history remain intact. Confirming the next drop-off starts the new programme day.
 
 Unfinished prior-day custody is never silently released or hidden. Staff see a prior-day warning; a supervisor must reconcile the actual return/pickup before a new daily drop-off. Outing and temporary-departure reconciliation rules remain in force. Old movements with no programme-date column retain their original timestamps and are not backfilled with guessed dates. Stale-day forms and replays of a previous day’s drop-off request cannot start a new day.
+
+### Separate convention arrival and JP start
+
+Set the event-scoped `dropoff_start_date` to the first JP day (NCNMO: 2026-12-25, following convention arrival on 2026-12-24). Staff record `convention_checkin` on arrival: this admits the shared Guest and records canonical daily attendance, but creates no JP custody, programme date, screening or wristbands. Drop-off is blocked before the configured date and until convention admission is recorded. From the start date, each JP day requires a witnessed drop-off and screening. Late arrivals can complete convention check-in, then drop-off. Unset events retain combined admission/drop-off; existing general scanner and Guest List admission still count.

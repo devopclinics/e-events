@@ -37,7 +37,7 @@ export interface AccountOrgOut {
 
 export interface ActionIn {
   accommodation?: (boolean) | null
-  action: 'dropoff' | 'screening' | 'assign_wristband' | 'clear_allergy' | 'clear_accommodation' | 'classroom' | 'clinic' | 'other' | 'return' | 'outing_depart' | 'outing_return' | 'release'
+  action: 'convention_checkin' | 'dropoff' | 'screening' | 'assign_wristband' | 'clear_allergy' | 'clear_accommodation' | 'classroom' | 'clinic' | 'other' | 'return' | 'outing_depart' | 'outing_return' | 'release'
   adult_name?: (string) | null
   adult_verified?: boolean
   allergy?: (boolean) | null
@@ -453,6 +453,7 @@ export interface ConferenceTrackIn {
 
 export interface ConfigIn {
   classrooms?: (string)[]
+  dropoff_start_date?: (string) | null
   enabled: boolean
   notifications_enabled?: boolean
   staff?: Record<string, 'scanner' | 'intake' | 'support' | 'inventory' | 'supervisor'>

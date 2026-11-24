@@ -13,6 +13,7 @@ def uid():
 class JuniorConfig(Base):
     __tablename__ = 'junior_configs'
     event_id: Mapped[str] = mapped_column(ForeignKey('events.id', ondelete='CASCADE'), primary_key=True)
+    dropoff_start_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
     classrooms: Mapped[list] = mapped_column(JSON, default=list)
     staff: Mapped[dict] = mapped_column(JSON, default=dict)
     notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=False)

@@ -175,3 +175,59 @@ async def test_released_guest_with_daily_record_can_still_be_deleted(ctx,monkeyp
     async with _Session() as db:
         assert await db.get(Guest,c['guest_id']) is None
         assert await db.scalar(select(func.count(AttendanceRecord.id)).where(AttendanceRecord.guest_id==c['guest_id']))==0
+
+async def separate_schedule(ctx,monkeypatch):
+    root,clock=await clock_setup(ctx,monkeypatch)
+    async with _Session() as db:
+        cfg=await db.get(JuniorConfig,ctx.ids['event_a']);cfg.dropoff_start_date='2026-12-25';await db.commit()
+    return root,clock
+
+@pytest.mark.asyncio
+async def test_arrival_day_convention_only_next_day_dropoff(ctx,monkeypatch):
+    root,clock=await separate_schedule(ctx,monkeypatch);c=await child(ctx,root)
+    c=await act(ctx,root,c,'convention_checkin',identity_checked=True,programme_date='2026-12-24')
+    assert c['convention_admitted'] and not c['started_today'] and c['programme_date'] is None
+    assert c['location']=='not_arrived' and c['allergy'] is None and not c['screening_wristband_assigned']
+    await act(ctx,root,c,'dropoff',expected=409,adult_name='Parent',relationship='parent',identity_checked=True)
+    async with _Session() as db:
+        original=(await db.get(Guest,c['guest_id'])).admitted_at
+        assert await db.scalar(select(func.count(JuniorMovement.id)).where(JuniorMovement.child_id==c['id'],JuniorMovement.action=='dropoff'))==0
+    clock[0]+=timedelta(days=1);c=await detail(ctx,root,c);c=await drop(ctx,root,c)
+    assert c['started_today'] and c['programme_date']=='2026-12-25' and c['screening_wristband_assigned']
+    async with _Session() as db:
+        assert (await db.get(Guest,c['guest_id'])).admitted_at==original
+        assert (await db.scalars(select(AttendanceRecord.scope_key).where(AttendanceRecord.guest_id==c['guest_id']).order_by(AttendanceRecord.scope_key))).all()==['2026-12-24','2026-12-25']
+
+@pytest.mark.asyncio
+async def test_late_arrival_requires_separate_admission_then_dropoff(ctx,monkeypatch):
+    root,clock=await separate_schedule(ctx,monkeypatch);clock[0]+=timedelta(days=1);c=await child(ctx,root)
+    await act(ctx,root,c,'dropoff',expected=409,adult_name='Parent',relationship='parent',identity_checked=True)
+    c=await act(ctx,root,c,'convention_checkin',identity_checked=True);c=await drop(ctx,root,c)
+    assert c['started_today'] and c['convention_admitted']
+
+@pytest.mark.asyncio
+async def test_convention_checkin_requires_staff_verification_and_is_atomic(ctx,monkeypatch):
+    root,clock=await separate_schedule(ctx,monkeypatch);c=await child(ctx,root)
+    await act(ctx,root,c,'convention_checkin',expected=400)
+    async def fail(*args,**kwargs):raise HTTPException(409,'Synthetic failure')
+    monkeypatch.setattr(junior,'audit',fail)
+    await act(ctx,root,c,'convention_checkin',expected=409,identity_checked=True)
+    async with _Session() as db:
+        assert not (await db.get(Guest,c['guest_id'])).admitted
+        assert await db.scalar(select(func.count(AttendanceRecord.id)).where(AttendanceRecord.guest_id==c['guest_id']))==0
+
+@pytest.mark.asyncio
+async def test_normal_scanner_admission_satisfies_separate_dropoff(ctx,monkeypatch):
+    root,clock=await separate_schedule(ctx,monkeypatch);c=await child(ctx,root)
+    async with _Session() as db:g=await db.get(Guest,c['guest_id']);qr=g.qr_token
+    r=await ctx.client.post('/api/scan/'+qr);assert r.status_code==200 and r.json()['status']=='admitted'
+    clock[0]+=timedelta(days=1);c=await detail(ctx,root,c);c=await drop(ctx,root,c);assert c['started_today']
+
+@pytest.mark.asyncio
+async def test_dropoff_schedule_is_event_scoped_validated_and_preserved_for_old_clients(ctx,monkeypatch):
+    root,clock=await separate_schedule(ctx,monkeypatch)
+    cfg=(await ctx.client.get(root+'/config')).json();assert cfg['dropoff_start_date']=='2026-12-25'
+    body={'enabled':True,'classrooms':cfg['classrooms'],'staff':cfg['staff'],'notifications_enabled':False}
+    r=await ctx.client.put(root+'/config',json={**body,'dropoff_start_date':'2026-12-29'});assert r.status_code==400
+    r=await ctx.client.put(root+'/config',json=body);assert r.status_code==200 and r.json()['dropoff_start_date']=='2026-12-25'
+    r=await ctx.client.put(root+'/config',json={**body,'dropoff_start_date':None});assert r.status_code==200 and r.json()['dropoff_start_date'] is None

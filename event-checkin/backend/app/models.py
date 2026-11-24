@@ -484,6 +484,7 @@ class EventUserSection(Base):
 
 
 class Event(Base):
+    junior_program_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     cancelled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     # NULL on pre-upgrade rows: unknown provenance is never a real outcome.
     is_test: Mapped[bool | None] = mapped_column(Boolean().evaluates_none(), nullable=True, default=False)

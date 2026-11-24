@@ -14,6 +14,7 @@ import RedesignGate from './pages/redesign/RedesignGate'
 import { setUiPreference } from './pages/redesign/uiPreference'
 
 const SharedGuestSheet = lazy(() => import('./pages/SharedGuestSheet'))
+const JuniorPlatformPage = lazy(() => import('./pages/JuniorPlatformPage'))
 const QuickInvite = lazy(() => import('./pages/QuickInvite'))
 const QuickInvitePublic = lazy(() => import('./pages/QuickInvite').then(m => ({ default: m.QuickInvitePublic })))
 
@@ -548,6 +549,7 @@ function AppRoutes() {
           session; otherwise their initial API reads receive 401 and bounce a
           valid user back through /login to the legacy admin. */}
       <Route path="/admin-redesign" element={<ProtectedRoute><AdminRedesignPage /></ProtectedRoute>} />
+      <Route path="/junior-platform" element={<ProtectedRoute><JuniorPlatformPage /></ProtectedRoute>} />
       <Route path="/events-redesign" element={<ProtectedRoute><EventsListRedesignPage /></ProtectedRoute>} />
       <Route path="/events-redesign/:eventId/rsvp-preview" element={<EventRsvpPreviewPage />} />
       <Route path="/guest-export" element={<ProtectedRoute><GuestExportPage /></ProtectedRoute>} />

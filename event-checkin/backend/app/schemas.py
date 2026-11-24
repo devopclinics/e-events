@@ -195,6 +195,7 @@ class EventSourceUpdate(BaseModel):
 
 
 class EventOut(BaseModel):
+    junior_program_enabled: bool = False
     my_feature_permissions: dict[str, str] | None = None
     cancelled: bool = False
     is_test: Optional[bool] = None

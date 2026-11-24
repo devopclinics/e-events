@@ -561,6 +561,7 @@ async function downloadFile(path, filename, { withAuth = true } = {}) {
 }
 
 export const api = {
+  junior: (eventId, path, method = 'GET', body) => req(method, `/events/${encodeURIComponent(eventId)}/junior${path}`, body, 20000),
   webSupportList: () => req('GET','/platform/support/chat/management'),
   webSupportThread: id => req('GET',`/platform/support/chat/management/${encodeURIComponent(id)}`),
   webSupportReply: (id,data) => req('POST',`/platform/support/chat/management/${encodeURIComponent(id)}/reply`,data),

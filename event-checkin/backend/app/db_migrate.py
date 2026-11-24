@@ -24,6 +24,7 @@ from sqlalchemy.schema import CreateColumn
 from .config import settings
 from .database import engine, Base
 from . import models  # noqa: F401 — ensure all models register on Base.metadata
+from . import junior_models  # noqa: F401 — isolated Junior Programme tables
 
 logger = logging.getLogger("db_migrate")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

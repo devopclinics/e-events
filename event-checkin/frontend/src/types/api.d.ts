@@ -383,8 +383,10 @@ export interface CheckoutRequest {
 export interface ChildIn {
   age_group?: string
   classroom?: string
+  confirm_junior?: boolean
   confirm_same_name?: boolean
   guardian?: (ContactIn) | null
+  guest_id?: (string) | null
   name: string
   reference?: (string) | null
 }
@@ -517,6 +519,8 @@ export interface ContactCreate {
 export interface ContactIn {
   adult_verified?: boolean
   email?: (string) | null
+  guardian_guest_id?: (string) | null
+  guardian_updated_at?: (string) | null
   name: string
   notify?: boolean
   phone?: (string) | null
@@ -551,6 +555,8 @@ export interface ContactPaste {
 export interface ContactUpdateIn {
   adult_verified?: boolean
   email?: (string) | null
+  guardian_guest_id?: (string) | null
+  guardian_updated_at?: (string) | null
   name: string
   notify?: boolean
   phone?: (string) | null
@@ -1728,6 +1734,8 @@ export interface GuestOut {
   is_test?: (boolean) | null
   is_vip?: boolean
   is_walk_in?: boolean
+  junior_guardian_for?: (string)[]
+  junior_platform_status?: (string) | null
   last_name: string
   meal_served?: boolean
   mms_delivery_at?: (string) | null
@@ -3317,6 +3325,10 @@ export interface RequestIn {
   table_id?: (string) | null
   title: string
   zone_id?: (string) | null
+}
+
+export interface ResolveIn {
+  token: string
 }
 
 export interface ReviewChoice {

@@ -5,7 +5,7 @@ import GuestDeliveryTracking from '../components/GuestDeliveryTracking'
 import FestioLogo from '../components/branding/FestioLogo'
 import EnvelopeSettings from '../components/invitations/EnvelopeSettings'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import RedesignShell, { Icon, Modal, ConfirmDialog, ChannelPreviewFrame, UnadmitDialog } from './redesign/RedesignShell'
 import { LoadingSkeleton, EmptyState, ErrorRetryState } from './redesign/RedesignPrimitives'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
@@ -425,9 +425,11 @@ function GuestsTab({ notify, onView, onEdit, onRemove, onUnadmit, onApproveRsvp,
                           {g.name}
                           {g.raw.shared_group_limit && <span className="gr-household-badge">Shared QR · {g.raw.shared_group_limit} people</span>}
                           {g.vip && <span className="gr-vip-badge">VIP</span>}
+                          {g.raw.junior_platform_status && <Link className="gr-household-badge" to={'/junior-platform?guest='+g.id}>JP · {g.raw.junior_platform_status.replaceAll('_',' ')}</Link>}
                           {g.household !== 'Unassigned' && <span className="gr-household-badge">{g.household}</span>}
                         </div>
                         <small className="rd-rowlink">{g.submitter ? `${g.role} · Guest of ${g.submitter}` : g.role}</small>
+                        {!!g.raw.junior_guardian_for?.length && <small className="rd-rowlink">JP guardian for: {g.raw.junior_guardian_for.join(', ')}</small>}
                         <div className="gr-session-access" aria-label="Session permissions">{(g.raw.session_access || []).map(s => <span key={s.zone_id} className={`gr-access-badge ${s.decision}`} title="Session permission only. Registration, ticket and gate rules still apply.">{s.name}: {s.decision === 'allow' ? 'Allowed' : s.decision === 'block' ? 'Blocked' : s.restricted ? 'Needs approval' : 'Existing rules'}</span>)}</div>
                       </div>
                     </div>
@@ -1877,7 +1879,7 @@ export default function GuestsRedesignPage() {
             <div><label className="rd-field-label">Email</label><input className="rd-field" value={editForm.email} onChange={(e) => setEditForm((v) => ({ ...v, email: e.target.value }))} /></div>
             <div><label className="rd-field-label">Phone (E.164)</label><input className="rd-field" value={editForm.phone} onChange={(e) => setEditForm((v) => ({ ...v, phone: e.target.value }))} /></div>
             <label className="rd-field-label">Relationship / role<input className="rd-field" value={editForm.rsvp_guest_type || ''} onChange={e=>setEditForm(v=>({...v,rsvp_guest_type:e.target.value}))}/></label>
-            <label><input type="checkbox" checked={!!editForm.is_junior} onChange={e=>setEditForm(v=>({...v,is_junior:e.target.checked}))}/> This attendee is a junior / minor</label><p className="rd-hint">Confirm the attendee’s details before correcting this. Guardian pickup and consent-signing permissions are managed separately.</p>
+            <label><input type="checkbox" checked={!!editForm.is_junior} onChange={e=>setEditForm(v=>({...v,is_junior:e.target.checked}))}/> This attendee is a junior / minor</label><p className="rd-hint">Confirm the attendee’s details before correcting this. Guardian pickup and consent-signing permissions are managed separately.</p>{event?.junior_program_enabled&&<button type="button" className="rr-btn secondary" onClick={()=>navigate('/junior-platform?guest='+editTarget.id)}>Open Junior Platform & guardians →</button>}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div><label className="rd-field-label">Table</label><select className="rd-field" value={editForm.table_id} onChange={(e) => setEditForm((v) => ({ ...v, table_id: e.target.value, seat_number: e.target.value ? v.seat_number : '' }))}><option value="">Unassigned</option>{tables.map((table) => <option key={table.id} value={table.id}>{table.name}</option>)}</select></div>
               <div><label className="rd-field-label">Seat</label><input className="rd-field" disabled={!editForm.table_id} value={editForm.seat_number} onChange={(e) => setEditForm((v) => ({ ...v, seat_number: e.target.value }))} placeholder="e.g. 4" /></div>

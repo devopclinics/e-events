@@ -63,6 +63,12 @@ def _guarded_drop_column(table: str, column: str) -> str:
 
 
 SCHEMA_PATCHES: list[str] = [
+    "DO $$ DECLARE r record; BEGIN FOR r IN SELECT conname FROM pg_constraint WHERE contype='f' AND conrelid='junior_children'::regclass AND confrelid='guests'::regclass AND conname<>'fk_junior_child_guest' LOOP EXECUTE format('ALTER TABLE junior_children DROP CONSTRAINT %I',r.conname); END LOOP; END $$",
+    "DO $$ DECLARE r record; BEGIN FOR r IN SELECT conname FROM pg_constraint WHERE contype='f' AND conrelid='junior_contacts'::regclass AND confrelid='guests'::regclass AND conname<>'fk_junior_contact_guest' LOOP EXECUTE format('ALTER TABLE junior_contacts DROP CONSTRAINT %I',r.conname); END LOOP; END $$",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_junior_guest_link ON junior_children (guest_id) WHERE guest_id IS NOT NULL",
+    "CREATE INDEX IF NOT EXISTS ix_junior_contacts_guardian_guest_id ON junior_contacts (guardian_guest_id)",
+    "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_junior_child_guest') THEN ALTER TABLE junior_children ADD CONSTRAINT fk_junior_child_guest FOREIGN KEY (guest_id) REFERENCES guests(id) ON DELETE SET NULL; END IF; END $$",
+    "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_junior_contact_guest') THEN ALTER TABLE junior_contacts ADD CONSTRAINT fk_junior_contact_guest FOREIGN KEY (guardian_guest_id) REFERENCES guests(id) ON DELETE SET NULL; END IF; END $$",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_support_agent BOOLEAN NOT NULL DEFAULT false",
     "ALTER TABLE event_users ADD COLUMN IF NOT EXISTS feature_permissions JSON NULL",
     "ALTER TABLE quick_invite_recipients ADD COLUMN IF NOT EXISTS party_size INTEGER NOT NULL DEFAULT 1",

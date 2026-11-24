@@ -1625,6 +1625,31 @@ async def list_guests(event_id: str, db: AsyncSession = Depends(get_db), _: User
     for guest in guests:
         config=group_configs.get(guest.id)
         guest.shared_group_limit=config.admission_limit if config and config.enabled else None
+    event=await db.get(Event,event_id)
+    show_junior_operations=False
+    if event.junior_program_enabled:
+        from .junior import access as junior_access
+        try:
+            junior_context=await junior_access(event_id,_,db)
+            show_junior_operations=junior_context[2]!='inventory'
+        except HTTPException as exc:
+            if exc.status_code!=403:raise
+    if show_junior_operations:
+        from ..junior_models import JuniorChild,JuniorContact
+        from ..services.event_forms import is_junior
+        profiles=(await db.scalars(select(JuniorChild).where(JuniorChild.event_id==event_id))).all()
+        states={p.guest_id:p.location for p in profiles if p.guest_id}
+        links={}
+        for child_id,entries in (event.guardian_authorizations or {}).items():
+            for entry in entries or []:
+                links.setdefault(entry.get('guardian_guest_id'),set()).add(child_id)
+        rows=(await db.execute(select(JuniorContact.guardian_guest_id,JuniorChild.guest_id).join(JuniorChild,JuniorChild.id==JuniorContact.child_id).where(JuniorChild.event_id==event_id))).all()
+        for guardian_id,child_id in rows:
+            if guardian_id and child_id:links.setdefault(guardian_id,set()).add(child_id)
+        by_id={g.id:' '.join(x for x in (g.first_name,g.last_name) if x) for g in guests}
+        for guest in guests:
+            guest.junior_platform_status=states.get(guest.id,'not_arrived' if is_junior(event,guest) else None)
+            guest.junior_guardian_for=sorted(by_id[i] for i in links.get(guest.id,[]) if i in by_id)
     return guests
 
 
@@ -2361,6 +2386,13 @@ async def delete_guest_cascade(event_id: str, guest_id: str, background_tasks: B
     if not guest or guest.event_id != event_id:
         return False
     event = await db.get(Event, event_id)
+    if event.junior_program_enabled:
+        from ..junior_models import JuniorChild,JuniorContact
+        custody=await db.scalar(select(JuniorChild).where(JuniorChild.event_id==event_id,JuniorChild.guest_id==guest_id).with_for_update())
+        if custody and custody.location not in ('not_arrived','released'):
+            raise HTTPException(409,'This child is currently in Junior Platform custody. Resolve their JP movement before deleting the guest.')
+        linked=await db.scalar(select(JuniorChild.id).join(JuniorContact,JuniorContact.child_id==JuniorChild.id).where(JuniorChild.event_id==event_id,JuniorContact.guardian_guest_id==guest_id,JuniorChild.location.not_in(('not_arrived','released'))).limit(1))
+        if linked:raise HTTPException(409,'This guardian is linked to a child currently in Junior Platform custody. Update their contact instead of deleting them.')
     was_active = guest.rsvp_status not in ("declined", "waitlisted")
     await db.execute(
         Guest.__table__.update()

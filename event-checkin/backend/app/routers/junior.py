@@ -7,7 +7,8 @@ from pydantic import BaseModel, Field, EmailStr, field_validator
 from sqlalchemy import select
 from ..database import get_db
 from ..auth import require_event_member, _org_role
-from ..models import Event, EventUser, User
+from ..models import Event, EventUser, User, Guest
+from ..services import junior_guests as shared
 from ..junior_models import (JuniorAudit, JuniorConfig, JuniorChild, JuniorContact, JuniorMovement,
     JuniorOuting, JuniorOutingMember, JuniorNotification, JuniorInventory, JuniorInventoryEntry)
 
@@ -35,7 +36,7 @@ async def access(event_id, actor, db, *, roles=None, enabled=True, write=True):
 
 
 def output_child(child, role):
-    keys = ('id','name','reference','age_group','classroom','location','allergy','accommodation',
+    keys = ('id','guest_id','name','reference','age_group','classroom','location','allergy','accommodation',
             'allergy_cleared','accommodation_cleared','version','updated_at')
     result = {k: getattr(child,k) for k in keys}
     if role in ('support','supervisor'):
@@ -44,12 +45,19 @@ def output_child(child, role):
 
 
 async def child_for(event_id, child_id, db, lock=False):
+    if lock:await db.scalar(select(Event).where(Event.id==event_id).with_for_update().execution_options(populate_existing=True))
     row = select(JuniorChild).where(JuniorChild.id == child_id, JuniorChild.event_id == event_id)
     if lock:
         row = row.with_for_update()
     child = await db.scalar(row)
+    event=await db.get(Event,event_id)
+    if not child:
+        await shared.roster(event,db)
+        child=await db.scalar(row)
     if not child:
         raise HTTPException(404, 'Child not found')
+    if not await shared.refresh_child(event,child,db):raise HTTPException(409,'This child is no longer linked to an active junior in Guest List')
+    await shared.refresh_contacts(event,child,db)
     return child
 
 
@@ -64,6 +72,7 @@ def tick(child):
 
 
 async def audit(db, event, child, actor, action, *, request_id, before=None, **details):
+    await shared.refresh_contacts(event,child,db)
     movement = JuniorMovement(event_id=event.id, child_id=child.id, request_id=request_id,
         action=action, from_location=before or child.location, to_location=child.location,
         actor_id=actor.id, **details)
@@ -123,7 +132,8 @@ async def config_get(event_id: str, db=Depends(get_db), actor=Depends(require_ev
         role, admin = None, False
     membership=await db.scalar(select(EventUser).where(EventUser.event_id==event_id,EventUser.user_id==actor.id))
     readonly=bool(membership and membership.access_level=='view' and not actor.is_platform_superadmin and await _org_role(actor,event.org_id,db) not in ('owner','admin'))
-    return {'enabled':bool(event.junior_program_enabled),'role':role,'can_configure':admin and not readonly,'read_only':readonly,
+    guest_access=admin or bool(membership and not membership.guest_service_scoped and (membership.can_view_guests or membership.can_manage_guests) and (membership.feature_permissions is None or membership.feature_permissions.get('guests') in ('view','manage')))
+    return {'enabled':bool(event.junior_program_enabled),'role':role,'can_configure':admin and not readonly,'read_only':readonly,'can_open_guest_list':guest_access,
         'classrooms':config.classrooms if config else [],
         'staff':config.staff if config and admin else {},
         'notifications_enabled':bool(config and config.notifications_enabled),
@@ -172,6 +182,8 @@ async def config_put(event_id: str, body: ConfigIn, db=Depends(get_db), actor=De
 
 
 class ContactIn(BaseModel):
+    guardian_guest_id: str | None = None
+    guardian_updated_at: datetime | None = None
     name: str = Field(min_length=1,max_length=255)
     relationship: Relationship
     email: EmailStr | None = None
@@ -189,6 +201,8 @@ class ContactIn(BaseModel):
 
 
 class ChildIn(BaseModel):
+    guest_id: str | None = None
+    confirm_junior: bool = False
     name: str = Field(min_length=1,max_length=255)
     reference: str | None = Field(default=None,max_length=100)
     age_group: str = Field(default='Pending confirmation',max_length=80)
@@ -208,29 +222,49 @@ class ChildIn(BaseModel):
         return value.strip()
 
 
-async def create_child(event,config,body,actor,db):
+async def create_child(event,config,body,actor,db,*,rows=None):
     if body.classroom and body.classroom not in (config.classrooms or []):
         raise HTTPException(400,'Choose a configured classroom')
-    rows=(await db.scalars(select(JuniorChild).where(JuniorChild.event_id==event.id))).all()
+    if rows is None:rows=await shared.roster(event,db)
     ref=(body.reference or '').strip() or None
     if ref and any(c.reference==ref for c in rows):
         raise HTTPException(409,'This roster reference already exists')
     if not body.confirm_same_name and any(c.name.casefold()==body.name.casefold() for c in rows):
         raise HTTPException(409,'A child with this name exists. Review the roster before confirming a different child.')
-    child=JuniorChild(event_id=event.id,name=body.name,reference=ref,age_group=body.age_group.strip() or 'Pending confirmation',classroom=body.classroom.strip())
+    if body.guest_id and any(c.guest_id==body.guest_id for c in rows):
+        raise HTTPException(409,'This junior is already in Junior Platform. Open their existing record.')
+    guest=await shared.resolve_person(event,db,guest_id=body.guest_id,name=body.name,junior=True,
+        confirm_same_name=body.confirm_same_name,confirm_junior=body.confirm_junior)
+    child=JuniorChild(id=guest.id,guest_id=guest.id,event_id=event.id,name=shared.person_name(guest),reference=ref,age_group=body.age_group.strip() or 'Pending confirmation',classroom=body.classroom.strip())
     db.add(child)
     await db.flush()
     if body.guardian:
-        add_contact(child,body.guardian,actor,db)
+        await add_contact(event,child,body.guardian,actor,db)
         await db.flush()
     await audit(db,event,child,actor,'intake',request_id='intake:'+child.id)
     return child
 
 
-def add_contact(child,body,actor,db):
+async def add_contact(event,child,body,actor,db):
     if body.pickup_authorized and not body.adult_verified:
         raise HTTPException(400,'Verify adulthood before authorizing pickup')
-    row=JuniorContact(child_id=child.id,verified_by=actor.id,**body.model_dump(mode='json'))
+    guardian=None
+    if not body.guardian_guest_id:
+        matches=[g for g in (await db.scalars(select(Guest).where(Guest.event_id==event.id))).all() if shared.person_name(g).casefold()==body.name.casefold()]
+        if len(matches)>1:raise HTTPException(409,'Multiple guests share this name. Select the correct guardian from Guest List.')
+        if matches:
+            guardian=matches[0]
+            if (body.email and str(body.email)!=guardian.email) or (body.phone and body.phone!=guardian.phone):
+                raise HTTPException(409,'Guardian exists in Guest List with different contact details. Select and review that record first.')
+    guardian=guardian or await shared.resolve_person(event,db,guest_id=body.guardian_guest_id,name=body.name,
+        email=str(body.email) if body.email else None,phone=body.phone,sms_consent=body.sms_consent)
+    if guardian.id==child.guest_id or shared.is_junior(event,guardian):raise HTTPException(400,'Choose an adult guardian, not a junior')
+    if await db.scalar(select(JuniorContact.id).where(JuniorContact.child_id==child.id,JuniorContact.guardian_guest_id==guardian.id)):
+        raise HTTPException(409,'This guardian is already linked. Edit the existing contact.')
+    shared.set_authorization(event,child,guardian.id,body.relationship,body.pickup_authorized)
+    row=JuniorContact(child_id=child.id,guardian_guest_id=guardian.id,verified_by=actor.id,
+        name=shared.person_name(guardian),email=guardian.email,phone=guardian.phone,sms_consent=bool(guardian.sms_consent),
+        relationship=body.relationship,adult_verified=body.adult_verified,pickup_authorized=body.pickup_authorized,notify=body.notify)
     db.add(row)
     return row
 
@@ -249,22 +283,58 @@ class ImportIn(BaseModel):
     children: list[ChildIn] = Field(min_length=1,max_length=200)
 
 
+@router.get('/guests')
+async def guest_candidates(event_id: str, db=Depends(get_db), actor=Depends(require_event_member)):
+    event,_,_,_=await access(event_id,actor,db,roles=['intake','supervisor'],write=False)
+    rows=(await db.scalars(select(Guest).where(Guest.event_id==event_id).order_by(Guest.first_name,Guest.last_name))).all()
+    enrolled=set((await db.scalars(select(JuniorChild.guest_id).where(JuniorChild.event_id==event_id))).all())
+    return [{'id':g.id,'name':shared.person_name(g),'email':g.email,'phone':g.phone,'sms_consent':bool(g.sms_consent),
+        'is_junior':shared.is_junior(event,g),'enrolled':g.id in enrolled or shared.is_junior(event,g)} for g in rows]
+
+
+class ResolveIn(BaseModel):
+    token: str = Field(min_length=1,max_length=1000)
+
+
+@router.post('/resolve')
+async def resolve_badge(event_id: str, body: ResolveIn, db=Depends(get_db), actor=Depends(require_event_member)):
+    from urllib.parse import urlsplit
+    from sqlalchemy import or_
+    event,_,_,_=await access(event_id,actor,db,roles=['scanner','intake','support','supervisor'],write=False)
+    token=body.token.strip()
+    if token.startswith('festio-jp:'):
+        child=await child_for(event_id,token[len('festio-jp:'):],db)
+    else:
+        if '://' in token:token=urlsplit(token).path.rstrip('/').split('/')[-1]
+        guest=await db.scalar(select(Guest).where(Guest.event_id==event_id,or_(Guest.qr_token==token,Guest.invite_token==token)))
+        if not guest:raise HTTPException(404,'Badge not found in this event’s Guest List')
+        if not shared.is_junior(event,guest):raise HTTPException(409,'This guest is not marked as a junior. Ask intake to review their Guest List record.')
+        await shared.roster(event,db)
+        child=await db.scalar(select(JuniorChild).where(JuniorChild.event_id==event_id,JuniorChild.guest_id==guest.id))
+    await db.commit()
+    return {'child_id':child.id,'guest_id':child.guest_id}
+
+
 @router.post('/import',status_code=201)
 async def roster_import(event_id: str, body: ImportIn, db=Depends(get_db), actor=Depends(require_event_member)):
     event,config,role,_=await access(event_id,actor,db,roles=['intake','supervisor'])
     await db.scalar(select(Event).where(Event.id==event_id).with_for_update())
     result=[]
+    existing=await shared.roster(event,db)
     for row in body.children:
-        result.append(output_child(await create_child(event,config,row,actor,db),role))
+        created=await create_child(event,config,row,actor,db,rows=existing)
+        existing.append(created)
+        result.append(output_child(created,role))
     await db.commit()
     return result
 
 
 @router.get('/children')
 async def children(event_id: str, db=Depends(get_db), actor=Depends(require_event_member)):
-    _,_,role,_=await access(event_id,actor,db)
+    event,_,role,_=await access(event_id,actor,db)
     if role=='inventory':raise HTTPException(403,'Inventory role has no child roster access')
-    rows=(await db.scalars(select(JuniorChild).where(JuniorChild.event_id==event_id).order_by(JuniorChild.name))).all()
+    rows=await shared.roster(event,db)
+    await db.commit()
     return [output_child(c,role) for c in rows]
 
 
@@ -276,12 +346,17 @@ async def child_detail(event_id: str, child_id: str, db=Depends(get_db), actor=D
     result=output_child(child,role)
     import base64, io, qrcode
     image=io.BytesIO()
-    qrcode.make('festio-jp:'+child.id).save(image,format='PNG')
+    guest=await db.get(Guest,child.guest_id)
+    qrcode.make(guest.qr_token).save(image,format='PNG')
     result['badge_data_url']='data:image/png;base64,'+base64.b64encode(image.getvalue()).decode()
     contacts=(await db.scalars(select(JuniorContact).where(JuniorContact.child_id==child_id))).all()
     result['contacts']=[{k:getattr(c,k) for k in
-        (('id','name','relationship','adult_verified','pickup_authorized','email','phone','sms_consent','notify')
-         if role in ('intake','supervisor') else ('id','name','relationship','adult_verified','pickup_authorized'))} for c in contacts]
+        (('id','guardian_guest_id','name','relationship','adult_verified','pickup_authorized','email','phone','sms_consent','notify')
+         if role in ('intake','supervisor') else ('id','guardian_guest_id','name','relationship','adult_verified','pickup_authorized'))} for c in contacts]
+    if role in ('intake','supervisor'):
+        for entry,contact in zip(result['contacts'],contacts):
+            guardian=await db.get(Guest,contact.guardian_guest_id) if contact.guardian_guest_id else None
+            entry['guardian_updated_at']=guardian.updated_at if guardian else None
     history=(await db.scalars(select(JuniorMovement).where(JuniorMovement.child_id==child_id).order_by(JuniorMovement.occurred_at.desc()).limit(100))).all()
     result['history']=[{k:getattr(m,k) for k in ('id','action','from_location','to_location','adult_name','relationship','actor_id','occurred_at')} for m in history]
     actor_ids={m.actor_id for m in history}
@@ -291,6 +366,7 @@ async def child_detail(event_id: str, child_id: str, db=Depends(get_db), actor=D
         if role in ('intake','supervisor') and m.action=='correction':
             import json
             entry['correction']=json.loads(m.notes) if m.notes else None
+    await db.commit()
     return result
 
 
@@ -313,6 +389,8 @@ async def child_correct(event_id: str, child_id: str, body: CorrectionIn, db=Dep
         raise HTTPException(409,'Record departure before clearing an occupied classroom assignment')
     old={'name':child.name,'classroom':child.classroom,'age_group':child.age_group}
     child.name=body.name.strip()
+    guest=await db.get(Guest,child.guest_id)
+    guest.first_name,guest.last_name=shared.split_name(body.name)
     child.classroom=body.classroom
     if body.age_group is not None:child.age_group=body.age_group.strip() or child.age_group
     tick(child)
@@ -330,7 +408,7 @@ async def contact_add(event_id: str, child_id: str, body: ContactIn, db=Depends(
     existing=(await db.scalars(select(JuniorContact).where(JuniorContact.child_id==child.id))).all()
     if any(c.name.casefold()==body.name.casefold() and c.relationship==body.relationship for c in existing):
         raise HTTPException(409,'This contact exists. Edit their details or authorization instead.')
-    contact=add_contact(child,body,actor,db)
+    contact=await add_contact(event,child,body,actor,db)
     await db.flush()
     tick(child)
     await audit(db,event,child,actor,'contact',request_id='contact:'+contact.id)
@@ -350,7 +428,16 @@ async def contact_update(event_id: str, child_id: str, contact_id: str, body: Co
     contact=await db.scalar(select(JuniorContact).where(JuniorContact.id==contact_id,JuniorContact.child_id==child.id))
     if not contact:raise HTTPException(404,'Contact not found')
     if body.pickup_authorized and not body.adult_verified:raise HTTPException(400,'Verify adulthood before authorizing pickup')
-    for k,v in body.model_dump(mode='json',exclude={'version'}).items():setattr(contact,k,v)
+    guardian=await db.get(Guest,contact.guardian_guest_id) if contact.guardian_guest_id else None
+    if not guardian or guardian.event_id!=event_id:raise HTTPException(409,'Guardian is no longer in Guest List')
+    if body.guardian_updated_at and guardian.updated_at.replace(tzinfo=None)!=body.guardian_updated_at.replace(tzinfo=None):
+        raise HTTPException(409,'Guardian details changed in Guest List. Refresh before editing.')
+    if shared.is_junior(event,guardian):raise HTTPException(400,'A junior cannot be an adult guardian')
+    if body.guardian_guest_id and body.guardian_guest_id!=guardian.id:raise HTTPException(409,'Remove this link before choosing a different guardian')
+    guardian.first_name,guardian.last_name=shared.split_name(body.name)
+    guardian.email=str(body.email) if body.email else None;guardian.phone=body.phone;guardian.sms_consent=body.sms_consent
+    for k,v in body.model_dump(mode='json',exclude={'version','guardian_guest_id','guardian_updated_at'}).items():setattr(contact,k,v)
+    shared.set_authorization(event,child,guardian.id,body.relationship,body.pickup_authorized)
     contact.verified_by=actor.id
     tick(child)
     await audit(db,event,child,actor,'contact',request_id='contact-update:'+child.id+':'+str(child.version))
@@ -364,6 +451,7 @@ async def contact_remove(event_id: str, child_id: str, contact_id: str, db=Depen
     child=await child_for(event_id,child_id,db,True)
     contact=await db.scalar(select(JuniorContact).where(JuniorContact.id==contact_id,JuniorContact.child_id==child.id))
     if not contact:raise HTTPException(404,'Contact not found')
+    shared.set_authorization(event,child,contact.guardian_guest_id,contact.relationship,False)
     await db.delete(contact)
     tick(child)
     await audit(db,event,child,actor,'contact',request_id='remove-contact:'+contact.id)
@@ -401,6 +489,8 @@ async def action(event_id: str, child_id: str, body: ActionIn, db=Depends(get_db
     a=body.action
     details={}
     if a=='dropoff':
+        guest=await db.get(Guest,child.guest_id)
+        if not shared.is_junior(event,guest):raise HTTPException(409,'Confirm junior status in Guest List before a new drop-off')
         if before not in ('not_arrived','released'):raise HTTPException(409,'Child is already in JP custody')
         if not body.adult_name or not body.adult_name.strip() or not body.relationship or not body.identity_checked:
             raise HTTPException(400,'Record the dropping-off adult, relationship and staff verification')
@@ -486,7 +576,8 @@ class OutingIn(BaseModel):
 
 @router.post('/outings',status_code=201)
 async def outing_add(event_id: str, body: OutingIn, db=Depends(get_db), actor=Depends(require_event_member)):
-    await access(event_id,actor,db,roles=['supervisor'])
+    event,_,_,_=await access(event_id,actor,db,roles=['supervisor'])
+    await shared.roster(event,db)
     if not body.permission_verified:raise HTTPException(400,'Verify outing permission for every selected child')
     if not body.name.strip():raise HTTPException(400,'Outing name required')
     ids=set(body.child_ids)
@@ -503,8 +594,9 @@ async def outing_add(event_id: str, body: OutingIn, db=Depends(get_db), actor=De
 
 @router.get('/outings')
 async def outings(event_id: str, db=Depends(get_db), actor=Depends(require_event_member)):
-    _,_,role,_=await access(event_id,actor,db)
+    event,_,role,_=await access(event_id,actor,db)
     if role=='inventory':raise HTTPException(403,'Inventory role has no child roster access')
+    await shared.roster(event,db)
     result=[]
     for outing in (await db.scalars(select(JuniorOuting).where(JuniorOuting.event_id==event_id))).all():
         members=(await db.execute(select(JuniorOutingMember,JuniorChild.name).join(JuniorChild,JuniorChild.id==JuniorOutingMember.child_id).where(JuniorOutingMember.outing_id==outing.id))).all()
@@ -512,6 +604,7 @@ async def outings(event_id: str, db=Depends(get_db), actor=Depends(require_event
             'departed':sum(bool(m.departed_at) for m,_ in members),'returned':sum(bool(m.returned_at) for m,_ in members),
             'outstanding':[{'id':m.child_id,'name':name} for m,name in members if m.departed_at and not m.returned_at],
             'members':[{'id':m.child_id,'name':name,'departed_at':m.departed_at,'returned_at':m.returned_at} for m,name in members]})
+    await db.commit()
     return result
 
 

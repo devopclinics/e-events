@@ -1889,6 +1889,11 @@
             "title": "Classroom",
             "type": "string"
           },
+          "confirm_junior": {
+            "default": false,
+            "title": "Confirm Junior",
+            "type": "boolean"
+          },
           "confirm_same_name": {
             "default": false,
             "title": "Confirm Same Name",
@@ -1903,6 +1908,17 @@
                 "type": "null"
               }
             ]
+          },
+          "guest_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guest Id"
           },
           "name": {
             "maxLength": 255,
@@ -2731,6 +2747,29 @@
             ],
             "title": "Email"
           },
+          "guardian_guest_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guardian Guest Id"
+          },
+          "guardian_updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guardian Updated At"
+          },
           "name": {
             "maxLength": 255,
             "minLength": 1,
@@ -2894,6 +2933,29 @@
               }
             ],
             "title": "Email"
+          },
+          "guardian_guest_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guardian Guest Id"
+          },
+          "guardian_updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guardian Updated At"
           },
           "name": {
             "maxLength": 255,
@@ -10658,6 +10720,24 @@
             "default": false,
             "title": "Is Walk In",
             "type": "boolean"
+          },
+          "junior_guardian_for": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Junior Guardian For",
+            "type": "array"
+          },
+          "junior_platform_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Junior Platform Status"
           },
           "last_name": {
             "title": "Last Name",
@@ -21229,6 +21309,21 @@
           "title"
         ],
         "title": "RequestIn",
+        "type": "object"
+      },
+      "ResolveIn": {
+        "properties": {
+          "token": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "ResolveIn",
         "type": "object"
       },
       "ReviewChoice": {
@@ -44414,6 +44509,51 @@
         ]
       }
     },
+    "/api/events/{event_id}/junior/guests": {
+      "get": {
+        "operationId": "guest_candidates_api_events__event_id__junior_guests_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Guest Candidates",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
     "/api/events/{event_id}/junior/import": {
       "post": {
         "operationId": "roster_import_api_events__event_id__junior_import_post",
@@ -44931,6 +45071,61 @@
           }
         ],
         "summary": "Outing Close",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/resolve": {
+      "post": {
+        "operationId": "resolve_badge_api_events__event_id__junior_resolve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Resolve Badge",
         "tags": [
           "junior-programme"
         ]

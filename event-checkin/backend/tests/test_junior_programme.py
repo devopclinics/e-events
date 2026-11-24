@@ -36,7 +36,7 @@ async def drop(ctx,root,c,**kw):
 
 
 @pytest.mark.asyncio
-async def test_disabled_default_and_independent_roster(ctx):
+async def test_disabled_default_and_shared_guest_roster(ctx):
     ctx.login(ctx.ids['user_a']);root=f"/api/events/{ctx.ids['event_a']}/junior"
     cfg=await ctx.client.get(root+'/config');assert cfg.json()['enabled'] is False
     assert (await ctx.client.get(root+'/children')).status_code==409
@@ -46,7 +46,7 @@ async def test_disabled_default_and_independent_roster(ctx):
     c=await child(ctx,root)
     assert c['location']=='not_arrived'
     async with _Session() as db:
-        assert await db.scalar(select(func.count(Guest.id)))==before
+        assert await db.scalar(select(func.count(Guest.id)))==before+2
         assert (await db.get(Event,ctx.ids['event_a'])).junior_program_enabled is True
     ctx.login(ctx.ids['user_b'])
     assert (await ctx.client.get(root+'/children')).status_code==404
@@ -275,7 +275,7 @@ async def test_recipient_change_cannot_send_old_contact_snapshot(ctx):
     c=await drop(ctx,root,c)
     async with _Session() as db:
         row=await db.scalar(select(JuniorNotification).where(JuniorNotification.channel=='email',JuniorNotification.status=='queued'))
-        row_id=row.id;contact=await db.get(JuniorContact,row.contact_id);contact.email='changed@example.com';await db.commit()
+        row_id=row.id;contact=await db.get(JuniorContact,row.contact_id);guardian=await db.get(Guest,contact.guardian_guest_id);guardian.email='changed@example.com';await db.commit()
     called=[]
     async def sender(row):called.append(row.id);return {'accepted':True}
     await junior_outbox.deliver(row_id,sessions=_Session,sender=sender)
@@ -313,3 +313,105 @@ async def test_names_only_intake_cannot_enter_classroom_or_release(ctx):
     await act(ctx,root,c,'release',expected=409,identity_checked=True)
     r=await ctx.client.patch(root+f"/children/{c['id']}",json={'version':c['version'],'name':'Correct Name','classroom':'','reason':'Corrected real name at intake'})
     assert r.status_code==200,r.text
+
+
+@pytest.mark.asyncio
+async def test_existing_guest_juniors_and_guardians_are_linked_without_duplicates(ctx):
+    root=await setup(ctx)
+    async with _Session() as db:
+        minor=Guest(event_id=ctx.ids['event_a'],first_name='Existing',last_name='Child',is_junior=True)
+        adult=Guest(event_id=ctx.ids['event_a'],first_name='Existing',last_name='Parent',email='parent@example.com',sms_consent=False)
+        db.add_all([minor,adult]);await db.flush()
+        event=await db.get(Event,ctx.ids['event_a']);event.guardian_authorizations={minor.id:[{'guardian_guest_id':adult.id,'relationship':'parent','source':'admin'}]}
+        await db.commit();before=await db.scalar(select(func.count(Guest.id)))
+    roster=(await ctx.client.get(root+'/children')).json();assert len(roster)==1 and roster[0]['guest_id']==minor.id
+    detail=(await ctx.client.get(root+f"/children/{minor.id}")).json()
+    assert detail['contacts'][0]['guardian_guest_id']==adult.id
+    assert detail['contacts'][0]['pickup_authorized'] is True
+    assert detail['contacts'][0]['adult_verified'] is False
+    # Every view reuses the same identities and does not assume a guardian's age/consent.
+    await ctx.client.get(root+'/children')
+    async with _Session() as db:assert await db.scalar(select(func.count(Guest.id)))==before
+    resolved=await ctx.client.post(root+'/resolve',json={'token':f'https://festio.events/scan/{minor.qr_token}'})
+    assert resolved.status_code==200 and resolved.json()['child_id']==minor.id
+    assert (await ctx.client.post(root+'/resolve',json={'token':adult.qr_token})).status_code==409
+
+
+@pytest.mark.asyncio
+async def test_shared_name_edits_update_both_views_and_preserve_admission(ctx):
+    root=await setup(ctx);c=await child(ctx,root)
+    assert c['guest_id']
+    response=await ctx.client.patch(f"/api/events/{ctx.ids['event_a']}/guests/{c['guest_id']}",json={'first_name':'Aminah'})
+    assert response.status_code==200
+    c=(await ctx.client.get(root+f"/children/{c['id']}")).json();assert c['name']=='Aminah Yusuf'
+    response=await ctx.client.patch(root+f"/children/{c['id']}",json={'version':c['version'],'name':'Aminah Corrected','classroom':'Group A','reason':'Real name confirmed'})
+    assert response.status_code==200,response.text
+    guests=(await ctx.client.get(f"/api/events/{ctx.ids['event_a']}/guests")).json()
+    linked=next(g for g in guests if g['id']==c['guest_id'])
+    assert linked['first_name']=='Aminah' and linked['last_name']=='Corrected'
+    assert linked['admitted'] is False and linked['invite_sent_at'] is None
+    assert linked['junior_platform_status']=='not_arrived'
+    guardian=next(g for g in guests if g['first_name']=='Maryam')
+    assert guardian['junior_guardian_for']==['Aminah Corrected']
+
+
+@pytest.mark.asyncio
+async def test_existing_guardian_selection_and_main_guest_list_revocation(ctx):
+    root=await setup(ctx);c=await child(ctx,root,guardian=False)
+    async with _Session() as db:
+        event=await db.get(Event,ctx.ids['event_a']);event.is_paid=True;event.venue_access_enabled=True;await db.commit()
+    response=await ctx.client.post(f"/api/events/{ctx.ids['event_a']}/guests",json={'first_name':'Actual','last_name':'Parent','email':'actual@example.com'})
+    guardian=response.json();before=len((await ctx.client.get(f"/api/events/{ctx.ids['event_a']}/guests")).json())
+    response=await ctx.client.post(root+f"/children/{c['id']}/contacts",json={'guardian_guest_id':guardian['id'],'name':'Actual Parent','relationship':'parent','adult_verified':True,'pickup_authorized':True,'notify':False})
+    assert response.status_code==201,response.text
+    contact=response.json()['id']
+    assert len((await ctx.client.get(f"/api/events/{ctx.ids['event_a']}/guests")).json())==before
+    c=(await ctx.client.get(root+f"/children/{c['id']}")).json();c=await drop(ctx,root,c)
+    # Revocation through the established guardian API must take effect in JP immediately.
+    r=await ctx.client.put(f"/api/events/{ctx.ids['event_a']}/access/guardian-authorizations",json={'enabled':True,'authorizations':[]})
+    assert r.status_code==200,r.text
+    await act(ctx,root,c,'release',expected=409,contact_id=contact,identity_checked=True)
+
+
+@pytest.mark.asyncio
+async def test_active_child_and_guardian_cannot_be_deleted_from_guest_list(ctx):
+    root=await setup(ctx);c=await child(ctx,root);detail=(await ctx.client.get(root+f"/children/{c['id']}")).json()
+    guardian=detail['contacts'][0]['guardian_guest_id'];c=await drop(ctx,root,c)
+    for gid in [c['guest_id'],guardian]:
+        response=await ctx.client.delete(f"/api/events/{ctx.ids['event_a']}/guests/{gid}")
+        assert response.status_code==409,response.text
+
+
+@pytest.mark.asyncio
+async def test_foreign_event_guest_cannot_be_linked_and_same_name_requires_review(ctx):
+    root=await setup(ctx)
+    async with _Session() as db:
+        other=Event(org_id=ctx.ids['org_a'],name='Other',couples_name='Other',event_date=datetime.utcnow(),checkin_base_url='http://test');db.add(other);await db.flush()
+        guest=Guest(event_id=other.id,first_name='Foreign',last_name='Child',is_junior=True);db.add(guest);await db.commit()
+    r=await ctx.client.post(root+'/children',json={'guest_id':guest.id,'name':'Foreign Child'});assert r.status_code==404
+    await child(ctx,root,guardian=False,name='Existing Name')
+    r=await ctx.client.post(root+'/children',json={'name':'Existing Name'});assert r.status_code==409
+
+
+@pytest.mark.asyncio
+async def test_stale_guardian_edit_cannot_overwrite_guest_list_changes(ctx):
+    root=await setup(ctx);c=await child(ctx,root)
+    detail=(await ctx.client.get(root+f"/children/{c['id']}")).json();contact=detail['contacts'][0]
+    async with _Session() as db:
+        guardian=await db.get(Guest,contact['guardian_guest_id']);guardian.email='new@example.com';guardian.updated_at=datetime.utcnow()+timedelta(seconds=1);await db.commit()
+    body={k:contact[k] for k in ['name','relationship','email','phone','sms_consent','adult_verified','pickup_authorized','notify','guardian_guest_id','guardian_updated_at']};body['version']=c['version']
+    r=await ctx.client.put(root+f"/children/{c['id']}/contacts/{contact['id']}",json=body);assert r.status_code==409,r.text
+
+
+@pytest.mark.asyncio
+async def test_guest_directory_permission_does_not_expose_jp_custody(ctx):
+    root=await setup(ctx);c=await child(ctx,root);c=await drop(ctx,root,c)
+    async with _Session() as db:
+        viewer=User(name='Directory viewer',email='directory@example.com',role='official');db.add(viewer);await db.flush()
+        db.add(Membership(org_id=ctx.ids['org_a'],user_id=viewer.id,role='member'))
+        db.add(EventUser(event_id=ctx.ids['event_a'],user_id=viewer.id,event_role='staff',can_view_guests=True))
+        await db.commit()
+    ctx.login(viewer)
+    r=await ctx.client.get(f"/api/events/{ctx.ids['event_a']}/guests");assert r.status_code==200,r.text
+    assert all(g['junior_platform_status'] is None and g['junior_guardian_for']==[] for g in r.json())
+    assert (await ctx.client.get(root+'/children')).status_code==403

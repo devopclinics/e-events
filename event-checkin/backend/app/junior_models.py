@@ -32,6 +32,7 @@ class JuniorChild(Base):
     __tablename__ = 'junior_children'
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     event_id: Mapped[str] = mapped_column(ForeignKey('events.id', ondelete='CASCADE'), index=True)
+    guest_id: Mapped[str | None] = mapped_column(String(36), ForeignKey('guests.id', ondelete='SET NULL', name='fk_junior_child_guest'), nullable=True)
     name: Mapped[str] = mapped_column(String(255))
     reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
     age_group: Mapped[str] = mapped_column(String(80))
@@ -45,13 +46,14 @@ class JuniorChild(Base):
     accommodation_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    __table_args__ = (UniqueConstraint('event_id', 'reference', name='uq_junior_reference'),)
+    __table_args__ = (UniqueConstraint('event_id', 'reference', name='uq_junior_reference'),UniqueConstraint('guest_id',name='uq_junior_guest_link'))
 
 
 class JuniorContact(Base):
     __tablename__ = 'junior_contacts'
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     child_id: Mapped[str] = mapped_column(ForeignKey('junior_children.id', ondelete='CASCADE'), index=True)
+    guardian_guest_id: Mapped[str | None] = mapped_column(String(36), ForeignKey('guests.id', ondelete='SET NULL', name='fk_junior_contact_guest'), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(255))
     relationship: Mapped[str] = mapped_column(String(30))
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)

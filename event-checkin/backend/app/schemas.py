@@ -2447,6 +2447,8 @@ class GuestSessionAccessOut(BaseModel):
 
 
 class GuestOut(BaseModel):
+    junior_platform_status: str | None = None
+    junior_guardian_for: list[str] = Field(default_factory=list)
     shared_group_limit: int | None = None
     session_access: list[GuestSessionAccessOut] = Field(default_factory=list)
     is_test: Optional[bool] = None

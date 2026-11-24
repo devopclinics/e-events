@@ -1,14 +1,18 @@
 # Junior Programme
 
 Staff-only, event-scoped child roster and custody/movement workspace at `/junior-platform`.
-Parents receive updates without using Festio. The convention Guest, RSVP, zone and
-admission models remain independent; no implicit roster migration is performed.
+Parents receive updates without using Festio. Guest List owns child and guardian identities and contact details. JP attaches its
+operational profile to the same guest IDs; convention admission and JP custody
+remain separate recorded actions. Existing explicitly recognized juniors appear
+automatically, without creating duplicate guests.
 
 ## Event setup
 
 Open Event Setup → Junior Programme. The mode defaults off on every existing and
 new event. Administrators configure classrooms and grant roles to existing event
-staff. Do not infer confirmed classrooms or child identities from old demo data.
+staff. Classrooms and guardian adulthood still require staff confirmation. Existing
+Guest List junior flags/types and guardian links identify juniors; do not infer
+classrooms or mark unrelated adults as children from their names.
 
 - Scanner: search/scan child badges, witness and record movements, select authorized collectors.
 - Intake: add/paste children, correct names/classrooms with reasons, manage guardian contacts and authorizations.
@@ -34,8 +38,11 @@ Import is atomic. Missing age/classroom remains awaiting confirmation; classroom
 arrival is blocked until intake assigns a configured classroom. Import never
 assumes SMS permission, adulthood or pickup authority.
 Intake staff must verify those independently. A child's roster reference can be
-retained from NCNMO; generated badge QRs contain only a JP record identifier and
-require authenticated staff access. They are not pickup credentials.
+retained from NCNMO. Existing Guest List badges work in JP; regenerated JP badge
+QRs use the same guest token. Badges identify the child and never authorize pickup.
+Names corrected through either screen appear in both. Guardians are selected from
+Guest List or created once there. Guardian verification/notification policy remains
+in JP; pickup grants use the existing event guardian authorization map.
 
 1. Find/add child, record dropping-off adult and relationship (optional drop-off phone).
 2. Answer both screening questions. Yes routes to support; each required referral
@@ -59,8 +66,9 @@ one current location. Current-location counts and outing cohort counts are separ
 
 Every child operational transition writes movement and per-channel notification
 records in the same transaction. Notifications go to designated guardian contacts,
-not automatically to the dropping-off/collecting person or a convention Guest's
-address. Free-text clinical notes and departure reasons never enter message bodies.
+not automatically to the dropping-off/collecting person. Addresses and SMS
+permission are read from the linked guardian’s current Guest List record before
+each send. Removing an existing pickup grant immediately blocks JP release. Free-text clinical notes and departure reasons never enter message bodies.
 
 Sending is independently off by default. Collect guardian contacts and SMS permission,
 verify providers and available credits, then enable Junior sending. Convention
@@ -80,19 +88,21 @@ receipt availability. No live guardian messages are sent during fixture QA.
 
 Inventory tracks total, issued, damaged and lost quantities with an attributed
 issue/return ledger. It does not implement individual asset serial-number tracking.
-The Volunteer guide tab provides the orientation walkthrough and a print action.
+The Volunteer guide tab provides a visual orientation gallery with screen examples,
+role filters, workflow diagrams, stop rules and a printable visual PDF.
 Practice with a separate training event and fictional contacts, not real children.
 
 ## Release and reuse
 
-Changes are additive: one default-false event flag and new Junior-owned tables.
+Changes are additive: one default-false event flag and Junior-owned operational tables. Nullable
+Guest List links are added without rewriting attendance history.
 Existing events stay disabled; generic scan/checkout behaviour is untouched.
 Use the actual production release baseline, not a main branch missing deployed fixes.
 Deploy backend and frontend through GitOps after PostgreSQL, authorization,
 legacy-flow and browser checks. Preserve previously served frontend assets.
 
-For the NCNMO pilot, enable only the intended event with sending paused and an empty
-JP roster. Complete confirmed classrooms, named staff grants, actual child/guardian
+For the NCNMO pilot, enable only the intended event with sending paused and the existing
+Guest List juniors linked to JP operational profiles. Complete confirmed classrooms, named staff grants, actual child/guardian
 intake and provider delivery checks before operational use. Reuse the module by
 configuring another event; never copy child records or attendance as a template.
 

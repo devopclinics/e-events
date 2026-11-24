@@ -13,6 +13,8 @@ from .public_event_policy import event_communications_blocked
 from services import messaging
 from services.email_service import send_simple_email
 from services.outbound_safety import recipient_allowed
+from . import junior_guests as shared
+from ..junior_models import JuniorChild
 
 logger=logging.getLogger(__name__)
 
@@ -47,6 +49,9 @@ async def deliver(notification_id, sessions=None, sender=None):
         if earlier:return
         config=await db.get(JuniorConfig,row.event_id)
         contact=await db.get(JuniorContact,row.contact_id) if row.contact_id else None
+        child=await db.get(JuniorChild,contact.child_id) if contact else None
+        if event and contact and child:
+            await shared.refresh_contact(event,child,contact,db)
         reason=None
         if not event or not event.junior_program_enabled or not config or not config.notifications_enabled:
             reason='Junior Programme sending is paused'

@@ -32,7 +32,7 @@ async def act(ctx,root,c,action,expected=200,**kwargs):
 
 
 async def drop(ctx,root,c,**kw):
-    return await act(ctx,root,c,'dropoff',adult_name='Maryam Yusuf',relationship='parent',identity_checked=True,allergy=False,accommodation=False,**kw)
+    return await act(ctx,root,c,'dropoff',adult_name='Maryam Yusuf',relationship='parent',identity_checked=True,allergy=False,accommodation=False,screening_wristband_assigned=True,**kw)
 
 
 @pytest.mark.asyncio
@@ -55,7 +55,7 @@ async def test_disabled_default_and_shared_guest_roster(ctx):
 @pytest.mark.asyncio
 async def test_screening_both_referrals_and_restricted_notes(ctx):
     root=await setup(ctx);c=await child(ctx,root)
-    c=await act(ctx,root,c,'dropoff',adult_name='Parent',relationship='parent',identity_checked=True,allergy=True,accommodation=True)
+    c=await act(ctx,root,c,'dropoff',adult_name='Parent',relationship='parent',identity_checked=True,allergy=True,accommodation=True,screening_wristband_assigned=True)
     assert c['location']=='support_desk'
     await act(ctx,root,c,'classroom',expected=409)
     await act(ctx,root,c,'clear_allergy',expected=400,notes='Allergy details',wristband_assigned=False)
@@ -86,7 +86,7 @@ async def test_missing_guardian_blocks_release_and_sibling_age(ctx):
 @pytest.mark.asyncio
 async def test_duplicate_retry_stale_version_and_temporary_return(ctx):
     root=await setup(ctx);c=await child(ctx,root)
-    request={'request_id':str(uuid.uuid4()),'version':c['version'],'action':'dropoff','adult_name':'Parent','relationship':'parent','identity_checked':True,'allergy':False,'accommodation':False}
+    request={'request_id':str(uuid.uuid4()),'version':c['version'],'action':'dropoff','adult_name':'Parent','relationship':'parent','identity_checked':True,'allergy':False,'accommodation':False,'screening_wristband_assigned':True}
     a=await ctx.client.post(root+f"/children/{c['id']}/actions",json=request)
     b=await ctx.client.post(root+f"/children/{c['id']}/actions",json=request)
     assert a.json()['version']==b.json()['version']
@@ -441,3 +441,57 @@ async def test_sending_setup_rechecks_guest_list_sms_permission(ctx,monkeypatch)
     monkeypatch.setattr(messaging,'_channel_ready',lambda *args:True)
     response=await ctx.client.put(root+'/config',json={'enabled':True,'classrooms':['Group A','Group B'],'notifications_enabled':True})
     assert response.status_code==409 and 'SMS permission' in response.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('allergy,accommodation',[(False,False),(True,False),(False,True),(True,True)])
+async def test_every_screened_child_needs_standard_band_plus_required_extra_bands(ctx,allergy,accommodation):
+    root=await setup(ctx);c=await child(ctx,root)
+    c=await act(ctx,root,c,'dropoff',adult_name='Parent',relationship='parent',identity_checked=True,allergy=allergy,accommodation=accommodation)
+    assert c['screening_wristband_assigned'] is False
+    if allergy:c=await act(ctx,root,c,'clear_allergy',notes='Restricted allergy details',wristband_assigned=True)
+    if accommodation:c=await act(ctx,root,c,'clear_accommodation',notes='Restricted accommodation details',wristband_assigned=True)
+    r=await act(ctx,root,c,'classroom',expected=409)
+    assert 'standard screening wristband' in r['detail']
+    await act(ctx,root,c,'assign_wristband',expected=400)
+    c=await act(ctx,root,c,'assign_wristband',screening_wristband_assigned=True)
+    assert c['screening_wristband_assigned'] is True
+    await act(ctx,root,c,'assign_wristband',expected=409,screening_wristband_assigned=True)
+    c=await act(ctx,root,c,'classroom');assert c['location']=='classroom'
+    detail=(await ctx.client.get(root+f"/children/{c['id']}")).json()
+    arrival=next(m for m in detail['history'] if m['action']=='classroom')
+    assert arrival['wristbands']=={'screening':True,'allergy':allergy,'accommodation':accommodation}
+    assert sum(arrival['wristbands'].values())==1+int(allergy)+int(accommodation)
+    dropoff=next(m for m in detail['history'] if m['action']=='dropoff')
+    assert dropoff['wristbands']=={'screening':False,'allergy':False,'accommodation':False}
+
+
+@pytest.mark.asyncio
+async def test_screening_band_preserved_on_rescreen_and_reset_for_new_dropoff(ctx):
+    root=await setup(ctx);c=await child(ctx,root);c=await drop(ctx,root,c)
+    c=await act(ctx,root,c,'screening',allergy=False,accommodation=False)
+    assert c['screening_wristband_assigned'] is True
+    detail=(await ctx.client.get(root+f"/children/{c['id']}")).json()
+    c=await act(ctx,root,c,'release',contact_id=detail['contacts'][0]['id'],identity_checked=True)
+    c=await act(ctx,root,c,'dropoff',adult_name='Parent',relationship='parent',identity_checked=True,allergy=False,accommodation=False)
+    assert c['screening_wristband_assigned'] is False
+    await act(ctx,root,c,'classroom',expected=409)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('destination',['clinic','other'])
+async def test_temporary_departure_has_complete_audited_return_and_classroom_cycle(ctx,destination):
+    root=await setup(ctx);c=await child(ctx,root);c=await drop(ctx,root,c);c=await act(ctx,root,c,'classroom')
+    c=await act(ctx,root,c,destination,adult_name='Accompanying volunteer',notes='SECRET internal reason')
+    await act(ctx,root,c,'classroom',expected=409)
+    detail=(await ctx.client.get(root+f"/children/{c['id']}")).json()
+    await act(ctx,root,c,'release',expected=409,contact_id=detail['contacts'][0]['id'],identity_checked=True)
+    c=await act(ctx,root,c,'return');assert c['location']=='reception'
+    c=await act(ctx,root,c,'classroom');assert c['location']=='classroom'
+    detail=(await ctx.client.get(root+f"/children/{c['id']}")).json()
+    returned=next(m for m in detail['history'] if m['action']=='return')
+    assert returned['from_location']==destination and returned['to_location']=='reception'
+    assert returned['occurred_at'] and returned['actor_name']
+    notices=(await ctx.client.get(root+'/notifications')).json()
+    assert any(('Returned from '+('clinic' if destination=='clinic' else 'temporary departure')+' to Junior Platform') in n['body'] for n in notices)
+    assert not any('SECRET' in n['body'] for n in notices)

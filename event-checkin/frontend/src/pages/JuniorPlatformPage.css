@@ -181,3 +181,23 @@ body:has(.jp-dialog[open]) { overflow:hidden; }
   .jp-workspace .jp-location-filters>button { min-height:44px; }
   .jp-workspace input,.jp-workspace select,.jp-workspace textarea { font-size:16px; }
 }
+.jp-wristband-record { padding:15px; margin:18px 0; border:1px solid var(--line); border-radius:10px; background:var(--surface-2); }
+.jp-wristband-record>.jp-row { font-size:12px; gap:8px; }
+.jp-wristband-record>.jp-row>span { font-size:10px; color:var(--muted); }
+.jp-wristband-record>div:nth-child(2) { display:flex; gap:7px; flex-wrap:wrap; margin-top:13px; }
+.jp-wristband-record p { font-size:11px; margin-bottom:0; }
+.jp-band-confirm { border:1px solid var(--line); border-radius:8px; padding:12px!important; background:var(--surface-2); }
+.jp-temporary-cycle { padding:16px; margin:18px 0; border:1px solid var(--line); border-radius:10px; }
+.jp-temporary-cycle h3 { font-size:12px; margin:0; }
+.jp-temporary-cycle ol { list-style:none; margin:15px 0 0; padding:0; display:grid; gap:13px; }
+.jp-temporary-cycle li { display:flex; gap:10px; font-size:11px; }
+.jp-cycle-dot { color:var(--muted); font-size:16px; }
+.jp-temporary-cycle li[data-recorded=true] .jp-cycle-dot { color:var(--jp-accent); }
+.jp-temporary-cycle li strong { font-size:11px; }
+.jp-temporary-cycle li small { font-size:10px; }
+.jp-temporary-cycle p { margin-bottom:0; font-size:11px; }
+.jp-shift-workspace { max-width:1100px; margin:auto; }
+.jp-shift-fields { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.jp-shift-channel-choices { display:flex; flex-wrap:wrap; gap:20px; }
+.jp-shift-workspace .jp-notice { border:1px solid var(--line); background:var(--surface-2); padding:12px; border-radius:8px; font-size:12px; }
+@media(max-width:600px) { .jp-shift-fields { grid-template-columns:1fr; gap:0; } }

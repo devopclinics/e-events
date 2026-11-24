@@ -127,6 +127,8 @@ async def tick():
             try:await deliver(row_id)
             except Exception:logger.exception('Junior notification claim failed id=%s',row_id)
     await asyncio.gather(*(one(row_id) for row_id in ids))
+    from .junior_volunteers import tick as volunteer_tick
+    await volunteer_tick()
 
 
 async def run():

@@ -7,3 +7,15 @@
   body:has(.jvg) *:has(.jvg){display:block!important;position:static!important;min-height:0!important;height:auto!important;padding:0!important;margin:0!important;max-width:none!important;overflow:visible!important;background:white!important;visibility:visible!important}
   .jvg{page:junior-guide;position:static!important;left:auto!important;top:auto!important;width:auto!important;margin:0!important}
 }
+.jvg-volunteer-mission { border:1px solid var(--line); border-left:4px solid var(--jp-accent,#245d50); border-radius:10px; background:var(--surface); padding:22px; margin:18px 0; }
+.jvg-volunteer-mission>span { font-size:9px; letter-spacing:1px; color:var(--muted); font-weight:750; }
+.jvg-volunteer-mission h3 { font-size:22px; line-height:1.35; margin:9px 0; }
+.jvg-volunteer-mission p,.jvg-volunteer-mission strong { font-size:12px; line-height:1.75; }
+.jvg-volunteer-mission p { color:var(--muted); }
+.jvg-movement-route { padding:11px; border:1px solid #dfd2bd; border-radius:8px; background:#fffcf7; }
+.jvg-movement-route>b { font-size:9px; letter-spacing:.6px; color:#775b3e; }
+.jvg-movement-route>ol { list-style:none; margin:9px 0 0; padding:0; display:grid; gap:7px; }
+.jvg-movement-route li { display:flex; align-items:flex-start; gap:8px; font-size:10px; line-height:1.5; }
+.jvg-movement-route li::before { content:'↓'; color:#95522a; font-weight:700; }
+.jvg-movement-route li:first-child::before { content:'●'; font-size:7px; padding-top:4px; }
+@media print { .jvg-volunteer-mission { break-inside:avoid; padding:15px; margin:12px 0; } .jvg-volunteer-mission h3 { font-size:17px; } .jvg-volunteer-mission p,.jvg-volunteer-mission strong { font-size:10px; line-height:1.55; } .jvg-movement-route { padding:8px; } .jvg-movement-route>ol { gap:5px; } .jvg-movement-route li { font-size:9px; } }

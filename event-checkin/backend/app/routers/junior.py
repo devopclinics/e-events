@@ -37,7 +37,7 @@ async def access(event_id, actor, db, *, roles=None, enabled=True, write=True):
 
 def output_child(child, role):
     keys = ('id','guest_id','name','reference','age_group','classroom','location','allergy','accommodation',
-            'allergy_cleared','accommodation_cleared','version','updated_at')
+            'allergy_cleared','accommodation_cleared','screening_wristband_assigned','version','updated_at')
     result = {k: getattr(child,k) for k in keys}
     if role in ('support','supervisor'):
         result.update(allergy_notes=child.allergy_notes, accommodation_notes=child.accommodation_notes)
@@ -75,7 +75,7 @@ async def audit(db, event, child, actor, action, *, request_id, before=None, **d
     await shared.refresh_contacts(event,child,db)
     movement = JuniorMovement(event_id=event.id, child_id=child.id, request_id=request_id,
         action=action, from_location=before or child.location, to_location=child.location,
-        actor_id=actor.id, **details)
+        actor_id=actor.id, wristbands={'screening':bool(child.screening_wristband_assigned),'allergy':bool(child.allergy and child.allergy_cleared),'accommodation':bool(child.accommodation and child.accommodation_cleared)}, **details)
     db.add(movement)
     await db.flush()
     # A missing contact still produces two visible setup-required records.
@@ -86,7 +86,7 @@ async def audit(db, event, child, actor, action, *, request_id, before=None, **d
     labels = {'dropoff':'Drop-off recorded', 'classroom':'Arrived in classroom',
         'clear_allergy':'Allergy desk visit completed', 'clear_accommodation':'Accommodation desk visit completed',
         'clinic':'Departed for clinic', 'other':'Temporary departure recorded',
-        'return':'Returned to Junior Platform', 'outing_depart':'Departed for outing',
+        'assign_wristband':'Screening wristband recorded', 'return':'Returned from '+('clinic' if movement.from_location=='clinic' else 'temporary departure')+' to Junior Platform', 'outing_depart':'Departed for outing',
         'outing_return':'Returned from outing', 'release':'Released to authorized adult',
         'intake':'Child record created', 'correction':'Child record updated', 'screening':'Screening recorded',
         'contact':'Guardian details updated'}
@@ -359,7 +359,7 @@ async def child_detail(event_id: str, child_id: str, db=Depends(get_db), actor=D
             guardian=await db.get(Guest,contact.guardian_guest_id) if contact.guardian_guest_id else None
             entry['guardian_updated_at']=guardian.updated_at if guardian else None
     history=(await db.scalars(select(JuniorMovement).where(JuniorMovement.child_id==child_id).order_by(JuniorMovement.occurred_at.desc()).limit(100))).all()
-    result['history']=[{k:getattr(m,k) for k in ('id','action','from_location','to_location','adult_name','relationship','actor_id','occurred_at')} for m in history]
+    result['history']=[{k:getattr(m,k) for k in ('id','action','from_location','to_location','adult_name','relationship','actor_id','occurred_at','wristbands')} for m in history]
     actor_ids={m.actor_id for m in history}
     names={u.id:u.name for u in (await db.scalars(select(User).where(User.id.in_(actor_ids)))).all()}
     for entry,m in zip(result['history'],history):
@@ -462,7 +462,7 @@ async def contact_remove(event_id: str, child_id: str, contact_id: str, db=Depen
 class ActionIn(BaseModel):
     request_id: str = Field(min_length=8,max_length=80)
     version: int
-    action: Literal['dropoff','screening','clear_allergy','clear_accommodation','classroom','clinic','other','return','outing_depart','outing_return','release']
+    action: Literal['dropoff','screening','assign_wristband','clear_allergy','clear_accommodation','classroom','clinic','other','return','outing_depart','outing_return','release']
     adult_name: str | None = Field(default=None,max_length=255)
     relationship: Relationship | None = None
     phone: str | None = Field(default=None,pattern=r'^\+[1-9]\d{7,14}$')
@@ -473,6 +473,7 @@ class ActionIn(BaseModel):
     accommodation: bool | None = None
     notes: str | None = Field(default=None,max_length=2000)
     wristband_assigned: bool = False
+    screening_wristband_assigned: bool = False
     outing_id: str | None = None
 
 
@@ -497,6 +498,7 @@ async def action(event_id: str, child_id: str, body: ActionIn, db=Depends(get_db
             raise HTTPException(400,'Record the dropping-off adult, relationship and staff verification')
         if body.relationship=='adult_sibling' and not body.adult_verified:
             raise HTTPException(400,'Verify sibling is 18 or older')
+        child.screening_wristband_assigned=body.screening_wristband_assigned
         child.allergy=body.allergy
         child.accommodation=body.accommodation
         child.allergy_cleared=False
@@ -506,11 +508,18 @@ async def action(event_id: str, child_id: str, body: ActionIn, db=Depends(get_db
     elif a=='screening':
         if before not in ('reception','support_desk'):raise HTTPException(409,'Screening requires a child at reception or support desk')
         if body.allergy is None or body.accommodation is None:raise HTTPException(400,'Answer both screening questions')
+        child.screening_wristband_assigned=bool(child.screening_wristband_assigned or body.screening_wristband_assigned)
         child.allergy=body.allergy
         child.accommodation=body.accommodation
         child.allergy_cleared=False
         child.accommodation_cleared=False
         child.location='support_desk' if body.allergy or body.accommodation else 'reception'
+    elif a=='assign_wristband':
+        if before not in ('reception','support_desk'):raise HTTPException(409,'Record screening wristbands at reception or the support desk')
+        if child.allergy is None or child.accommodation is None:raise HTTPException(409,'Complete both screening questions before recording the screening wristband')
+        if not body.screening_wristband_assigned:raise HTTPException(400,'Confirm the standard screening wristband was physically assigned')
+        if child.screening_wristband_assigned:raise HTTPException(409,'The screening wristband is already recorded')
+        child.screening_wristband_assigned=True
     elif a in ('clear_allergy','clear_accommodation'):
         if role not in ('support','supervisor'):raise HTTPException(403,'Support desk permission required')
         field='allergy' if a=='clear_allergy' else 'accommodation'
@@ -528,6 +537,8 @@ async def action(event_id: str, child_id: str, body: ActionIn, db=Depends(get_db
         if child.allergy is None or child.accommodation is None:raise HTTPException(409,'Complete both screening questions first')
         if (child.allergy and not child.allergy_cleared) or (child.accommodation and not child.accommodation_cleared):
             raise HTTPException(409,'Complete all support-desk referrals and wristbands first')
+        if not child.screening_wristband_assigned:
+            raise HTTPException(409,'Assign and record the standard screening wristband before classroom arrival')
         child.location='classroom'
     elif a in ('clinic','other'):
         if before not in ('classroom','reception','support_desk'):raise HTTPException(409,'Child must be present in JP')
@@ -711,3 +722,7 @@ async def inventory_history(event_id: str, item_id: str, db=Depends(get_db), act
     if not item:raise HTTPException(404,'Item not found')
     rows=(await db.scalars(select(JuniorInventoryEntry).where(JuniorInventoryEntry.item_id==item_id).order_by(JuniorInventoryEntry.created_at.desc()).limit(200))).all()
     return [{k:getattr(r,k) for k in ('action','quantity','responsible','notes','actor_id','created_at')} for r in rows]
+
+
+from .junior_volunteers import router as volunteer_router
+router.include_router(volunteer_router)

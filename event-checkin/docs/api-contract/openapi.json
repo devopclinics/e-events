@@ -135,6 +135,7 @@
             "enum": [
               "dropoff",
               "screening",
+              "assign_wristband",
               "clear_allergy",
               "clear_accommodation",
               "classroom",
@@ -248,6 +249,11 @@
             "minLength": 8,
             "title": "Request Id",
             "type": "string"
+          },
+          "screening_wristband_assigned": {
+            "default": false,
+            "title": "Screening Wristband Assigned",
+            "type": "boolean"
           },
           "version": {
             "title": "Version",
@@ -23184,6 +23190,19 @@
         "title": "SendInvites",
         "type": "object"
       },
+      "SendingIn": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "SendingIn",
+        "type": "object"
+      },
       "SessionDecisionUpdate": {
         "properties": {
           "decision": {
@@ -23349,6 +23368,171 @@
           }
         },
         "title": "SettingsPayload",
+        "type": "object"
+      },
+      "ShiftIn": {
+        "properties": {
+          "channels": {
+            "items": {
+              "enum": [
+                "email",
+                "sms",
+                "whatsapp",
+                "mms"
+              ],
+              "type": "string"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Channels",
+            "type": "array"
+          },
+          "consents": {
+            "items": {
+              "enum": [
+                "email",
+                "sms",
+                "whatsapp",
+                "mms"
+              ],
+              "type": "string"
+            },
+            "maxItems": 4,
+            "title": "Consents",
+            "type": "array"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "ends_at": {
+            "format": "date-time",
+            "title": "Ends At",
+            "type": "string"
+          },
+          "event_user_id": {
+            "title": "Event User Id",
+            "type": "string"
+          },
+          "exact_times": {
+            "items": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Exact Times",
+            "type": "array"
+          },
+          "media_url": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Url"
+          },
+          "minutes_before": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 20,
+            "title": "Minutes Before",
+            "type": "array"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "pattern": "^\\+[1-9]\\d{7,14}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "repeat_every_minutes": {
+            "anyOf": [
+              {
+                "maximum": 10080.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repeat Every Minutes"
+          },
+          "repeat_from_minutes": {
+            "default": 60,
+            "maximum": 10080.0,
+            "minimum": 1.0,
+            "title": "Repeat From Minutes",
+            "type": "integer"
+          },
+          "request_id": {
+            "maxLength": 80,
+            "minLength": 8,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          },
+          "station": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Station",
+            "type": "string"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "whatsapp_template_ref": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Whatsapp Template Ref"
+          },
+          "whatsapp_template_vars": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Whatsapp Template Vars",
+            "type": "object"
+          }
+        },
+        "required": [
+          "request_id",
+          "event_user_id",
+          "station",
+          "starts_at",
+          "ends_at",
+          "channels"
+        ],
+        "title": "ShiftIn",
         "type": "object"
       },
       "ShipmentCreate": {
@@ -45126,6 +45310,223 @@
           }
         ],
         "summary": "Resolve Badge",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/volunteers": {
+      "get": {
+        "operationId": "list_shifts_api_events__event_id__junior_volunteers_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Shifts",
+        "tags": [
+          "junior-programme"
+        ]
+      },
+      "post": {
+        "operationId": "create_shift_api_events__event_id__junior_volunteers_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShiftIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Shift",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/volunteers/sending/state": {
+      "put": {
+        "operationId": "set_sending_api_events__event_id__junior_volunteers_sending_state_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendingIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Sending",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/volunteers/{shift_id}": {
+      "put": {
+        "operationId": "update_shift_api_events__event_id__junior_volunteers__shift_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "shift_id",
+            "required": true,
+            "schema": {
+              "title": "Shift Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShiftIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Shift",
         "tags": [
           "junior-programme"
         ]

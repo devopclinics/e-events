@@ -16,6 +16,7 @@ class JuniorConfig(Base):
     classrooms: Mapped[list] = mapped_column(JSON, default=list)
     staff: Mapped[dict] = mapped_column(JSON, default=dict)
     notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    volunteer_reminders_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class JuniorAudit(Base):
@@ -40,6 +41,7 @@ class JuniorChild(Base):
     location: Mapped[str] = mapped_column(String(30), default='not_arrived')
     allergy: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     accommodation: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    screening_wristband_assigned: Mapped[bool] = mapped_column(Boolean, default=False)
     allergy_cleared: Mapped[bool] = mapped_column(Boolean, default=False)
     accommodation_cleared: Mapped[bool] = mapped_column(Boolean, default=False)
     allergy_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -72,6 +74,7 @@ class JuniorMovement(Base):
     child_id: Mapped[str] = mapped_column(ForeignKey('junior_children.id', ondelete='CASCADE'), index=True)
     request_id: Mapped[str] = mapped_column(String(80))
     action: Mapped[str] = mapped_column(String(40))
+    wristbands: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     from_location: Mapped[str] = mapped_column(String(30))
     to_location: Mapped[str] = mapped_column(String(30))
     adult_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -144,3 +147,37 @@ class JuniorInventoryEntry(Base):
     actor_id: Mapped[str] = mapped_column(String(36))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     __table_args__ = (UniqueConstraint('item_id', 'request_id', name='uq_junior_inventory_request'),)
+
+
+class JuniorVolunteerShift(Base):
+    __tablename__ = 'junior_volunteer_shifts'
+    __table_args__ = (UniqueConstraint('event_id','request_key',name='uq_junior_shift_request'),)
+    request_key: Mapped[str] = mapped_column(String(80))
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    event_id: Mapped[str] = mapped_column(ForeignKey('events.id', ondelete='CASCADE'), index=True)
+    event_user_id: Mapped[str] = mapped_column(ForeignKey('event_users.id', ondelete='CASCADE'), index=True)
+    station: Mapped[str] = mapped_column(String(120))
+    starts_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    ends_at: Mapped[datetime] = mapped_column(DateTime)
+    plan: Mapped[dict] = mapped_column(JSON)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    updated_by: Mapped[str] = mapped_column(String(36))
+
+
+class JuniorVolunteerNotice(Base):
+    __tablename__ = 'junior_volunteer_notices'
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    event_id: Mapped[str] = mapped_column(ForeignKey('events.id', ondelete='CASCADE'), index=True)
+    shift_id: Mapped[str] = mapped_column(ForeignKey('junior_volunteer_shifts.id', ondelete='CASCADE'), index=True)
+    generation: Mapped[int] = mapped_column(Integer)
+    due_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    channel: Mapped[str] = mapped_column(String(20))
+    recipient: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default='scheduled', index=True)
+    error: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    provider_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    ledger_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    attempted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    __table_args__ = (UniqueConstraint('shift_id','generation','due_at','channel',name='uq_junior_volunteer_notice'),)

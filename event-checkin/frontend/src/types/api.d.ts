@@ -37,7 +37,7 @@ export interface AccountOrgOut {
 
 export interface ActionIn {
   accommodation?: (boolean) | null
-  action: 'dropoff' | 'screening' | 'clear_allergy' | 'clear_accommodation' | 'classroom' | 'clinic' | 'other' | 'return' | 'outing_depart' | 'outing_return' | 'release'
+  action: 'dropoff' | 'screening' | 'assign_wristband' | 'clear_allergy' | 'clear_accommodation' | 'classroom' | 'clinic' | 'other' | 'return' | 'outing_depart' | 'outing_return' | 'release'
   adult_name?: (string) | null
   adult_verified?: boolean
   allergy?: (boolean) | null
@@ -48,6 +48,7 @@ export interface ActionIn {
   phone?: (string) | null
   relationship?: ('parent' | 'chaperone' | 'adult_sibling') | null
   request_id: string
+  screening_wristband_assigned?: boolean
   version: number
   wristband_assigned?: boolean
 }
@@ -3656,6 +3657,10 @@ export interface SendConsentCopyOut {
   sent_to: string
 }
 
+export interface SendingIn {
+  enabled: boolean
+}
+
 export interface SendInvites {
   confirm: boolean
   recipients: (EmailContact)[]
@@ -3693,6 +3698,26 @@ export interface SettingsPayload {
   message?: string
   profiles?: (Profile)[]
   welcome?: string
+}
+
+export interface ShiftIn {
+  channels: ('email' | 'sms' | 'whatsapp' | 'mms')[]
+  consents?: ('email' | 'sms' | 'whatsapp' | 'mms')[]
+  enabled?: boolean
+  ends_at: string
+  event_user_id: string
+  exact_times?: (string)[]
+  media_url?: (string) | null
+  minutes_before?: (number)[]
+  phone?: (string) | null
+  repeat_every_minutes?: (number) | null
+  repeat_from_minutes?: number
+  request_id: string
+  starts_at: string
+  station: string
+  version?: (number) | null
+  whatsapp_template_ref?: (string) | null
+  whatsapp_template_vars?: Record<string, string>
 }
 
 export interface ShipmentCreate {

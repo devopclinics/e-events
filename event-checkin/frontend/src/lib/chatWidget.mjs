@@ -5,7 +5,7 @@ const SUPPORT_ROUTES = new Set([
   '/console', '/media-library', '/help', '/meetings',
   '/live', '/finance', '/admin-redesign', '/events-redesign', '/guests-redesign',
   '/communications-redesign', '/billing-redesign', '/addons-redesign', '/team-redesign',
-  '/experience-redesign', '/checkin-redesign', '/superadmin-redesign', '/media-redesign',
+  '/guest-export', '/invoices', '/junior-platform', '/experience-redesign', '/checkin-redesign', '/superadmin-redesign', '/media-redesign',
   '/marketing', '/design-studio-redesign', '/event-results-redesign', '/festiome-redesign',
   '/planner-redesign', '/conference-center', '/live-redesign', '/ticketing-redesign',
   '/guest-services', '/help-redesign', '/scanner-redesign', '/kitchen-redesign', '/setup-redesign',

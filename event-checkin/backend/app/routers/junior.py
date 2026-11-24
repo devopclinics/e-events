@@ -494,9 +494,18 @@ async def action(event_id: str, child_id: str, body: ActionIn, db=Depends(get_db
         guest=await db.get(Guest,child.guest_id)
         if not shared.is_junior(event,guest):raise HTTPException(409,'Confirm junior status in Guest List before a new drop-off')
         if before not in ('not_arrived','released'):raise HTTPException(409,'Child is already in JP custody')
-        if not body.adult_name or not body.adult_name.strip() or not body.relationship or not body.identity_checked:
+        adult_name,relationship,phone=body.adult_name,body.relationship,body.phone
+        dropoff_contact=None
+        if body.contact_id:
+            dropoff_contact=await db.scalar(select(JuniorContact).where(JuniorContact.id==body.contact_id,JuniorContact.child_id==child.id))
+            if not dropoff_contact or not await shared.refresh_contact(event,child,dropoff_contact,db):
+                raise HTTPException(409,'This guardian is no longer linked to this child. Refresh and choose the person present.')
+            adult_name=dropoff_contact.name
+            relationship=dropoff_contact.relationship if dropoff_contact.relationship in ('parent','chaperone','adult_sibling') else body.relationship
+            phone=dropoff_contact.phone
+        if not adult_name or not adult_name.strip() or not relationship or not body.identity_checked:
             raise HTTPException(400,'Record the dropping-off adult, relationship and staff verification')
-        if body.relationship=='adult_sibling' and not body.adult_verified:
+        if relationship=='adult_sibling' and not body.adult_verified:
             raise HTTPException(400,'Verify sibling is 18 or older')
         child.screening_wristband_assigned=body.screening_wristband_assigned
         child.allergy=body.allergy
@@ -504,7 +513,7 @@ async def action(event_id: str, child_id: str, body: ActionIn, db=Depends(get_db
         child.allergy_cleared=False
         child.accommodation_cleared=False
         child.location='support_desk' if body.allergy or body.accommodation else 'reception'
-        details={'adult_name':body.adult_name.strip(),'relationship':body.relationship,'phone':body.phone}
+        details={'adult_name':adult_name.strip(),'relationship':relationship,'phone':phone,'contact_id':dropoff_contact.id if dropoff_contact else None}
     elif a=='screening':
         if before not in ('reception','support_desk'):raise HTTPException(409,'Screening requires a child at reception or support desk')
         if body.allergy is None or body.accommodation is None:raise HTTPException(400,'Answer both screening questions')

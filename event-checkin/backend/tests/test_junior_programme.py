@@ -495,3 +495,38 @@ async def test_temporary_departure_has_complete_audited_return_and_classroom_cyc
     notices=(await ctx.client.get(root+'/notifications')).json()
     assert any(('Returned from '+('clinic' if destination=='clinic' else 'temporary departure')+' to Junior Platform') in n['body'] for n in notices)
     assert not any('SECRET' in n['body'] for n in notices)
+
+@pytest.mark.asyncio
+async def test_dropoff_uses_linked_guardian_current_details_and_records_contact(ctx):
+    root=await setup(ctx);c=await child(ctx,root)
+    detail=(await ctx.client.get(root+f"/children/{c['id']}")).json();contact=detail['contacts'][0]
+    async with _Session() as db:
+        g=await db.get(Guest,contact['guardian_guest_id']);g.first_name='Updated';g.last_name='Guardian';g.phone='+12025550147';await db.commit()
+    await act(ctx,root,c,'dropoff',expected=400,contact_id=contact['id'])
+    c=await act(ctx,root,c,'dropoff',contact_id=contact['id'],adult_name='Forged name',relationship='chaperone',phone='+12025550148',identity_checked=True,allergy=False,accommodation=False,screening_wristband_assigned=True)
+    async with _Session() as db:
+        m=await db.scalar(select(JuniorMovement).where(JuniorMovement.child_id==c['id'],JuniorMovement.action=='dropoff'))
+        assert (m.adult_name,m.relationship,m.phone,m.contact_id)==('Updated Guardian','parent','+12025550147',contact['id'])
+
+@pytest.mark.asyncio
+async def test_dropoff_rejects_another_childs_contact_and_keeps_manual_person_separate(ctx):
+    root=await setup(ctx);c=await child(ctx,root);other=await child(ctx,root,guardian=False,name='Different Child')
+    detail=(await ctx.client.get(root+f"/children/{c['id']}")).json();contact=detail['contacts'][0]
+    await act(ctx,root,other,'dropoff',expected=409,contact_id=contact['id'],identity_checked=True)
+    async with _Session() as db:
+        guests=await db.scalar(select(func.count(Guest.id)));contacts=await db.scalar(select(func.count(JuniorContact.id)))
+    await act(ctx,root,other,'dropoff',adult_name='Another adult',relationship='chaperone',phone='+12025550149',identity_checked=True,allergy=False,accommodation=False)
+    async with _Session() as db:
+        m=await db.scalar(select(JuniorMovement).where(JuniorMovement.child_id==other['id'],JuniorMovement.action=='dropoff'))
+        assert m.contact_id is None and m.adult_name=='Another adult'
+        assert await db.scalar(select(func.count(Guest.id)))==guests
+        assert await db.scalar(select(func.count(JuniorContact.id)))==contacts
+
+@pytest.mark.asyncio
+async def test_linked_sibling_dropoff_still_requires_explicit_age_verification(ctx):
+    root=await setup(ctx);c=await child(ctx,root,guardian=False)
+    r=await ctx.client.post(root+f"/children/{c['id']}/contacts",json={'name':'Adult sibling','relationship':'adult_sibling','adult_verified':True,'pickup_authorized':True})
+    assert r.status_code==201
+    detail=(await ctx.client.get(root+f"/children/{c['id']}")).json();c=detail
+    await act(ctx,root,c,'dropoff',expected=400,contact_id=r.json()['id'],identity_checked=True)
+    await act(ctx,root,c,'dropoff',contact_id=r.json()['id'],identity_checked=True,adult_verified=True,allergy=False,accommodation=False)

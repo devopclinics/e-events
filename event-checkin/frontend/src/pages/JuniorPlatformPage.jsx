@@ -69,6 +69,25 @@ function TemporaryCycle({child,tz}) {
   return <section className="jp-temporary-cycle" aria-label={title+' cycle'}><div className="jp-row"><h3>{title} · complete movement record</h3><span className={'jp-status '+(returned?'jp-classroom':'jp-clinic')}>{returned?'Return recorded':'Awaiting return'}</span></div><ol>{[[title+' departure',departure],['Return to JP',returned],['Classroom arrival',classroom]].map(([name,entry])=><li key={name} data-recorded={!!entry}><span className="jp-cycle-dot">{entry?'✓':'○'}</span><div><strong>{name}</strong><small>{entry?stamp(entry.occurred_at,tz):'Not recorded yet'}</small>{entry&&<small>Recorded by {entry.actor_name||'Staff'}</small>}</div></li>)}</ol><p>Record the return when the child is physically back. Confirm classroom arrival if they resume class, or follow verified pickup if they are leaving for the day.</p></section>
 }
 
+function DropoffFields({contacts}) {
+  const linkedContacts=contacts.filter(c=>c.guardian_guest_id).sort((a,b)=>Number(b.relationship==='parent')-Number(a.relationship==='parent')||a.name.localeCompare(b.name))
+  const [selected,setSelected]=useState(()=>linkedContacts[0]?.id||'')
+  const [manual,setManual]=useState({name:'',relationship:'parent',phone:''})
+  const linked=linkedContacts.find(c=>c.id===selected)
+  const knownRelationship=linked&&['parent','chaperone','adult_sibling'].includes(linked.relationship)
+  const resetVerification=form=>{if(form){form.elements.identity_checked.checked=false;form.elements.adult_verified.checked=false}}
+  return <>
+    <label>Person dropping off<select aria-label="Person dropping off" value={linked?.id||''} onChange={e=>{setSelected(e.target.value);resetVerification(e.target.form)}}>{linkedContacts.map(c=><option key={c.id} value={c.id}>{c.name} · {label(c.relationship)}</option>)}<option value="">Another person — enter their details</option></select></label>
+    <input type="hidden" name="contact_id" value={linked?.id||''}/>
+    {linked?<p className="jp-muted">Linked guardian selected. Confirm this is the person present, or choose Another person. Guardian details will be recorded from the shared profile.</p>:<p className="jp-muted">Record this person for today’s drop-off. This does not add them as a guardian or authorize pickup.</p>}
+    <label>Adult dropping off<input name="adult_name" required maxLength={255} readOnly={!!linked} value={linked?.name||manual.name} onChange={e=>{setManual({...manual,name:e.target.value});resetVerification(e.target.form)}}/></label>
+    <label>Relationship<select aria-label="Drop-off relationship" name={knownRelationship?undefined:'relationship'} disabled={!!knownRelationship} value={knownRelationship?linked.relationship:manual.relationship} onChange={e=>{setManual({...manual,relationship:e.target.value});resetVerification(e.target.form)}}>{relationOptions}</select></label>{knownRelationship&&<input type="hidden" name="relationship" value={linked.relationship}/>}
+    <label>Drop-off phone (optional)<input name="phone" type="tel" pattern="\+[1-9][0-9]{7,14}" title="Use the full international number, including + and country code" readOnly={!!linked} value={linked?(linked.phone||''):manual.phone} onChange={e=>setManual({...manual,phone:e.target.value})} placeholder={linked?'Recorded from linked guardian profile':'+12025550146'}/></label>
+    <label className="jp-check"><input name="identity_checked" type="checkbox" required/>Staff verified drop-off in person</label>
+    <label className="jp-check"><input name="adult_verified" type="checkbox" required={(knownRelationship?linked.relationship:manual.relationship)==='adult_sibling'}/>Sibling age 18+ verified (required for sibling)</label>
+  </>
+}
+
 function ChildPanel({ child, config, outings, role, call, refresh, close, busy: externalBusy, tz, guestPool }) {
   const [saving,setSaving]=useState(false)
   const busy=externalBusy||saving
@@ -118,7 +137,7 @@ function ChildPanel({ child, config, outings, role, call, refresh, close, busy: 
       {intake && <><option value="contact">Add guardian / collector</option><option value="correction">Correct name / classroom</option></>}
     </select></label>
     <form key={mode + (editContact?.id || "")} onSubmit={submit}>
-      {mode === 'dropoff' && <><label>Adult dropping off<input name="adult_name" required maxLength={255} /></label><label>Relationship<select name="relationship">{relationOptions}</select></label><label>Drop-off phone (optional)<input name="phone" type="tel" pattern="\+[1-9][0-9]{7,14}" title="Use the full international number, including + and country code" placeholder="+12025550146" /></label><label className="jp-check"><input name="identity_checked" type="checkbox" required />Staff verified drop-off in person</label><label className="jp-check"><input name="adult_verified" type="checkbox" />Sibling age 18+ verified (required for sibling)</label></>}
+      {mode === 'dropoff' && <DropoffFields contacts={child.contacts}/>}
       {['dropoff', 'screening'].includes(mode) && <fieldset><legend>Screening</legend>{['allergy', 'accommodation'].map(name => <label key={name}>{name === 'allergy' ? 'Allergy profile?' : 'Special accommodation?'}<select name={name} required><option value="">Select Yes or No</option><option value="yes">Yes — refer to desk</option><option value="no">No</option></select></label>)}</fieldset>}
       {['dropoff','screening','assign_wristband'].includes(mode)&&<label className="jp-check jp-band-confirm"><input name="screening_wristband_assigned" type="checkbox" required defaultChecked={mode!=='dropoff'&&!!child.screening_wristband_assigned}/>Standard screening wristband physically issued or checked on this child</label>}
       {['clear_allergy', 'clear_accommodation'].includes(mode) && <><label>Restricted details<input name="notes" required maxLength={2000} /></label><label className="jp-check"><input name="wristband_assigned" type="checkbox" required />Details reviewed and wristband assigned</label></>}

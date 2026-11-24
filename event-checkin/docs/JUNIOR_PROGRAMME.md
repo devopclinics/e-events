@@ -127,3 +127,8 @@ Select Email, SMS, WhatsApp, MMS or multiple channels. Email uses the current Te
 Shift activation and the event’s volunteer-sending switch are separate, initially off, and independent of guardian or convention notification switches. Dispatch rechecks membership, Junior Platform role, active account, consent, provider readiness, event safety and credits. Removed staff, changed shifts, expired times and paused schedules cannot fan out. Edits cancel unattempted old-generation reminders. A provider attempt is committed before dispatch; uncertain outcomes require review and are never automatically replayed. Delivery receipts distinguish Accepted from Delivered. Missed reminders are not sent once the shift begins, or when more than five minutes late.
 
 Volunteers keep children supervised and queues moving through prompt, recorded handoffs. Late relief is escalated to the lead; a reminder does not replace an in-person handover.
+
+
+### Linked guardian at drop-off
+
+Drop-off defaults to an existing linked guardian (parents listed first). Staff can select another linked guardian or choose Another person to enter a separate handoff record. The server resolves linked names, relationships and phone numbers from the current shared guardian record; scanner roles do not receive private contact fields. Staff must still verify the person in front of them, and verify an adult sibling’s age. Recording another person at drop-off does not create a Guest, change guardian contacts, opt them into messages, or grant pickup authorization.

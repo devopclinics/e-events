@@ -204,3 +204,27 @@ body:has(.jp-dialog[open]) { overflow:hidden; }
 .jp-day-status { padding:14px; margin:15px 0; border:1px solid var(--line); border-radius:9px; background:var(--surface-2); }
 .jp-day-status strong { font-size:12px; }
 .jp-day-status p { font-size:11px; margin-bottom:0; }
+
+/* Keep routine check-in focused on the junior in front of the volunteer. */
+.jp-roster-heading p { color:var(--muted); font-size:12px; line-height:1.6; margin:10px 0 0; max-width:390px; }
+.jp-search-row .jp-search-label { min-height:58px; }
+.jp-panel .jp-search-hint { color:var(--muted); font-size:11px; margin:10px 23px 20px; line-height:1.5; }
+.jp-panel .jp-search-results { margin:0; padding:14px 23px; color:var(--muted); font-size:12px; border-top:1px solid var(--line); }
+.jp-search-start { padding:30px 24px 38px; border-top:1px solid var(--line); background:linear-gradient(180deg,var(--surface-2),transparent); }
+.jp-search-start .jp-empty-icon { color:var(--jp-accent); background:var(--jp-accent-soft); }
+.jp-search-start h3 { font-size:20px; }
+.jp-search-start p { max-width:390px; font-size:12px; line-height:1.8; }
+.jp-search-steps { display:flex; justify-content:center; gap:20px; margin-top:24px; flex-wrap:wrap; }
+.jp-search-steps span { display:flex; align-items:center; gap:7px; color:var(--muted); font-size:10px; }
+.jp-search-steps b { display:grid; place-items:center; width:23px; height:23px; border:1px solid var(--line); border-radius:50%; color:var(--jp-accent); background:var(--surface); font-weight:500; }
+.jp-workspace .jp-search-label input::-webkit-search-cancel-button { display:none; }
+@media(max-width:600px) {
+ .jp-roster-heading { flex-wrap:wrap; }
+ .jp-roster-heading p { font-size:12px; }
+ .jp-workspace .jp-scan-button { width:100%; justify-content:center; font-size:12px; }
+ .jp-panel .jp-search-hint { margin-left:16px; margin-right:16px; }
+ .jp-panel .jp-search-results { padding:14px 16px; }
+ .jp-search-start { padding:25px 18px 30px; }
+ .jp-search-steps { gap:10px; }
+ .jp-search-steps span { font-size:9px; gap:5px; }
+}

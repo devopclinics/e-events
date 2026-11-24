@@ -38,7 +38,7 @@ function withTimeout(promise, ms, message) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
 }
 
-export default function QrCameraScanner({ onScan, disabled = false }) {
+export default function QrCameraScanner({ onScan, disabled = false, responsive = false }) {
   const reactId = useId()
   const elementId = `qr-camera-${reactId.replaceAll(':', '')}`
   const scannerRef = useRef(null)
@@ -63,7 +63,7 @@ export default function QrCameraScanner({ onScan, disabled = false }) {
     scannerRef.current = scanner
     await scanner.start(
       id,
-      { fps: 10, qrbox: { width: 250, height: 250 } },
+      { fps: 10, qrbox: responsive ? (width,height)=>{const edge=Math.max(1,Math.floor(Math.min(250,width*.8,height*.8)));return {width:edge,height:edge}} : { width: 250, height: 250 } },
       async (value) => {
         await stopCamera()
         setRunning(false)

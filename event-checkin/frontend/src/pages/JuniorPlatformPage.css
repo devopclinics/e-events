@@ -244,3 +244,64 @@ body:has(.jp-dialog[open]) { overflow:hidden; }
 .juniors-install-help { max-width:900px; margin:20px auto; padding:20px; border:1px solid var(--line); background:var(--surface); border-radius:10px; font-size:13px; line-height:1.8; }
 .juniors-app-footer { padding:20px 28px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:15px; color:var(--muted); font-size:11px; }
 @media(max-width:600px) { .juniors-app-bar { padding:16px; gap:16px; } .juniors-app-bar>label { order:3; width:100%; margin:0; } .juniors-app-bar select { max-width:none; width:100%; font-size:16px; } .juniors-app-tools { margin-left:auto; } .juniors-app-tools>span { display:none; } .juniors-app-tools button { min-height:44px; } .juniors-install-help { margin:16px; } }
+
+.jp-mobile-section { display:none; }
+.jp-other-actions { margin:16px 0; }
+.jp-other-actions>summary { cursor:pointer; color:var(--jp-accent); font-size:12px; padding:12px 0; }
+.jp-practice-banner>summary { cursor:pointer; font-weight:650; }
+.jp-screening-choice { border:0!important; margin:16px 0 0!important; padding:0!important; }
+.jp-screening-choice>legend { font-size:13px; font-weight:600; }
+.jp-screening-choice>div { display:flex; gap:10px; margin-top:8px; flex-wrap:wrap; }
+.jp-screening-choice>div>label { display:flex; align-items:center; gap:10px; flex:1 1 120px; min-height:48px; border:1px solid var(--line); border-radius:9px; padding:12px; cursor:pointer; font-size:13px; }
+.jp-screening-choice label:has(input:checked) { background:var(--jp-accent-soft); border-color:var(--jp-accent); }
+.jp-screening-choice input { width:20px!important; height:20px; accent-color:var(--jp-accent); flex:none; margin:0; }
+@media(max-width:600px), (max-height:500px) and (pointer:coarse) {
+ .juniors-app-bar { padding-top:max(12px,env(safe-area-inset-top)); padding-bottom:12px; gap:10px; }
+ .juniors-app-brand { font-size:19px; }
+ .juniors-app-brand small { display:none; }
+ .juniors-app .jp-workspace { padding-top:12px; }
+ .juniors-app .jp-heading { margin-bottom:8px; }
+ .juniors-app .jp-heading>div:first-child { display:none; }
+ .juniors-app .jp-context-bar { padding:8px 0 12px; }
+ .jp-practice-banner { padding:13px 14px; margin-bottom:14px; }
+ .jp-mobile-section { display:grid; gap:5px; color:var(--muted); font-size:11px; margin:0 0 14px; }
+ .jp-mobile-section select { width:100%; min-height:48px; padding:10px 12px; border-radius:9px; border:1px solid var(--line); color:var(--ink); background:var(--surface); font-size:16px; }
+ .jp-tabs { display:none; }
+ .jp-workspace button:not(.rd-switch):not(.rr-switch),.jp-workspace .jp-link-button,.jp-dialog button { min-height:48px; touch-action:manipulation; }
+ .jp-dialog input:not([type=checkbox]):not([type=radio]),.jp-dialog select,.jp-dialog textarea { min-height:48px; font-size:16px; }
+ .jp-dialog .jp-check { min-height:48px; padding:10px 0; gap:12px; }
+ .jp-dialog input[type=checkbox] { width:22px; height:22px; flex:none; accent-color:var(--jp-accent); }
+ .jp-detail-heading { position:sticky; top:0; z-index:4; background:var(--surface); padding:12px 0; border-bottom:1px solid var(--line); }
+ .jp-detail-heading>div { min-width:0; }
+ .jp-detail-heading h2 { font-size:22px; overflow-wrap:anywhere; }
+ .jp-detail-heading .jp-close { flex:none; }
+ .jp-workspace .jp-detail form>.jp-primary { position:sticky; bottom:env(safe-area-inset-bottom,0px); z-index:3; min-height:52px; box-shadow:0 -5px 18px var(--surface); }
+ .jp-dialog>.jp-panel { padding-top:0; padding-bottom:calc(24px + env(safe-area-inset-bottom,0px)); }
+ .jp-roster-panel { padding:0; }
+ .jp-search-start { padding:20px 16px; }
+ .jp-search-steps { display:none; }
+ .jp-workspace .jp-search-label { min-height:54px; }
+ .jp-workspace .jp-roster-footer button { min-height:48px; }
+}
+
+@media(max-width:600px), (max-height:500px) and (pointer:coarse) {
+ .jp-dialog summary { min-height:48px; padding-top:12px; padding-bottom:12px; }
+ .jp-practice-banner a,.juniors-app-footer a { display:inline-flex; align-items:center; min-height:48px; }
+ .jp-detail-heading a { display:inline-flex; align-items:center; min-height:44px; }
+ .jp-detail .jp-next-action { margin-top:14px; }
+}
+
+.jp-saved-feedback { display:flex; align-items:center; gap:8px; }
+@media(max-width:600px), (max-height:500px) and (pointer:coarse) {
+ .jp-dialog { scroll-padding-top:180px; scroll-padding-bottom:80px; }
+ .jp-person strong,.jp-classroom-name { overflow-wrap:anywhere; }
+}
+
+@media(pointer:coarse) { .juniors-app-bar select { min-height:48px; font-size:16px; } .juniors-app-tools button { min-height:48px; } }
+
+@media(max-width:600px), (max-height:500px) and (pointer:coarse) {
+ .jp-dialog label,.jp-dialog legend,.jp-dialog .jp-screening-choice label { font-size:14px; }
+ .jp-person strong { font-size:14px; }
+ .jp-person small { font-size:11px; }
+ .jp-classroom-name { font-size:12px; }
+}

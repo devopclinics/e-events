@@ -84,6 +84,28 @@ async def bird(method, path, **kwargs):
                                     headers={'Authorization': 'AccessKey '+settings.bird_access_key}, **kwargs)
 
 
+def rejection_detail(response):
+    """Keep actionable validation paths, without copying customer text or URLs."""
+    import re
+    try:data=response.json()
+    except (ValueError,TypeError):data={}
+    if not isinstance(data,dict):data={}
+    code=str(data.get('code') or '')
+    code=code if re.fullmatch(r'[A-Za-z0-9_-]{1,60}',code) else ''
+    summary='Bird rejected this reply (HTTP '+str(response.status_code)+((', '+code) if code else '')+').'
+    details=data.get('details') or {}
+    if isinstance(details,dict):
+        for field,reasons in list(details.items())[:3]:
+            if not isinstance(field,str) or not re.fullmatch(r'[A-Za-z0-9_.\[\]-]{1,90}',field):continue
+            path=field.lstrip('.') or 'request'
+            safe=[]
+            for reason in (reasons if isinstance(reasons,list) else [])[:2]:
+                match=re.fullmatch(r'property "([A-Za-z0-9_-]{1,50})" is (missing|unsupported)',str(reason))
+                if match:safe.append(match[1]+' '+match[2])
+            summary+=' '+path+(': '+', '.join(safe) if safe else '')+'.'
+    return summary[:278]+' No message was sent.'
+
+
 def channel_path():
     return '/channels/'+settings.bird_whatsapp_channel_id+'/messages'
 

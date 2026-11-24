@@ -1,9 +1,11 @@
 """Durable guardian notices. Uncertain sends require review, never blind retry."""
 import logging
+import asyncio
 from datetime import datetime, timedelta
 from html import escape
 from sqlalchemy import select
 from ..database import AsyncSessionLocal
+from ..config import settings
 from ..models import Event, EmailDeliveryEvent, MessageCreditLedger
 from ..junior_models import JuniorConfig, JuniorContact, JuniorNotification
 from ..entitlements import reserve_message_credit, last_credit_ledger_id, can_use_paid_channels
@@ -38,6 +40,11 @@ async def deliver(notification_id, sessions=None, sender=None):
         row=await db.scalar(select(JuniorNotification).where(JuniorNotification.id==notification_id).with_for_update(skip_locked=True))
         if not row or row.status!='queued':return
         event=await db.scalar(select(Event).where(Event.id==row.event_id).with_for_update())
+        earlier=await db.scalar(select(JuniorNotification.id).where(
+            JuniorNotification.event_id==row.event_id,JuniorNotification.contact_id==row.contact_id,
+            JuniorNotification.channel==row.channel,JuniorNotification.status.in_(['queued','sending']),
+            JuniorNotification.created_at<row.created_at).limit(1))
+        if earlier:return
         config=await db.get(JuniorConfig,row.event_id)
         contact=await db.get(JuniorContact,row.contact_id) if row.contact_id else None
         reason=None
@@ -49,19 +56,19 @@ async def deliver(notification_id, sessions=None, sender=None):
         elif row.recipient!=getattr(contact,'email' if row.channel=='email' else 'phone'):reason='Guardian contact changed; review recipient'
         elif not row.recipient:reason='Missing guardian contact'
         elif row.channel in (event.blocked_messaging_channels or []):reason='Channel blocked'
-        elif not getattr(event,'notify_'+row.channel):reason='Event channel disabled'
         elif not recipient_allowed(row.channel,row.recipient):reason='Recipient blocked by outbound policy'
+        elif row.channel=='email' and sender is transport and not (settings.resend_api_key or settings.smtp_host or (settings.bird_email_api_base and settings.bird_access_key and settings.bird_workspace_id)):
+            reason='Email provider setup required'
         elif row.channel=='sms' and not contact.sms_consent:reason='Guardian SMS permission not recorded'
         elif row.channel=='sms' and not messaging._channel_ready('sms',row.recipient):reason='SMS provider setup required'
         elif row.channel=='sms' and not can_use_paid_channels(event):reason='Paid messaging is not available'
         if reason:
             row.status='setup_required';row.error=reason
             await db.commit();return
-        if row.channel=='sms':
-            if not await reserve_message_credit(event,'sms',db=db,reason='junior_update',provider_message_id='junior:'+row.id):
-                row.status='setup_required';row.error='Message credits required'
-                await db.commit();return
-            row.ledger_id=last_credit_ledger_id(event)
+        if not await reserve_message_credit(event,row.channel,db=db,reason='junior_update',provider_message_id='junior:'+row.id):
+            row.status='setup_required';row.error='Message credits required'
+            await db.commit();return
+        row.ledger_id=last_credit_ledger_id(event)
         row.status='sending';row.attempted_at=datetime.utcnow()
         await db.commit()
     # A crash or timeout may mean provider acceptance: retain uncertainty.
@@ -83,8 +90,9 @@ async def deliver(notification_id, sessions=None, sender=None):
 
 
 async def receipts(db):
-    rows=(await db.scalars(select(JuniorNotification).where(JuniorNotification.status.in_(['accepted','sending'])).order_by(JuniorNotification.created_at.desc()).limit(200))).all()
+    rows=(await db.scalars(select(JuniorNotification).where(JuniorNotification.status.in_(['accepted','sending'])).order_by(JuniorNotification.receipt_checked_at.asc().nullsfirst(),JuniorNotification.created_at).limit(200))).all()
     for row in rows:
+        row.receipt_checked_at=datetime.utcnow()
         if row.status=='sending':
             if row.attempted_at and row.attempted_at<datetime.utcnow()-timedelta(minutes=5):
                 row.status='review_required';row.error='Interrupted send; reconcile provider outcome before resending'
@@ -108,4 +116,18 @@ async def tick():
     async with AsyncSessionLocal() as db:
         await receipts(db)
         ids=(await db.scalars(select(JuniorNotification.id).where(JuniorNotification.status=='queued').order_by(JuniorNotification.created_at).limit(20))).all()
-    for row_id in ids:await deliver(row_id)
+    semaphore=asyncio.Semaphore(4)
+    async def one(row_id):
+        async with semaphore:
+            try:await deliver(row_id)
+            except Exception:logger.exception('Junior notification claim failed id=%s',row_id)
+    await asyncio.gather(*(one(row_id) for row_id in ids))
+
+
+async def run():
+    while True:
+        try:
+            await tick()
+        except Exception:
+            logger.exception('Junior notification worker tick failed')
+        await asyncio.sleep(10)

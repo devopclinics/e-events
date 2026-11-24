@@ -231,3 +231,85 @@ async def test_notification_revocation_and_expiry_block_provider_call(ctx):
     await junior_outbox.deliver(row_id,sessions=_Session,sender=forbidden)
     async with _Session() as db:assert (await db.get(JuniorNotification,row_id)).status=='setup_required'
     assert (await ctx.client.post(root+f'/notifications/{row_id}/retry')).status_code==409
+
+
+@pytest.mark.asyncio
+async def test_contact_edit_revocation_and_correction_history(ctx):
+    root=await setup(ctx);c=await child(ctx,root)
+    detail=(await ctx.client.get(root+f"/children/{c['id']}")).json()
+    assert detail['badge_data_url'].startswith('data:image/png;base64,')
+    contact=detail['contacts'][0]
+    body={k:contact[k] for k in ['name','relationship','email','phone','sms_consent','adult_verified','pickup_authorized','notify']}
+    body.update(version=c['version'],pickup_authorized=False)
+    r=await ctx.client.put(root+f"/children/{c['id']}/contacts/{contact['id']}",json=body);assert r.status_code==200,r.text
+    assert (await ctx.client.put(root+f"/children/{c['id']}/contacts/{contact['id']}",json=body)).status_code==409
+    c=(await ctx.client.get(root+f"/children/{c['id']}")).json();c=await drop(ctx,root,c)
+    await act(ctx,root,c,'release',expected=409,contact_id=contact['id'],identity_checked=True)
+    r=await ctx.client.patch(root+f"/children/{c['id']}",json={'version':c['version'],'name':'Aminah Yusuf','classroom':'Group B','reason':'Corrected against JP roster'})
+    assert r.status_code==200
+    detail=(await ctx.client.get(root+f"/children/{c['id']}")).json()
+    correction=next(h for h in detail['history'] if h['action']=='correction')
+    assert correction['correction']['before']['name']=='Amina Yusuf'
+    assert correction['correction']['after']['name']=='Aminah Yusuf'
+    assert correction['actor_name']=='Alice'
+
+
+@pytest.mark.asyncio
+async def test_module_disable_preserves_data_and_other_event_default(ctx):
+    root=await setup(ctx);c=await child(ctx,root)
+    r=await ctx.client.put(root+'/config',json={'enabled':False,'classrooms':['Group A','Group B']});assert r.status_code==200
+    assert (await ctx.client.get(root+'/children')).status_code==409
+    async with _Session() as db:
+        assert await db.get(JuniorChild,c['id']) is not None
+        org=ctx.ids['org_a']
+        future=Event(org_id=org,name='Future event',couples_name='Future',event_date=datetime.utcnow(),checkin_base_url='http://test')
+        db.add(future);await db.commit();assert future.junior_program_enabled is False
+
+
+@pytest.mark.asyncio
+async def test_recipient_change_cannot_send_old_contact_snapshot(ctx):
+    root=await setup(ctx);c=await child(ctx,root)
+    async with _Session() as db:
+        event=await db.get(Event,ctx.ids['event_a']);event.notify_email=True;event.notify_sms=True
+        config=await db.get(JuniorConfig,event.id);config.notifications_enabled=True;await db.commit()
+    c=await drop(ctx,root,c)
+    async with _Session() as db:
+        row=await db.scalar(select(JuniorNotification).where(JuniorNotification.channel=='email',JuniorNotification.status=='queued'))
+        row_id=row.id;contact=await db.get(JuniorContact,row.contact_id);contact.email='changed@example.com';await db.commit()
+    called=[]
+    async def sender(row):called.append(row.id);return {'accepted':True}
+    await junior_outbox.deliver(row_id,sessions=_Session,sender=sender)
+    assert not called
+    async with _Session() as db:
+        row=await db.get(JuniorNotification,row_id);assert row.status=='setup_required'
+    r=await ctx.client.post(root+f'/notifications/{row_id}/retry');assert r.status_code==200
+    async with _Session() as db:
+        row=await db.get(JuniorNotification,row_id);assert row.recipient=='changed@example.com'
+
+
+@pytest.mark.asyncio
+async def test_junior_notices_do_not_enable_or_depend_on_convention_notices(ctx):
+    root=await setup(ctx);c=await child(ctx,root)
+    async with _Session() as db:
+        event=await db.get(Event,ctx.ids['event_a']);event.notify_email=False;event.notify_sms=False
+        config=await db.get(JuniorConfig,event.id);config.notifications_enabled=True;await db.commit()
+    c=await drop(ctx,root,c)
+    async with _Session() as db:
+        row=await db.scalar(select(JuniorNotification).where(JuniorNotification.channel=='email',JuniorNotification.status=='queued'));row_id=row.id
+    async def sender(row):return {'accepted':True}
+    await junior_outbox.deliver(row_id,sessions=_Session,sender=sender)
+    async with _Session() as db:
+        assert (await db.get(JuniorNotification,row_id)).status=='accepted'
+        event=await db.get(Event,ctx.ids['event_a']);assert not event.notify_email and not event.notify_sms
+
+
+@pytest.mark.asyncio
+async def test_names_only_intake_cannot_enter_classroom_or_release(ctx):
+    root=await setup(ctx)
+    r=await ctx.client.post(root+'/import',json={'children':[{'name':'Name Only'}]});assert r.status_code==201,r.text
+    c=r.json()[0];assert c['classroom']=='' and c['age_group']=='Pending confirmation'
+    c=await drop(ctx,root,c)
+    await act(ctx,root,c,'classroom',expected=409)
+    await act(ctx,root,c,'release',expected=409,identity_checked=True)
+    r=await ctx.client.patch(root+f"/children/{c['id']}",json={'version':c['version'],'name':'Correct Name','classroom':'','reason':'Corrected real name at intake'})
+    assert r.status_code==200,r.text

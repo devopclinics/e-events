@@ -45,6 +45,7 @@ from .services import meeting_outbox
 from .models import ApiKeyRequestLog
 from . import junior_models  # Register additive tables before migration/test metadata creation.
 from .routers import junior
+from .services import junior_outbox
 
 # Override with UPLOADS_DIR for local/test runs; defaults to the in-container path.
 UPLOADS_DIR = os.environ.get("UPLOADS_DIR", "/app/uploads")
@@ -75,6 +76,7 @@ async def lifespan(app: FastAPI):
     # others until they happen to restart.
     cache_refresh_task = asyncio.create_task(entitlements.run_cache_refresher())
     quick_invite_task = asyncio.create_task(quick_invite_outbox.run())
+    junior_task = asyncio.create_task(junior_outbox.run())
     meetings_task = asyncio.create_task(meeting_outbox.run()) if settings.meetings_sending_enabled else None
 
     # Run the guest-list sync poller inside the web process for single-host
@@ -144,6 +146,11 @@ async def lifespan(app: FastAPI):
         await routers.stop_sse_subscriber()
         cache_refresh_task.cancel()
         quick_invite_task.cancel()
+        junior_task.cancel()
+        try:
+            await junior_task
+        except asyncio.CancelledError:
+            pass
         try:
             await quick_invite_task
         except asyncio.CancelledError:

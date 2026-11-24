@@ -118,6 +118,155 @@
         "title": "AccountOrgOut",
         "type": "object"
       },
+      "ActionIn": {
+        "properties": {
+          "accommodation": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accommodation"
+          },
+          "action": {
+            "enum": [
+              "dropoff",
+              "screening",
+              "clear_allergy",
+              "clear_accommodation",
+              "classroom",
+              "clinic",
+              "other",
+              "return",
+              "outing_depart",
+              "outing_return",
+              "release"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "adult_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adult Name"
+          },
+          "adult_verified": {
+            "default": false,
+            "title": "Adult Verified",
+            "type": "boolean"
+          },
+          "allergy": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allergy"
+          },
+          "contact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Id"
+          },
+          "identity_checked": {
+            "default": false,
+            "title": "Identity Checked",
+            "type": "boolean"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "outing_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outing Id"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "pattern": "^\\+[1-9]\\d{7,14}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "relationship": {
+            "anyOf": [
+              {
+                "enum": [
+                  "parent",
+                  "chaperone",
+                  "adult_sibling"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relationship"
+          },
+          "request_id": {
+            "maxLength": 80,
+            "minLength": 8,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "wristband_assigned": {
+            "default": false,
+            "title": "Wristband Assigned",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "request_id",
+          "version",
+          "action"
+        ],
+        "title": "ActionIn",
+        "type": "object"
+      },
       "ActiveToggle": {
         "properties": {
           "active": {
@@ -281,6 +430,43 @@
           "body"
         ],
         "title": "AnnouncementRequest",
+        "type": "object"
+      },
+      "Answers": {
+        "additionalProperties": false,
+        "properties": {
+          "dress": {
+            "default": "",
+            "maxLength": 600,
+            "title": "Dress",
+            "type": "string"
+          },
+          "programme": {
+            "default": "",
+            "maxLength": 600,
+            "title": "Programme",
+            "type": "string"
+          },
+          "registration": {
+            "default": "",
+            "maxLength": 600,
+            "title": "Registration",
+            "type": "string"
+          },
+          "time": {
+            "default": "",
+            "maxLength": 600,
+            "title": "Time",
+            "type": "string"
+          },
+          "venue": {
+            "default": "",
+            "maxLength": 600,
+            "title": "Venue",
+            "type": "string"
+          }
+        },
+        "title": "Answers",
         "type": "object"
       },
       "ApiKeyCreate": {
@@ -820,6 +1006,60 @@
         "title": "Batch",
         "type": "object"
       },
+      "Body_email_proposal_api_events_proposals_email_post": {
+        "properties": {
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id"
+          },
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "message": {
+            "default": "",
+            "maxLength": 3000,
+            "title": "Message",
+            "type": "string"
+          },
+          "recipient": {
+            "format": "email",
+            "title": "Recipient",
+            "type": "string"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "subject": {
+            "maxLength": 180,
+            "minLength": 1,
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "recipient",
+          "subject",
+          "request_id"
+        ],
+        "title": "Body_email_proposal_api_events_proposals_email_post",
+        "type": "object"
+      },
       "Body_import_contacts_csv_api_organizations_me_contact_lists__list_id__contacts_csv_post": {
         "properties": {
           "file": {
@@ -834,6 +1074,25 @@
         "title": "Body_import_contacts_csv_api_organizations_me_contact_lists__list_id__contacts_csv_post",
         "type": "object"
       },
+      "Body_issue_api_organization_invoices__invoice_id__issue_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "file"
+        ],
+        "title": "Body_issue_api_organization_invoices__invoice_id__issue_post",
+        "type": "object"
+      },
       "Body_upload_asset_api_events__event_id__design_assets_post": {
         "properties": {
           "file": {
@@ -846,6 +1105,20 @@
           "file"
         ],
         "title": "Body_upload_asset_api_events__event_id__design_assets_post",
+        "type": "object"
+      },
+      "Body_upload_attachment_api_platform_support_whatsapp_conversations__ident__attachments_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_attachment_api_platform_support_whatsapp_conversations__ident__attachments_post",
         "type": "object"
       },
       "Body_upload_calendar_logo_api_organizations_me_calendars__calendar_id__upload_logo_post": {
@@ -1602,6 +1875,60 @@
         "title": "CheckoutRequest",
         "type": "object"
       },
+      "ChildIn": {
+        "properties": {
+          "age_group": {
+            "default": "Pending confirmation",
+            "maxLength": 80,
+            "title": "Age Group",
+            "type": "string"
+          },
+          "classroom": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Classroom",
+            "type": "string"
+          },
+          "confirm_same_name": {
+            "default": false,
+            "title": "Confirm Same Name",
+            "type": "boolean"
+          },
+          "guardian": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContactIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ChildIn",
+        "type": "object"
+      },
       "ConferenceOperationIn": {
         "properties": {
           "category": {
@@ -2000,6 +2327,46 @@
         "title": "ConferenceTrackIn",
         "type": "object"
       },
+      "ConfigIn": {
+        "properties": {
+          "classrooms": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Classrooms",
+            "type": "array"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "notifications_enabled": {
+            "default": false,
+            "title": "Notifications Enabled",
+            "type": "boolean"
+          },
+          "staff": {
+            "additionalProperties": {
+              "enum": [
+                "scanner",
+                "intake",
+                "support",
+                "inventory",
+                "supervisor"
+              ],
+              "type": "string"
+            },
+            "title": "Staff",
+            "type": "object"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "ConfigIn",
+        "type": "object"
+      },
       "ConsentFormOut": {
         "properties": {
           "body": {
@@ -2345,6 +2712,75 @@
         "title": "ContactCreate",
         "type": "object"
       },
+      "ContactIn": {
+        "properties": {
+          "adult_verified": {
+            "default": false,
+            "title": "Adult Verified",
+            "type": "boolean"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "notify": {
+            "default": true,
+            "title": "Notify",
+            "type": "boolean"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "pattern": "^\\+[1-9]\\d{7,14}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "pickup_authorized": {
+            "default": false,
+            "title": "Pickup Authorized",
+            "type": "boolean"
+          },
+          "relationship": {
+            "enum": [
+              "parent",
+              "chaperone",
+              "adult_sibling"
+            ],
+            "title": "Relationship",
+            "type": "string"
+          },
+          "sms_consent": {
+            "default": false,
+            "title": "Sms Consent",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "relationship"
+        ],
+        "title": "ContactIn",
+        "type": "object"
+      },
       "ContactListCreate": {
         "properties": {
           "name": {
@@ -2438,6 +2874,126 @@
           "text"
         ],
         "title": "ContactPaste",
+        "type": "object"
+      },
+      "ContactUpdateIn": {
+        "properties": {
+          "adult_verified": {
+            "default": false,
+            "title": "Adult Verified",
+            "type": "boolean"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "notify": {
+            "default": true,
+            "title": "Notify",
+            "type": "boolean"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "pattern": "^\\+[1-9]\\d{7,14}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "pickup_authorized": {
+            "default": false,
+            "title": "Pickup Authorized",
+            "type": "boolean"
+          },
+          "relationship": {
+            "enum": [
+              "parent",
+              "chaperone",
+              "adult_sibling"
+            ],
+            "title": "Relationship",
+            "type": "string"
+          },
+          "sms_consent": {
+            "default": false,
+            "title": "Sms Consent",
+            "type": "boolean"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "relationship",
+          "version"
+        ],
+        "title": "ContactUpdateIn",
+        "type": "object"
+      },
+      "CorrectionIn": {
+        "properties": {
+          "age_group": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age Group"
+          },
+          "classroom": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Classroom",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "name",
+          "reason"
+        ],
+        "title": "CorrectionIn",
         "type": "object"
       },
       "CreditRateUpsert": {
@@ -5482,6 +6038,20 @@
             "title": "Event Role",
             "type": "string"
           },
+          "feature_permissions": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Permissions"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -5896,6 +6466,11 @@
             "title": "Junior Guardian Handoff Enabled",
             "type": "boolean"
           },
+          "junior_program_enabled": {
+            "default": false,
+            "title": "Junior Program Enabled",
+            "type": "boolean"
+          },
           "live_program_enabled": {
             "default": false,
             "title": "Live Program Enabled",
@@ -5960,6 +6535,20 @@
             "default": false,
             "title": "My Can View Guests",
             "type": "boolean"
+          },
+          "my_feature_permissions": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "My Feature Permissions"
           },
           "my_redesign_accessible": {
             "default": false,
@@ -8867,6 +9456,13 @@
             "title": "Message",
             "type": "string"
           },
+          "notifications": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Notifications",
+            "type": "object"
+          },
           "occupancy": {
             "anyOf": [
               {
@@ -8878,9 +9474,31 @@
             ],
             "title": "Occupancy"
           },
+          "seat_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seat Number"
+          },
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "table_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Name"
           },
           "zone_name": {
             "anyOf": [
@@ -8927,6 +9545,73 @@
           }
         },
         "title": "GrantRequest",
+        "type": "object"
+      },
+      "GroupConfig": {
+        "properties": {
+          "admission_limit": {
+            "anyOf": [
+              {
+                "maximum": 500.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Admission Limit"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "title": "GroupConfig",
+        "type": "object"
+      },
+      "GroupEntry": {
+        "properties": {
+          "gate_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gate Id"
+          },
+          "quantity": {
+            "default": 1,
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "zone_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zone Id"
+          }
+        },
+        "required": [
+          "request_id"
+        ],
+        "title": "GroupEntry",
         "type": "object"
       },
       "GuardianAddRequest": {
@@ -10161,6 +10846,24 @@
             ],
             "title": "Seat Number"
           },
+          "session_access": {
+            "items": {
+              "$ref": "#/components/schemas/GuestSessionAccessOut"
+            },
+            "title": "Session Access",
+            "type": "array"
+          },
+          "shared_group_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shared Group Limit"
+          },
           "sms_consent": {
             "default": true,
             "title": "Sms Consent",
@@ -10515,6 +11218,11 @@
             ],
             "title": "Room"
           },
+          "show_end_time": {
+            "default": true,
+            "title": "Show End Time",
+            "type": "boolean"
+          },
           "speaker": {
             "anyOf": [
               {
@@ -10558,6 +11266,34 @@
           "starts_at"
         ],
         "title": "GuestProgramSegmentOut",
+        "type": "object"
+      },
+      "GuestSessionAccessOut": {
+        "properties": {
+          "decision": {
+            "title": "Decision",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "restricted": {
+            "title": "Restricted",
+            "type": "boolean"
+          },
+          "zone_id": {
+            "title": "Zone Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "zone_id",
+          "name",
+          "decision",
+          "restricted"
+        ],
+        "title": "GuestSessionAccessOut",
         "type": "object"
       },
       "GuestShipmentOut": {
@@ -11415,6 +12151,24 @@
         "title": "HouseholdOut",
         "type": "object"
       },
+      "ImportIn": {
+        "properties": {
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/ChildIn"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Children",
+            "type": "array"
+          }
+        },
+        "required": [
+          "children"
+        ],
+        "title": "ImportIn",
+        "type": "object"
+      },
       "InboundCompletionCondition": {
         "properties": {
           "field": {
@@ -12153,6 +12907,27 @@
         "title": "InboundSenderRule",
         "type": "object"
       },
+      "Input": {
+        "additionalProperties": false,
+        "properties": {
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "payload"
+        ],
+        "title": "Input",
+        "type": "object"
+      },
       "InvitationLink": {
         "properties": {
           "slug": {
@@ -12455,6 +13230,18 @@
             "default": false,
             "title": "Experience Enabled",
             "type": "boolean"
+          },
+          "external_registration_url": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Registration Url"
           },
           "external_website_url": {
             "anyOf": [
@@ -13432,6 +14219,85 @@
           "template_id"
         ],
         "title": "IssueRequest",
+        "type": "object"
+      },
+      "ItemActionIn": {
+        "properties": {
+          "action": {
+            "enum": [
+              "issue",
+              "return",
+              "damaged",
+              "lost"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "quantity": {
+            "maximum": 1000000.0,
+            "minimum": 1.0,
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "request_id": {
+            "maxLength": 80,
+            "minLength": 8,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "responsible": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Responsible",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "request_id",
+          "version",
+          "action",
+          "quantity",
+          "responsible"
+        ],
+        "title": "ItemActionIn",
+        "type": "object"
+      },
+      "ItemIn": {
+        "properties": {
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "total": {
+            "maximum": 1000000.0,
+            "minimum": 1.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "total"
+        ],
+        "title": "ItemIn",
         "type": "object"
       },
       "JoinRequestDecision": {
@@ -14966,6 +15832,20 @@
         "title": "MessageTemplateSave",
         "type": "object"
       },
+      "Mode": {
+        "properties": {
+          "mode": {
+            "pattern": "^(auto|human)$",
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "Mode",
+        "type": "object"
+      },
       "MyJunior": {
         "description": "One of the requesting guest's own RSVP-submitted children that's\nmarked as needing pickup authorization, with their current guardians.",
         "properties": {
@@ -15588,6 +16468,42 @@
           }
         },
         "title": "OutboxStatus",
+        "type": "object"
+      },
+      "OutingIn": {
+        "properties": {
+          "child_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Child Ids",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "outing_date": {
+            "format": "date",
+            "title": "Outing Date",
+            "type": "string"
+          },
+          "permission_verified": {
+            "title": "Permission Verified",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "outing_date",
+          "child_ids",
+          "permission_verified"
+        ],
+        "title": "OutingIn",
         "type": "object"
       },
       "PaidAttendee": {
@@ -16442,6 +17358,68 @@
           "status"
         ],
         "title": "PracticalReview",
+        "type": "object"
+      },
+      "Preview": {
+        "properties": {
+          "context": {
+            "additionalProperties": true,
+            "title": "Context",
+            "type": "object"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/SettingsPayload"
+          },
+          "text": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "settings",
+          "text"
+        ],
+        "title": "Preview",
+        "type": "object"
+      },
+      "Profile": {
+        "additionalProperties": false,
+        "properties": {
+          "aliases": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 5,
+            "title": "Aliases",
+            "type": "array"
+          },
+          "answers": {
+            "$ref": "#/components/schemas/Answers"
+          },
+          "approved": {
+            "default": false,
+            "title": "Approved",
+            "type": "boolean"
+          },
+          "id": {
+            "pattern": "^[a-zA-Z0-9_-]{1,80}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 2,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "Profile",
         "type": "object"
       },
       "ProgramSegmentImport": {
@@ -18824,6 +19802,29 @@
         "title": "RSVPTokenSubmit",
         "type": "object"
       },
+      "ReadBody": {
+        "properties": {
+          "through": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Through"
+          },
+          "unread": {
+            "default": false,
+            "title": "Unread",
+            "type": "boolean"
+          }
+        },
+        "title": "ReadBody",
+        "type": "object"
+      },
       "RedesignCohortUpdate": {
         "properties": {
           "redesign_cohort": {
@@ -19975,6 +20976,15 @@
             "title": "Channel",
             "type": "string"
           },
+          "sample_session_access": {
+            "default": "conference_dinner",
+            "enum": [
+              "conference_dinner",
+              "conference_only"
+            ],
+            "title": "Sample Session Access",
+            "type": "string"
+          },
           "subject": {
             "anyOf": [
               {
@@ -20021,6 +21031,19 @@
         "title": "ReminderRequest",
         "type": "object"
       },
+      "ReminderSendNowRequest": {
+        "properties": {
+          "confirmation_token": {
+            "title": "Confirmation Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirmation_token"
+        ],
+        "title": "ReminderSendNowRequest",
+        "type": "object"
+      },
       "ReminderTestSendRequest": {
         "properties": {
           "body": {
@@ -20035,6 +21058,15 @@
               "whatsapp"
             ],
             "title": "Channel",
+            "type": "string"
+          },
+          "sample_session_access": {
+            "default": "conference_dinner",
+            "enum": [
+              "conference_dinner",
+              "conference_only"
+            ],
+            "title": "Sample Session Access",
             "type": "string"
           },
           "subject": {
@@ -20083,6 +21115,38 @@
           "to"
         ],
         "title": "ReminderTestSendRequest",
+        "type": "object"
+      },
+      "ReplyBody": {
+        "properties": {
+          "attachment_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attachment Id"
+          },
+          "body": {
+            "default": "",
+            "maxLength": 4096,
+            "title": "Body",
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id"
+        ],
+        "title": "ReplyBody",
         "type": "object"
       },
       "RequestIn": {
@@ -20165,6 +21229,57 @@
           "title"
         ],
         "title": "RequestIn",
+        "type": "object"
+      },
+      "ReviewChoice": {
+        "properties": {
+          "note": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Note",
+            "type": "string"
+          },
+          "reviewer_name": {
+            "maxLength": 140,
+            "minLength": 2,
+            "title": "Reviewer Name",
+            "type": "string"
+          },
+          "template_id": {
+            "title": "Template Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "template_id",
+          "reviewer_name"
+        ],
+        "title": "ReviewChoice",
+        "type": "object"
+      },
+      "ReviewCreate": {
+        "properties": {
+          "expires_days": {
+            "default": 14,
+            "maximum": 30.0,
+            "minimum": 1.0,
+            "title": "Expires Days",
+            "type": "integer"
+          },
+          "template_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Template Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "template_ids"
+        ],
+        "title": "ReviewCreate",
         "type": "object"
       },
       "RevokeRequest": {
@@ -20350,6 +21465,24 @@
           "body"
         ],
         "title": "SaveForm",
+        "type": "object"
+      },
+      "SaveSettings": {
+        "properties": {
+          "settings": {
+            "$ref": "#/components/schemas/SettingsPayload"
+          },
+          "version": {
+            "minimum": 0.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "settings",
+          "version"
+        ],
+        "title": "SaveSettings",
         "type": "object"
       },
       "ScanCheckoutRequest": {
@@ -20682,6 +21815,13 @@
             "title": "Journey Count",
             "type": "integer"
           },
+          "notifications": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Notifications",
+            "type": "object"
+          },
           "occupancy": {
             "default": 0,
             "title": "Occupancy",
@@ -20736,6 +21876,51 @@
           "direction"
         ],
         "title": "ScanZoneResult",
+        "type": "object"
+      },
+      "ScannerPresentation": {
+        "properties": {
+          "admission_step_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Admission Step Ids",
+            "type": "array"
+          },
+          "attendance_step_ids": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Attendance Step Ids",
+            "type": "object"
+          },
+          "focused": {
+            "default": true,
+            "title": "Focused",
+            "type": "boolean"
+          },
+          "revision": {
+            "maxLength": 64,
+            "minLength": 64,
+            "title": "Revision",
+            "type": "string"
+          },
+          "zone_step_ids": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Zone Step Ids",
+            "type": "object"
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "title": "ScannerPresentation",
         "type": "object"
       },
       "ScheduledCommunicationCreate": {
@@ -21840,6 +23025,28 @@
         "title": "SelfCheckinSearch",
         "type": "object"
       },
+      "Send": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "body",
+          "request_id"
+        ],
+        "title": "Send",
+        "type": "object"
+      },
       "SendConsentCopyOut": {
         "properties": {
           "ok": {
@@ -21882,6 +23089,34 @@
         "title": "SendInvites",
         "type": "object"
       },
+      "SessionDecisionUpdate": {
+        "properties": {
+          "decision": {
+            "enum": [
+              "allow",
+              "block",
+              "review"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "guest_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Guest Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "guest_ids",
+          "decision"
+        ],
+        "title": "SessionDecisionUpdate",
+        "type": "object"
+      },
       "SessionEntryOverride": {
         "properties": {
           "reason": {
@@ -21897,6 +23132,38 @@
         "title": "SessionEntryOverride",
         "type": "object"
       },
+      "SessionRestrictionUpdate": {
+        "properties": {
+          "restricted": {
+            "title": "Restricted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "restricted"
+        ],
+        "title": "SessionRestrictionUpdate",
+        "type": "object"
+      },
+      "SessionSeatingUpdate": {
+        "properties": {
+          "mode": {
+            "enum": [
+              "default",
+              "none",
+              "event",
+              "assigned"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "SessionSeatingUpdate",
+        "type": "object"
+      },
       "Settings": {
         "additionalProperties": false,
         "properties": {
@@ -21904,6 +23171,21 @@
             "default": false,
             "title": "Allow Edit",
             "type": "boolean"
+          },
+          "default_zone_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Zone Ids"
           },
           "enabled": {
             "default": true,
@@ -21917,6 +23199,61 @@
           }
         },
         "title": "Settings",
+        "type": "object"
+      },
+      "SettingsPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "handover": {
+            "default": "I\u2019m handing this conversation to the Festio team. Automatic replies are paused while they help you.",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Handover",
+            "type": "string"
+          },
+          "heading": {
+            "default": "Your next event. Let\u2019s talk.",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Heading",
+            "type": "string"
+          },
+          "intro": {
+            "default": "Planning an event or need a hand with Festio? Message our team on WhatsApp.",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Intro",
+            "type": "string"
+          },
+          "message": {
+            "default": "Hi Festio, I would like some help with my event.",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/Profile"
+            },
+            "maxItems": 20,
+            "title": "Profiles",
+            "type": "array"
+          },
+          "welcome": {
+            "default": "Hi! I\u2019m Festio\u2019s automated helper. Which event can I help with?",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Welcome",
+            "type": "string"
+          }
+        },
+        "title": "SettingsPayload",
         "type": "object"
       },
       "ShipmentCreate": {
@@ -22343,6 +23680,98 @@
         "title": "ShippingAddressUpdate",
         "type": "object"
       },
+      "SignRequest": {
+        "properties": {
+          "expected_email": {
+            "default": "",
+            "maxLength": 254,
+            "title": "Expected Email",
+            "type": "string"
+          },
+          "expires_days": {
+            "default": 7,
+            "maximum": 30.0,
+            "minimum": 1.0,
+            "title": "Expires Days",
+            "type": "integer"
+          },
+          "label": {
+            "maxLength": 120,
+            "minLength": 2,
+            "title": "Label",
+            "type": "string"
+          },
+          "slot": {
+            "maximum": 2.0,
+            "minimum": 1.0,
+            "title": "Slot",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "slot",
+          "label"
+        ],
+        "title": "SignRequest",
+        "type": "object"
+      },
+      "SignSubmission": {
+        "properties": {
+          "consent": {
+            "const": true,
+            "title": "Consent",
+            "type": "boolean"
+          },
+          "email": {
+            "default": "",
+            "maxLength": 254,
+            "title": "Email",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 140,
+            "minLength": 2,
+            "title": "Name",
+            "type": "string"
+          },
+          "strokes": {
+            "items": {
+              "items": {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              "type": "array"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Strokes",
+            "type": "array"
+          },
+          "title": {
+            "maxLength": 120,
+            "minLength": 2,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "title",
+          "consent",
+          "strokes"
+        ],
+        "title": "SignSubmission",
+        "type": "object"
+      },
       "SocialLink": {
         "properties": {
           "platform": {
@@ -22402,6 +23831,45 @@
           }
         },
         "title": "SpeakerSettingsOut",
+        "type": "object"
+      },
+      "Start": {
+        "additionalProperties": false,
+        "properties": {
+          "page": {
+            "default": "general",
+            "pattern": "^(general|organiser|event)$",
+            "title": "Page",
+            "type": "string"
+          },
+          "site_slug": {
+            "anyOf": [
+              {
+                "pattern": "^[a-zA-Z0-9_-]{1,100}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site Slug"
+          }
+        },
+        "title": "Start",
+        "type": "object"
+      },
+      "StateBody": {
+        "properties": {
+          "status": {
+            "pattern": "^(open|resolved)$",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "StateBody",
         "type": "object"
       },
       "StopNotifications": {
@@ -22677,6 +24145,37 @@
           }
         },
         "title": "SubtaskUpdate",
+        "type": "object"
+      },
+      "SupportStaffAccessBody": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "SupportStaffAccessBody",
+        "type": "object"
+      },
+      "SyncBody": {
+        "properties": {
+          "page_token": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Token"
+          }
+        },
+        "title": "SyncBody",
         "type": "object"
       },
       "TableGroupCreate": {
@@ -24144,6 +25643,11 @@
           "is_platform_superadmin": {
             "default": false,
             "title": "Is Platform Superadmin",
+            "type": "boolean"
+          },
+          "is_support_agent": {
+            "default": false,
+            "title": "Is Support Agent",
             "type": "boolean"
           },
           "name": {
@@ -28069,6 +29573,275 @@
         ]
       }
     },
+    "/api/certificate-workflow/reviews/{token}": {
+      "get": {
+        "operationId": "public_review_api_certificate_workflow_reviews__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Public Review",
+        "tags": [
+          "certificate-workflow-public"
+        ]
+      },
+      "post": {
+        "operationId": "select_review_api_certificate_workflow_reviews__token__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewChoice"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Select Review",
+        "tags": [
+          "certificate-workflow-public"
+        ]
+      }
+    },
+    "/api/certificate-workflow/reviews/{token}/preview/{template_id}": {
+      "get": {
+        "operationId": "review_preview_api_certificate_workflow_reviews__token__preview__template_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "template_id",
+            "required": true,
+            "schema": {
+              "title": "Template Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Review Preview",
+        "tags": [
+          "certificate-workflow-public"
+        ]
+      }
+    },
+    "/api/certificate-workflow/signatures/{token}": {
+      "get": {
+        "operationId": "public_sign_api_certificate_workflow_signatures__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Public Sign",
+        "tags": [
+          "certificate-workflow-public"
+        ]
+      },
+      "post": {
+        "operationId": "submit_signature_api_certificate_workflow_signatures__token__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignSubmission"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Signature",
+        "tags": [
+          "certificate-workflow-public"
+        ]
+      }
+    },
+    "/api/certificate-workflow/signatures/{token}/preview": {
+      "get": {
+        "operationId": "signature_preview_api_certificate_workflow_signatures__token__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Signature Preview",
+        "tags": [
+          "certificate-workflow-public"
+        ]
+      }
+    },
     "/api/certificates/{token}": {
       "get": {
         "operationId": "verify_api_certificates__token__get",
@@ -28104,6 +29877,46 @@
           }
         },
         "summary": "Verify",
+        "tags": [
+          "certificates-public"
+        ]
+      }
+    },
+    "/api/certificates/{token}/document.html": {
+      "get": {
+        "operationId": "certificate_document_html_api_certificates__token__document_html_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Certificate Document Html",
         "tags": [
           "certificates-public"
         ]
@@ -28831,6 +30644,50 @@
         ]
       }
     },
+    "/api/events/proposals/email": {
+      "post": {
+        "operationId": "email_proposal_api_events_proposals_email_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_email_proposal_api_events_proposals_email_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Email Proposal",
+        "tags": [
+          "shared-media"
+        ]
+      }
+    },
     "/api/events/{event_id}": {
       "delete": {
         "operationId": "delete_event_api_events__event_id__delete",
@@ -29448,6 +31305,170 @@
         ]
       }
     },
+    "/api/events/{event_id}/certificate-presets/{key}": {
+      "post": {
+        "operationId": "add_preset_api_events__event_id__certificate_presets__key__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add Preset",
+        "tags": [
+          "certificate-workflow"
+        ]
+      }
+    },
+    "/api/events/{event_id}/certificate-preview": {
+      "post": {
+        "operationId": "certificate_preview_api_events__event_id__certificate_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateSave"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Certificate Preview",
+        "tags": [
+          "certificates-presenter-materials"
+        ]
+      }
+    },
+    "/api/events/{event_id}/certificate-reviews": {
+      "post": {
+        "operationId": "create_review_api_events__event_id__certificate_reviews_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Review",
+        "tags": [
+          "certificate-workflow"
+        ]
+      }
+    },
     "/api/events/{event_id}/certificate-templates": {
       "get": {
         "operationId": "templates_api_events__event_id__certificate_templates_get",
@@ -29607,6 +31628,182 @@
         "summary": "Save Template",
         "tags": [
           "certificates-presenter-materials"
+        ]
+      }
+    },
+    "/api/events/{event_id}/certificate-templates/{template_id}/signature-requests": {
+      "post": {
+        "operationId": "create_signature_api_events__event_id__certificate_templates__template_id__signature_requests_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "template_id",
+            "required": true,
+            "schema": {
+              "title": "Template Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Signature",
+        "tags": [
+          "certificate-workflow"
+        ]
+      }
+    },
+    "/api/events/{event_id}/certificate-workflow": {
+      "get": {
+        "operationId": "workflow_api_events__event_id__certificate_workflow_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Workflow",
+        "tags": [
+          "certificate-workflow"
+        ]
+      }
+    },
+    "/api/events/{event_id}/certificate-workflow/{link_id}/{action}": {
+      "post": {
+        "operationId": "decision_api_events__event_id__certificate_workflow__link_id___action__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "link_id",
+            "required": true,
+            "schema": {
+              "title": "Link Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "action",
+            "required": true,
+            "schema": {
+              "enum": [
+                "approve",
+                "revoke"
+              ],
+              "title": "Action",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Decision",
+        "tags": [
+          "certificate-workflow"
         ]
       }
     },
@@ -39047,6 +41244,51 @@
         ]
       }
     },
+    "/api/events/{event_id}/guests/delivery-summary": {
+      "get": {
+        "operationId": "guest_delivery_summary_api_events__event_id__guests_delivery_summary_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Guest Delivery Summary",
+        "tags": [
+          "guests"
+        ]
+      }
+    },
     "/api/events/{event_id}/guests/duplicates": {
       "get": {
         "description": "Existing guests that collide under the same name-normalization\nadd_guest() checks at creation time (honorifics stripped, case/whitespace\ninsensitive) -- this retroactively surfaces duplicates that predate that\ncheck, or were created another way (e.g. two separate CSV imports with a\nslightly different spelling). Read-only; see merge_guest_duplicates for\nresolving a group.",
@@ -40339,6 +42581,176 @@
         ]
       }
     },
+    "/api/events/{event_id}/guests/{guest_id}/delivery-history": {
+      "get": {
+        "operationId": "guest_delivery_history_api_events__event_id__guests__guest_id__delivery_history_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "guest_id",
+            "required": true,
+            "schema": {
+              "title": "Guest Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Guest Delivery History",
+        "tags": [
+          "guests"
+        ]
+      }
+    },
+    "/api/events/{event_id}/guests/{guest_id}/group-pass": {
+      "get": {
+        "operationId": "get_config_api_events__event_id__guests__guest_id__group_pass_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "guest_id",
+            "required": true,
+            "schema": {
+              "title": "Guest Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Config",
+        "tags": [
+          "group-passes"
+        ]
+      },
+      "put": {
+        "operationId": "set_config_api_events__event_id__guests__guest_id__group_pass_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "guest_id",
+            "required": true,
+            "schema": {
+              "title": "Guest Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupConfig"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Config",
+        "tags": [
+          "group-passes"
+        ]
+      }
+    },
     "/api/events/{event_id}/guests/{guest_id}/invite-token": {
       "post": {
         "description": "Mint (or return) a guest's personal RSVP-link token so the planner can\ncopy /r/{token} from the dashboard without having to send the invite first.",
@@ -40723,6 +43135,72 @@
           }
         ],
         "summary": "Resend Invite",
+        "tags": [
+          "guests"
+        ]
+      }
+    },
+    "/api/events/{event_id}/guests/{guest_id}/retry-channel": {
+      "post": {
+        "operationId": "retry_guest_channel_api_events__event_id__guests__guest_id__retry_channel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "guest_id",
+            "required": true,
+            "schema": {
+              "title": "Guest Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "default": {},
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Retry Guest Channel",
         "tags": [
           "guests"
         ]
@@ -41364,6 +43842,1097 @@
         "summary": "Update Invite Settings",
         "tags": [
           "events"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/children": {
+      "get": {
+        "operationId": "children_api_events__event_id__junior_children_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Children",
+        "tags": [
+          "junior-programme"
+        ]
+      },
+      "post": {
+        "operationId": "child_add_api_events__event_id__junior_children_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChildIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Child Add",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/children/{child_id}": {
+      "get": {
+        "operationId": "child_detail_api_events__event_id__junior_children__child_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "child_id",
+            "required": true,
+            "schema": {
+              "title": "Child Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Child Detail",
+        "tags": [
+          "junior-programme"
+        ]
+      },
+      "patch": {
+        "operationId": "child_correct_api_events__event_id__junior_children__child_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "child_id",
+            "required": true,
+            "schema": {
+              "title": "Child Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorrectionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Child Correct",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/children/{child_id}/actions": {
+      "post": {
+        "operationId": "action_api_events__event_id__junior_children__child_id__actions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "child_id",
+            "required": true,
+            "schema": {
+              "title": "Child Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Action",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/children/{child_id}/contacts": {
+      "post": {
+        "operationId": "contact_add_api_events__event_id__junior_children__child_id__contacts_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "child_id",
+            "required": true,
+            "schema": {
+              "title": "Child Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContactIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Contact Add",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/children/{child_id}/contacts/{contact_id}": {
+      "delete": {
+        "operationId": "contact_remove_api_events__event_id__junior_children__child_id__contacts__contact_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "child_id",
+            "required": true,
+            "schema": {
+              "title": "Child Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "contact_id",
+            "required": true,
+            "schema": {
+              "title": "Contact Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Contact Remove",
+        "tags": [
+          "junior-programme"
+        ]
+      },
+      "put": {
+        "operationId": "contact_update_api_events__event_id__junior_children__child_id__contacts__contact_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "child_id",
+            "required": true,
+            "schema": {
+              "title": "Child Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "contact_id",
+            "required": true,
+            "schema": {
+              "title": "Contact Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContactUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Contact Update",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/config": {
+      "get": {
+        "operationId": "config_get_api_events__event_id__junior_config_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Config Get",
+        "tags": [
+          "junior-programme"
+        ]
+      },
+      "put": {
+        "operationId": "config_put_api_events__event_id__junior_config_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfigIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Config Put",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/import": {
+      "post": {
+        "operationId": "roster_import_api_events__event_id__junior_import_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Roster Import",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/inventory": {
+      "get": {
+        "operationId": "inventory_api_events__event_id__junior_inventory_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Inventory",
+        "tags": [
+          "junior-programme"
+        ]
+      },
+      "post": {
+        "operationId": "inventory_add_api_events__event_id__junior_inventory_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Inventory Add",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/inventory/{item_id}/actions": {
+      "post": {
+        "operationId": "inventory_action_api_events__event_id__junior_inventory__item_id__actions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemActionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Inventory Action",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/inventory/{item_id}/history": {
+      "get": {
+        "operationId": "inventory_history_api_events__event_id__junior_inventory__item_id__history_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Inventory History",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/notifications": {
+      "get": {
+        "operationId": "notifications_api_events__event_id__junior_notifications_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Notifications",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/notifications/{notification_id}/retry": {
+      "post": {
+        "operationId": "retry_notice_api_events__event_id__junior_notifications__notification_id__retry_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "notification_id",
+            "required": true,
+            "schema": {
+              "title": "Notification Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Retry Notice",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/outings": {
+      "get": {
+        "operationId": "outings_api_events__event_id__junior_outings_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Outings",
+        "tags": [
+          "junior-programme"
+        ]
+      },
+      "post": {
+        "operationId": "outing_add_api_events__event_id__junior_outings_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutingIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Outing Add",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/outings/{outing_id}/close": {
+      "post": {
+        "operationId": "outing_close_api_events__event_id__junior_outings__outing_id__close_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "outing_id",
+            "required": true,
+            "schema": {
+              "title": "Outing Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Outing Close",
+        "tags": [
+          "junior-programme"
         ]
       }
     },
@@ -45477,6 +49046,178 @@
         ]
       }
     },
+    "/api/events/{event_id}/reminders/{reminder_id}/send-now": {
+      "post": {
+        "operationId": "send_reminder_now_api_events__event_id__reminders__reminder_id__send_now_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "reminder_id",
+            "required": true,
+            "schema": {
+              "title": "Reminder Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReminderSendNowRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Send Reminder Now",
+        "tags": [
+          "reminders"
+        ]
+      }
+    },
+    "/api/events/{event_id}/reminders/{reminder_id}/send-progress": {
+      "get": {
+        "operationId": "reminder_send_progress_api_events__event_id__reminders__reminder_id__send_progress_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "reminder_id",
+            "required": true,
+            "schema": {
+              "title": "Reminder Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reminder Send Progress",
+        "tags": [
+          "reminders"
+        ]
+      }
+    },
+    "/api/events/{event_id}/reminders/{reminder_id}/send-summary": {
+      "get": {
+        "operationId": "reminder_send_summary_api_events__event_id__reminders__reminder_id__send_summary_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "reminder_id",
+            "required": true,
+            "schema": {
+              "title": "Reminder Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reminder Send Summary",
+        "tags": [
+          "reminders"
+        ]
+      }
+    },
     "/api/events/{event_id}/reminders/{reminder_id}/test-send": {
       "post": {
         "description": "Sends the draft content to an admin-supplied address, not a guest --\nunlike the real per-guest fan-out, this must call recipient_allowed()\nitself (mirrors templates.py's test_send_template). Does not reserve\ncredit or write EventReminderSend -- it's a test, same as the template\neditor's test-send.",
@@ -45827,6 +49568,104 @@
         ]
       }
     },
+    "/api/events/{event_id}/scanner-presentation": {
+      "get": {
+        "operationId": "get_presentation_api_events__event_id__scanner_presentation_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Presentation",
+        "tags": [
+          "scanner-settings"
+        ]
+      },
+      "put": {
+        "operationId": "save_presentation_api_events__event_id__scanner_presentation_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScannerPresentation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Save Presentation",
+        "tags": [
+          "scanner-settings"
+        ]
+      }
+    },
     "/api/events/{event_id}/seating": {
       "get": {
         "description": "Full chart: each table with all seat slots (filled and empty).",
@@ -46040,6 +49879,243 @@
         "summary": "Send Manual Invites",
         "tags": [
           "events"
+        ]
+      }
+    },
+    "/api/events/{event_id}/session-access": {
+      "get": {
+        "operationId": "session_access_list_api_events__event_id__session_access_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Session Access List",
+        "tags": [
+          "access"
+        ]
+      }
+    },
+    "/api/events/{event_id}/session-access/{zone_id}": {
+      "put": {
+        "operationId": "session_access_update_api_events__event_id__session_access__zone_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "zone_id",
+            "required": true,
+            "schema": {
+              "title": "Zone Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionDecisionUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Session Access Update",
+        "tags": [
+          "access"
+        ]
+      }
+    },
+    "/api/events/{event_id}/session-access/{zone_id}/restriction": {
+      "put": {
+        "operationId": "session_access_restriction_api_events__event_id__session_access__zone_id__restriction_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "zone_id",
+            "required": true,
+            "schema": {
+              "title": "Zone Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionRestrictionUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Session Access Restriction",
+        "tags": [
+          "access"
+        ]
+      }
+    },
+    "/api/events/{event_id}/session-access/{zone_id}/seating": {
+      "put": {
+        "operationId": "session_seating_update_api_events__event_id__session_access__zone_id__seating_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "zone_id",
+            "required": true,
+            "schema": {
+              "title": "Zone Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionSeatingUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Session Seating Update",
+        "tags": [
+          "access"
         ]
       }
     },
@@ -53060,6 +57136,75 @@
         ]
       }
     },
+    "/api/media/invoices": {
+      "get": {
+        "operationId": "list_invoices_api_media_invoices_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Invoices",
+        "tags": [
+          "staff-invoices"
+        ]
+      }
+    },
+    "/api/media/invoices/{invoice_id}/download": {
+      "get": {
+        "operationId": "download_invoice_api_media_invoices__invoice_id__download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "invoice_id",
+            "required": true,
+            "schema": {
+              "title": "Invoice Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Download Invoice",
+        "tags": [
+          "staff-invoices"
+        ]
+      }
+    },
     "/api/meeting-responses/preferences/{token}": {
       "get": {
         "operationId": "preference_preview_api_meeting_responses_preferences__token__get",
@@ -54771,6 +58916,467 @@
         "summary": "Og Rsvp",
         "tags": [
           "og"
+        ]
+      }
+    },
+    "/api/organization-invoices": {
+      "get": {
+        "operationId": "list_invoices_api_organization_invoices_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "org_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Org Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Invoices",
+        "tags": [
+          "organization-invoices"
+        ]
+      },
+      "post": {
+        "operationId": "create_api_organization_invoices_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "org_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create",
+        "tags": [
+          "organization-invoices"
+        ]
+      }
+    },
+    "/api/organization-invoices/organizations": {
+      "get": {
+        "operationId": "context_api_organization_invoices_organizations_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Context",
+        "tags": [
+          "organization-invoices"
+        ]
+      }
+    },
+    "/api/organization-invoices/{invoice_id}": {
+      "delete": {
+        "operationId": "remove_api_organization_invoices__invoice_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "invoice_id",
+            "required": true,
+            "schema": {
+              "title": "Invoice Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "title": "Version",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "org_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Org Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove",
+        "tags": [
+          "organization-invoices"
+        ]
+      },
+      "get": {
+        "operationId": "get_api_organization_invoices__invoice_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "invoice_id",
+            "required": true,
+            "schema": {
+              "title": "Invoice Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "org_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Org Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get",
+        "tags": [
+          "organization-invoices"
+        ]
+      },
+      "put": {
+        "operationId": "update_api_organization_invoices__invoice_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "invoice_id",
+            "required": true,
+            "schema": {
+              "title": "Invoice Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "org_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update",
+        "tags": [
+          "organization-invoices"
+        ]
+      }
+    },
+    "/api/organization-invoices/{invoice_id}/download": {
+      "get": {
+        "operationId": "download_api_organization_invoices__invoice_id__download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "invoice_id",
+            "required": true,
+            "schema": {
+              "title": "Invoice Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "org_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Org Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Download",
+        "tags": [
+          "organization-invoices"
+        ]
+      }
+    },
+    "/api/organization-invoices/{invoice_id}/issue": {
+      "post": {
+        "operationId": "issue_api_organization_invoices__invoice_id__issue_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "invoice_id",
+            "required": true,
+            "schema": {
+              "title": "Invoice Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "org_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_issue_api_organization_invoices__invoice_id__issue_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Issue",
+        "tags": [
+          "organization-invoices"
         ]
       }
     },
@@ -56604,6 +61210,1180 @@
         "summary": "Update Platform Settings",
         "tags": [
           "platform-settings"
+        ]
+      }
+    },
+    "/api/platform/support/chat/automation": {
+      "post": {
+        "operationId": "resume_api_platform_support_chat_automation_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resume",
+        "tags": [
+          "website-support"
+        ]
+      }
+    },
+    "/api/platform/support/chat/management": {
+      "get": {
+        "operationId": "inbox_api_platform_support_chat_management_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Inbox",
+        "tags": [
+          "website-support"
+        ]
+      }
+    },
+    "/api/platform/support/chat/management/{ident}": {
+      "get": {
+        "operationId": "thread_api_platform_support_chat_management__ident__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ident",
+            "required": true,
+            "schema": {
+              "title": "Ident",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Thread",
+        "tags": [
+          "website-support"
+        ]
+      }
+    },
+    "/api/platform/support/chat/management/{ident}/reply": {
+      "post": {
+        "operationId": "reply_api_platform_support_chat_management__ident__reply_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ident",
+            "required": true,
+            "schema": {
+              "title": "Ident",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Send"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reply",
+        "tags": [
+          "website-support"
+        ]
+      }
+    },
+    "/api/platform/support/chat/messages": {
+      "post": {
+        "operationId": "send_api_platform_support_chat_messages_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Send"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Send",
+        "tags": [
+          "website-support"
+        ]
+      }
+    },
+    "/api/platform/support/chat/session": {
+      "get": {
+        "operationId": "read_api_platform_support_chat_session_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read",
+        "tags": [
+          "website-support"
+        ]
+      },
+      "post": {
+        "operationId": "create_api_platform_support_chat_session_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Start"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Data"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create",
+        "tags": [
+          "website-support"
+        ]
+      }
+    },
+    "/api/platform/support/whatsapp/attachments/{aid}/content": {
+      "get": {
+        "operationId": "provider_attachment_api_platform_support_whatsapp_attachments__aid__content_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "aid",
+            "required": true,
+            "schema": {
+              "title": "Aid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "maxLength": 100,
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Provider Attachment",
+        "tags": [
+          "platform-support"
+        ]
+      }
+    },
+    "/api/platform/support/whatsapp/automation/event/{event_id}": {
+      "get": {
+        "operationId": "event_snapshot_api_platform_support_whatsapp_automation_event__event_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Event Snapshot",
+        "tags": [
+          "support-automation"
+        ]
+      }
+    },
+    "/api/platform/support/whatsapp/automation/preview": {
+      "post": {
+        "operationId": "preview_api_platform_support_whatsapp_automation_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Preview"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview",
+        "tags": [
+          "support-automation"
+        ]
+      }
+    },
+    "/api/platform/support/whatsapp/automation/settings": {
+      "get": {
+        "operationId": "get_settings_api_platform_support_whatsapp_automation_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Settings",
+        "tags": [
+          "support-automation"
+        ]
+      },
+      "put": {
+        "operationId": "save_settings_api_platform_support_whatsapp_automation_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Save Settings",
+        "tags": [
+          "support-automation"
+        ]
+      }
+    },
+    "/api/platform/support/whatsapp/bird": {
+      "post": {
+        "operationId": "webhook_api_platform_support_whatsapp_bird_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Webhook",
+        "tags": [
+          "platform-support"
+        ]
+      }
+    },
+    "/api/platform/support/whatsapp/contact": {
+      "get": {
+        "operationId": "contact_api_platform_support_whatsapp_contact_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Contact",
+        "tags": [
+          "support-automation"
+        ]
+      }
+    },
+    "/api/platform/support/whatsapp/conversations": {
+      "get": {
+        "operationId": "conversations_api_platform_support_whatsapp_conversations_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 100,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "title": "State",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Conversations",
+        "tags": [
+          "platform-support"
+        ]
+      }
+    },
+    "/api/platform/support/whatsapp/conversations/{ident}": {
+      "get": {
+        "operationId": "conversation_api_platform_support_whatsapp_conversations__ident__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ident",
+            "required": true,
+            "schema": {
+              "title": "Ident",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Conversation",
+        "tags": [
+          "platform-support"
+        ]
+      },
+      "patch": {
+        "operationId": "change_state_api_platform_support_whatsapp_conversations__ident__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ident",
+            "required": true,
+            "schema": {
+              "title": "Ident",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StateBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Change State",
+        "tags": [
+          "platform-support"
+        ]
+      }
+    },
+    "/api/platform/support/whatsapp/conversations/{ident}/attachments": {
+      "post": {
+        "operationId": "upload_attachment_api_platform_support_whatsapp_conversations__ident__attachments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ident",
+            "required": true,
+            "schema": {
+              "title": "Ident",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_attachment_api_platform_support_whatsapp_conversations__ident__attachments_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upload Attachment",
+        "tags": [
+          "platform-support"
+        ]
+      }
+    },
+    "/api/platform/support/whatsapp/conversations/{ident}/automation": {
+      "put": {
+        "operationId": "set_mode_api_platform_support_whatsapp_conversations__ident__automation_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ident",
+            "required": true,
+            "schema": {
+              "title": "Ident",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Mode"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Mode",
+        "tags": [
+          "support-automation"
+        ]
+      }
+    },
+    "/api/platform/support/whatsapp/conversations/{ident}/messages/{mid}/attachments/{index}": {
+      "get": {
+        "operationId": "download_attachment_api_platform_support_whatsapp_conversations__ident__messages__mid__attachments__index__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ident",
+            "required": true,
+            "schema": {
+              "title": "Ident",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "mid",
+            "required": true,
+            "schema": {
+              "title": "Mid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "index",
+            "required": true,
+            "schema": {
+              "title": "Index",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Download Attachment",
+        "tags": [
+          "platform-support"
+        ]
+      }
+    },
+    "/api/platform/support/whatsapp/conversations/{ident}/read": {
+      "post": {
+        "operationId": "mark_read_api_platform_support_whatsapp_conversations__ident__read_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ident",
+            "required": true,
+            "schema": {
+              "title": "Ident",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Mark Read",
+        "tags": [
+          "platform-support"
+        ]
+      }
+    },
+    "/api/platform/support/whatsapp/conversations/{ident}/reply": {
+      "post": {
+        "operationId": "reply_api_platform_support_whatsapp_conversations__ident__reply_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ident",
+            "required": true,
+            "schema": {
+              "title": "Ident",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplyBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reply",
+        "tags": [
+          "platform-support"
+        ]
+      }
+    },
+    "/api/platform/support/whatsapp/staff-access": {
+      "get": {
+        "operationId": "support_staff_access_api_platform_support_whatsapp_staff_access_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 100,
+              "title": "Q",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Support Staff Access",
+        "tags": [
+          "platform-support"
+        ]
+      }
+    },
+    "/api/platform/support/whatsapp/staff-access/{user_id}": {
+      "patch": {
+        "operationId": "set_support_staff_access_api_platform_support_whatsapp_staff_access__user_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupportStaffAccessBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Support Staff Access",
+        "tags": [
+          "platform-support"
+        ]
+      }
+    },
+    "/api/platform/support/whatsapp/sync": {
+      "post": {
+        "operationId": "sync_api_platform_support_whatsapp_sync_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Sync",
+        "tags": [
+          "platform-support"
         ]
       }
     },
@@ -59325,6 +65105,176 @@
           }
         ],
         "summary": "Record Daily Attendance",
+        "tags": [
+          "scanner"
+        ]
+      }
+    },
+    "/api/scan/{qr_token}/group-pass": {
+      "get": {
+        "operationId": "preflight_api_scan__qr_token__group_pass_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "qr_token",
+            "required": true,
+            "schema": {
+              "title": "Qr Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "zone_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Zone Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "gate_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gate Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preflight",
+        "tags": [
+          "group-passes"
+        ]
+      },
+      "post": {
+        "operationId": "enter_group_api_scan__qr_token__group_pass_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "qr_token",
+            "required": true,
+            "schema": {
+              "title": "Qr Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupEntry"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Enter Group",
+        "tags": [
+          "group-passes"
+        ]
+      }
+    },
+    "/api/scan/{qr_token}/labels": {
+      "get": {
+        "operationId": "view_pass_labels_api_scan__qr_token__labels_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "qr_token",
+            "required": true,
+            "schema": {
+              "title": "Qr Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "View Pass Labels",
         "tags": [
           "scanner"
         ]

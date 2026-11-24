@@ -51,11 +51,6 @@ async def _sync_one(event_id: str) -> None:
 
 
 async def _tick() -> None:
-    from .services import junior_outbox
-    try:
-        await junior_outbox.tick()
-    except Exception:
-        logger.exception('Junior notification tick failed')
     now = datetime.utcnow()
     async with AsyncSessionLocal() as db:
         result = await db.execute(

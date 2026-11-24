@@ -35,6 +35,23 @@ export interface AccountOrgOut {
   slug: string
 }
 
+export interface ActionIn {
+  accommodation?: (boolean) | null
+  action: 'dropoff' | 'screening' | 'clear_allergy' | 'clear_accommodation' | 'classroom' | 'clinic' | 'other' | 'return' | 'outing_depart' | 'outing_return' | 'release'
+  adult_name?: (string) | null
+  adult_verified?: boolean
+  allergy?: (boolean) | null
+  contact_id?: (string) | null
+  identity_checked?: boolean
+  notes?: (string) | null
+  outing_id?: (string) | null
+  phone?: (string) | null
+  relationship?: ('parent' | 'chaperone' | 'adult_sibling') | null
+  request_id: string
+  version: number
+  wristband_assigned?: boolean
+}
+
 export interface ActiveToggle {
   active: boolean
 }
@@ -69,6 +86,14 @@ export interface AnnouncementRequest {
   kind?: string
   title: string
   urgent?: boolean
+}
+
+export interface Answers {
+  dress?: string
+  programme?: string
+  registration?: string
+  time?: string
+  venue?: string
 }
 
 export interface ApiKeyCreate {
@@ -182,11 +207,30 @@ export interface Batch {
   rows: (Row)[]
 }
 
+export interface Body_email_proposal_api_events_proposals_email_post {
+  confirmed?: boolean
+  event_id?: (string) | null
+  file: string
+  message?: string
+  recipient: string
+  request_id: string
+  subject: string
+}
+
 export interface Body_import_contacts_csv_api_organizations_me_contact_lists__list_id__contacts_csv_post {
   file: string
 }
 
+export interface Body_issue_api_organization_invoices__invoice_id__issue_post {
+  file: string
+  version: number
+}
+
 export interface Body_upload_asset_api_events__event_id__design_assets_post {
+  file: string
+}
+
+export interface Body_upload_attachment_api_platform_support_whatsapp_conversations__ident__attachments_post {
   file: string
 }
 
@@ -336,6 +380,15 @@ export interface CheckoutRequest {
   tier: string
 }
 
+export interface ChildIn {
+  age_group?: string
+  classroom?: string
+  confirm_same_name?: boolean
+  guardian?: (ContactIn) | null
+  name: string
+  reference?: (string) | null
+}
+
 export interface ConferenceOperationIn {
   category: 'meeting' | 'release' | 'gallery' | 'integration'
   data?: Record<string, unknown>
@@ -392,6 +445,13 @@ export interface ConferenceTrackIn {
   is_active?: boolean
   name: string
   sort_order?: number
+}
+
+export interface ConfigIn {
+  classrooms?: (string)[]
+  enabled: boolean
+  notifications_enabled?: boolean
+  staff?: Record<string, 'scanner' | 'intake' | 'support' | 'inventory' | 'supervisor'>
 }
 
 export interface ConsentFormOut {
@@ -454,6 +514,17 @@ export interface ContactCreate {
   last_name?: (string) | null
 }
 
+export interface ContactIn {
+  adult_verified?: boolean
+  email?: (string) | null
+  name: string
+  notify?: boolean
+  phone?: (string) | null
+  pickup_authorized?: boolean
+  relationship: 'parent' | 'chaperone' | 'adult_sibling'
+  sms_consent?: boolean
+}
+
 export interface ContactListCreate {
   name: string
 }
@@ -475,6 +546,26 @@ export interface ContactOut {
 
 export interface ContactPaste {
   text: string
+}
+
+export interface ContactUpdateIn {
+  adult_verified?: boolean
+  email?: (string) | null
+  name: string
+  notify?: boolean
+  phone?: (string) | null
+  pickup_authorized?: boolean
+  relationship: 'parent' | 'chaperone' | 'adult_sibling'
+  sms_consent?: boolean
+  version: number
+}
+
+export interface CorrectionIn {
+  age_group?: (string) | null
+  classroom?: string
+  name: string
+  reason: string
+  version: number
 }
 
 export interface CreditRateUpsert {
@@ -937,6 +1028,7 @@ export interface EventMemberOut {
   can_view_guests?: boolean
   can_view_planner?: boolean
   event_role?: string
+  feature_permissions?: (Record<string, string>) | null
   id: string
   section_group_ids?: (string)[]
   updated_at?: (string) | null
@@ -991,6 +1083,7 @@ export interface EventOut {
   is_paid?: boolean
   is_test?: (boolean) | null
   junior_guardian_handoff_enabled?: boolean
+  junior_program_enabled?: boolean
   live_program_enabled?: boolean
   logistics_enabled?: boolean
   logo_url?: (string) | null
@@ -1003,6 +1096,7 @@ export interface EventOut {
   my_can_manage_event?: boolean
   my_can_manage_guests?: boolean
   my_can_view_guests?: boolean
+  my_feature_permissions?: (Record<string, string>) | null
   my_redesign_accessible?: boolean
   my_redesign_cohort?: string
   name: string
@@ -1428,14 +1522,29 @@ export interface GateScanResult {
   guest_name?: (string) | null
   matched_tags?: (string)[]
   message: string
+  notifications?: Record<string, string>
   occupancy?: (number) | null
+  seat_number?: (string) | null
   status: string
+  table_name?: (string) | null
   zone_name?: (string) | null
 }
 
 export interface GrantRequest {
   add_credits?: (number) | null
   tier?: (string) | null
+}
+
+export interface GroupConfig {
+  admission_limit?: (number) | null
+  enabled?: boolean
+}
+
+export interface GroupEntry {
+  gate_id?: (string) | null
+  quantity?: number
+  request_id: string
+  zone_id?: (string) | null
 }
 
 export interface GuardianAddRequest {
@@ -1638,6 +1747,8 @@ export interface GuestOut {
   rsvp_submitter_name?: (string) | null
   rsvp_submitter_phone?: (string) | null
   seat_number?: (string) | null
+  session_access?: (GuestSessionAccessOut)[]
+  shared_group_limit?: (number) | null
   sms_consent?: boolean
   sms_delivery_at?: (string) | null
   sms_delivery_status?: (string) | null
@@ -1688,11 +1799,19 @@ export interface GuestProgramSegmentOut {
   ends_at?: (string) | null
   key: string
   room?: (string) | null
+  show_end_time?: boolean
   speaker?: (string) | null
   starts_at: string
   state?: 'ended' | 'ongoing' | 'upcoming' | 'scheduled'
   step_id: string
   title: string
+}
+
+export interface GuestSessionAccessOut {
+  decision: string
+  name: string
+  restricted: boolean
+  zone_id: string
 }
 
 export interface GuestShipmentOut {
@@ -1815,6 +1934,10 @@ export interface HTTPValidationError {
   detail?: (ValidationError)[]
 }
 
+export interface ImportIn {
+  children: (ChildIn)[]
+}
+
 export interface InboundCompletionCondition {
   field: 'subject' | 'body'
   operator: 'contains' | 'equals' | 'starts_with'
@@ -1920,6 +2043,11 @@ export interface InboundSenderRule {
   value: string
 }
 
+export interface Input {
+  payload: Record<string, unknown>
+  version?: number
+}
+
 export interface InvitationLink {
   slug?: string
 }
@@ -1970,6 +2098,7 @@ export interface InvitePageOut {
   event_time_tbd?: boolean
   event_type?: (string) | null
   experience_enabled?: boolean
+  external_registration_url?: (string) | null
   external_website_url?: (string) | null
   festiome_addon_enabled?: boolean
   festiome_enabled?: boolean
@@ -2088,6 +2217,20 @@ export interface IssueRequest {
   guest_ids?: (string)[]
   send_email?: boolean
   template_id: string
+}
+
+export interface ItemActionIn {
+  action: 'issue' | 'return' | 'damaged' | 'lost'
+  notes?: (string) | null
+  quantity: number
+  request_id: string
+  responsible: string
+  version: number
+}
+
+export interface ItemIn {
+  name: string
+  total: number
 }
 
 export interface JoinRequestDecision {
@@ -2365,6 +2508,10 @@ export interface MessageTemplateSave {
   whatsapp_template_vars?: (Record<string, string>) | null
 }
 
+export interface Mode {
+  mode: string
+}
+
 export interface MyJunior {
   checked_in?: boolean
   child_guest_id: string
@@ -2473,6 +2620,13 @@ export interface OutboxStatus {
   failed?: number
   pending?: number
   retry?: number
+}
+
+export interface OutingIn {
+  child_ids: (string)[]
+  name: string
+  outing_date: string
+  permission_verified: boolean
 }
 
 export interface PaidAttendee {
@@ -2632,6 +2786,20 @@ export interface PracticalRequest {
 export interface PracticalReview {
   notes?: (string) | null
   status: 'approved' | 'rejected'
+}
+
+export interface Preview {
+  context?: Record<string, unknown>
+  settings: SettingsPayload
+  text: string
+}
+
+export interface Profile {
+  aliases?: (string)[]
+  answers?: Answers
+  approved?: boolean
+  id: string
+  name: string
 }
 
 export interface ProgramSegmentImport {
@@ -2942,6 +3110,11 @@ export interface QuizSubmission {
   answers: (number)[]
 }
 
+export interface ReadBody {
+  through?: (string) | null
+  unread?: boolean
+}
+
 export interface RedesignCohortUpdate {
   redesign_cohort: 'legacy_only' | 'redesign_opt_in' | 'redesign_internal' | 'redesign_cohort' | 'redesign_default' | 'legacy_retired'
 }
@@ -3106,6 +3279,7 @@ export interface ReminderPreviewOut {
 export interface ReminderPreviewRequest {
   body?: string
   channel: 'email' | 'sms' | 'whatsapp'
+  sample_session_access?: 'conference_dinner' | 'conference_only'
   subject?: (string) | null
 }
 
@@ -3114,13 +3288,24 @@ export interface ReminderRequest {
   user_ids: (string)[]
 }
 
+export interface ReminderSendNowRequest {
+  confirmation_token: string
+}
+
 export interface ReminderTestSendRequest {
   body?: string
   channel: 'email' | 'sms' | 'whatsapp'
+  sample_session_access?: 'conference_dinner' | 'conference_only'
   subject?: (string) | null
   to: string
   whatsapp_template_ref?: (string) | null
   whatsapp_template_vars?: (Record<string, string>) | null
+}
+
+export interface ReplyBody {
+  attachment_id?: (string) | null
+  body?: string
+  request_id: string
 }
 
 export interface RequestIn {
@@ -3132,6 +3317,17 @@ export interface RequestIn {
   table_id?: (string) | null
   title: string
   zone_id?: (string) | null
+}
+
+export interface ReviewChoice {
+  note?: string
+  reviewer_name: string
+  template_id: string
+}
+
+export interface ReviewCreate {
+  expires_days?: number
+  template_ids: (string)[]
 }
 
 export interface RevokeRequest {
@@ -3237,6 +3433,11 @@ export interface SaveForm {
   zone_id?: (string) | null
 }
 
+export interface SaveSettings {
+  settings: SettingsPayload
+  version: number
+}
+
 export interface ScanCheckoutRequest {
   guardian_guest_id?: (string) | null
   guardian_token?: (string) | null
@@ -3248,6 +3449,14 @@ export interface ScanIn {
   guardian_token?: (string) | null
   token: string
   zone_id?: (string) | null
+}
+
+export interface ScannerPresentation {
+  admission_step_ids?: (string)[]
+  attendance_step_ids?: Record<string, string>
+  focused?: boolean
+  revision: string
+  zone_step_ids?: Record<string, (string)[]>
 }
 
 export interface ScanResult {
@@ -3282,6 +3491,7 @@ export interface ScanZoneResult {
   guardian_verification_method?: (string) | null
   guest_name: string
   journey_count?: number
+  notifications?: Record<string, string>
   occupancy?: number
   seat_number?: (string) | null
   status: string
@@ -3424,6 +3634,11 @@ export interface SelfCheckinSearch {
   query: string
 }
 
+export interface Send {
+  body: string
+  request_id: string
+}
+
 export interface SendConsentCopyOut {
   ok: boolean
   sent_to: string
@@ -3434,14 +3649,38 @@ export interface SendInvites {
   recipients: (EmailContact)[]
 }
 
+export interface SessionDecisionUpdate {
+  decision: 'allow' | 'block' | 'review'
+  guest_ids: (string)[]
+}
+
 export interface SessionEntryOverride {
   reason: string
 }
 
+export interface SessionRestrictionUpdate {
+  restricted: boolean
+}
+
+export interface SessionSeatingUpdate {
+  mode: 'default' | 'none' | 'event' | 'assigned'
+}
+
 export interface Settings {
   allow_edit?: boolean
+  default_zone_ids?: ((string)[]) | null
   enabled?: boolean
   reset_pin?: boolean
+}
+
+export interface SettingsPayload {
+  enabled?: boolean
+  handover?: string
+  heading?: string
+  intro?: string
+  message?: string
+  profiles?: (Profile)[]
+  welcome?: string
 }
 
 export interface ShipmentCreate {
@@ -3496,6 +3735,21 @@ export interface ShippingAddressUpdate {
   ship_state?: (string) | null
 }
 
+export interface SignRequest {
+  expected_email?: string
+  expires_days?: number
+  label: string
+  slot: number
+}
+
+export interface SignSubmission {
+  consent: boolean
+  email?: string
+  name: string
+  strokes: (((unknown)[])[])[]
+  title: string
+}
+
 export interface SocialLink {
   platform: string
   url: string
@@ -3509,6 +3763,15 @@ export interface SpeakerPageOut {
 export interface SpeakerSettingsOut {
   speaker_show_before_rsvp?: boolean
   speaker_token?: (string) | null
+}
+
+export interface Start {
+  page?: string
+  site_slug?: (string) | null
+}
+
+export interface StateBody {
+  status: string
 }
 
 export interface StopNotifications {
@@ -3558,6 +3821,14 @@ export interface SubtaskOut {
 export interface SubtaskUpdate {
   status?: (string) | null
   title?: (string) | null
+}
+
+export interface SupportStaffAccessBody {
+  enabled: boolean
+}
+
+export interface SyncBody {
+  page_token?: (string) | null
 }
 
 export interface TableGroupCreate {
@@ -3788,6 +4059,7 @@ export interface UserOut {
   id: string
   is_org_admin?: boolean
   is_platform_superadmin?: boolean
+  is_support_agent?: boolean
   name: string
   redesign_cohort?: string
   role: string

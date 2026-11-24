@@ -3,3 +3,6 @@
 @media(max-width:1050px){.jp-kpis{grid-template-columns:repeat(4,1fr)}.jp-columns{grid-template-columns:1fr}.jp-detail{border:2px solid var(--teal)}}
 @media(max-width:600px){.jp-workspace{padding:16px}.jp-heading h1{font-size:28px}.jp-panel{padding:16px}.jp-kpis{grid-template-columns:repeat(2,1fr)}.jp-filters{grid-template-columns:1fr;gap:0}.jp-heading{align-items:flex-start}.jp-row{justify-content:flex-start}.jp-tabs button{flex:1 1 130px}.jp-workspace td{min-width:90px}}
 @media print{body *{visibility:hidden}.jp-guide,.jp-guide *{visibility:visible}.jp-guide{position:absolute;left:0;top:0;width:100%;color:#111;background:white;border:0}.jp-guide button{display:none}}
+
+.jp-detail{scroll-margin-top:180px}
+@media(max-width:600px){.jp-child-table,.jp-child-table tbody{display:block}.jp-child-table thead{display:none}.jp-child-table tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;padding:14px 0;border-bottom:1px solid var(--line)}.jp-child-table td{min-width:0;padding:3px;border:0}.jp-child-table td:first-child{grid-column:1;grid-row:1}.jp-child-table td:nth-child(2){grid-column:1;grid-row:2}.jp-child-table td:nth-child(3){grid-column:2;grid-row:2}.jp-child-table td:last-child{grid-column:2;grid-row:1}}

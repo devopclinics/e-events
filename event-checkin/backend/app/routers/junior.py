@@ -8,7 +8,7 @@ from sqlalchemy import select
 from ..database import get_db
 from ..auth import require_event_member, _org_role
 from ..models import Event, EventUser, User
-from ..junior_models import (JuniorConfig, JuniorChild, JuniorContact, JuniorMovement,
+from ..junior_models import (JuniorAudit, JuniorConfig, JuniorChild, JuniorContact, JuniorMovement,
     JuniorOuting, JuniorOutingMember, JuniorNotification, JuniorInventory, JuniorInventoryEntry)
 
 router = APIRouter(prefix='/{event_id}/junior')
@@ -16,7 +16,7 @@ Role = Literal['scanner', 'intake', 'support', 'inventory', 'supervisor']
 Relationship = Literal['parent', 'chaperone', 'adult_sibling']
 
 
-async def access(event_id, actor, db, *, roles=None, enabled=True):
+async def access(event_id, actor, db, *, roles=None, enabled=True, write=True):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, 'Event not found')
@@ -27,7 +27,7 @@ async def access(event_id, actor, db, *, roles=None, enabled=True):
     role = 'supervisor' if admin else (config.staff or {}).get(actor.id) if config and eu else None
     if not role or (roles and role not in roles):
         raise HTTPException(403, 'Junior Programme permission required')
-    if eu and org_role not in ('owner','admin') and eu.access_level == 'view' and roles:
+    if eu and org_role not in ('owner','admin') and eu.access_level == 'view' and roles and write:
         raise HTTPException(403, 'This event access is view-only')
     if enabled and not event.junior_program_enabled:
         raise HTTPException(409, 'Junior Programme is not enabled for this event')
@@ -87,9 +87,12 @@ async def audit(db, event, child, actor, action, *, request_id, before=None, **d
         body += f' Classroom: {child.classroom}.'
     if action == 'release':
         body += f' Collected by {movement.adult_name} ({movement.relationship.replace("_", " ")}).'
+    seen_recipients=set()
     for contact in contacts or [None]:
         for channel in ('email','sms'):
             recipient = getattr(contact, 'email' if channel == 'email' else 'phone', None)
+            if recipient and (channel,recipient.lower()) in seen_recipients:continue
+            if recipient:seen_recipients.add((channel,recipient.lower()))
             error = None
             if not recipient:
                 error = 'Guardian contact details missing'
@@ -118,7 +121,9 @@ async def config_get(event_id: str, db=Depends(get_db), actor=Depends(require_ev
         if exc.status_code != 403:
             raise
         role, admin = None, False
-    return {'enabled':bool(event.junior_program_enabled),'role':role,'can_configure':admin,
+    membership=await db.scalar(select(EventUser).where(EventUser.event_id==event_id,EventUser.user_id==actor.id))
+    readonly=bool(membership and membership.access_level=='view' and not actor.is_platform_superadmin and await _org_role(actor,event.org_id,db) not in ('owner','admin'))
+    return {'enabled':bool(event.junior_program_enabled),'role':role,'can_configure':admin and not readonly,'read_only':readonly,
         'classrooms':config.classrooms if config else [],
         'staff':config.staff if config and admin else {},
         'notifications_enabled':bool(config and config.notifications_enabled),
@@ -137,14 +142,27 @@ async def config_put(event_id: str, body: ConfigIn, db=Depends(get_db), actor=De
     classrooms = list(dict.fromkeys(x.strip() for x in body.classrooms if x.strip()))
     if any(len(x)>100 for x in classrooms):
         raise HTTPException(400,'Classroom names must be at most 100 characters')
-    existing = set((await db.scalars(select(JuniorChild.classroom).where(JuniorChild.event_id==event_id))).all())
+    existing = set((await db.scalars(select(JuniorChild.classroom).where(JuniorChild.event_id==event_id,JuniorChild.classroom!=''))).all())
     if not existing.issubset(set(classrooms)):
         raise HTTPException(409,'Reassign children before removing their classroom')
-    if body.notifications_enabled and (not event.notify_email or not event.notify_sms):
-        raise HTTPException(409,'Enable event email and SMS channels and verify sending readiness first')
+    if body.notifications_enabled:
+        from ..config import settings
+        from services import messaging
+        if {'email','sms'} & set(event.blocked_messaging_channels or []):
+            raise HTTPException(409,'A required guardian channel is blocked by the platform')
+        if not (settings.resend_api_key or settings.smtp_host or (settings.bird_email_api_base and settings.bird_access_key and settings.bird_workspace_id)):
+            raise HTTPException(409,'Verify the email provider before enabling guardian sending')
+        contacts=(await db.scalars(select(JuniorContact).join(JuniorChild,JuniorChild.id==JuniorContact.child_id).where(
+            JuniorChild.event_id==event_id,JuniorContact.notify.is_(True)))).all()
+        if not contacts or any(not c.email or not c.phone or not c.sms_consent for c in contacts):
+            raise HTTPException(409,'Complete email, mobile and SMS permission for every designated guardian first')
+        if not all(messaging._channel_ready('sms',c.phone) for c in contacts):
+            raise HTTPException(409,'Verify SMS provider readiness before enabling guardian sending')
     if not config:
         config=JuniorConfig(event_id=event_id)
         db.add(config)
+    db.add(JuniorAudit(event_id=event_id,actor_id=actor.id,action='settings_updated',detail={
+        'enabled':body.enabled,'classrooms':classrooms,'staff':body.staff,'notifications_enabled':body.notifications_enabled}))
     event.junior_program_enabled=body.enabled
     config.classrooms=classrooms
     config.staff=body.staff
@@ -173,20 +191,25 @@ class ContactIn(BaseModel):
 class ChildIn(BaseModel):
     name: str = Field(min_length=1,max_length=255)
     reference: str | None = Field(default=None,max_length=100)
-    age_group: str = Field(min_length=1,max_length=80)
-    classroom: str = Field(min_length=1,max_length=100)
+    age_group: str = Field(default='Pending confirmation',max_length=80)
+    classroom: str = Field(default='',max_length=100)
     guardian: ContactIn | None = None
     confirm_same_name: bool = False
 
-    @field_validator('name','age_group','classroom')
+    @field_validator('name')
     @classmethod
     def not_blank(cls,value):
         if not value.strip(): raise ValueError('This field is required')
         return value.strip()
 
+    @field_validator('age_group','classroom')
+    @classmethod
+    def optional_text(cls,value):
+        return value.strip()
+
 
 async def create_child(event,config,body,actor,db):
-    if body.classroom not in (config.classrooms or []):
+    if body.classroom and body.classroom not in (config.classrooms or []):
         raise HTTPException(400,'Choose a configured classroom')
     rows=(await db.scalars(select(JuniorChild).where(JuniorChild.event_id==event.id))).all()
     ref=(body.reference or '').strip() or None
@@ -194,7 +217,7 @@ async def create_child(event,config,body,actor,db):
         raise HTTPException(409,'This roster reference already exists')
     if not body.confirm_same_name and any(c.name.casefold()==body.name.casefold() for c in rows):
         raise HTTPException(409,'A child with this name exists. Review the roster before confirming a different child.')
-    child=JuniorChild(event_id=event.id,name=body.name,reference=ref,age_group=body.age_group,classroom=body.classroom)
+    child=JuniorChild(event_id=event.id,name=body.name,reference=ref,age_group=body.age_group.strip() or 'Pending confirmation',classroom=body.classroom.strip())
     db.add(child)
     await db.flush()
     if body.guardian:
@@ -251,19 +274,31 @@ async def child_detail(event_id: str, child_id: str, db=Depends(get_db), actor=D
     if role=='inventory':raise HTTPException(403,'Inventory role has no child roster access')
     child=await child_for(event_id,child_id,db)
     result=output_child(child,role)
+    import base64, io, qrcode
+    image=io.BytesIO()
+    qrcode.make('festio-jp:'+child.id).save(image,format='PNG')
+    result['badge_data_url']='data:image/png;base64,'+base64.b64encode(image.getvalue()).decode()
     contacts=(await db.scalars(select(JuniorContact).where(JuniorContact.child_id==child_id))).all()
     result['contacts']=[{k:getattr(c,k) for k in
         (('id','name','relationship','adult_verified','pickup_authorized','email','phone','sms_consent','notify')
          if role in ('intake','supervisor') else ('id','name','relationship','adult_verified','pickup_authorized'))} for c in contacts]
     history=(await db.scalars(select(JuniorMovement).where(JuniorMovement.child_id==child_id).order_by(JuniorMovement.occurred_at.desc()).limit(100))).all()
     result['history']=[{k:getattr(m,k) for k in ('id','action','from_location','to_location','adult_name','relationship','actor_id','occurred_at')} for m in history]
+    actor_ids={m.actor_id for m in history}
+    names={u.id:u.name for u in (await db.scalars(select(User).where(User.id.in_(actor_ids)))).all()}
+    for entry,m in zip(result['history'],history):
+        entry['actor_name']=names.get(m.actor_id,'Former volunteer')
+        if role in ('intake','supervisor') and m.action=='correction':
+            import json
+            entry['correction']=json.loads(m.notes) if m.notes else None
     return result
 
 
 class CorrectionIn(BaseModel):
     version: int
     name: str = Field(min_length=1,max_length=255)
-    classroom: str = Field(min_length=1,max_length=100)
+    classroom: str = Field(default='',max_length=100)
+    age_group: str | None = Field(default=None,min_length=1,max_length=80)
     reason: str = Field(min_length=3,max_length=1000)
 
 
@@ -272,15 +307,18 @@ async def child_correct(event_id: str, child_id: str, body: CorrectionIn, db=Dep
     event,config,role,_=await access(event_id,actor,db,roles=['intake','supervisor'])
     child=await child_for(event_id,child_id,db,True)
     check_version(child,body.version)
-    if not body.name.strip() or body.classroom not in config.classrooms:
+    if not body.name.strip() or (body.classroom and body.classroom not in config.classrooms):
         raise HTTPException(400,'Provide a name and configured classroom')
-    old={'name':child.name,'classroom':child.classroom}
+    if child.location=='classroom' and not body.classroom:
+        raise HTTPException(409,'Record departure before clearing an occupied classroom assignment')
+    old={'name':child.name,'classroom':child.classroom,'age_group':child.age_group}
     child.name=body.name.strip()
     child.classroom=body.classroom
+    if body.age_group is not None:child.age_group=body.age_group.strip() or child.age_group
     tick(child)
     import json
     await audit(db,event,child,actor,'correction',request_id='correction:'+child.id+':'+str(child.version),
-        notes=json.dumps({'before':old,'reason':body.reason}))
+        notes=json.dumps({'before':old,'after':{'name':child.name,'classroom':child.classroom,'age_group':child.age_group},'reason':body.reason}))
     await db.commit()
     return output_child(child,role)
 
@@ -289,10 +327,33 @@ async def child_correct(event_id: str, child_id: str, body: CorrectionIn, db=Dep
 async def contact_add(event_id: str, child_id: str, body: ContactIn, db=Depends(get_db), actor=Depends(require_event_member)):
     event,_,_,_=await access(event_id,actor,db,roles=['intake','supervisor'])
     child=await child_for(event_id,child_id,db,True)
+    existing=(await db.scalars(select(JuniorContact).where(JuniorContact.child_id==child.id))).all()
+    if any(c.name.casefold()==body.name.casefold() and c.relationship==body.relationship for c in existing):
+        raise HTTPException(409,'This contact exists. Edit their details or authorization instead.')
     contact=add_contact(child,body,actor,db)
     await db.flush()
     tick(child)
     await audit(db,event,child,actor,'contact',request_id='contact:'+contact.id)
+    await db.commit()
+    return {'id':contact.id}
+
+
+class ContactUpdateIn(ContactIn):
+    version: int
+
+
+@router.put('/children/{child_id}/contacts/{contact_id}')
+async def contact_update(event_id: str, child_id: str, contact_id: str, body: ContactUpdateIn, db=Depends(get_db), actor=Depends(require_event_member)):
+    event,_,_,_=await access(event_id,actor,db,roles=['intake','supervisor'])
+    child=await child_for(event_id,child_id,db,True)
+    check_version(child,body.version)
+    contact=await db.scalar(select(JuniorContact).where(JuniorContact.id==contact_id,JuniorContact.child_id==child.id))
+    if not contact:raise HTTPException(404,'Contact not found')
+    if body.pickup_authorized and not body.adult_verified:raise HTTPException(400,'Verify adulthood before authorizing pickup')
+    for k,v in body.model_dump(mode='json',exclude={'version'}).items():setattr(contact,k,v)
+    contact.verified_by=actor.id
+    tick(child)
+    await audit(db,event,child,actor,'contact',request_id='contact-update:'+child.id+':'+str(child.version))
     await db.commit()
     return {'id':contact.id}
 
@@ -369,6 +430,9 @@ async def action(event_id: str, child_id: str, body: ActionIn, db=Depends(get_db
         setattr(child,field+'_notes',body.notes.strip())
         setattr(child,field+'_cleared',True)
     elif a=='classroom':
+        config=await db.get(JuniorConfig,event_id)
+        if not child.classroom or child.classroom not in config.classrooms:
+            raise HTTPException(409,'Confirm classroom assignment at the help desk first')
         if before not in ('reception','support_desk'):raise HTTPException(409,'Record return to JP before classroom arrival')
         if child.allergy is None or child.accommodation is None:raise HTTPException(409,'Complete both screening questions first')
         if (child.allergy and not child.allergy_cleared) or (child.accommodation and not child.accommodation_cleared):
@@ -424,6 +488,7 @@ class OutingIn(BaseModel):
 async def outing_add(event_id: str, body: OutingIn, db=Depends(get_db), actor=Depends(require_event_member)):
     await access(event_id,actor,db,roles=['supervisor'])
     if not body.permission_verified:raise HTTPException(400,'Verify outing permission for every selected child')
+    if not body.name.strip():raise HTTPException(400,'Outing name required')
     ids=set(body.child_ids)
     rows=(await db.scalars(select(JuniorChild.id).where(JuniorChild.event_id==event_id,JuniorChild.id.in_(ids)))).all()
     if set(rows)!=ids:raise HTTPException(400,'All children must belong to this event')
@@ -431,6 +496,7 @@ async def outing_add(event_id: str, body: OutingIn, db=Depends(get_db), actor=De
     db.add(outing)
     await db.flush()
     for child_id in ids:db.add(JuniorOutingMember(outing_id=outing.id,child_id=child_id,permission_verified_by=actor.id))
+    db.add(JuniorAudit(event_id=event_id,actor_id=actor.id,action='outing_created',detail={'outing_id':outing.id,'name':outing.name,'child_ids':sorted(ids),'date':outing.outing_date,'permission_verified':True}))
     await db.commit()
     return {'id':outing.id}
 
@@ -457,13 +523,14 @@ async def outing_close(event_id: str, outing_id: str, db=Depends(get_db), actor=
     pending=await db.scalar(select(JuniorOutingMember.child_id).where(JuniorOutingMember.outing_id==outing_id,JuniorOutingMember.departed_at.is_not(None),JuniorOutingMember.returned_at.is_(None)).limit(1))
     if pending:raise HTTPException(409,'Reconcile all outstanding children before closing the outing')
     outing.closed=True
+    db.add(JuniorAudit(event_id=event_id,actor_id=actor.id,action='outing_closed',detail={'outing_id':outing.id}))
     await db.commit()
     return {'closed':True}
 
 
 @router.get('/notifications')
 async def notifications(event_id: str, db=Depends(get_db), actor=Depends(require_event_member)):
-    await access(event_id,actor,db,roles=['intake','supervisor'])
+    await access(event_id,actor,db,roles=['intake','supervisor'],write=False)
     rows=(await db.scalars(select(JuniorNotification).where(JuniorNotification.event_id==event_id).order_by(JuniorNotification.created_at.desc()).limit(300))).all()
     return [{k:getattr(row,k) for k in ('id','movement_id','channel','recipient','body','status','error','provider_id','created_at')} for row in rows]
 
@@ -493,7 +560,7 @@ class ItemIn(BaseModel):
 
 @router.get('/inventory')
 async def inventory(event_id: str, db=Depends(get_db), actor=Depends(require_event_member)):
-    await access(event_id,actor,db,roles=['inventory','supervisor'])
+    await access(event_id,actor,db,roles=['inventory','supervisor'],write=False)
     rows=(await db.scalars(select(JuniorInventory).where(JuniorInventory.event_id==event_id).order_by(JuniorInventory.name))).all()
     return [{k:getattr(r,k) for k in ('id','name','total','issued','damaged','lost','version')} for r in rows]
 
@@ -542,7 +609,7 @@ async def inventory_action(event_id: str, item_id: str, body: ItemActionIn, db=D
 
 @router.get('/inventory/{item_id}/history')
 async def inventory_history(event_id: str, item_id: str, db=Depends(get_db), actor=Depends(require_event_member)):
-    await access(event_id,actor,db,roles=['inventory','supervisor'])
+    await access(event_id,actor,db,roles=['inventory','supervisor'],write=False)
     item=await db.scalar(select(JuniorInventory).where(JuniorInventory.id==item_id,JuniorInventory.event_id==event_id))
     if not item:raise HTTPException(404,'Item not found')
     rows=(await db.scalars(select(JuniorInventoryEntry).where(JuniorInventoryEntry.item_id==item_id).order_by(JuniorInventoryEntry.created_at.desc()).limit(200))).all()

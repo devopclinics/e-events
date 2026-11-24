@@ -18,6 +18,16 @@ class JuniorConfig(Base):
     notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+class JuniorAudit(Base):
+    __tablename__ = 'junior_audits'
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    event_id: Mapped[str] = mapped_column(ForeignKey('events.id', ondelete='CASCADE'), index=True)
+    actor_id: Mapped[str] = mapped_column(String(36))
+    action: Mapped[str] = mapped_column(String(50))
+    detail: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class JuniorChild(Base):
     __tablename__ = 'junior_children'
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
@@ -104,6 +114,7 @@ class JuniorNotification(Base):
     provider_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     ledger_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     attempted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    receipt_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

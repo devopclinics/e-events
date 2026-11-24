@@ -2322,6 +2322,32 @@
         "title": "ChildIn",
         "type": "object"
       },
+      "ClassroomIn": {
+        "properties": {
+          "classrooms": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Classrooms",
+            "type": "array"
+          },
+          "expected_classrooms": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Expected Classrooms",
+            "type": "array"
+          }
+        },
+        "required": [
+          "classrooms",
+          "expected_classrooms"
+        ],
+        "title": "ClassroomIn",
+        "type": "object"
+      },
       "ConferenceOperationIn": {
         "properties": {
           "category": {
@@ -45141,6 +45167,61 @@
           }
         ],
         "summary": "Contact Update",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/classrooms": {
+      "put": {
+        "operationId": "classrooms_put_api_events__event_id__junior_classrooms_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClassroomIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Classrooms Put",
         "tags": [
           "junior-programme"
         ]

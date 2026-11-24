@@ -449,6 +449,11 @@ export interface ChildIn {
   reference?: (string) | null
 }
 
+export interface ClassroomIn {
+  classrooms: (string)[]
+  expected_classrooms: (string)[]
+}
+
 export interface ConferenceOperationIn {
   category: 'meeting' | 'release' | 'gallery' | 'integration'
   data?: Record<string, unknown>

@@ -153,17 +153,52 @@ async def config_get(event_id: str, db=Depends(get_db), actor=Depends(require_ev
             (await db.execute(select(EventUser,User).join(User,User.id==EventUser.user_id).where(EventUser.event_id==event_id))).all()] if admin else []}
 
 
+class ClassroomIn(BaseModel):
+    classrooms: list[str] = Field(max_length=100)
+    expected_classrooms: list[str] = Field(max_length=100)
+
+
+@router.put('/classrooms')
+async def classrooms_put(event_id: str, body: ClassroomIn, db=Depends(get_db), actor=Depends(require_event_member)):
+    event,config,_,admin = await access(event_id,actor,db,enabled=False,roles=['supervisor'])
+    if not admin:
+        raise HTTPException(403,'Only the event administrator can configure classrooms')
+    await db.scalar(select(Event).where(Event.id==event_id).with_for_update())
+    config=await db.scalar(select(JuniorConfig).where(JuniorConfig.event_id==event_id).execution_options(populate_existing=True))
+    before=list(config.classrooms or []) if config else []
+    if body.expected_classrooms!=before:
+        raise HTTPException(409,'Classrooms changed elsewhere. Reload saved classrooms, review your changes and save again.')
+    classrooms=list(dict.fromkeys(x.strip() for x in body.classrooms if x.strip()))
+    if any(len(x)>100 for x in classrooms):
+        raise HTTPException(400,'Classroom names must be at most 100 characters')
+    existing=set((await db.scalars(select(JuniorChild.classroom).where(JuniorChild.event_id==event_id,JuniorChild.classroom!=''))).all())
+    from ..junior_models import JuniorVolunteerProfile,JuniorVolunteerShift
+    profiles=(await db.scalars(select(JuniorVolunteerProfile).where(JuniorVolunteerProfile.event_id==event_id))).all()
+    shifts=(await db.scalars(select(JuniorVolunteerShift).where(JuniorVolunteerShift.event_id==event_id,JuniorVolunteerShift.enabled.is_(True),JuniorVolunteerShift.checked_out_at.is_(None)))).all()
+    existing.update(c for profile in profiles for c in (profile.classrooms or []))
+    existing.update(shift.plan['classroom'] for shift in shifts if shift.plan.get('classroom'))
+    if not existing.issubset(set(classrooms)):
+        raise HTTPException(409,'Reassign children, volunteers and active shifts before removing their classroom')
+    if not config:config=JuniorConfig(event_id=event_id);db.add(config)
+    config.classrooms=classrooms
+    db.add(JuniorAudit(event_id=event_id,actor_id=actor.id,action='classrooms_updated',detail={'before':before,'classrooms':classrooms}))
+    await db.commit()
+    return {'classrooms':classrooms}
+
+
 @router.put('/config')
 async def config_put(event_id: str, body: ConfigIn, db=Depends(get_db), actor=Depends(require_event_member)):
     event,config,_,admin = await access(event_id,actor,db,enabled=False,roles=['supervisor'])
     if not admin:
         raise HTTPException(403,'Only the event administrator can configure this module')
+    await db.scalar(select(Event).where(Event.id==event_id).with_for_update())
+    config=await db.scalar(select(JuniorConfig).where(JuniorConfig.event_id==event_id).execution_options(populate_existing=True))
     if body.dropoff_start_date and not (days.day(event,event.event_date)<=body.dropoff_start_date.isoformat()<=days.day(event,event.event_end_date or event.event_date)):
         raise HTTPException(400,'Drop-off start date must be within the event dates')
     assigned = set((await db.scalars(select(EventUser.user_id).where(EventUser.event_id == event_id))).all())
     if not set(body.staff).issubset(assigned):
         raise HTTPException(400,'Junior staff must already be assigned to this event')
-    classrooms = list(dict.fromkeys(x.strip() for x in body.classrooms if x.strip()))
+    classrooms = list(dict.fromkeys(x.strip() for x in (body.classrooms if 'classrooms' in body.model_fields_set else (config.classrooms if config else [])) if x.strip()))
     if any(len(x)>100 for x in classrooms):
         raise HTTPException(400,'Classroom names must be at most 100 characters')
     existing = set((await db.scalars(select(JuniorChild.classroom).where(JuniorChild.event_id==event_id,JuniorChild.classroom!=''))).all())

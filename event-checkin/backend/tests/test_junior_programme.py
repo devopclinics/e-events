@@ -415,3 +415,29 @@ async def test_guest_directory_permission_does_not_expose_jp_custody(ctx):
     r=await ctx.client.get(f"/api/events/{ctx.ids['event_a']}/guests");assert r.status_code==200,r.text
     assert all(g['junior_platform_status'] is None and g['junior_guardian_for']==[] for g in r.json())
     assert (await ctx.client.get(root+'/children')).status_code==403
+
+
+@pytest.mark.asyncio
+async def test_retry_reads_current_guest_list_recipient_without_roster_refresh(ctx):
+    root=await setup(ctx);await child(ctx,root)
+    async with _Session() as db:
+        config=await db.get(JuniorConfig,ctx.ids['event_a']);config.notifications_enabled=True
+        row=await db.scalar(select(JuniorNotification).where(JuniorNotification.channel=='email'));rid=row.id
+        contact=await db.get(JuniorContact,row.contact_id);guardian=await db.get(Guest,contact.guardian_guest_id)
+        guardian.email='updated-guardian@example.com';await db.commit()
+    response=await ctx.client.post(root+f'/notifications/{rid}/retry');assert response.status_code==200,response.text
+    async with _Session() as db:assert (await db.get(JuniorNotification,rid)).recipient=='updated-guardian@example.com'
+
+
+@pytest.mark.asyncio
+async def test_sending_setup_rechecks_guest_list_sms_permission(ctx,monkeypatch):
+    from app.config import settings
+    from services import messaging
+    root=await setup(ctx);await child(ctx,root)
+    async with _Session() as db:
+        contact=await db.scalar(select(JuniorContact));guardian=await db.get(Guest,contact.guardian_guest_id)
+        guardian.sms_consent=False;await db.commit()
+    monkeypatch.setattr(settings,'resend_api_key','synthetic-not-used')
+    monkeypatch.setattr(messaging,'_channel_ready',lambda *args:True)
+    response=await ctx.client.put(root+'/config',json={'enabled':True,'classrooms':['Group A','Group B'],'notifications_enabled':True})
+    assert response.status_code==409 and 'SMS permission' in response.text

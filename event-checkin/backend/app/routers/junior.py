@@ -156,6 +156,7 @@ async def config_put(event_id: str, body: ConfigIn, db=Depends(get_db), actor=De
     if not existing.issubset(set(classrooms)):
         raise HTTPException(409,'Reassign children before removing their classroom')
     if body.notifications_enabled:
+        await shared.roster(event,db)
         from ..config import settings
         from services import messaging
         if {'email','sms'} & set(event.blocked_messaging_channels or []):
@@ -630,7 +631,7 @@ async def notifications(event_id: str, db=Depends(get_db), actor=Depends(require
 
 @router.post('/notifications/{notification_id}/retry')
 async def retry_notice(event_id: str, notification_id: str, db=Depends(get_db), actor=Depends(require_event_member)):
-    _,config,_,_=await access(event_id,actor,db,roles=['intake','supervisor'])
+    event,config,_,_=await access(event_id,actor,db,roles=['intake','supervisor'])
     row=await db.scalar(select(JuniorNotification).where(JuniorNotification.id==notification_id,JuniorNotification.event_id==event_id).with_for_update())
     if not row:raise HTTPException(404,'Notification not found')
     if row.status not in ('setup_required','paused') or row.attempted_at:
@@ -638,6 +639,9 @@ async def retry_notice(event_id: str, notification_id: str, db=Depends(get_db), 
     if (datetime.utcnow()-row.created_at).total_seconds()>86400:raise HTTPException(409,'This historical notice has expired')
     if not config.notifications_enabled:raise HTTPException(409,'Guardian sending is paused')
     contact=await db.get(JuniorContact,row.contact_id) if row.contact_id else None
+    if contact:
+        child=await child_for(event_id,contact.child_id,db)
+        await shared.refresh_contact(event,child,contact,db)
     if not contact or not contact.notify:raise HTTPException(409,'Resolve guardian notification contact first')
     recipient=getattr(contact,'email' if row.channel=='email' else 'phone')
     if not recipient or (row.channel=='sms' and not contact.sms_consent):raise HTTPException(409,'Contact details and SMS permission must be complete')

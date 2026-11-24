@@ -406,6 +406,8 @@ async def child_detail(event_id: str, child_id: str, db=Depends(get_db), actor=D
     if not can(role,'view_children'):raise HTTPException(403,'Permission to view children is required')
     child=await child_for(event_id,child_id,db)
     result=output_child(child,role)
+    from ..services.junior_screening import profile as screening_profile
+    result['screening_profile']=await screening_profile(await db.get(Event,event_id),child,db,restricted=can(role,'support'))
     import base64, io, qrcode
     image=io.BytesIO()
     guest=await db.get(Guest,child.guest_id)

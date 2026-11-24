@@ -1,0 +1,20 @@
+{
+  "version": "2026-11-24",
+  "sections": 12,
+  "files": [
+    "daily-arrival-pickup.pdf",
+    "daily-arrival-pickup.png",
+    "daily-arrival-pickup.svg",
+    "festio-juniors-infographics.pdf",
+    "festio-juniors-volunteer-guide.docx",
+    "festio-juniors-volunteer-guide.html",
+    "festio-juniors-volunteer-guide.pdf",
+    "manifest.json",
+    "movement-return-cycles.pdf",
+    "movement-return-cycles.png",
+    "movement-return-cycles.svg",
+    "volunteer-handover.pdf",
+    "volunteer-handover.png",
+    "volunteer-handover.svg"
+  ]
+}

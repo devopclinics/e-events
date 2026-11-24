@@ -1,0 +1,198 @@
+{
+  "version": "2026-11-24",
+  "title": "Festio Juniors Volunteer Guide",
+  "tagline": "See it. Record it. Reconcile it.",
+  "introduction": "Staff-only guidance for safe, calm child movements. Use the same Festio account and the event assigned by your Admin. Parents do not operate Festio Juniors.",
+  "permissions": [
+    "Check-in, pickup & movements",
+    "Add/correct children & guardians",
+    "Support desks & restricted notes",
+    "Create & manage outings",
+    "Manage inventory",
+    "Guardian contacts & notification history",
+    "Coordinate volunteers & shifts",
+    "Resolve previous-day movement records"
+  ],
+  "sections": [
+    {
+      "id": "mobile",
+      "role": "Orientation",
+      "title": "Start on your phone",
+      "subtitle": "Home, Children, Scan, My shift and More.",
+      "tab": "overview",
+      "icon": "01",
+      "steps": [
+        "Open festio.events/juniors/ and sign in with your existing account. New staff create and verify an account using the exact email assigned by the Admin. Choose the correct event.",
+        "Home shows your shift, scanning, search and attention counts. Children opens search; Scan opens the camera; My shift opens your personal assignments. Find Outings, Support desks, Notifications, Inventory and permitted Admin tools under More.",
+        "Use the theme button for light or dark mode. Open Account & app to install or sign out. On iPhone/iPad use Safari Share → Add to Home Screen; on Android use the browser's Install app option."
+      ],
+      "check": "Admin is full Juniors access within its assigned scope; Volunteer receives only checked permissions. Existing event/organization Admins inherit the appropriate access. A missing tool may be a permission restriction. Stay online: handoffs are not queued offline."
+    },
+    {
+      "id": "find",
+      "role": "Check-in",
+      "title": "Find the child once",
+      "subtitle": "Guest List owns the shared child and guardian identities.",
+      "tab": "children",
+      "icon": "02",
+      "steps": [
+        "Search by child name, classroom or badge reference, or scan their existing badge. The general child roster stays hidden until a search; an explicitly opened support or movement queue shows its relevant children.",
+        "Scanning identifies and opens a record. It does not automatically record attendance, a movement or pickup. Confirm the child and the next action on screen.",
+        "Missing or incorrect record? An Admin or volunteer with Add/correct children & guardians permission adds or corrects the shared record. Search first and avoid duplicates."
+      ],
+      "check": "A badge identifies a child. It never proves that the adult present is authorized to collect them."
+    },
+    {
+      "id": "dropoff",
+      "role": "Check-in",
+      "title": "Separate convention arrival from daily drop-off",
+      "subtitle": "Follow this event's configured JP start date.",
+      "tab": "children",
+      "icon": "03",
+      "steps": [
+        "Complete convention check-in first. When the event has a separate JP start date, arrival day can be convention check-in only; this does not begin JP custody or complete screening.",
+        "Every JP day begins with a fresh drop-off after convention admission. The linked guardian is prefilled; choose the adult actually present. For Another person, record their name, relationship and optional international phone number.",
+        "Verify the drop-off in person. Verify a sibling is 18+. Complete today's screening confirmation and physically issue/check the standard band before confirming drop-off."
+      ],
+      "check": "Yesterday's unresolved custody must be reconciled by an authorized lead before a new daily drop-off. A drop-off adult is not automatically a pickup-authorized collector; review that authorization separately."
+    },
+    {
+      "id": "screening",
+      "role": "Check-in",
+      "title": "Confirm saved screening answers",
+      "subtitle": "Reuse information; confirm today's facts.",
+      "tab": "children",
+      "icon": "04",
+      "steps": [
+        "At drop-off or screening, supported child-specific registration answers or previous screening answers are prefilled. The source is shown. A parent's own answers are not copied to a child, and another event's answers are not used.",
+        "Ask and complete any missing or unknown allergy/accommodation answer. Confirm saved answers with the adult today and change anything that is different. Tick I confirmed both screening answers with the adult today.",
+        "Every screened child needs the standard screening wristband. A Yes answer also sends the child to the corresponding support desk; both Yes answers require both reviews."
+      ],
+      "check": "Saved answers do not mean today's desk reviews or wristbands are complete. Daily clearances and band confirmations do not automatically carry forward. Do not assume a missing answer means No."
+    },
+    {
+      "id": "desk",
+      "role": "Support",
+      "title": "Clear every required desk",
+      "subtitle": "One standard band; additional bands for additional needs.",
+      "tab": "referrals",
+      "icon": "05",
+      "steps": [
+        "A volunteer with Support desks & restricted notes permission reviews each referral. Relevant saved details can prefill the restricted notes; review and update them before confirming.",
+        "Confirm the physical band for each applicable need. Standard only = one band; standard plus allergy OR accommodation = two; standard plus both = three.",
+        "Clear both referrals when both apply. Classroom arrival remains blocked until required reviews, bands and classroom assignment are complete."
+      ],
+      "check": "Medical details stay restricted to authorized staff. Do not copy them into guardian messages or general movement notes. A saved form never grants automatic desk clearance."
+    },
+    {
+      "id": "classroom",
+      "role": "Check-in",
+      "title": "Record actual classroom arrival",
+      "subtitle": "Headcounts follow the recorded location.",
+      "tab": "children",
+      "icon": "06",
+      "steps": [
+        "Confirm the assigned classroom. If missing, ask an Admin or a volunteer with child-record permission to set it in the child's shared record.",
+        "Check the standard band and all applicable extra bands. Finish each support-desk review first.",
+        "Confirm classroom arrival when the child physically reaches the classroom. Reception, support desk and classroom are separate locations."
+      ],
+      "check": "Do not record a child in a classroom while they are still waiting at reception or a support desk."
+    },
+    {
+      "id": "temporary",
+      "role": "Check-in",
+      "title": "Complete Clinic and Other return cycles",
+      "subtitle": "Departure → return to JP → classroom or verified pickup.",
+      "tab": "children",
+      "icon": "07",
+      "steps": [
+        "Choose Temporary departure: clinic or Temporary departure: other. Record the accompanying adult; Other also requires an internal reason. The account and time are recorded with the movement.",
+        "When the child is physically back, choose Return from clinic / other. With no recorded return, the child remains away in the headcount.",
+        "If resuming class, record classroom arrival. If leaving for the day, record the return first, then complete verified final pickup."
+      ],
+      "check": "Never use final release for a clinic visit or assume a child returned. Clinic, Other and Outing each need their own recorded return."
+    },
+    {
+      "id": "outing",
+      "role": "Coordination",
+      "title": "Account for each outing attendee",
+      "subtitle": "Expected, departed, returned and awaiting-return counts.",
+      "tab": "outings",
+      "icon": "08",
+      "steps": [
+        "Under More → Outings, an Admin or permitted outing coordinator creates the named, dated roster. Search/select children, verify outing permission and create the outing. Changing the search keeps selected children.",
+        "A volunteer with movement permission opens the outing and uses Not departed, Awaiting return, Returned or All attendees, with attendee search. Scan outing badge or open the child. Confirm departure for that exact outing only on its scheduled date, after the child is in class.",
+        "Record each return when the child is physically back; the child returns to JP reception. Confirm classroom arrival if resuming the day. Review every outstanding child before closing the outing."
+      ],
+      "check": "Scanning opens a confirmation; it never moves a child automatically. A child not yet dropped off must complete the arrival steps first. Close reconciled outing is blocked while any departed child lacks a return."
+    },
+    {
+      "id": "pickup",
+      "role": "Check-in",
+      "title": "Authorize, verify and release",
+      "subtitle": "Collector permission and the physical identity check are separate.",
+      "tab": "children",
+      "icon": "09",
+      "steps": [
+        "If No authorized adult collector appears, drop-off, screening and classroom steps can continue; final pickup remains blocked. An Admin or guardian-editor uses Review collector authorization, or Add authorized collector when no contact exists.",
+        "Review the linked adult or enter the correct guardian, verify adulthood and mark Authorized to collect this child. Admin access already includes guardian editing. To delegate it: More → Volunteers → Volunteers tab → select people → Set role & permissions → Add/correct children & guardians → Save.",
+        "At final pickup, choose an already-authorized, adult-verified collector. Verify the person present against that authorization and confirm the physical handoff before Confirm verified pickup. A different, unapproved collector needs authorized staff review first. Call/Email shortcuts, when permitted, open the device’s phone or email app."
+      ],
+      "check": "A drop-off record, typed name or badge alone cannot authorize pickup. Never bypass missing authorization. Return children from Clinic, Other or Outing before final release."
+    },
+    {
+      "id": "messages",
+      "role": "Coordination",
+      "title": "Read communication statuses correctly",
+      "subtitle": "Recording a movement does not guarantee a delivered message.",
+      "tab": "notifications",
+      "icon": "10",
+      "steps": [
+        "Guardian email/SMS notices are recorded for movements. Actual sending depends on the event sending switch, designated guardian contacts, SMS permission, provider setup and available credits.",
+        "Queued means waiting; Accepted means the provider accepted the message; Delivered requires a receipt. Missing setup, failures and uncertain outcomes need review before retrying.",
+        "Use Notifications when permitted. Practice events never send guardian or volunteer messages. Admins can review volunteer access emails, shift reminders and handover reporting in Volunteers → Coverage & messages."
+      ],
+      "check": "Do not promise a message was delivered because a movement saved or the provider accepted it. Restricted medical details are excluded from guardian transition messages."
+    },
+    {
+      "id": "inventory",
+      "role": "Inventory",
+      "title": "Record supplies issued and returned",
+      "subtitle": "Use the current inventory form accurately.",
+      "tab": "inventory",
+      "icon": "11",
+      "steps": [
+        "Open Inventory and the correct item. Check available quantity before issuing supplies.",
+        "Record the action, quantity and responsible volunteer. Put the destination, such as Room A, and useful handover details in Note; the current form has no separate destination selector.",
+        "Record good-condition returns, damaged returns and lost issued items separately. Check the issue/return history. Only mark items returned when physically received."
+      ],
+      "check": "Inventory totals are not proof that a particular classroom returned its allocation. Keep clear responsibility and destination notes; reconcile against the physical stock."
+    },
+    {
+      "id": "volunteers",
+      "role": "Coordination",
+      "title": "Arrive, count and hand over together",
+      "subtitle": "Volunteers keep the whole programme moving safely.",
+      "tab": "volunteers",
+      "icon": "12",
+      "steps": [
+        "An Admin opens More → Volunteers → Volunteers tab to add names, emails and optional phones in table rows. Choose Admin or Volunteer and permissions, save, then select people for classroom and shift assignments. Email updates can be requested; delivery is reported separately.",
+        "Open My shift and check in only when physically at the station. Before leaving, count the children together and review Clinic, Other, Outing and unresolved records. Offer handover to the assigned incoming volunteer.",
+        "The incoming volunteer checks in and accepts the current physical count. The outgoing volunteer then finishes the shift. Use Shift planner for reminder timing, repeat intervals, exact times and supported email/SMS/WhatsApp/MMS channels; non-email channels need appropriate contact/consent/provider readiness."
+      ],
+      "check": "Do not leave children without relief. An overdue shift remains on duty until checkout. Reminders are not attendance, and accepted email is not a delivery receipt. Finish active handovers before changing access or removing classroom assignments."
+    }
+  ],
+  "practice": [
+    "Find a child without showing the whole roster",
+    "Convention check-in followed by the configured JP start day",
+    "Prefilled Yes/No and missing screening answers",
+    "A child needing all three bands",
+    "Admin collector authorization and verified pickup",
+    "Clinic departure, return and classroom arrival",
+    "Other departure, return and classroom arrival",
+    "Outing departure and a missing return",
+    "Incoming/outgoing physical shift handover",
+    "Paused practice messages and missing notification setup"
+  ]
+}

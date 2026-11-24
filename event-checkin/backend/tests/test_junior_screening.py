@@ -71,3 +71,9 @@ async def test_confirming_registration_at_dropoff_keeps_details_for_the_support_
     root=await setup(ctx);c=await child(ctx,root);await form_answer(ctx,root,c,{'allergies':'Peanuts','support':'Quiet room'},date=datetime.utcnow()-timedelta(hours=1))
     c=await act(ctx,root,c,'dropoff',adult_name='Parent',relationship='parent',identity_checked=True,allergy=True,accommodation=True,screening_wristband_assigned=True)
     r=(await ctx.client.get(root+'/children/'+c['id'])).json();assert r['screening_profile']['allergy']['details']=='Peanuts' and r['screening_profile']['accommodation']['details']=='Quiet room';assert not r['allergy_cleared'] and not r['accommodation_cleared']
+
+@pytest.mark.asyncio
+async def test_registration_screening_does_not_leak_to_another_child_in_same_event(ctx):
+    root=await setup(ctx);first=await child(ctx,root);second=await child(ctx,root,guardian=False,name='Other junior')
+    await form_answer(ctx,root,first,{'allergies':'Peanuts','support':'Quiet room'})
+    profile=(await ctx.client.get(root+'/children/'+second['id'])).json()['screening_profile'];assert profile['allergy']['value'] is None and profile['accommodation']['value'] is None

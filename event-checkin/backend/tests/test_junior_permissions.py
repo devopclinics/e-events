@@ -107,3 +107,46 @@ async def test_revocation_blocks_action_and_old_request_replay(ctx):
     r=await ctx.client.post(root+'/team/access',json={'request_id':key(),'role':'volunteer','permissions':['messages'],'event_user_ids':[eid],'expected_versions':{eid:p['version']},'notify_email':False});assert r.status_code==200,r.text
     ctx.login(user);assert (await ctx.client.get(root+'/children/'+c['id'])).status_code==200
     assert (await ctx.client.post(root+'/children/'+c['id']+'/actions',json=body)).status_code==403
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('admin_kind',['organization_owner','organization_admin','event_manager','juniors_admin','platform_admin'])
+async def test_future_admin_accounts_inherit_juniors_permissions_without_email_exceptions(ctx,admin_kind):
+    root=await setup(ctx)
+    user,eid=await invite(ctx,root,'admin' if admin_kind=='juniors_admin' else 'volunteer',permissions=[])
+    async with _Session() as db:
+        if admin_kind in ('organization_owner','organization_admin'):
+            membership=await db.scalar(select(Membership).where(Membership.user_id==user.id,Membership.org_id==ctx.ids['org_a']));membership.role='owner' if admin_kind=='organization_owner' else 'admin'
+        elif admin_kind=='event_manager':
+            eu=await db.get(EventUser,eid);eu.event_role='manager'
+        elif admin_kind=='platform_admin':
+            row=await db.get(User,user.id);row.is_platform_superadmin=True;user.is_platform_superadmin=True
+        await db.commit()
+    ctx.login(user)
+    r=await ctx.client.get(root+'/config');assert r.status_code==200,r.text
+    cfg=r.json();assert cfg['simple_role']=='admin' and cfg['can_configure'] and set(cfg['permissions'])==ALL
+    c=await child(ctx,root,name='Future account child '+key())
+    d=(await ctx.client.get(root+'/children/'+c['id'])).json();contact=d['contacts'][0]
+    assert contact['pickup_authorized'] and contact['adult_verified'] and 'email' in contact
+
+@pytest.mark.asyncio
+async def test_juniors_admin_grant_does_not_follow_account_to_another_assigned_event(ctx):
+    from app.models import Event
+    from datetime import datetime
+    root=await setup(ctx);user,eid=await invite(ctx,root,'admin')
+    async with _Session() as db:
+        other=Event(org_id=ctx.ids['org_a'],name='Separate event',couples_name='Separate',event_date=datetime.utcnow(),checkin_base_url='http://test',junior_program_enabled=True);db.add(other);await db.flush();other_id=other.id
+        db.add(JuniorConfig(event_id=other_id,classrooms=['Group A'],staff={}))
+        db.add(EventUser(event_id=other_id,user_id=user.id,event_role='staff',feature_permissions={}))
+        await db.commit()
+    ctx.login(user);assert (await ctx.client.get(root+'/config')).status_code==200
+    other_root='/api/events/'+other_id+'/junior'
+    cfg=(await ctx.client.get(other_root+'/config')).json();assert cfg['role'] is None and not cfg['can_configure'] and cfg['permissions']==[] and cfg['staff']=={}
+    assert (await ctx.client.get(other_root+'/children')).status_code==403
+    assert (await ctx.client.put(other_root+'/classrooms',json={'classrooms':['Unauthorized'],'expected_classrooms':['Group A']})).status_code==403
+
+@pytest.mark.asyncio
+async def test_guest_services_manager_does_not_inherit_juniors_admin(ctx):
+    root=await setup(ctx);user,eid=await invite(ctx,root,permissions=[])
+    async with _Session() as db:
+        eu=await db.get(EventUser,eid);eu.event_role='manager';eu.guest_service_scoped=True;await db.commit()
+    ctx.login(user);cfg=(await ctx.client.get(root+'/config')).json();assert cfg['simple_role']=='volunteer' and not cfg['can_configure'] and cfg['permissions']==[]

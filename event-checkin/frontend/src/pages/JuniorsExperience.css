@@ -22,3 +22,4 @@
 @media print{.jp-workspace .jvg{--surface:#fff;--surface-2:#f3f6f5;--ink:#152e35;--muted:#526971;--line:#dce7e9;--teal:#126e63}}
 .jp-workspace .jp-home-primary{margin-top:22px;padding:13px 18px;min-height:50px;gap:12px}.jp-workspace .jp-context-bar{font-size:12px}.jp-workspace .jp-sending-state{font-size:12px}.jp-workspace .jp-header-actions>*{font-size:13px}.jp-workspace .jp-vol-person small{font-size:13px}@media(max-width:760px){.jp-workspace .jp-home-primary{width:100%;justify-content:space-between}.jp-workspace .jp-context-bar{gap:8px;flex-wrap:wrap}.jp-workspace .jp-sending-state{font-size:12px}}
 .jp-workspace .jp-close{width:48px;min-width:48px;min-height:48px;padding:12px}.jp-workspace .jp-close svg{width:20px;height:20px}
+.jp-detail-heading h2{overflow-wrap:anywhere}

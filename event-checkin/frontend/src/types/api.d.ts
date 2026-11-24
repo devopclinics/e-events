@@ -46,6 +46,7 @@ export interface ActionIn {
   notes?: (string) | null
   outing_id?: (string) | null
   phone?: (string) | null
+  programme_date?: (string) | null
   relationship?: ('parent' | 'chaperone' | 'adult_sibling') | null
   request_id: string
   screening_wristband_assigned?: boolean

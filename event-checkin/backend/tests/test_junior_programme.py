@@ -10,6 +10,8 @@ from app.services import junior_outbox
 
 async def setup(ctx):
     ctx.login(ctx.ids['user_a'])
+    async with _Session() as db:
+        event=await db.get(Event,ctx.ids['event_a']);event.status='active';event.seating_enabled=False;await db.commit()
     root=f"/api/events/{ctx.ids['event_a']}/junior"
     response=await ctx.client.put(root+'/config',json={'enabled':True,'classrooms':['Group A','Group B']})
     assert response.status_code==200,response.text

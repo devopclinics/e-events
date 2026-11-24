@@ -2,8 +2,9 @@
 
 Staff-only, event-scoped child roster and custody/movement workspace at `/junior-platform`.
 Parents receive updates without using Festio. Guest List owns child and guardian identities and contact details. JP attaches its
-operational profile to the same guest IDs; convention admission and JP custody
-remain separate recorded actions. Existing explicitly recognized juniors appear
+operational profile to the same guest IDs. A verified daily drop-off atomically
+completes convention admission if needed, records the shared dated attendance mark,
+and starts JP custody for that day. Existing explicitly recognized juniors appear
 automatically, without creating duplicate guests.
 
 ## Event setup
@@ -132,3 +133,14 @@ Volunteers keep children supervised and queues moving through prompt, recorded h
 ### Linked guardian at drop-off
 
 Drop-off defaults to an existing linked guardian (parents listed first). Staff can select another linked guardian or choose Another person to enter a separate handoff record. The server resolves linked names, relationships and phone numbers from the current shared guardian record; scanner roles do not receive private contact fields. Staff must still verify the person in front of them, and verify an adult sibling’s age. Recording another person at drop-off does not create a Guest, change guardian contacts, opt them into messages, or grant pickup authorization.
+
+
+## Convention admission and daily programme start
+
+Adding names, linking a guardian, opening a record, or beginning a new calendar day does not admit anyone. Confirming a witnessed drop-off invokes the existing convention admission rules when the child has not already been admitted. Cancelled passes, inactive events, required check-in steps, group-pass rules and seating policies remain in force. If daily attendance is enabled, its event-date window also applies. No event schedule or general daily-scanner feature switch is changed by JP.
+
+The verified drop-off explicitly opts that junior into the canonical AttendanceRecord daily ledger: one mark per guest/event/local date, reused if a normal daily scan already recorded it. Convention admission, daily attendance, JP movement and guardian notice creation share one transaction. Conventional admission messages are suppressed for this JP path; the independently controlled guardian outbox handles JP notices. Existing convention admission timestamps and seats are preserved on subsequent days or re-entry. Broadcast occurs only after commit.
+
+Programme dates use the event timezone. A child released on an earlier day appears as Not arrived today, with fresh screening and wristband confirmation required. This is a read view, not a destructive midnight reset: stored release, original admission, restricted profile notes and dated movement history remain intact. Confirming the next drop-off starts the new programme day.
+
+Unfinished prior-day custody is never silently released or hidden. Staff see a prior-day warning; a supervisor must reconcile the actual return/pickup before a new daily drop-off. Outing and temporary-departure reconciliation rules remain in force. Old movements with no programme-date column retain their original timestamps and are not backfilled with guessed dates. Stale-day forms and replays of a previous day’s drop-off request cannot start a new day.

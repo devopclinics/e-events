@@ -1210,10 +1210,21 @@ async def checkin_guard(event, current_user, db, guest=None, operation="checkin"
     return None
 
 
-async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
+async def perform_admission(guest, event, background_tasks, db, *, commit=True, notifications=True, broadcast_event=True) -> ScanResult:
     """Admit a guest — seat assignment (incl. table-group rules), admitted flags,
     notifications, and SSE broadcast. Shared by QR scan and manual check-in.
-    Caller must have already validated the event + access (see checkin_guard)."""
+    Caller must have already validated the event + access (see checkin_guard).
+    JP uses commit=False and defers broadcast until its own atomic commit.
+    All ordinary callers retain the existing defaults."""
+    async def persist():
+        if commit:await db.commit()
+        else:await db.flush()
+
+    # Serialize first admission across the standard scanner and JP drop-off.
+    # Autoflush preserves any caller-selected seating fields before refreshing.
+    if guest.id:
+        await db.scalar(select(Guest).where(Guest.id==guest.id).with_for_update().execution_options(populate_existing=True))
+
     from ..services.group_passes import active_group, claim_active
     if not claim_active.get() and await active_group(db, guest.id):
         return ScanResult(status="group_pass_required", message="Shared group QR: scan this pass in the scanner and confirm how many people are entering.")
@@ -1329,9 +1340,9 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
     from ..services.marketing_client import capture_event_outcome
     await capture_event_outcome(db, event, "checkin_succeeded", guest.id, use_case="checkin", guest=guest)
     from .live_content import auto_issue_eligible_certificates
-    await auto_issue_eligible_certificates(event, guest, db, background_tasks)
+    await auto_issue_eligible_certificates(event, guest, db, background_tasks if notifications else None)
     try:
-        await db.commit()
+        await persist()
     except IntegrityError:
         # Another scanner grabbed this exact seat between our FCFS pick and our
         # commit (the unique index rejected the duplicate). Roll back and ask for
@@ -1349,10 +1360,10 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
         "first_name": guest.first_name, "last_name": guest.last_name,
         "admitted_at": guest.admitted_at.isoformat() if guest.admitted_at else None,
     }):
-        await db.commit()
+        await persist()
 
     await queue_points_award(db, event_id=event.id, guest_id=guest.id, reason="event_checked_in", points=15)
-    await db.commit()
+    await persist()
 
     # Look up menu choices for this guest as "Category: Item" pairs.
     menu_lines: list[tuple[str, str]] = []
@@ -1400,7 +1411,7 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
     tmpl_ctx = build_template_context(
         event, guest, extras={"table_name": table_name or "", "ticket_link": ticket_url or "", "qr_code": ticket_url or ""}
     )
-    chosen = channels_for_flow(event, guest, "admission", paid_ok=paid)
+    chosen = channels_for_flow(event, guest, "admission", paid_ok=paid) if notifications else []
     if "sms" in chosen and await reserve_message_credit(event, "sms", db=db):
         sms_text = _template_channel_for_event(overrides, event, "admission_confirmation", "experience_admission_confirmation", "sms", tmpl_ctx)
         if sms_text is not None:
@@ -1439,9 +1450,9 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
                     or f"Welcome {guest.first_name}! You're checked in to {event.name}.")
         card_url = f"{event.checkin_base_url.rstrip('/')}/api/scan/{guest.qr_token}/card.jpg?admitted=true"
         background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_mms, phone=guest.phone, body=mms_text, media_url=card_url)
-    await db.commit()  # persist message-credit decrements
+    await persist()  # persist message-credit decrements
     await sync_guest_progress(event.id, guest.id, db, source="staff", actor_user_id=None)
-    await db.commit()
+    await persist()
     experience_next = await _next_steps_for_scan(event.id, guest.id, db) if event else []
     operational_context = await _scan_operational_context(guest, table_name, experience_next, db)
     if "email" in chosen:
@@ -1451,14 +1462,15 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
         background_tasks.add_task(send_admission_email, guest_data)
         await _queue_experience_next_steps_email(background_tasks, event, guest, db, overrides)
 
-    await broadcast(guest.event_id, {
-        "type": "admitted",
-        "guest_id": guest.id,
-        "name": f"{guest.first_name} {guest.last_name}",
-        "email": guest.email,
-        "admitted_at": guest.admitted_at.isoformat(),
-        "is_walk_in": bool(guest.is_walk_in),
-    })
+    if broadcast_event:
+        await broadcast(guest.event_id, {
+            "type": "admitted",
+            "guest_id": guest.id,
+            "name": f"{guest.first_name} {guest.last_name}",
+            "email": guest.email,
+            "admitted_at": guest.admitted_at.isoformat(),
+            "is_walk_in": bool(guest.is_walk_in),
+        })
 
     return ScanResult(
         status="admitted",

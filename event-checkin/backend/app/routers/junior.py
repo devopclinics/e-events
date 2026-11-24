@@ -1,14 +1,15 @@
-"""Staff-only Junior Programme. No public endpoints or implicit convention admission."""
+"""Staff-only Junior Programme. Verified drop-offs atomically record convention and dated JP entry."""
 from datetime import datetime, date, timezone
 from typing import Literal
 from zoneinfo import ZoneInfo
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field, EmailStr, field_validator
 from sqlalchemy import select
 from ..database import get_db
 from ..auth import require_event_member, _org_role
 from ..models import Event, EventUser, User, Guest
 from ..services import junior_guests as shared
+from ..services import junior_days as days
 from ..junior_models import (JuniorAudit, JuniorConfig, JuniorChild, JuniorContact, JuniorMovement,
     JuniorOuting, JuniorOutingMember, JuniorNotification, JuniorInventory, JuniorInventoryEntry)
 
@@ -39,6 +40,8 @@ def output_child(child, role):
     keys = ('id','guest_id','name','reference','age_group','classroom','location','allergy','accommodation',
             'allergy_cleared','accommodation_cleared','screening_wristband_assigned','version','updated_at')
     result = {k: getattr(child,k) for k in keys}
+    result.update(days.view(child))
+    result['convention_admitted']=bool(getattr(child,'_convention_admitted',False))
     if role in ('support','supervisor'):
         result.update(allergy_notes=child.allergy_notes, accommodation_notes=child.accommodation_notes)
     return result
@@ -75,7 +78,7 @@ async def audit(db, event, child, actor, action, *, request_id, before=None, **d
     await shared.refresh_contacts(event,child,db)
     movement = JuniorMovement(event_id=event.id, child_id=child.id, request_id=request_id,
         action=action, from_location=before or child.location, to_location=child.location,
-        actor_id=actor.id, wristbands={'screening':bool(child.screening_wristband_assigned),'allergy':bool(child.allergy and child.allergy_cleared),'accommodation':bool(child.accommodation and child.accommodation_cleared)}, **details)
+        actor_id=actor.id, occurred_at=days.utcnow(),programme_date=(child.programme_date if action not in ('intake','correction','contact') else None) or days.day(event),wristbands={'screening':bool(child.screening_wristband_assigned),'allergy':bool(child.allergy and child.allergy_cleared),'accommodation':bool(child.accommodation and child.accommodation_cleared)}, **details)
     db.add(movement)
     await db.flush()
     # A missing contact still produces two visible setup-required records.
@@ -92,6 +95,8 @@ async def audit(db, event, child, actor, action, *, request_id, before=None, **d
         'contact':'Guardian details updated'}
     # Never copy medical notes, free-text movement reasons or phone numbers into messages.
     body = f'{event.name} / Junior Platform: {child.name}. {labels.get(action, action)}. {local:%b %d, %I:%M %p %Z}.'
+    if movement.programme_date!=local.date().isoformat():
+        body=f'{event.name} / Junior Platform: {child.name}. Prior programme day {movement.programme_date} reconciled: {labels.get(action, action)}. Recorded {local:%b %d, %I:%M %p %Z}.'
     if action == 'classroom':
         body += f' Classroom: {child.classroom}.'
     if action == 'release':
@@ -136,7 +141,7 @@ async def config_get(event_id: str, db=Depends(get_db), actor=Depends(require_ev
     return {'enabled':bool(event.junior_program_enabled),'role':role,'can_configure':admin and not readonly,'read_only':readonly,'can_open_guest_list':guest_access,
         'classrooms':config.classrooms if config else [],
         'staff':config.staff if config and admin else {},
-        'notifications_enabled':bool(config and config.notifications_enabled),
+        'notifications_enabled':bool(config and config.notifications_enabled),'today':days.day(event),
         'available_staff':[{'id':u.id,'name':u.name,'view_only':eu.access_level=='view'} for eu,u in
             (await db.execute(select(EventUser,User).join(User,User.id==EventUser.user_id).where(EventUser.event_id==event_id))).all()] if admin else []}
 
@@ -243,6 +248,7 @@ async def create_child(event,config,body,actor,db,*,rows=None):
         await add_contact(event,child,body.guardian,actor,db)
         await db.flush()
     await audit(db,event,child,actor,'intake',request_id='intake:'+child.id)
+    await shared.refresh_child(event,child,db)
     return child
 
 
@@ -359,7 +365,7 @@ async def child_detail(event_id: str, child_id: str, db=Depends(get_db), actor=D
             guardian=await db.get(Guest,contact.guardian_guest_id) if contact.guardian_guest_id else None
             entry['guardian_updated_at']=guardian.updated_at if guardian else None
     history=(await db.scalars(select(JuniorMovement).where(JuniorMovement.child_id==child_id).order_by(JuniorMovement.occurred_at.desc()).limit(100))).all()
-    result['history']=[{k:getattr(m,k) for k in ('id','action','from_location','to_location','adult_name','relationship','actor_id','occurred_at','wristbands')} for m in history]
+    result['history']=[{k:getattr(m,k) for k in ('id','action','from_location','to_location','adult_name','relationship','actor_id','occurred_at','wristbands','programme_date')} for m in history]
     actor_ids={m.actor_id for m in history}
     names={u.id:u.name for u in (await db.scalars(select(User).where(User.id.in_(actor_ids)))).all()}
     for entry,m in zip(result['history'],history):
@@ -475,25 +481,35 @@ class ActionIn(BaseModel):
     wristband_assigned: bool = False
     screening_wristband_assigned: bool = False
     outing_id: str | None = None
+    programme_date: str | None = Field(default=None,pattern=r'^\d{4}-\d{2}-\d{2}$')
 
 
 @router.post('/children/{child_id}/actions')
-async def action(event_id: str, child_id: str, body: ActionIn, db=Depends(get_db), actor=Depends(require_event_member)):
+async def action(event_id: str, child_id: str, body: ActionIn, background_tasks: BackgroundTasks, db=Depends(get_db), actor=Depends(require_event_member)):
     event,_,role,_=await access(event_id,actor,db,roles=['scanner','intake','support','supervisor'])
     child=await child_for(event_id,child_id,db,True)
     prior=await db.scalar(select(JuniorMovement).where(JuniorMovement.event_id==event_id,JuniorMovement.request_id==body.request_id))
     if prior:
         if prior.child_id!=child_id or prior.action!=body.action:
             raise HTTPException(409,'Request ID was already used for another operation')
+        if body.action=='dropoff' and (prior.programme_date or days.day(event,prior.occurred_at))!=days.day(event):
+            raise HTTPException(409,'That drop-off request belongs to a previous day. Refresh and record a new drop-off for today.')
         return output_child(child,role)
     check_version(child,body.version)
     before=child.location
     a=body.action
     details={}
+    today=days.day(event)
+    if days.view(child,event)['prior_day_unresolved'] and role!='supervisor':
+        raise HTTPException(409,'Previous-day custody is still open. Ask a supervisor to reconcile it before today’s drop-off.')
+    newly_admitted=False
     if a=='dropoff':
         guest=await db.get(Guest,child.guest_id)
         if not shared.is_junior(event,guest):raise HTTPException(409,'Confirm junior status in Guest List before a new drop-off')
-        if before not in ('not_arrived','released'):raise HTTPException(409,'Child is already in JP custody')
+        if body.programme_date and body.programme_date!=today:raise HTTPException(409,'The event day changed. Refresh and record today’s drop-off.')
+        if before not in ('not_arrived','released'):raise HTTPException(409,'Child is already in JP custody; reconcile the previous handoff before a new drop-off')
+        if event.daily_checkin_enabled and not (days.day(event,event.event_date)<=today<=days.day(event,event.event_end_date or event.event_date)):
+            raise HTTPException(409,'Daily drop-off can only be recorded on an event date. Check the event schedule before proceeding.')
         adult_name,relationship,phone=body.adult_name,body.relationship,body.phone
         dropoff_contact=None
         if body.contact_id:
@@ -507,6 +523,28 @@ async def action(event_id: str, child_id: str, body: ActionIn, db=Depends(get_db
             raise HTTPException(400,'Record the dropping-off adult, relationship and staff verification')
         if relationship=='adult_sibling' and not body.adult_verified:
             raise HTTPException(400,'Verify sibling is 18 or older')
+        from .scanner import checkin_guard,perform_admission
+        blocked=await checkin_guard(event,actor,db,guest=guest,operation='checkin')
+        if blocked:raise HTTPException(409,'Convention check-in: '+blocked.message)
+        if guest.rsvp_status=='declined':raise HTTPException(409,'Convention check-in: This ticket has been cancelled and cannot be admitted.')
+        if not guest.admitted:
+            admission=await perform_admission(guest,event,background_tasks,db,commit=False,notifications=False,broadcast_event=False)
+            if admission.status not in ('admitted','already_admitted'):
+                raise HTTPException(409,'Convention check-in: '+admission.message)
+            newly_admitted=admission.status=='admitted'
+        from ..models import AttendanceRecord
+        from sqlalchemy.exc import IntegrityError
+        existing=await db.scalar(select(AttendanceRecord).where(AttendanceRecord.event_id==event_id,AttendanceRecord.guest_id==guest.id,AttendanceRecord.scope=='daily',AttendanceRecord.scope_key==today))
+        if not existing:
+            try:
+                async with db.begin_nested():
+                    db.add(AttendanceRecord(event_id=event_id,guest_id=guest.id,scope='daily',scope_key=today,recorded_at=days.utcnow(),recorded_by=actor.id))
+                    await db.flush()
+            except IntegrityError:
+                if not await db.scalar(select(AttendanceRecord.id).where(AttendanceRecord.event_id==event_id,AttendanceRecord.guest_id==guest.id,AttendanceRecord.scope=='daily',AttendanceRecord.scope_key==today)):raise
+        child.programme_date=today
+        child._programme_today=today
+        child._convention_admitted=True
         child.screening_wristband_assigned=body.screening_wristband_assigned
         child.allergy=body.allergy
         child.accommodation=body.accommodation
@@ -564,7 +602,7 @@ async def action(event_id: str, child_id: str, body: ActionIn, db=Depends(get_db
         member=await db.get(JuniorOutingMember,(body.outing_id,child_id))
         if not outing or outing.closed or not member:raise HTTPException(409,'Child must be on an open, permission-verified outing roster')
         if a=='outing_depart':
-            today=datetime.now(ZoneInfo(event.timezone or 'UTC')).date().isoformat()
+            today=days.day(event)
             if outing.outing_date!=today:raise HTTPException(409,'Outing departure is only available on its scheduled date')
             if before!='classroom' or member.departed_at:raise HTTPException(409,'Child must be in class and not already departed')
             member.departed_at=datetime.utcnow()
@@ -585,6 +623,9 @@ async def action(event_id: str, child_id: str, body: ActionIn, db=Depends(get_db
     tick(child)
     await audit(db,event,child,actor,a,request_id=body.request_id,before=before,**details)
     await db.commit()
+    if newly_admitted:
+        from . import broadcast
+        background_tasks.add_task(broadcast,event_id,{'type':'admitted','guest_id':child.guest_id,'name':child.name,'email':guest.email,'admitted_at':guest.admitted_at.isoformat() if guest.admitted_at else None,'is_walk_in':bool(guest.is_walk_in)})
     return output_child(child,role)
 
 

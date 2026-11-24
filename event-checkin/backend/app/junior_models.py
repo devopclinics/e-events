@@ -1,4 +1,4 @@
-"""Event-scoped Junior Programme data. Never populated from convention guests implicitly."""
+"""Event-scoped Junior Programme extensions of shared Guest List identities."""
 import uuid
 from datetime import datetime
 from sqlalchemy import String, Text, Boolean, Integer, DateTime, JSON, ForeignKey, UniqueConstraint
@@ -39,6 +39,7 @@ class JuniorChild(Base):
     age_group: Mapped[str] = mapped_column(String(80))
     classroom: Mapped[str] = mapped_column(String(100))
     location: Mapped[str] = mapped_column(String(30), default='not_arrived')
+    programme_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
     allergy: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     accommodation: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     screening_wristband_assigned: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -74,6 +75,7 @@ class JuniorMovement(Base):
     child_id: Mapped[str] = mapped_column(ForeignKey('junior_children.id', ondelete='CASCADE'), index=True)
     request_id: Mapped[str] = mapped_column(String(80))
     action: Mapped[str] = mapped_column(String(40))
+    programme_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
     wristbands: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     from_location: Mapped[str] = mapped_column(String(30))
     to_location: Mapped[str] = mapped_column(String(30))

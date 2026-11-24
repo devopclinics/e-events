@@ -17,6 +17,7 @@ from ..timeutil import to_event_local
 from sqlalchemy import or_
 from . import broadcast
 from ..models import (
+    AttendanceRecord,
     ConsentSignature,
     EventFormSubmission,
     EventConsentAuthority,
@@ -1638,7 +1639,8 @@ async def list_guests(event_id: str, db: AsyncSession = Depends(get_db), _: User
         from ..junior_models import JuniorChild,JuniorContact
         from ..services.event_forms import is_junior
         profiles=(await db.scalars(select(JuniorChild).where(JuniorChild.event_id==event_id))).all()
-        states={p.guest_id:p.location for p in profiles if p.guest_id}
+        from ..services.junior_days import view as junior_day_view
+        states={p.guest_id:junior_day_view(p,event)['location'] for p in profiles if p.guest_id}
         links={}
         for child_id,entries in (event.guardian_authorizations or {}).items():
             for entry in entries or []:
@@ -2413,6 +2415,7 @@ async def delete_guest_cascade(event_id: str, guest_id: str, background_tasks: B
     await db.execute(delete(EventFormSubmission).where(EventFormSubmission.guest_id == guest_id))
     await db.execute(EventFormSubmission.__table__.update().where(EventFormSubmission.signer_guest_id == guest_id).values(signer_guest_id=None))
     await db.execute(delete(EventConsentAuthority).where(or_(EventConsentAuthority.guest_id == guest_id, EventConsentAuthority.signer_guest_id == guest_id)))
+    await db.execute(delete(AttendanceRecord).where(AttendanceRecord.guest_id == guest_id))
     await db.execute(delete(ScanEvent).where(ScanEvent.guest_id == guest_id))
     await db.execute(delete(GuestTagLink).where(GuestTagLink.guest_id == guest_id))
     await db.execute(delete(GuestShipment).where(GuestShipment.guest_id == guest_id))

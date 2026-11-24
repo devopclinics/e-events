@@ -2464,6 +2464,7 @@ class AttendanceRecord(Base):
     It deliberately does not change ``Guest.admitted``.  Existing check-in and
     checkout keep their established behaviour; an organizer can later enable
     daily attendance and receive one idempotent record per guest per event day.
+    A verified JP drop-off also opts that junior into this shared daily ledger.
     """
     __tablename__ = "attendance_records"
     __table_args__ = (

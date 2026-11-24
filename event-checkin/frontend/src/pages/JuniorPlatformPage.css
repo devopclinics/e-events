@@ -201,3 +201,6 @@ body:has(.jp-dialog[open]) { overflow:hidden; }
 .jp-shift-channel-choices { display:flex; flex-wrap:wrap; gap:20px; }
 .jp-shift-workspace .jp-notice { border:1px solid var(--line); background:var(--surface-2); padding:12px; border-radius:8px; font-size:12px; }
 @media(max-width:600px) { .jp-shift-fields { grid-template-columns:1fr; gap:0; } }
+.jp-day-status { padding:14px; margin:15px 0; border:1px solid var(--line); border-radius:9px; background:var(--surface-2); }
+.jp-day-status strong { font-size:12px; }
+.jp-day-status p { font-size:11px; margin-bottom:0; }

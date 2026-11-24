@@ -54,6 +54,9 @@ async def refresh_child(event,child,db):
     if not guest or guest.event_id!=event.id:
         return None
     if not is_junior(event,guest) and child.location in ('not_arrived','released'):return None
+    from .junior_days import day
+    child._programme_today=day(event)
+    child._convention_admitted=bool(guest.admitted)
     name=person_name(guest)
     if child.name!=name:
         child.name=name;child.version+=1;child.updated_at=datetime.utcnow()

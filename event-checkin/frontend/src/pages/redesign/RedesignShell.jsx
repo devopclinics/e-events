@@ -268,6 +268,7 @@ export function WhatsAppTemplatePicker({ approvedTemplates, mergeFieldOptions, e
 
 export function Icon({ name, size = 18, className }) {
   const paths = {
+    scan: <><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5"/><rect x="7" y="7" width="3" height="3" rx=".5"/><rect x="14" y="7" width="3" height="3" rx=".5"/><rect x="7" y="14" width="3" height="3" rx=".5"/><path d="M14 14h3v3h-3Z"/></>,
     grid: <><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></>,
     users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></>,
     mail: <><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></>,

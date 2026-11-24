@@ -1,0 +1,19 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import {readFileSync} from 'node:fs'
+import {createRequire} from 'node:module'
+import {runInNewContext} from 'node:vm'
+import {transformSync} from 'esbuild'
+import React from 'react'
+import {create,act} from 'react-test-renderer'
+import {juniorCan} from '../src/utils/juniorPermissions.js'
+const req=createRequire(import.meta.url),mod={exports:{}}
+runInNewContext(transformSync(readFileSync(new URL('../src/components/JuniorOutings.jsx',import.meta.url),'utf8'),{loader:'jsx',jsx:'automatic',format:'cjs'}).code,{module:mod,exports:mod.exports,window:{confirm:()=>true,scrollTo:()=>{}},requestAnimationFrame:fn=>fn(),require:n=>n==='react'?React:n==='../pages/redesign/RedesignShell'?{Icon:()=>null}:n==='./QrCameraScanner'?(props=>React.createElement('scanner',props)):n==='../utils/juniorPermissions'?{juniorCan}:req(n)})
+const Component=mod.exports.default,text=n=>typeof n==='string'?n:Array.isArray(n)?n.map(text).join(''):n?.children?text(n.children):'',button=(t,name)=>t.root.findAllByType('button').find(b=>text(b.children)===name)
+const outing={id:'trip',name:'Museum visit',date:'2026-11-24',closed:false,expected:2,departed:1,returned:0,outstanding:[{id:'a',name:'Amina'}],members:[{id:'a',name:'Amina',departed_at:'2026-11-24T10:00:00',returned_at:null},{id:'b',name:'Bello',departed_at:null,returned_at:null}]}
+async function setup(config={permissions:['checkin','outings']}){const opened=[],writes=[];let resolved='a',tree;await act(async()=>{tree=create(React.createElement(Component,{config,outings:[outing],children:[],call:async(p,m,b)=>{writes.push([p,m,b]);return{child_id:resolved}},refresh:async()=>{},open:async(...args)=>opened.push(args)}))});await act(async()=>tree.root.findAllByType('button').find(b=>text(b.children).includes('Museum visit')).props.onClick());return{tree,opened,writes,resolve:id=>{resolved=id}}}
+test('Outing scanner identifies a roster member without recording movement and passes the exact return context',async()=>{const{tree,opened,writes}=await setup();assert.equal(button(tree,'Close reconciled outing').props.disabled,true);await act(async()=>button(tree,'Scan outing badge').props.onClick());await act(async()=>tree.root.findByType('scanner').props.onScan('badge'));assert.deepEqual(JSON.parse(JSON.stringify(opened)),[['a',{outingId:'trip',action:'outing_return'}]]);assert.equal(writes.length,1);assert.equal(writes[0][0],'/resolve');await act(async()=>tree.unmount())})
+test('Scanning a child outside this outing cannot open or move them',async()=>{const{tree,opened,resolve}=await setup();resolve('foreign');await act(async()=>button(tree,'Scan outing badge').props.onClick());await act(async()=>tree.root.findByType('scanner').props.onScan('foreign badge'));assert.equal(opened.length,0);assert.match(text(tree.toJSON()),/not on this outing roster/);await act(async()=>tree.unmount())})
+test('Managing outings does not grant physical movement permissions',async()=>{const{tree}=await setup({permissions:['outings']});assert.equal(button(tree,'Scan outing badge'),undefined);await act(async()=>tree.unmount())})
+test('Read-only staff cannot scan movements or close an outing',async()=>{const{tree}=await setup({permissions:['checkin','outings'],read_only:true});assert.equal(button(tree,'Scan outing badge'),undefined);assert.equal(button(tree,'Close reconciled outing'),undefined);await act(async()=>tree.unmount())})
+test('Not-departed attendees open departure confirmation for this exact outing',async()=>{const{tree,opened}=await setup();await act(async()=>button(tree,'Not departed').props.onClick());await act(async()=>tree.root.findAllByType('button').find(b=>text(b.children)==='BelloNot departed').props.onClick());assert.deepEqual(JSON.parse(JSON.stringify(opened)),[['b',{outingId:'trip',action:'outing_depart'}]]);await act(async()=>tree.unmount())})

@@ -8,7 +8,7 @@ const readable=s=>String(s||'').replaceAll('_',' ')
 const request=()=>crypto.randomUUID()
 export default function JuniorVolunteerHub({call,busy,timezone,role,config,refreshAccess}){
  const supervisor=juniorCan(config,'volunteers'),readonly=config.read_only
- const [tab,setTab]=useState(supervisor?'team':'mine'),[team,setTeam]=useState(null),[mine,setMine]=useState(null),[dashboard,setDashboard]=useState(null),[selected,setSelected]=useState([]),[error,setError]=useState(''),[notice,setNotice]=useState(''),[saving,setSaving]=useState(false)
+ const [tab,setTab]=useState('mine'),[team,setTeam]=useState(null),[mine,setMine]=useState(null),[dashboard,setDashboard]=useState(null),[selected,setSelected]=useState([]),[error,setError]=useState(''),[notice,setNotice]=useState(''),[saving,setSaving]=useState(false)
  const [classes,setClasses]=useState([]),[notify,setNotify]=useState(true),[subject,setSubject]=useState(''),[message,setMessage]=useState('')
  const attempt=useRef(null),mounted=useRef(true)
  const load=useCallback(async()=>{try{const values=await Promise.all([call('/team/mine'),...(supervisor?[call('/team'),call('/team/dashboard')]:[])]);if(!mounted.current)return;setMine(values[0]);if(supervisor){setTeam(values[1]);setDashboard(values[2])}}catch(e){if(mounted.current)setError(e.message)}},[call,supervisor])

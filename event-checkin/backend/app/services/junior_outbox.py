@@ -10,6 +10,7 @@ from ..models import Event, EmailDeliveryEvent, MessageCreditLedger
 from ..junior_models import JuniorConfig, JuniorContact, JuniorNotification
 from ..entitlements import reserve_message_credit, last_credit_ledger_id, can_use_paid_channels
 from .public_event_policy import event_communications_blocked
+from .junior_practice import is_practice
 from services import messaging
 from services.email_service import send_simple_email
 from services.outbound_safety import recipient_allowed
@@ -21,7 +22,7 @@ logger=logging.getLogger(__name__)
 
 async def transport(row):
     if row.channel=='email':
-        ok=await send_simple_email(row.recipient,'Junior Platform update',f'<p>{escape(row.body)}</p>',
+        ok=await send_simple_email(row.recipient,'Festio Juniors update',f'<p>{escape(row.body)}</p>',
             event_id=row.event_id,message_kind='junior:'+row.id)
         return {'accepted':bool(ok)}
     context=messaging._event_context.set(row.event_id)
@@ -53,7 +54,8 @@ async def deliver(notification_id, sessions=None, sender=None):
         if event and contact and child:
             await shared.refresh_contact(event,child,contact,db)
         reason=None
-        if not event or not event.junior_program_enabled or not config or not config.notifications_enabled:
+        if is_practice(event):reason='Practice events never send guardian messages'
+        elif not event or not event.junior_program_enabled or not config or not config.notifications_enabled:
             reason='Junior Programme sending is paused'
         elif await event_communications_blocked(event,db):reason='Event communications are blocked'
         elif row.created_at < datetime.utcnow()-timedelta(hours=24):reason='Historical update expired; review instead of sending'

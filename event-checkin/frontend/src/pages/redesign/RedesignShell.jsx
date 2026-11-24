@@ -340,7 +340,7 @@ const TOP_LINKS = [
       ['festio.events', 'staging.festio.events', 'localhost'].includes(window.location.hostname),
   },
   { id: 'guestservices', label: 'Guest Services', to: '/guest-services', icon: 'users' },
-  { id: 'junior', label: 'Junior Platform', to: '/junior-platform', icon: 'shield', gate: ({ event }) => !!event?.junior_program_enabled },
+  { id: 'junior', label: 'Festio Juniors', to: '/junior-platform', icon: 'shield', gate: ({ event }) => !!event?.junior_program_enabled },
   { id: 'mytasks', label: 'My Tasks', to: '/team-redesign?tab=mytasks', icon: 'file' },
   {
     id: 'org', label: 'Org Settings', to: '/billing-redesign?tab=org', icon: 'settings',

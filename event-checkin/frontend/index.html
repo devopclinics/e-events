@@ -8,7 +8,13 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="FestioHub" />
-    <link rel="manifest" href="/guesthub.webmanifest" />
+    <link id="festio-manifest" rel="manifest" href="/guesthub.webmanifest" />
+    <script>
+      if (location.pathname === '/juniors' || location.pathname.startsWith('/juniors/')) {
+        document.getElementById('festio-manifest').href='/juniors/manifest.webmanifest';
+        document.querySelector('meta[name="apple-mobile-web-app-title"]').content='Festio Juniors';
+      }
+    </script>
     <link rel="apple-touch-icon" sizes="192x192" href="/brand/festio-mark-192.png" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=20261102" />
     <meta name="description" content="Festio helps organizers create events, manage guests, collect RSVPs, send QR passes, assign seats, message attendees, control access, manage meals, and track attendance live." />

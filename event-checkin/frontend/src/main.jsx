@@ -35,7 +35,7 @@ if (new URLSearchParams(window.location.search).get('guesthub') === '1') {
 
 // The Guest Hub is a Progressive Web App. Registering this small worker makes
 // the pass installable and retains the guest's QR image for weak venue Wi-Fi.
-if ('serviceWorker' in navigator && window.isSecureContext) {
+if ('serviceWorker' in navigator && window.isSecureContext && !window.location.pathname.startsWith('/juniors')) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/guesthub-sw.js?v=4').catch(() => {
       // Installing the app is optional; the browser experience stays usable.

@@ -1,0 +1,25 @@
+{
+  "id": "/juniors/",
+  "name": "Festio Juniors",
+  "short_name": "Juniors",
+  "description": "Staff check-in, daily drop-off and verified pickup for children at any event.",
+  "start_url": "/juniors/",
+  "scope": "/juniors/",
+  "display": "standalone",
+  "background_color": "#fffdf8",
+  "theme_color": "#254F43",
+  "icons": [
+    {
+      "src": "/brand/festio-mark-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/brand/festio-mark-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

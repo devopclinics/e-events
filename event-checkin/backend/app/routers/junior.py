@@ -10,6 +10,7 @@ from ..auth import require_event_member, _org_role
 from ..models import Event, EventUser, User, Guest
 from ..services import junior_guests as shared
 from ..services import junior_days as days
+from ..services.junior_practice import is_practice
 from ..junior_models import (JuniorAudit, JuniorConfig, JuniorChild, JuniorContact, JuniorMovement,
     JuniorOuting, JuniorOutingMember, JuniorNotification, JuniorInventory, JuniorInventoryEntry)
 
@@ -94,9 +95,9 @@ async def audit(db, event, child, actor, action, *, request_id, before=None, **d
         'intake':'Child record created', 'correction':'Child record updated', 'screening':'Screening recorded',
         'convention_checkin':'Checked into the convention (JP drop-off is separate)', 'contact':'Guardian details updated'}
     # Never copy medical notes, free-text movement reasons or phone numbers into messages.
-    body = f'{event.name} / Junior Platform: {child.name}. {labels.get(action, action)}. {local:%b %d, %I:%M %p %Z}.'
+    body = f'{event.name} / Festio Juniors: {child.name}. {labels.get(action, action)}. {local:%b %d, %I:%M %p %Z}.'
     if movement.programme_date!=local.date().isoformat():
-        body=f'{event.name} / Junior Platform: {child.name}. Prior programme day {movement.programme_date} reconciled: {labels.get(action, action)}. Recorded {local:%b %d, %I:%M %p %Z}.'
+        body=f'{event.name} / Festio Juniors: {child.name}. Prior programme day {movement.programme_date} reconciled: {labels.get(action, action)}. Recorded {local:%b %d, %I:%M %p %Z}.'
     if action == 'classroom':
         body += f' Classroom: {child.classroom}.'
     if action == 'release':
@@ -114,7 +115,7 @@ async def audit(db, event, child, actor, action, *, request_id, before=None, **d
                 error = 'Guardian SMS permission not recorded'
             db.add(JuniorNotification(event_id=event.id,movement_id=movement.id,
                 contact_id=contact.id if contact else None,channel=channel,recipient=recipient,
-                body=body,status='setup_required' if error else ('queued' if config and config.notifications_enabled else 'paused'),error=error))
+                body=body,status='setup_required' if error else ('queued' if config and config.notifications_enabled and not is_practice(event) else 'paused'),error=error))
     return movement
 
 
@@ -139,7 +140,11 @@ async def config_get(event_id: str, db=Depends(get_db), actor=Depends(require_ev
     membership=await db.scalar(select(EventUser).where(EventUser.event_id==event_id,EventUser.user_id==actor.id))
     readonly=bool(membership and membership.access_level=='view' and not actor.is_platform_superadmin and await _org_role(actor,event.org_id,db) not in ('owner','admin'))
     guest_access=admin or bool(membership and not membership.guest_service_scoped and (membership.can_view_guests or membership.can_manage_guests) and (membership.feature_permissions is None or membership.feature_permissions.get('guests') in ('view','manage')))
-    return {'enabled':bool(event.junior_program_enabled),'role':role,'can_configure':admin and not readonly,'read_only':readonly,'can_open_guest_list':guest_access,
+    practice=None
+    if admin and not is_practice(event):
+        candidates=(await db.scalars(select(Event).where(Event.org_id==event.org_id,Event.is_test.is_(True),Event.junior_program_enabled.is_(True),Event.cancelled.is_(False)))).all()
+        practice=next((e.id for e in candidates if is_practice(e) and e.setup_preferences.get('junior_practice_source')==event_id),None)
+    return {'practice_mode':is_practice(event),'practice_event_id':practice,'practice_source_event_id':event.setup_preferences.get('junior_practice_source') if is_practice(event) else None,'enabled':bool(event.junior_program_enabled),'role':role,'can_configure':admin and not readonly,'read_only':readonly,'can_open_guest_list':guest_access,
         'classrooms':config.classrooms if config else [],
         'staff':config.staff if config and admin else {},
         'notifications_enabled':bool(config and config.notifications_enabled),'today':days.day(event),
@@ -164,6 +169,7 @@ async def config_put(event_id: str, body: ConfigIn, db=Depends(get_db), actor=De
     existing = set((await db.scalars(select(JuniorChild.classroom).where(JuniorChild.event_id==event_id,JuniorChild.classroom!=''))).all())
     if not existing.issubset(set(classrooms)):
         raise HTTPException(409,'Reassign children before removing their classroom')
+    if body.notifications_enabled and is_practice(event):raise HTTPException(409,'Guardian sending is disabled in practice events')
     if body.notifications_enabled:
         await shared.roster(event,db)
         from ..config import settings

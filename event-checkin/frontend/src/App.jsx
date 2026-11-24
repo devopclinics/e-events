@@ -549,6 +549,7 @@ function AppRoutes() {
           session; otherwise their initial API reads receive 401 and bounce a
           valid user back through /login to the legacy admin. */}
       <Route path="/admin-redesign" element={<ProtectedRoute><AdminRedesignPage /></ProtectedRoute>} />
+      <Route path="/juniors" element={<ProtectedRoute><JuniorPlatformPage standalone /></ProtectedRoute>} />
       <Route path="/junior-platform" element={<ProtectedRoute><JuniorPlatformPage /></ProtectedRoute>} />
       <Route path="/events-redesign" element={<ProtectedRoute><EventsListRedesignPage /></ProtectedRoute>} />
       <Route path="/events-redesign/:eventId/rsvp-preview" element={<EventRsvpPreviewPage />} />

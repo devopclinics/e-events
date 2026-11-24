@@ -146,6 +146,8 @@ class SendingIn(BaseModel):enabled:bool
 @router.put('/sending/state')
 async def set_sending(event_id:str,body:SendingIn,db=Depends(get_db),actor=Depends(require_event_member)):
     event,cfg,_,_=await allowed(event_id,actor,db)
+    from ..services.junior_practice import is_practice
+    if body.enabled and is_practice(event):raise HTTPException(409,'Volunteer sending is disabled in practice events')
     if body.enabled:
         shifts=(await db.scalars(select(Shift).where(Shift.event_id==event_id,Shift.enabled.is_(True),Shift.starts_at>datetime.utcnow()))).all()
         if not shifts:raise HTTPException(409,'Create at least one enabled future shift before enabling sending')

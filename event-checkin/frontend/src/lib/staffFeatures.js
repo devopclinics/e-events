@@ -11,7 +11,7 @@ export const STAFF_FEATURES = [
 ]
 export function staffRouteFeature(path, search='') {
   // Junior Programme has its own explicit event-scoped staff grants.
-  if (path === '/junior-platform') return null
+  if (['/junior-platform','/juniors','/juniors/'].includes(path)) return null
   if (/^\/(events(?:-redesign)?|help(?:-redesign)?|support-chat|training)$/.test(path)) return null
   if (path === '/guest-export') return 'export'
   const tab = new URLSearchParams(search).get('tab')

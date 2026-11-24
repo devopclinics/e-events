@@ -112,7 +112,10 @@ async def deliver(notice_id,sessions=None,sender=None,now=None):
         cfg=await db.get(JuniorConfig,row.event_id)
         user=await team_member(event,shift,db) if event and shift else None
         reason=None;status='setup_required'
-        if not event or not cfg or not shift or not event.junior_program_enabled or not cfg.volunteer_reminders_enabled or not shift.enabled:
+        from .junior_practice import is_practice
+        if is_practice(event):
+            reason='Practice events never send volunteer reminders';status='paused'
+        elif not event or not cfg or not shift or not event.junior_program_enabled or not cfg.volunteer_reminders_enabled or not shift.enabled:
             reason='Volunteer reminders are paused';status='paused'
         elif row.generation!=shift.version:reason='Shift schedule changed';status='cancelled'
         elif now>=shift.starts_at or now-row.due_at>timedelta(minutes=5):reason='Reminder time passed; historical notices are not replayed';status='expired'

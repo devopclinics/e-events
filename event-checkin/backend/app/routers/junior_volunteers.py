@@ -19,6 +19,7 @@ class ShiftIn(BaseModel):
     request_id:str=Field(min_length=8,max_length=80)
     event_user_id:str
     station:str=Field(min_length=1,max_length=120)
+    classroom:str|None=Field(default=None,max_length=100)
     starts_at:datetime
     ends_at:datetime
     minutes_before:list[int]=Field(default_factory=lambda:[30,15],max_length=20)
@@ -84,6 +85,11 @@ async def list_shifts(event_id:str,db=Depends(get_db),actor=Depends(require_even
     event,cfg,_,_=await allowed(event_id,actor,db,False)
     team=(await db.execute(select(EventUser,User).join(User,User.id==EventUser.user_id).where(EventUser.event_id==event_id))).all()
     members=[{'event_user_id':eu.id,'user_id':u.id,'name':u.name,'email':u.email} for eu,u in team if u.is_active and ((eu.event_role=='manager' and not eu.guest_service_scoped) or u.id in (cfg.staff or {}))]
+    from ..junior_models import JuniorVolunteerProfile
+    profiles={p.event_user_id:p for p in (await db.scalars(select(JuniorVolunteerProfile).where(JuniorVolunteerProfile.event_id==event_id))).all()}
+    for member in members:
+        p=profiles.get(member['event_user_id'])
+        member.update(name=p.name if p else member['name'],phone=p.phone if p else None,classrooms=p.classrooms if p else [])
     people={eu.id:u for eu,u in team}
     shifts=(await db.scalars(select(Shift).where(Shift.event_id==event_id).order_by(Shift.starts_at))).all()
     rows=[]
@@ -98,17 +104,21 @@ async def list_shifts(event_id:str,db=Depends(get_db),actor=Depends(require_even
         'whatsapp_templates':[{'ref':t.bird_project_id+':'+t.bird_channel_template_id,'name':t.name,'variables':t.variables} for t in templates if t.bird_project_id and t.bird_channel_template_id]}
 
 
-async def save_shift(event_id,body,db,actor,shift_id=None):
+async def save_shift(event_id,body,db,actor,shift_id=None,*,commit=True):
     event,cfg,_,_=await allowed(event_id,actor,db)
+    if body.classroom and body.classroom not in (cfg.classrooms or []):raise HTTPException(400,'Choose a configured classroom')
     if not shift_id:
         prior=await db.scalar(select(Shift).where(Shift.event_id==event_id,Shift.request_key==body.request_id))
         if prior:return {'id':prior.id,'version':prior.version}
     eu=await db.get(EventUser,body.event_user_id)
     if not eu or eu.event_id!=event_id:raise HTTPException(404,'Team member not found in this event')
+    from ..junior_models import JuniorVolunteerProfile
+    profile=await db.get(JuniorVolunteerProfile,eu.id)
     shift=await db.scalar(select(Shift).where(Shift.id==shift_id,Shift.event_id==event_id).with_for_update()) if shift_id else None
     if shift_id and not shift:raise HTTPException(404,'Shift not found')
     if shift and body.version!=shift.version:raise HTTPException(409,'Shift changed; refresh before editing')
     if shift:
+        if shift.checked_in_at:raise HTTPException(409,'Checked-in shifts are attendance history. Finish the handover and create a replacement shift instead of editing it.')
         notices=(await db.scalars(select(Notice).where(Notice.shift_id==shift.id))).all()
         if any(n.status=='sending' for n in notices):raise HTTPException(409,'A reminder is being sent; wait for its outcome before editing')
         for n in notices:
@@ -117,7 +127,8 @@ async def save_shift(event_id,body,db,actor,shift_id=None):
     else:
         shift=Shift(event_id=event_id,event_user_id=body.event_user_id,version=1,request_key=body.request_id);db.add(shift)
     shift.event_user_id=body.event_user_id;shift.station=body.station;shift.starts_at=service.utc(body.starts_at);shift.ends_at=service.utc(body.ends_at)
-    shift.plan=body.plan();shift.enabled=body.enabled;shift.updated_by=actor.id
+    if body.classroom and (not profile or body.classroom not in (profile.classrooms or [])):raise HTTPException(409,'Assign this volunteer to the classroom before scheduling their shift')
+    shift.plan={**body.plan(),'use_team_phone':bool(not body.phone and profile)};shift.enabled=body.enabled;shift.updated_by=actor.id
     user=await service.team_member(event,shift,db)
     if not user:raise HTTPException(409,'Choose an active Junior Platform team member')
     await db.flush()
@@ -126,7 +137,8 @@ async def save_shift(event_id,body,db,actor,shift_id=None):
         for channel in dict.fromkeys(shift.plan['channels']):
             db.add(Notice(event_id=event_id,shift_id=shift.id,generation=shift.version,due_at=due,channel=channel,status='expired' if due<=now else 'scheduled' if shift.enabled else 'paused'))
     db.add(JuniorAudit(event_id=event_id,actor_id=actor.id,action='volunteer_shift_saved',detail={'shift_id':shift.id,'version':shift.version,'enabled':shift.enabled,'channels':shift.plan['channels']}))
-    await db.commit()
+    if commit:await db.commit()
+    else:await db.flush()
     return {'id':shift.id,'version':shift.version}
 
 

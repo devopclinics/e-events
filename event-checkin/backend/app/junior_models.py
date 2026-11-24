@@ -153,6 +153,8 @@ class JuniorInventoryEntry(Base):
 
 
 class JuniorVolunteerShift(Base):
+    checked_in_at: Mapped[datetime | None] = mapped_column(DateTime,nullable=True)
+    checked_out_at: Mapped[datetime | None] = mapped_column(DateTime,nullable=True)
     __tablename__ = 'junior_volunteer_shifts'
     __table_args__ = (UniqueConstraint('event_id','request_key',name='uq_junior_shift_request'),)
     request_key: Mapped[str] = mapped_column(String(80))
@@ -184,3 +186,62 @@ class JuniorVolunteerNotice(Base):
     ledger_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     attempted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     __table_args__ = (UniqueConstraint('shift_id','generation','due_at','channel',name='uq_junior_volunteer_notice'),)
+
+
+class JuniorVolunteerProfile(Base):
+    __tablename__ = 'junior_volunteer_profiles'
+    event_user_id: Mapped[str] = mapped_column(ForeignKey('event_users.id',ondelete='CASCADE'),primary_key=True)
+    event_id: Mapped[str] = mapped_column(ForeignKey('events.id',ondelete='CASCADE'),index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    phone: Mapped[str | None] = mapped_column(String(30),nullable=True)
+    classrooms: Mapped[list] = mapped_column(JSON,default=list)
+    version: Mapped[int] = mapped_column(Integer,default=1)
+    updated_at: Mapped[datetime] = mapped_column(DateTime,default=datetime.utcnow)
+
+
+class JuniorVolunteerMessage(Base):
+    __tablename__ = 'junior_volunteer_messages'
+    __table_args__ = (UniqueConstraint('event_id','request_key',name='uq_junior_team_message'),)
+    id: Mapped[str] = mapped_column(String(36),primary_key=True,default=uid)
+    event_id: Mapped[str] = mapped_column(ForeignKey('events.id',ondelete='CASCADE'),index=True)
+    event_user_id: Mapped[str | None] = mapped_column(ForeignKey('event_users.id',ondelete='SET NULL'),nullable=True)
+    user_id: Mapped[str] = mapped_column(String(36))
+    request_key: Mapped[str] = mapped_column(String(160))
+    kind: Mapped[str] = mapped_column(String(30))
+    recipient: Mapped[str] = mapped_column(String(255))
+    subject: Mapped[str] = mapped_column(String(160))
+    body: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(30),default='queued',index=True)
+    error: Mapped[str | None] = mapped_column(String(255),nullable=True)
+    provider_id: Mapped[str | None] = mapped_column(String(255),nullable=True)
+    ledger_id: Mapped[str | None] = mapped_column(String(36),nullable=True)
+    created_by: Mapped[str] = mapped_column(String(36))
+    created_at: Mapped[datetime] = mapped_column(DateTime,default=datetime.utcnow)
+    attempted_at: Mapped[datetime | None] = mapped_column(DateTime,nullable=True)
+
+
+class JuniorVolunteerHandover(Base):
+    __tablename__ = 'junior_volunteer_handovers'
+    __table_args__ = (UniqueConstraint('event_id','request_key',name='uq_junior_handover_request'),)
+    id: Mapped[str] = mapped_column(String(36),primary_key=True,default=uid)
+    event_id: Mapped[str] = mapped_column(ForeignKey('events.id',ondelete='CASCADE'),index=True)
+    request_key: Mapped[str] = mapped_column(String(80))
+    from_shift_id: Mapped[str | None] = mapped_column(ForeignKey('junior_volunteer_shifts.id',ondelete='SET NULL'),nullable=True)
+    to_shift_id: Mapped[str | None] = mapped_column(ForeignKey('junior_volunteer_shifts.id',ondelete='SET NULL'),nullable=True)
+    from_user_id: Mapped[str] = mapped_column(String(36))
+    to_user_id: Mapped[str] = mapped_column(String(36))
+    from_name: Mapped[str] = mapped_column(String(255))
+    to_name: Mapped[str] = mapped_column(String(255))
+    from_version: Mapped[int] = mapped_column(Integer)
+    to_version: Mapped[int] = mapped_column(Integer)
+    classroom: Mapped[str | None] = mapped_column(String(100),nullable=True)
+    status: Mapped[str] = mapped_column(String(30),default='pending',index=True)
+    version: Mapped[int] = mapped_column(Integer,default=1)
+    headcount: Mapped[int] = mapped_column(Integer)
+    snapshot: Mapped[dict] = mapped_column(JSON)
+    accepted_snapshot: Mapped[dict | None] = mapped_column(JSON,nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text,nullable=True)
+    offered_by: Mapped[str] = mapped_column(String(36))
+    accepted_by: Mapped[str | None] = mapped_column(String(36),nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime,default=datetime.utcnow)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime,nullable=True)

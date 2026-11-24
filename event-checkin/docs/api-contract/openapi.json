@@ -1,6 +1,41 @@
 {
   "components": {
     "schemas": {
+      "AcceptIn": {
+        "properties": {
+          "counts_confirmed": {
+            "title": "Counts Confirmed",
+            "type": "boolean"
+          },
+          "headcount": {
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Headcount",
+            "type": "integer"
+          },
+          "open_movements_reviewed": {
+            "title": "Open Movements Reviewed",
+            "type": "boolean"
+          },
+          "snapshot_token": {
+            "title": "Snapshot Token",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "headcount",
+          "snapshot_token",
+          "counts_confirmed",
+          "open_movements_reviewed"
+        ],
+        "title": "AcceptIn",
+        "type": "object"
+      },
       "AccessGrantRequest": {
         "properties": {
           "email": {
@@ -685,6 +720,69 @@
         "title": "ArchiveRequest",
         "type": "object"
       },
+      "AssignIn": {
+        "properties": {
+          "classrooms": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 30,
+            "title": "Classrooms",
+            "type": "array"
+          },
+          "event_user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Event User Ids",
+            "type": "array"
+          },
+          "expected_versions": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Expected Versions",
+            "type": "object"
+          },
+          "notify_email": {
+            "default": true,
+            "title": "Notify Email",
+            "type": "boolean"
+          },
+          "request_id": {
+            "maxLength": 80,
+            "minLength": 8,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "enum": [
+                  "scanner",
+                  "intake",
+                  "support",
+                  "inventory",
+                  "supervisor"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          }
+        },
+        "required": [
+          "request_id",
+          "event_user_ids"
+        ],
+        "title": "AssignIn",
+        "type": "object"
+      },
       "AssignUserRequest": {
         "properties": {
           "user_id": {
@@ -1023,6 +1121,36 @@
           "rows"
         ],
         "title": "Batch",
+        "type": "object"
+      },
+      "BatchIn": {
+        "properties": {
+          "notify_email": {
+            "default": true,
+            "title": "Notify Email",
+            "type": "boolean"
+          },
+          "request_id": {
+            "maxLength": 80,
+            "minLength": 8,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/PersonIn"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "request_id",
+          "rows"
+        ],
+        "title": "BatchIn",
         "type": "object"
       },
       "Body_email_proposal_api_events_proposals_email_post": {
@@ -1612,6 +1740,198 @@
         "title": "BulkAssignHouseholdRequest",
         "type": "object"
       },
+      "BulkShiftIn": {
+        "properties": {
+          "channels": {
+            "items": {
+              "enum": [
+                "email",
+                "sms",
+                "whatsapp",
+                "mms"
+              ],
+              "type": "string"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Channels",
+            "type": "array"
+          },
+          "classroom": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classroom"
+          },
+          "consents": {
+            "items": {
+              "enum": [
+                "email",
+                "sms",
+                "whatsapp",
+                "mms"
+              ],
+              "type": "string"
+            },
+            "maxItems": 4,
+            "title": "Consents",
+            "type": "array"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "ends_at": {
+            "format": "date-time",
+            "title": "Ends At",
+            "type": "string"
+          },
+          "event_user_id": {
+            "default": "",
+            "title": "Event User Id",
+            "type": "string"
+          },
+          "event_user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Event User Ids",
+            "type": "array"
+          },
+          "exact_times": {
+            "items": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Exact Times",
+            "type": "array"
+          },
+          "media_url": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Url"
+          },
+          "minutes_before": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 20,
+            "title": "Minutes Before",
+            "type": "array"
+          },
+          "notify_email": {
+            "default": true,
+            "title": "Notify Email",
+            "type": "boolean"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "pattern": "^\\+[1-9]\\d{7,14}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "repeat_every_minutes": {
+            "anyOf": [
+              {
+                "maximum": 10080.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repeat Every Minutes"
+          },
+          "repeat_from_minutes": {
+            "default": 60,
+            "maximum": 10080.0,
+            "minimum": 1.0,
+            "title": "Repeat From Minutes",
+            "type": "integer"
+          },
+          "request_id": {
+            "maxLength": 80,
+            "minLength": 8,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          },
+          "station": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Station",
+            "type": "string"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "whatsapp_template_ref": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Whatsapp Template Ref"
+          },
+          "whatsapp_template_vars": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Whatsapp Template Vars",
+            "type": "object"
+          }
+        },
+        "required": [
+          "request_id",
+          "station",
+          "starts_at",
+          "ends_at",
+          "channels",
+          "event_user_ids"
+        ],
+        "title": "BulkShiftIn",
+        "type": "object"
+      },
       "CalendarContactListsUpdate": {
         "properties": {
           "contact_list_ids": {
@@ -1856,6 +2176,44 @@
           }
         },
         "title": "CalendarUpdate",
+        "type": "object"
+      },
+      "CancelIn": {
+        "properties": {
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "reason"
+        ],
+        "title": "CancelIn",
+        "type": "object"
+      },
+      "CheckIn": {
+        "properties": {
+          "physically_present": {
+            "title": "Physically Present",
+            "type": "boolean"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "physically_present"
+        ],
+        "title": "CheckIn",
         "type": "object"
       },
       "CheckoutOut": {
@@ -15857,6 +16215,45 @@
         "title": "MergeDuplicatesRequest",
         "type": "object"
       },
+      "MessageIn": {
+        "properties": {
+          "body": {
+            "maxLength": 3000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "event_user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Event User Ids",
+            "type": "array"
+          },
+          "request_id": {
+            "maxLength": 80,
+            "minLength": 8,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "subject": {
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "event_user_ids",
+          "subject",
+          "body"
+        ],
+        "title": "MessageIn",
+        "type": "object"
+      },
       "MessageTemplateSave": {
         "properties": {
           "email_body": {
@@ -16210,6 +16607,70 @@
           "event_name"
         ],
         "title": "MyTaskOut",
+        "type": "object"
+      },
+      "OfferIn": {
+        "properties": {
+          "counts_confirmed": {
+            "title": "Counts Confirmed",
+            "type": "boolean"
+          },
+          "from_shift_id": {
+            "title": "From Shift Id",
+            "type": "string"
+          },
+          "from_version": {
+            "title": "From Version",
+            "type": "integer"
+          },
+          "headcount": {
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Headcount",
+            "type": "integer"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "open_movements_reviewed": {
+            "title": "Open Movements Reviewed",
+            "type": "boolean"
+          },
+          "request_id": {
+            "maxLength": 80,
+            "minLength": 8,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "to_shift_id": {
+            "title": "To Shift Id",
+            "type": "string"
+          },
+          "to_version": {
+            "title": "To Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "request_id",
+          "from_shift_id",
+          "to_shift_id",
+          "from_version",
+          "to_version",
+          "headcount",
+          "counts_confirmed",
+          "open_movements_reviewed"
+        ],
+        "title": "OfferIn",
         "type": "object"
       },
       "OfflineActionIn": {
@@ -17268,6 +17729,59 @@
           "relationship"
         ],
         "title": "PendingGuardianConfirmation",
+        "type": "object"
+      },
+      "PersonIn": {
+        "properties": {
+          "classrooms": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 30,
+            "title": "Classrooms",
+            "type": "array"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "pattern": "^\\+[1-9]\\d{7,14}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "role": {
+            "default": "scanner",
+            "enum": [
+              "scanner",
+              "intake",
+              "support",
+              "inventory",
+              "supervisor"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "email"
+        ],
+        "title": "PersonIn",
         "type": "object"
       },
       "PlaceholderNameIn": {
@@ -23411,6 +23925,18 @@
             "minItems": 1,
             "title": "Channels",
             "type": "array"
+          },
+          "classroom": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classroom"
           },
           "consents": {
             "items": {
@@ -45335,6 +45861,672 @@
           }
         ],
         "summary": "Resolve Badge",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/team": {
+      "get": {
+        "operationId": "roster_api_events__event_id__junior_team_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Roster",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/team/assign": {
+      "post": {
+        "operationId": "bulk_assign_api_events__event_id__junior_team_assign_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Bulk Assign",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/team/bulk": {
+      "post": {
+        "operationId": "bulk_add_api_events__event_id__junior_team_bulk_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Bulk Add",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/team/dashboard": {
+      "get": {
+        "operationId": "dashboard_api_events__event_id__junior_team_dashboard_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Dashboard",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/team/handovers": {
+      "post": {
+        "operationId": "offer_api_events__event_id__junior_team_handovers_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfferIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Offer",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/team/handovers/{handover_id}/accept": {
+      "post": {
+        "operationId": "accept_api_events__event_id__junior_team_handovers__handover_id__accept_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "handover_id",
+            "required": true,
+            "schema": {
+              "title": "Handover Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Accept",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/team/handovers/{handover_id}/cancel": {
+      "post": {
+        "operationId": "cancel_api_events__event_id__junior_team_handovers__handover_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "handover_id",
+            "required": true,
+            "schema": {
+              "title": "Handover Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Cancel",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/team/message": {
+      "post": {
+        "operationId": "send_message_api_events__event_id__junior_team_message_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Send Message",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/team/mine": {
+      "get": {
+        "operationId": "mine_api_events__event_id__junior_team_mine_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Mine",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/team/shifts/bulk": {
+      "post": {
+        "operationId": "bulk_shifts_api_events__event_id__junior_team_shifts_bulk_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkShiftIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Bulk Shifts",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/team/shifts/{shift_id}/checkin": {
+      "post": {
+        "operationId": "checkin_api_events__event_id__junior_team_shifts__shift_id__checkin_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "shift_id",
+            "required": true,
+            "schema": {
+              "title": "Shift Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Checkin",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/team/shifts/{shift_id}/checkout": {
+      "post": {
+        "operationId": "checkout_api_events__event_id__junior_team_shifts__shift_id__checkout_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "shift_id",
+            "required": true,
+            "schema": {
+              "title": "Shift Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Checkout",
         "tags": [
           "junior-programme"
         ]

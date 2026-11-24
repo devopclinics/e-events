@@ -10,6 +10,14 @@
 //   /** @type {import('../types/api').GuestOut[]} */
 //   const guests = await api.listGuests(eventId)
 
+export interface AcceptIn {
+  counts_confirmed: boolean
+  headcount: number
+  open_movements_reviewed: boolean
+  snapshot_token: string
+  version: number
+}
+
 export interface AccessGrantRequest {
   email: string
   reason?: (string) | null
@@ -151,6 +159,15 @@ export interface ArchiveRequest {
   revision: number
 }
 
+export interface AssignIn {
+  classrooms?: (string)[]
+  event_user_ids: (string)[]
+  expected_versions?: Record<string, number>
+  notify_email?: boolean
+  request_id: string
+  role?: ('scanner' | 'intake' | 'support' | 'inventory' | 'supervisor') | null
+}
+
 export interface AssignmentIn {
   can_checkin?: boolean
   can_manage_meals?: boolean
@@ -207,6 +224,12 @@ export interface Authority {
 export interface Batch {
   request_key: string
   rows: (Row)[]
+}
+
+export interface BatchIn {
+  notify_email?: boolean
+  request_id: string
+  rows: (PersonIn)[]
 }
 
 export interface Body_email_proposal_api_events_proposals_email_post {
@@ -332,6 +355,29 @@ export interface BulkAssignHouseholdRequest {
   household_id?: (string) | null
 }
 
+export interface BulkShiftIn {
+  channels: ('email' | 'sms' | 'whatsapp' | 'mms')[]
+  classroom?: (string) | null
+  consents?: ('email' | 'sms' | 'whatsapp' | 'mms')[]
+  enabled?: boolean
+  ends_at: string
+  event_user_id?: string
+  event_user_ids: (string)[]
+  exact_times?: (string)[]
+  media_url?: (string) | null
+  minutes_before?: (number)[]
+  notify_email?: boolean
+  phone?: (string) | null
+  repeat_every_minutes?: (number) | null
+  repeat_from_minutes?: number
+  request_id: string
+  starts_at: string
+  station: string
+  version?: (number) | null
+  whatsapp_template_ref?: (string) | null
+  whatsapp_template_vars?: Record<string, string>
+}
+
 export interface CalendarContactListsUpdate {
   contact_list_ids?: (string)[]
 }
@@ -370,6 +416,16 @@ export interface CalendarUpdate {
   logo_width?: (number) | null
   title?: (string) | null
   visibility?: ('public' | 'private') | null
+}
+
+export interface CancelIn {
+  reason: string
+  version: number
+}
+
+export interface CheckIn {
+  physically_present: boolean
+  version: number
 }
 
 export interface CheckoutOut {
@@ -2509,6 +2565,13 @@ export interface MergeDuplicatesRequest {
   duplicate_ids: (string)[]
 }
 
+export interface MessageIn {
+  body: string
+  event_user_ids: (string)[]
+  request_id: string
+  subject: string
+}
+
 export interface MessageTemplateSave {
   email_body?: (string) | null
   mms_body?: (string) | null
@@ -2567,6 +2630,18 @@ export interface MyTaskOut {
   status?: string
   title: string
   updated_at: string
+}
+
+export interface OfferIn {
+  counts_confirmed: boolean
+  from_shift_id: string
+  from_version: number
+  headcount: number
+  notes?: (string) | null
+  open_movements_reviewed: boolean
+  request_id: string
+  to_shift_id: string
+  to_version: number
 }
 
 export interface OfflineActionIn {
@@ -2760,6 +2835,14 @@ export interface PendingGuardianConfirmation {
   child_guest_id: string
   child_name: string
   relationship: string
+}
+
+export interface PersonIn {
+  classrooms?: (string)[]
+  email: string
+  name: string
+  phone?: (string) | null
+  role?: 'scanner' | 'intake' | 'support' | 'inventory' | 'supervisor'
 }
 
 export interface PlaceholderNameIn {
@@ -3704,6 +3787,7 @@ export interface SettingsPayload {
 
 export interface ShiftIn {
   channels: ('email' | 'sms' | 'whatsapp' | 'mms')[]
+  classroom?: (string) | null
   consents?: ('email' | 'sms' | 'whatsapp' | 'mms')[]
   enabled?: boolean
   ends_at: string

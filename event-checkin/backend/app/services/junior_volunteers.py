@@ -53,7 +53,7 @@ async def whatsapp_template(event,plan,db):
 async def channel_blocker(event,shift,user,channel,db,*,providers=True):
     plan=shift.plan
     if channel in (event.blocked_messaging_channels or []):return 'Channel blocked by the platform'
-    recipient=user.email if channel=='email' else plan.get('phone')
+    recipient=user.email if channel=='email' else await volunteer_phone(shift,db)
     if not recipient:return 'Volunteer '+('email' if channel=='email' else 'international phone number')+' is missing'
     if not recipient_allowed(channel,recipient):return 'Recipient blocked by outbound policy'
     if channel!='email' and channel not in plan.get('consents',[]):return 'Volunteer '+channel.upper()+' permission is not recorded'
@@ -75,12 +75,12 @@ async def channel_blocker(event,shift,user,channel,db,*,providers=True):
 
 def message(event,shift,user):
     local=shift.starts_at.replace(tzinfo=timezone.utc).astimezone(ZoneInfo(event.timezone or 'UTC'))
-    return f'{event.name} / Junior Platform volunteer reminder: {user.name}, your shift at {shift.station} starts {local:%b %d, %I:%M %p %Z}. Arrive ready for the handover. If delayed, contact your lead; keep child handoffs safe and queues moving.'
+    return f'{event.name} / Festio Juniors volunteer reminder: {user.name}, your shift at {shift.station} starts {local:%b %d, %I:%M %p %Z}. Arrive ready for the handover. If delayed, contact your lead; keep child handoffs safe and queues moving.'
 
 
 async def transport(row,shift):
     if row.channel=='email':
-        return {'accepted':bool(await send_simple_email(row.recipient,'Your Junior Platform volunteer shift',f'<p>{escape(row.body)}</p>',event_id=row.event_id,message_kind='jp-volunteer:'+row.id))}
+        return {'accepted':bool(await send_simple_email(row.recipient,'Your Festio Juniors volunteer shift',f'<p>{escape(row.body)}</p>',event_id=row.event_id,message_kind='jp-volunteer:'+row.id))}
     context=messaging._event_context.set(row.event_id)
     try:
         if row.channel=='sms':result=await messaging.send_custom_sms(phone=row.recipient,body=row.body)
@@ -117,6 +117,7 @@ async def deliver(notice_id,sessions=None,sender=None,now=None):
             reason='Practice events never send volunteer reminders';status='paused'
         elif not event or not cfg or not shift or not event.junior_program_enabled or not cfg.volunteer_reminders_enabled or not shift.enabled:
             reason='Volunteer reminders are paused';status='paused'
+        elif shift.checked_in_at:reason='Volunteer has already checked in';status='cancelled'
         elif row.generation!=shift.version:reason='Shift schedule changed';status='cancelled'
         elif now>=shift.starts_at or now-row.due_at>timedelta(minutes=5):reason='Reminder time passed; historical notices are not replayed';status='expired'
         elif not user:reason='Volunteer is no longer active on the Junior Platform team';status='cancelled'
@@ -124,7 +125,7 @@ async def deliver(notice_id,sessions=None,sender=None,now=None):
         else:reason=await channel_blocker(event,shift,user,row.channel,db,providers=sender is transport)
         if reason:
             row.status=status;row.error=reason;await db.commit();return
-        row.recipient=user.email if row.channel=='email' else shift.plan.get('phone')
+        row.recipient=user.email if row.channel=='email' else await volunteer_phone(shift,db)
         row.body=message(event,shift,user)
         if row.channel=='whatsapp':
             template=await whatsapp_template(event,shift.plan,db)
@@ -174,3 +175,13 @@ async def tick():
         ids=(await db.scalars(select(Notice.id).where(Notice.status=='scheduled',Notice.due_at<=datetime.utcnow()).order_by(Notice.due_at).limit(10))).all()
     for row_id in ids:
         await deliver(row_id)
+    from . import junior_team
+    await junior_team.tick()
+
+
+async def volunteer_phone(shift,db):
+    if shift.plan.get('use_team_phone'):
+        from ..junior_models import JuniorVolunteerProfile
+        profile=await db.get(JuniorVolunteerProfile,shift.event_user_id)
+        return profile.phone if profile else None
+    return shift.plan.get('phone')

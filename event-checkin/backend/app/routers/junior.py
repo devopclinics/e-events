@@ -797,3 +797,6 @@ async def inventory_history(event_id: str, item_id: str, db=Depends(get_db), act
 
 from .junior_volunteers import router as volunteer_router
 router.include_router(volunteer_router)
+
+from .junior_team import router as team_router
+router.include_router(team_router)

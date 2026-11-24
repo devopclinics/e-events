@@ -10,17 +10,23 @@ from ..models import Event,EventUser,User,Membership
 from ..junior_models import JuniorConfig,JuniorAudit,JuniorVolunteerProfile as Profile,JuniorVolunteerMessage as Message,JuniorVolunteerShift as Shift,JuniorVolunteerHandover as Handover
 from ..services import junior_team as service
 from ..services import junior_volunteers as reminders
+from ..services import junior_permissions as permissions
+from ..services.junior_permissions import Role,Permission,can
 from .junior_volunteers import ShiftIn,allowed,save_shift,instant
 
 router=APIRouter(prefix='/team')
-Role=Literal['scanner','intake','support','inventory','supervisor']
 
 class PersonIn(BaseModel):
     name:str=Field(min_length=1,max_length=255)
     email:EmailStr
     phone:str|None=Field(default=None,pattern=r'^\+[1-9]\d{7,14}$')
     role:Role='scanner'
+    permissions:list[Permission]|None=Field(default=None,max_length=8)
     classrooms:list[str]=Field(default_factory=list,max_length=30)
+    @model_validator(mode='after')
+    def permission_role(self):
+        if self.permissions is not None and self.role not in ('admin','volunteer'):raise ValueError('Choose Admin or Volunteer when assigning permissions')
+        return self
     @field_validator('name')
     @classmethod
     def name_required(cls,v):
@@ -95,8 +101,8 @@ async def roster(event_id:str,db=Depends(get_db),actor=Depends(require_event_mem
     for eu,u in rows:
         if u.id not in (cfg.staff or {}) and not (eu.event_role=='manager' and not eu.guest_service_scoped):continue
         p=profiles.get(eu.id)
-        people.append({'event_user_id':eu.id,'user_id':u.id,'name':p.name if p else u.name,'email':u.email,'phone':p.phone if p else None,'classrooms':p.classrooms if p else [],'role':'supervisor' if u.is_platform_superadmin or org_roles.get(u.id) in ('owner','admin') or (eu.event_role=='manager' and not eu.guest_service_scoped) else (cfg.staff or {}).get(u.id,'scanner'),'version':p.version if p else 0,'account_status':'linked' if u.firebase_uid else 'awaiting_sign_in','active':u.is_active,'read_only':eu.access_level=='view'})
-    return {'people':people,'classrooms':cfg.classrooms or [],'can_manage':owner,'practice_mode':service.is_practice(event),'app_url':service.app_url(event)}
+        people.append({'event_user_id':eu.id,'user_id':u.id,'name':p.name if p else u.name,'email':u.email,'phone':p.phone if p else None,'classrooms':p.classrooms if p else [],**permissions.info((cfg.staff or {}).get(u.id),u.is_platform_superadmin or org_roles.get(u.id) in ('owner','admin') or (eu.event_role=='manager' and not eu.guest_service_scoped)),'inherited_admin':bool(u.is_platform_superadmin or org_roles.get(u.id) in ('owner','admin') or (eu.event_role=='manager' and not eu.guest_service_scoped)),'version':p.version if p else 0,'account_status':'linked' if u.firebase_uid else 'awaiting_sign_in','active':u.is_active,'read_only':eu.access_level=='view'})
+    return {'people':people,'classrooms':cfg.classrooms or [],'can_manage':owner,'practice_mode':service.is_practice(event),'app_url':service.app_url(event),'permission_catalog':permissions.CATALOG}
 
 @router.post('/bulk',status_code=201)
 async def bulk_add(event_id:str,body:BatchIn,db=Depends(get_db),actor=Depends(require_event_member)):
@@ -106,7 +112,7 @@ async def bulk_add(event_id:str,body:BatchIn,db=Depends(get_db),actor=Depends(re
     for row in body.rows:rooms(cfg,row.classrooms)
     result={'event_user_ids':[],'messages':[],'practice_mode':service.is_practice(event)}
     for row in body.rows:
-        eu,user,p=await service.provision(db,event,row.name,str(row.email).lower(),row.phone,row.role,rooms(cfg,row.classrooms),cfg)
+        eu,user,p=await service.provision(db,event,row.name,str(row.email).lower(),row.phone,row.role,rooms(cfg,row.classrooms),cfg,permissions=row.permissions)
         result['event_user_ids'].append(eu.id)
         if body.notify_email:
             msg=await service.queue(db,event,eu,user,'invite',key+':'+eu.id,actor);result['messages'].append({'id':msg.id,'status':msg.status})
@@ -121,16 +127,43 @@ async def bulk_assign(event_id:str,body:AssignIn,db=Depends(get_db),actor=Depend
     for eu,user in people:
         p=await db.get(Profile,eu.id)
         active=(await db.scalars(select(Shift).where(Shift.event_id==event_id,Shift.event_user_id==eu.id,Shift.checked_in_at.is_not(None),Shift.checked_out_at.is_(None)))).all()
-        if active and ((body.role and body.role!=(cfg.staff or {}).get(user.id,body.role)) or any(s.plan.get('classroom') and s.plan['classroom'] not in classes for s in active)):raise HTTPException(409,'Finish the active classroom handover before reassigning this volunteer')
+        if active and ((body.role and permissions.signature(permissions.entry(body.role))!=permissions.signature((cfg.staff or {}).get(user.id,body.role))) or any(s.plan.get('classroom') and s.plan['classroom'] not in classes for s in active)):raise HTTPException(409,'Finish the active classroom handover before reassigning this volunteer')
         if body.expected_versions.get(eu.id,p.version if p else 0)!=(p.version if p else 0):raise HTTPException(409,'Volunteer details changed. Refresh before assigning.')
         if not p:p=Profile(event_user_id=eu.id,event_id=event_id,name=user.name,classrooms=classes);db.add(p)
         else:p.classrooms=classes;p.version+=1;p.updated_at=datetime.utcnow()
-        if body.role:cfg.staff={**(cfg.staff or {}),user.id:body.role}
+        if body.role:cfg.staff={**(cfg.staff or {}),user.id:permissions.entry(body.role)}
         elif user.id not in (cfg.staff or {}) and eu.event_role!='manager':raise HTTPException(409,'Grant a Festio Juniors role before assigning this volunteer')
         await db.flush()
         if body.notify_email:
             msg=await service.queue(db,event,eu,user,'assignment',key+':'+eu.id,actor);result['messages'].append({'id':msg.id,'status':msg.status})
     service.finish(db,event,actor,'volunteer_classes_assigned',key,fingerprint,result);await db.commit();return result
+
+class AccessIn(Selection):
+    role:Literal['admin','volunteer']
+    permissions:list[Permission]=Field(default_factory=lambda:['checkin'],max_length=8)
+    expected_versions:dict[str,int]
+    notify_email:bool=True
+
+@router.post('/access')
+async def set_access(event_id:str,body:AccessIn,db=Depends(get_db),actor=Depends(require_event_member)):
+    event,cfg,_,_=await context(event_id,actor,db,admin=True)
+    key,fingerprint,previous=await service.prior(db,event,actor,'volunteer_access_updated',body)
+    if previous:return previous
+    value=permissions.entry(body.role,body.permissions);result={'updated':0,'messages':[]}
+    org_roles=dict((await db.execute(select(Membership.user_id,Membership.role).where(Membership.org_id==event.org_id))).all())
+    for eu,user in await selected(db,event,body.event_user_ids):
+        inherited=user.is_platform_superadmin or org_roles.get(user.id) in ('owner','admin') or (eu.event_role=='manager' and not eu.guest_service_scoped)
+        if inherited and body.role!='admin':raise HTTPException(409,'Event owners and managers keep their inherited Admin access')
+        p=await db.get(Profile,eu.id)
+        if body.expected_versions.get(eu.id)!=(p.version if p else 0):raise HTTPException(409,'Volunteer access changed. Refresh before saving permissions.')
+        active=await db.scalar(select(Shift.id).where(Shift.event_id==event_id,Shift.event_user_id==eu.id,Shift.checked_in_at.is_not(None),Shift.checked_out_at.is_(None)))
+        if active and permissions.signature((cfg.staff or {}).get(user.id),inherited)!=permissions.signature(value,inherited):raise HTTPException(409,'Finish the active shift handover before changing permissions')
+        if not p:p=Profile(event_user_id=eu.id,event_id=event_id,name=user.name,classrooms=[]);db.add(p)
+        else:p.version+=1;p.updated_at=datetime.utcnow()
+        cfg.staff={**(cfg.staff or {}),user.id:value};await db.flush();result['updated']+=1
+        if body.notify_email:
+            msg=await service.queue(db,event,eu,user,'assignment',key+':'+eu.id,actor);result['messages'].append({'id':msg.id,'status':msg.status})
+    service.finish(db,event,actor,'volunteer_access_updated',key,fingerprint,result);await db.commit();return result
 
 @router.post('/message')
 async def send_message(event_id:str,body:MessageIn,db=Depends(get_db),actor=Depends(require_event_member)):
@@ -177,10 +210,13 @@ async def shift_data(db,event,s,cache=None):
     snap=cache[room]
     return {'id':s.id,'event_user_id':s.event_user_id,'station':s.station,'classroom':s.plan.get('classroom'),'starts_at':instant(s.starts_at),'ends_at':instant(s.ends_at),'version':s.version,'enabled':s.enabled,'checked_in_at':instant(s.checked_in_at) if s.checked_in_at else None,'checked_out_at':instant(s.checked_out_at) if s.checked_out_at else None,'snapshot':snap}
 
-async def handover_data(db,event,h,cache=None):
+async def handover_data(db,event,h,cache=None,role=None):
     cache={} if cache is None else cache
     if h.classroom not in cache:cache[h.classroom]=await service.snapshot(db,event,h.classroom)
-    return {'id':h.id,'from_shift_id':h.from_shift_id,'to_shift_id':h.to_shift_id,'from_name':h.from_name,'to_name':h.to_name,'from_user_id':h.from_user_id,'to_user_id':h.to_user_id,'classroom':h.classroom,'status':h.status,'version':h.version,'headcount':h.headcount,'snapshot':h.snapshot,'current_snapshot':cache[h.classroom],'notes':h.notes,'created_at':instant(h.created_at),'accepted_at':instant(h.accepted_at) if h.accepted_at else None}
+    safe=role is None or can(role,'view_children')
+    snapshot=h.snapshot if safe else {**h.snapshot,'away':[]}
+    current=cache[h.classroom] if safe else {**cache[h.classroom],'away':[]}
+    return {'id':h.id,'from_shift_id':h.from_shift_id,'to_shift_id':h.to_shift_id,'from_name':h.from_name,'to_name':h.to_name,'from_user_id':h.from_user_id,'to_user_id':h.to_user_id,'classroom':h.classroom,'status':h.status,'version':h.version,'headcount':h.headcount,'snapshot':snapshot,'current_snapshot':current,'notes':h.notes if safe else None,'created_at':instant(h.created_at),'accepted_at':instant(h.accepted_at) if h.accepted_at else None}
 
 @router.get('/mine')
 async def mine(event_id:str,db=Depends(get_db),actor=Depends(require_event_member)):
@@ -188,8 +224,8 @@ async def mine(event_id:str,db=Depends(get_db),actor=Depends(require_event_membe
     shifts=(await db.scalars(select(Shift).join(EventUser,EventUser.id==Shift.event_user_id).where(Shift.event_id==event_id,EventUser.user_id==actor.id).order_by(Shift.starts_at))).all()
     handovers=(await db.scalars(select(Handover).where(Handover.event_id==event_id,(Handover.from_user_id==actor.id)|(Handover.to_user_id==actor.id)).order_by(Handover.created_at.desc()).limit(100))).all()
     candidates=(await db.execute(select(Shift,User).join(EventUser,EventUser.id==Shift.event_user_id).join(User,User.id==EventUser.user_id).where(Shift.event_id==event_id,Shift.enabled.is_(True),((Shift.ends_at>datetime.utcnow())|((Shift.checked_in_at.is_not(None))&(Shift.checked_out_at.is_(None)))),User.id!=actor.id))).all()
-    own_shifts=[await shift_data(db,event,s) for s in shifts];own_hands=[await handover_data(db,event,h) for h in handovers]
-    if role=='inventory':
+    own_shifts=[await shift_data(db,event,s) for s in shifts];own_hands=[await handover_data(db,event,h,role=role) for h in handovers]
+    if not can(role,'view_children'):
         for row in own_shifts:row['snapshot']={**row['snapshot'],'away':[]}
         for row in own_hands:
             for key in ('snapshot','current_snapshot'):row[key]={**row[key],'away':[]}
@@ -202,7 +238,7 @@ class CheckIn(BaseModel):
 
 @router.post('/shifts/{shift_id}/checkin')
 async def checkin(event_id:str,shift_id:str,body:CheckIn,db=Depends(get_db),actor=Depends(require_event_member)):
-    event,_,_,admin=await my_context(event_id,actor,db,True);s,user=await duty(db,event,shift_id,actor,admin)
+    event,_,role,admin=await my_context(event_id,actor,db,True);s,user=await duty(db,event,shift_id,actor,admin)
     if not body.physically_present:raise HTTPException(400,'Confirm the volunteer is physically at their station')
     if body.version!=s.version:raise HTTPException(409,'Shift changed; refresh')
     if not s.enabled or s.checked_out_at:raise HTTPException(409,'This shift is paused or already finished')
@@ -216,7 +252,7 @@ async def checkin(event_id:str,shift_id:str,body:CheckIn,db=Depends(get_db),acto
 
 @router.post('/shifts/{shift_id}/checkout')
 async def checkout(event_id:str,shift_id:str,body:CheckIn,db=Depends(get_db),actor=Depends(require_event_member)):
-    event,_,_,admin=await my_context(event_id,actor,db,True);s,user=await duty(db,event,shift_id,actor,admin)
+    event,_,role,admin=await my_context(event_id,actor,db,True);s,user=await duty(db,event,shift_id,actor,admin)
     if not body.physically_present or body.version!=s.version:raise HTTPException(409,'Confirm the current shift and physical handoff')
     if not s.checked_in_at:raise HTTPException(409,'Record shift check-in first')
     if not s.checked_out_at:
@@ -242,12 +278,12 @@ class OfferIn(BaseModel):
 
 @router.post('/handovers',status_code=201)
 async def offer(event_id:str,body:OfferIn,db=Depends(get_db),actor=Depends(require_event_member)):
-    event,_,_,admin=await my_context(event_id,actor,db,True);old=await db.scalar(select(Handover).where(Handover.event_id==event_id,Handover.request_key==body.request_id))
+    event,_,role,admin=await my_context(event_id,actor,db,True);old=await db.scalar(select(Handover).where(Handover.event_id==event_id,Handover.request_key==body.request_id))
     if old:
         if old.from_user_id!=actor.id and not admin:raise HTTPException(403,'This handover belongs to another outgoing volunteer')
         if old.headcount!=body.headcount or old.notes!=body.notes or old.from_version!=body.from_version or old.to_version!=body.to_version:raise HTTPException(409,'Request ID already used for a different handover')
         if old.from_shift_id!=body.from_shift_id or old.to_shift_id!=body.to_shift_id:raise HTTPException(409,'Request ID already used for a different handover')
-        return await handover_data(db,event,old)
+        return await handover_data(db,event,old,role=role)
     first,user=await duty(db,event,body.from_shift_id,actor,admin)
     if first.id==body.to_shift_id:raise HTTPException(400,'Choose a different incoming shift')
     second=await db.get(Shift,body.to_shift_id)
@@ -266,7 +302,7 @@ async def offer(event_id:str,body:OfferIn,db=Depends(get_db),actor=Depends(requi
     h=Handover(event_id=event_id,request_key=body.request_id,from_shift_id=first.id,to_shift_id=second.id,from_user_id=user.id,to_user_id=incoming.id,from_name=user.name,to_name=incoming.name,from_version=first.version,to_version=second.version,classroom=classroom,headcount=body.headcount,snapshot=snap,notes=body.notes,offered_by=actor.id,status='pending' if snap['expected_count']==body.headcount else 'attention');db.add(h);await db.flush()
     eu=await db.get(EventUser,second.event_user_id)
     await service.queue(db,event,eu,incoming,'handover',h.id+':offered',actor,body=f'{event.name}: {user.name} has offered you a handover for {classroom or first.station}. Open Festio Juniors, review current headcounts and open movements, then accept in person.',subject='Festio Juniors handover needs your acceptance')
-    db.add(JuniorAudit(event_id=event_id,actor_id=actor.id,action='volunteer_handover_offered',detail={'handover_id':h.id,'status':h.status}));await db.commit();return await handover_data(db,event,h)
+    db.add(JuniorAudit(event_id=event_id,actor_id=actor.id,action='volunteer_handover_offered',detail={'handover_id':h.id,'status':h.status}));await db.commit();return await handover_data(db,event,h,role=role)
 
 class AcceptIn(BaseModel):
     version:int
@@ -277,10 +313,10 @@ class AcceptIn(BaseModel):
 
 @router.post('/handovers/{handover_id}/accept')
 async def accept(event_id:str,handover_id:str,body:AcceptIn,db=Depends(get_db),actor=Depends(require_event_member)):
-    event,_,_,_=await my_context(event_id,actor,db,True);h=await db.scalar(select(Handover).where(Handover.id==handover_id,Handover.event_id==event_id).with_for_update())
+    event,_,role,_=await my_context(event_id,actor,db,True);h=await db.scalar(select(Handover).where(Handover.id==handover_id,Handover.event_id==event_id).with_for_update())
     if not h:raise HTTPException(404,'Handover not found')
     if h.to_user_id!=actor.id:raise HTTPException(403,'Only the assigned incoming volunteer can accept this handover')
-    if h.status=='accepted':return await handover_data(db,event,h)
+    if h.status=='accepted':return await handover_data(db,event,h,role=role)
     if h.status not in ('pending','attention') or body.version!=h.version:raise HTTPException(409,'Handover changed; refresh')
     first=await db.get(Shift,h.from_shift_id) if h.from_shift_id else None;second=await db.get(Shift,h.to_shift_id) if h.to_shift_id else None
     if not first or not second or not first.enabled or not second.enabled or not first.checked_in_at or first.checked_out_at or first.version!=h.from_version or second.version!=h.to_version:raise HTTPException(409,'Shift assignment changed. Cancel this handover and create a current one.')
@@ -291,20 +327,20 @@ async def accept(event_id:str,handover_id:str,body:AcceptIn,db=Depends(get_db),a
     h.status='accepted';h.version+=1;h.accepted_at=datetime.utcnow();h.accepted_by=actor.id;h.accepted_snapshot={**snap,'physical_count':body.headcount}
     eu=await db.get(EventUser,first.event_user_id);user=await db.get(User,h.from_user_id)
     if eu and user:await service.queue(db,event,eu,user,'handover',h.id+':accepted',actor,body=f'{event.name}: {actor.name} accepted your handover for {h.classroom or first.station}. You can now finish your outgoing shift in Festio Juniors.',subject='Festio Juniors handover accepted')
-    db.add(JuniorAudit(event_id=event_id,actor_id=actor.id,action='volunteer_handover_accepted',detail={'handover_id':h.id,'snapshot':snap}));await db.commit();return await handover_data(db,event,h)
+    db.add(JuniorAudit(event_id=event_id,actor_id=actor.id,action='volunteer_handover_accepted',detail={'handover_id':h.id,'snapshot':snap}));await db.commit();return await handover_data(db,event,h,role=role)
 
 class CancelIn(BaseModel):version:int;reason:str=Field(min_length=3,max_length=1000)
 @router.post('/handovers/{handover_id}/cancel')
 async def cancel(event_id:str,handover_id:str,body:CancelIn,db=Depends(get_db),actor=Depends(require_event_member)):
     event,_,role,admin=await my_context(event_id,actor,db,True);h=await db.scalar(select(Handover).where(Handover.id==handover_id,Handover.event_id==event_id).with_for_update())
     if not h:raise HTTPException(404,'Handover not found')
-    if actor.id!=h.from_user_id and role!='supervisor':raise HTTPException(403,'Ask the outgoing volunteer or supervisor to cancel')
+    if actor.id!=h.from_user_id and not can(role,'volunteers'):raise HTTPException(403,'Ask the outgoing volunteer or supervisor to cancel')
     if h.version!=body.version or h.status not in ('pending','attention'):raise HTTPException(409,'Only a current pending handover can be cancelled')
     h.status='cancelled';h.version+=1;db.add(JuniorAudit(event_id=event_id,actor_id=actor.id,action='volunteer_handover_cancelled',detail={'handover_id':h.id,'reason':body.reason}));await db.commit();return {'status':h.status}
 
 @router.get('/dashboard')
 async def dashboard(event_id:str,db=Depends(get_db),actor=Depends(require_event_member)):
-    event,cfg,_,_=await context(event_id,actor,db,write=False)
+    event,cfg,role,_=await context(event_id,actor,db,write=False)
     # Receipt reconciliation is performed by the worker; dashboard reads do not submit email.
     shifts=(await db.scalars(select(Shift).where(Shift.event_id==event_id).order_by(Shift.starts_at))).all();now=datetime.utcnow();rows=[];cache={}
     for s in shifts:
@@ -321,6 +357,12 @@ async def dashboard(event_id:str,db=Depends(get_db),actor=Depends(require_event_
     for classroom in cfg.classrooms or []:
         snap=await service.snapshot(db,event,classroom);on=[s for s in rows if s['classroom']==classroom and s['enabled'] and s['checked_in_at'] and not s['checked_out_at']]
         classes.append({'classroom':classroom,'children_present':snap['expected_count'],'volunteers_on_duty':len(on),'needs_cover':bool(snap['expected_count'] and not on)})
-    return {'shifts':rows,'classes':classes,'handovers':[await handover_data(db,event,h,cache) for h in hands],
+    hand_rows=[await handover_data(db,event,h,cache) for h in hands]
+    if not can(role,'view_children'):
+        for row in rows:row['snapshot']={**row['snapshot'],'away':[]}
+        for row in hand_rows:
+            row['notes']=None
+            for key in ('snapshot','current_snapshot'):row[key]={**row[key],'away':[]}
+    return {'shifts':rows,'classes':classes,'handovers':hand_rows,
         'summary':{'on_duty':sum(bool(s['checked_in_at'] and not s['checked_out_at'] and s['enabled']) for s in rows),'upcoming':sum(s['enabled'] and datetime.fromisoformat(s['starts_at'])>now.replace(tzinfo=timezone.utc) for s in rows),'pending_handovers':sum(h.status=='pending' for h in hands),'attention_handovers':sum(h.status=='attention' or (h.status in ('pending','attention') and (not h.from_shift_id or not h.to_shift_id)) for h in hands),'overdue_shifts':sum(bool(s['checked_in_at'] and not s['checked_out_at'] and datetime.fromisoformat(s['ends_at'])<now.replace(tzinfo=timezone.utc)) for s in rows),'coverage_gaps':sum(c['needs_cover'] for c in classes),'email_and_reminder_status':counts},
         'messages':[{'id':m.id,'kind':m.kind,'recipient':m.recipient,'subject':m.subject,'body':m.body,'status':m.status,'error':m.error,'created_at':instant(m.created_at)} for m in messages]}

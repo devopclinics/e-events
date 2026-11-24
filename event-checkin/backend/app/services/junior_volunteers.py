@@ -8,6 +8,7 @@ from ..models import Event,EventUser,User,Membership,EmailDeliveryEvent,MessageC
 from ..junior_models import JuniorConfig,JuniorVolunteerShift as Shift,JuniorVolunteerNotice as Notice
 from ..entitlements import reserve_message_credit,last_credit_ledger_id,can_use_paid_channels
 from ..config import settings
+from .junior_permissions import principal
 from .public_event_policy import event_communications_blocked
 from services import messaging
 from services.email_service import send_simple_email
@@ -36,7 +37,7 @@ async def team_member(event,shift,db):
     cfg=await db.get(JuniorConfig,event.id)
     if not user or not user.is_active or not cfg:return None
     if not user.is_platform_superadmin and not await db.scalar(select(Membership.id).where(Membership.org_id==event.org_id,Membership.user_id==user.id)):return None
-    if not (eu.event_role=='manager' and not eu.guest_service_scoped) and eu.user_id not in (cfg.staff or {}):return None
+    if not (eu.event_role=='manager' and not eu.guest_service_scoped) and not principal((cfg.staff or {}).get(eu.user_id)):return None
     return user
 
 

@@ -10,6 +10,7 @@ from ..models import Event,User,EventUser,Membership,EmailDeliveryEvent,MessageC
 from ..junior_models import JuniorConfig,JuniorAudit,JuniorChild,JuniorVolunteerProfile as Profile,JuniorVolunteerMessage as Message,JuniorVolunteerShift as Shift
 from ..config import settings
 from .junior_practice import is_practice
+from . import junior_permissions as access_policy
 from .junior_days import view,day
 from .public_event_policy import event_communications_blocked
 from services.email_service import send_simple_email
@@ -24,7 +25,11 @@ def operation_id(event_id,kind,key):return str(uuid.uuid5(uuid.NAMESPACE_URL,'ju
 
 async def prior(db,event,actor,kind,body):
     identity=operation_id(event.id,kind,body.request_id)
-    fingerprint=hashlib.sha256(json.dumps(body.model_dump(mode='json'),sort_keys=True).encode()).hexdigest()
+    payload=body.model_dump(mode='json')
+    # Preserve replay fingerprints for older onboarding requests without custom grants.
+    for row in payload.get('rows',[]):
+        if row.get('permissions') is None:row.pop('permissions',None)
+    fingerprint=hashlib.sha256(json.dumps(payload,sort_keys=True).encode()).hexdigest()
     audit=await db.get(JuniorAudit,identity)
     if audit:
         from fastapi import HTTPException
@@ -37,7 +42,7 @@ def finish(db,event,actor,kind,identity,fingerprint,result):
     db.add(JuniorAudit(id=identity,event_id=event.id,actor_id=actor.id,action=kind,detail={'fingerprint':fingerprint,'result':result}))
 
 
-async def provision(db,event,name,email,phone,role,classrooms,cfg):
+async def provision(db,event,name,email,phone,role,classrooms,cfg,permissions=None):
     # Savepoints handle concurrent invitations in different events without a partial batch.
     from sqlalchemy import func
     from fastapi import HTTPException
@@ -66,12 +71,15 @@ async def provision(db,event,name,email,phone,role,classrooms,cfg):
         except IntegrityError:
             eu=await db.scalar(select(EventUser).where(EventUser.event_id==event.id,EventUser.user_id==user.id))
             if not eu:raise
+    inherited=bool(user.is_platform_superadmin or membership and membership.role in ('owner','admin') or eu.event_role=='manager' and not eu.guest_service_scoped)
+    if role=='volunteer' and inherited:raise HTTPException(409,'Event owners and managers keep inherited Admin access. Choose Admin for this account.')
+    grant=access_policy.entry(role,permissions)
     active=(await db.scalars(select(Shift).where(Shift.event_id==event.id,Shift.event_user_id==eu.id,Shift.checked_in_at.is_not(None),Shift.checked_out_at.is_(None)))).all()
-    if active and ((cfg.staff or {}).get(user.id,role)!=role or any(s.plan.get('classroom') and s.plan['classroom'] not in classrooms for s in active)):raise HTTPException(409,'Complete the active shift handover before changing its role or removing its classroom')
+    if active and (access_policy.signature((cfg.staff or {}).get(user.id,role),inherited)!=access_policy.signature(grant,inherited) or any(s.plan.get('classroom') and s.plan['classroom'] not in classrooms for s in active)):raise HTTPException(409,'Complete the active shift handover before changing its role or removing its classroom')
     profile=await db.get(Profile,eu.id)
     if not profile:profile=Profile(event_user_id=eu.id,event_id=event.id,name=name,phone=phone,classrooms=classrooms);db.add(profile)
     else:profile.name=name;profile.phone=phone;profile.classrooms=classrooms;profile.version+=1;profile.updated_at=datetime.utcnow()
-    cfg.staff={**(cfg.staff or {}),user.id:role}
+    cfg.staff={**(cfg.staff or {}),user.id:grant}
     await db.flush()
     return eu,user,profile
 
@@ -82,8 +90,10 @@ async def queue(db,event,eu,user,kind,key,actor,body=None,subject=None):
     profile=await db.get(Profile,eu.id);cfg=await db.get(JuniorConfig,event.id)
     if body is None:
         rooms=', '.join(profile.classrooms or []) if profile else ''
-        role=(cfg.staff or {}).get(user.id,'supervisor' if eu.event_role=='manager' else 'volunteer')
-        body=f'Hello {profile.name if profile else user.name},\nYou have been assigned to {event.name} in Festio Juniors.\nRole: {role}. Classes: {rooms or "See your shift assignment"}.\nOpen Festio Juniors and sign in with {user.email}. If you do not yet have an account, create one using this same email and verify it. This is staff access, not a guest registration.'
+        grant=access_policy.info((cfg.staff or {}).get(user.id),eu.event_role=='manager' and not eu.guest_service_scoped)
+        role=grant['role']
+        permission_names=', '.join(access_policy.CATALOG[k] for k in grant['permissions']) or 'Volunteer guide and own shifts'
+        body=f'Hello {profile.name if profile else user.name},\nYou have been assigned to {event.name} in Festio Juniors.\nRole: {role}. Permissions: {permission_names}. Classes: {rooms or "See your shift assignment"}.\nOpen Festio Juniors and sign in with {user.email}. If you do not yet have an account, create one using this same email and verify it. This is staff access, not a guest registration.'
     paused=is_practice(event)
     row=Message(event_id=event.id,event_user_id=eu.id,user_id=user.id,request_key=key,kind=kind,recipient=user.email,subject=subject or ('Your Festio Juniors staff access' if kind=='invite' else 'Your Festio Juniors assignment'),body=body,status='paused' if paused else 'queued',error='Practice events never send staff email' if paused else None,created_by=actor.id)
     db.add(row);await db.flush();return row

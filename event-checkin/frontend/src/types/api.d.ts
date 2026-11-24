@@ -23,6 +23,15 @@ export interface AccessGrantRequest {
   reason?: (string) | null
 }
 
+export interface AccessIn {
+  event_user_ids: (string)[]
+  expected_versions: Record<string, number>
+  notify_email?: boolean
+  permissions?: ('checkin' | 'children' | 'support' | 'outings' | 'inventory' | 'messages' | 'volunteers' | 'reconcile')[]
+  request_id: string
+  role: 'admin' | 'volunteer'
+}
+
 export interface AccountMemberOut {
   email: string
   is_active: boolean
@@ -165,7 +174,7 @@ export interface AssignIn {
   expected_versions?: Record<string, number>
   notify_email?: boolean
   request_id: string
-  role?: ('scanner' | 'intake' | 'support' | 'inventory' | 'supervisor') | null
+  role?: ('admin' | 'volunteer' | 'scanner' | 'intake' | 'support' | 'inventory' | 'supervisor') | null
 }
 
 export interface AssignmentIn {
@@ -517,7 +526,7 @@ export interface ConfigIn {
   dropoff_start_date?: (string) | null
   enabled: boolean
   notifications_enabled?: boolean
-  staff?: Record<string, 'scanner' | 'intake' | 'support' | 'inventory' | 'supervisor'>
+  staff?: Record<string, 'admin' | 'volunteer' | 'scanner' | 'intake' | 'support' | 'inventory' | 'supervisor' | Grant>
 }
 
 export interface ConsentFormOut {
@@ -1598,6 +1607,11 @@ export interface GateScanResult {
   status: string
   table_name?: (string) | null
   zone_name?: (string) | null
+}
+
+export interface Grant {
+  permissions?: ('checkin' | 'children' | 'support' | 'outings' | 'inventory' | 'messages' | 'volunteers' | 'reconcile')[]
+  role?: 'admin' | 'volunteer'
 }
 
 export interface GrantRequest {
@@ -2846,8 +2860,9 @@ export interface PersonIn {
   classrooms?: (string)[]
   email: string
   name: string
+  permissions?: (('checkin' | 'children' | 'support' | 'outings' | 'inventory' | 'messages' | 'volunteers' | 'reconcile')[]) | null
   phone?: (string) | null
-  role?: 'scanner' | 'intake' | 'support' | 'inventory' | 'supervisor'
+  role?: 'admin' | 'volunteer' | 'scanner' | 'intake' | 'support' | 'inventory' | 'supervisor'
 }
 
 export interface PlaceholderNameIn {

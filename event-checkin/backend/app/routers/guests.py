@@ -1630,9 +1630,10 @@ async def list_guests(event_id: str, db: AsyncSession = Depends(get_db), _: User
     show_junior_operations=False
     if event.junior_program_enabled:
         from .junior import access as junior_access
+        from ..services.junior_permissions import can as junior_can
         try:
-            junior_context=await junior_access(event_id,_,db)
-            show_junior_operations=junior_context[2]!='inventory'
+            junior_context=await junior_access(event_id,_,db,write=False)
+            show_junior_operations=junior_can(junior_context[2],'view_children')
         except HTTPException as exc:
             if exc.status_code!=403:raise
     if show_junior_operations:

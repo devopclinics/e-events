@@ -10,16 +10,17 @@ from ..auth import require_event_member, _org_role
 from ..models import Event, EventUser, User, Guest
 from ..services import junior_guests as shared
 from ..services import junior_days as days
+from ..services import junior_permissions as permissions
+from ..services.junior_permissions import can, Role, Grant
 from ..services.junior_practice import is_practice
 from ..junior_models import (JuniorAudit, JuniorConfig, JuniorChild, JuniorContact, JuniorMovement,
     JuniorOuting, JuniorOutingMember, JuniorNotification, JuniorInventory, JuniorInventoryEntry)
 
 router = APIRouter(prefix='/{event_id}/junior')
-Role = Literal['scanner', 'intake', 'support', 'inventory', 'supervisor']
 Relationship = Literal['parent', 'chaperone', 'adult_sibling']
 
 
-async def access(event_id, actor, db, *, roles=None, enabled=True, write=True):
+async def access(event_id, actor, db, *, roles=None, enabled=True, write=True, permission=None):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, 'Event not found')
@@ -27,10 +28,13 @@ async def access(event_id, actor, db, *, roles=None, enabled=True, write=True):
     eu = await db.scalar(select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == actor.id))
     config = await db.get(JuniorConfig, event_id)
     admin = org_role in ('owner', 'admin') or bool(eu and eu.event_role == 'manager' and not eu.guest_service_scoped)
-    role = 'supervisor' if admin else (config.staff or {}).get(actor.id) if config and eu else None
-    if not role or (roles and role not in roles):
+    role = permissions.principal((config.staff or {}).get(actor.id) if config and eu else None,admin)
+    admin = bool(role and role.admin)
+    if permission is None and roles:
+        permission = 'children' if roles==['intake','supervisor'] else 'inventory' if roles==['inventory','supervisor'] else 'volunteers' if roles==['supervisor'] else 'view_children' if 'inventory' not in roles else None
+    if not role or (permission and not can(role,permission)):
         raise HTTPException(403, 'Junior Programme permission required')
-    if eu and org_role not in ('owner','admin') and eu.access_level == 'view' and roles and write:
+    if eu and org_role not in ('owner','admin') and eu.access_level == 'view' and write:
         raise HTTPException(403, 'This event access is view-only')
     if enabled and not event.junior_program_enabled:
         raise HTTPException(409, 'Junior Programme is not enabled for this event')
@@ -43,7 +47,7 @@ def output_child(child, role):
     result = {k: getattr(child,k) for k in keys}
     result.update(days.view(child))
     result['convention_admitted']=bool(getattr(child,'_convention_admitted',False))
-    if role in ('support','supervisor'):
+    if can(role,'support'):
         result.update(allergy_notes=child.allergy_notes, accommodation_notes=child.accommodation_notes)
     return result
 
@@ -122,7 +126,7 @@ async def audit(db, event, child, actor, action, *, request_id, before=None, **d
 class ConfigIn(BaseModel):
     enabled: bool
     classrooms: list[str] = Field(default_factory=list, max_length=100)
-    staff: dict[str, Role] = Field(default_factory=dict)
+    staff: dict[str, Role | Grant] = Field(default_factory=dict)
     notifications_enabled: bool = False
     dropoff_start_date: date | None = None
 
@@ -132,19 +136,20 @@ async def config_get(event_id: str, db=Depends(get_db), actor=Depends(require_ev
     event = await db.get(Event,event_id)
     config = await db.get(JuniorConfig,event_id)
     try:
-        _, _, role, admin = await access(event_id,actor,db,enabled=False)
+        _, _, role, admin = await access(event_id,actor,db,enabled=False,write=False)
     except HTTPException as exc:
         if exc.status_code != 403:
             raise
         role, admin = None, False
     membership=await db.scalar(select(EventUser).where(EventUser.event_id==event_id,EventUser.user_id==actor.id))
     readonly=bool(membership and membership.access_level=='view' and not actor.is_platform_superadmin and await _org_role(actor,event.org_id,db) not in ('owner','admin'))
-    guest_access=admin or bool(membership and not membership.guest_service_scoped and (membership.can_view_guests or membership.can_manage_guests) and (membership.feature_permissions is None or membership.feature_permissions.get('guests') in ('view','manage')))
+    event_admin=actor.is_platform_superadmin or await _org_role(actor,event.org_id,db) in ('owner','admin') or bool(membership and membership.event_role=='manager' and not membership.guest_service_scoped)
+    guest_access=event_admin or bool(membership and not membership.guest_service_scoped and (membership.can_view_guests or membership.can_manage_guests) and (membership.feature_permissions is None or membership.feature_permissions.get('guests') in ('view','manage')))
     practice=None
     if admin and not is_practice(event):
         candidates=(await db.scalars(select(Event).where(Event.org_id==event.org_id,Event.is_test.is_(True),Event.junior_program_enabled.is_(True),Event.cancelled.is_(False)))).all()
         practice=next((e.id for e in candidates if is_practice(e) and e.setup_preferences.get('junior_practice_source')==event_id),None)
-    return {'practice_mode':is_practice(event),'practice_event_id':practice,'practice_source_event_id':event.setup_preferences.get('junior_practice_source') if is_practice(event) else None,'enabled':bool(event.junior_program_enabled),'role':role,'can_configure':admin and not readonly,'read_only':readonly,'can_open_guest_list':guest_access,
+    return {'practice_mode':is_practice(event),'practice_event_id':practice,'practice_source_event_id':event.setup_preferences.get('junior_practice_source') if is_practice(event) else None,'enabled':bool(event.junior_program_enabled),'role':role,'simple_role':'admin' if admin else 'volunteer','permissions':sorted(role.permissions) if role else [],'can_reconcile':can(role,'reconcile'),'permission_catalog':permissions.CATALOG,'can_configure':admin and not readonly,'read_only':readonly,'can_open_guest_list':guest_access,
         'classrooms':config.classrooms if config else [],
         'staff':config.staff if config and admin else {},
         'notifications_enabled':bool(config and config.notifications_enabled),'today':days.day(event),
@@ -160,7 +165,7 @@ class ClassroomIn(BaseModel):
 
 @router.put('/classrooms')
 async def classrooms_put(event_id: str, body: ClassroomIn, db=Depends(get_db), actor=Depends(require_event_member)):
-    event,config,_,admin = await access(event_id,actor,db,enabled=False,roles=['supervisor'])
+    event,config,_,admin = await access(event_id,actor,db,enabled=False)
     if not admin:
         raise HTTPException(403,'Only the event administrator can configure classrooms')
     await db.scalar(select(Event).where(Event.id==event_id).with_for_update())
@@ -188,13 +193,15 @@ async def classrooms_put(event_id: str, body: ClassroomIn, db=Depends(get_db), a
 
 @router.put('/config')
 async def config_put(event_id: str, body: ConfigIn, db=Depends(get_db), actor=Depends(require_event_member)):
-    event,config,_,admin = await access(event_id,actor,db,enabled=False,roles=['supervisor'])
+    event,config,_,admin = await access(event_id,actor,db,enabled=False)
     if not admin:
         raise HTTPException(403,'Only the event administrator can configure this module')
     await db.scalar(select(Event).where(Event.id==event_id).with_for_update())
     config=await db.scalar(select(JuniorConfig).where(JuniorConfig.event_id==event_id).execution_options(populate_existing=True))
     if body.dropoff_start_date and not (days.day(event,event.event_date)<=body.dropoff_start_date.isoformat()<=days.day(event,event.event_end_date or event.event_date)):
         raise HTTPException(400,'Drop-off start date must be within the event dates')
+    staff=body.model_dump(mode='json')['staff'] if 'staff' in body.model_fields_set else (config.staff or {}) if config else {}
+    if config and 'staff' in body.model_fields_set and any(isinstance(v,dict) and not isinstance(staff.get(k),dict) for k,v in (config.staff or {}).items()):raise HTTPException(409,'Refresh the app and manage Admin/Volunteer permissions in Volunteers')
     assigned = set((await db.scalars(select(EventUser.user_id).where(EventUser.event_id == event_id))).all())
     if not set(body.staff).issubset(assigned):
         raise HTTPException(400,'Junior staff must already be assigned to this event')
@@ -223,10 +230,10 @@ async def config_put(event_id: str, body: ConfigIn, db=Depends(get_db), actor=De
         config=JuniorConfig(event_id=event_id)
         db.add(config)
     db.add(JuniorAudit(event_id=event_id,actor_id=actor.id,action='settings_updated',detail={
-        'enabled':body.enabled,'classrooms':classrooms,'staff':body.staff,'notifications_enabled':body.notifications_enabled}))
+        'enabled':body.enabled,'classrooms':classrooms,'staff':staff,'notifications_enabled':body.notifications_enabled}))
     event.junior_program_enabled=body.enabled
     config.classrooms=classrooms
-    config.staff=body.staff
+    config.staff=staff
     config.notifications_enabled=body.notifications_enabled
     if 'dropoff_start_date' in body.model_fields_set:
         config.dropoff_start_date=body.dropoff_start_date.isoformat() if body.dropoff_start_date else None
@@ -386,8 +393,8 @@ async def roster_import(event_id: str, body: ImportIn, db=Depends(get_db), actor
 
 @router.get('/children')
 async def children(event_id: str, db=Depends(get_db), actor=Depends(require_event_member)):
-    event,_,role,_=await access(event_id,actor,db)
-    if role=='inventory':raise HTTPException(403,'Inventory role has no child roster access')
+    event,_,role,_=await access(event_id,actor,db,write=False)
+    if not can(role,'view_children'):raise HTTPException(403,'Permission to view children is required')
     rows=await shared.roster(event,db)
     await db.commit()
     return [output_child(c,role) for c in rows]
@@ -395,8 +402,8 @@ async def children(event_id: str, db=Depends(get_db), actor=Depends(require_even
 
 @router.get('/children/{child_id}')
 async def child_detail(event_id: str, child_id: str, db=Depends(get_db), actor=Depends(require_event_member)):
-    _,_,role,_=await access(event_id,actor,db)
-    if role=='inventory':raise HTTPException(403,'Inventory role has no child roster access')
+    _,_,role,_=await access(event_id,actor,db,write=False)
+    if not can(role,'view_children'):raise HTTPException(403,'Permission to view children is required')
     child=await child_for(event_id,child_id,db)
     result=output_child(child,role)
     import base64, io, qrcode
@@ -407,8 +414,8 @@ async def child_detail(event_id: str, child_id: str, db=Depends(get_db), actor=D
     contacts=(await db.scalars(select(JuniorContact).where(JuniorContact.child_id==child_id))).all()
     result['contacts']=[{k:getattr(c,k) for k in
         (('id','guardian_guest_id','name','relationship','adult_verified','pickup_authorized','email','phone','sms_consent','notify')
-         if role in ('intake','supervisor') else ('id','guardian_guest_id','name','relationship','adult_verified','pickup_authorized'))} for c in contacts]
-    if role in ('intake','supervisor'):
+         if can(role,'children') or can(role,'messages') else ('id','guardian_guest_id','name','relationship','adult_verified','pickup_authorized'))} for c in contacts]
+    if can(role,'children'):
         for entry,contact in zip(result['contacts'],contacts):
             guardian=await db.get(Guest,contact.guardian_guest_id) if contact.guardian_guest_id else None
             entry['guardian_updated_at']=guardian.updated_at if guardian else None
@@ -418,7 +425,7 @@ async def child_detail(event_id: str, child_id: str, db=Depends(get_db), actor=D
     names={u.id:u.name for u in (await db.scalars(select(User).where(User.id.in_(actor_ids)))).all()}
     for entry,m in zip(result['history'],history):
         entry['actor_name']=names.get(m.actor_id,'Former volunteer')
-        if role in ('intake','supervisor') and m.action=='correction':
+        if can(role,'children') and m.action=='correction':
             import json
             entry['correction']=json.loads(m.notes) if m.notes else None
     await db.commit()
@@ -535,6 +542,7 @@ class ActionIn(BaseModel):
 @router.post('/children/{child_id}/actions')
 async def action(event_id: str, child_id: str, body: ActionIn, background_tasks: BackgroundTasks, db=Depends(get_db), actor=Depends(require_event_member)):
     event,config,role,_=await access(event_id,actor,db,roles=['scanner','intake','support','supervisor'])
+    if not can(role,'support' if body.action in ('clear_allergy','clear_accommodation') else 'checkin'):raise HTTPException(403,'Permission for this child movement is required')
     child=await child_for(event_id,child_id,db,True)
     prior=await db.scalar(select(JuniorMovement).where(JuniorMovement.event_id==event_id,JuniorMovement.request_id==body.request_id))
     if prior:
@@ -548,7 +556,7 @@ async def action(event_id: str, child_id: str, body: ActionIn, background_tasks:
     a=body.action
     details={}
     today=days.day(event)
-    if days.view(child,event)['prior_day_unresolved'] and role!='supervisor':
+    if days.view(child,event)['prior_day_unresolved'] and not can(role,'reconcile'):
         raise HTTPException(409,'Previous-day custody is still open. Ask a supervisor to reconcile it before today’s drop-off.')
     newly_admitted=False
     if a in ('dropoff','convention_checkin'):
@@ -624,7 +632,7 @@ async def action(event_id: str, child_id: str, body: ActionIn, background_tasks:
         if child.screening_wristband_assigned:raise HTTPException(409,'The screening wristband is already recorded')
         child.screening_wristband_assigned=True
     elif a in ('clear_allergy','clear_accommodation'):
-        if role not in ('support','supervisor'):raise HTTPException(403,'Support desk permission required')
+        if not can(role,'support'):raise HTTPException(403,'Support desk permission required')
         field='allergy' if a=='clear_allergy' else 'accommodation'
         if before!='support_desk' or not getattr(child,field):raise HTTPException(409,'No matching desk referral pending')
         if getattr(child,field+'_cleared'):raise HTTPException(409,'This referral is already cleared')
@@ -694,7 +702,7 @@ class OutingIn(BaseModel):
 
 @router.post('/outings',status_code=201)
 async def outing_add(event_id: str, body: OutingIn, db=Depends(get_db), actor=Depends(require_event_member)):
-    event,_,_,_=await access(event_id,actor,db,roles=['supervisor'])
+    event,_,_,_=await access(event_id,actor,db,permission='outings')
     await shared.roster(event,db)
     if not body.permission_verified:raise HTTPException(400,'Verify outing permission for every selected child')
     if not body.name.strip():raise HTTPException(400,'Outing name required')
@@ -712,8 +720,8 @@ async def outing_add(event_id: str, body: OutingIn, db=Depends(get_db), actor=De
 
 @router.get('/outings')
 async def outings(event_id: str, db=Depends(get_db), actor=Depends(require_event_member)):
-    event,_,role,_=await access(event_id,actor,db)
-    if role=='inventory':raise HTTPException(403,'Inventory role has no child roster access')
+    event,_,role,_=await access(event_id,actor,db,write=False)
+    if not can(role,'view_children'):raise HTTPException(403,'Permission to view children is required')
     await shared.roster(event,db)
     result=[]
     for outing in (await db.scalars(select(JuniorOuting).where(JuniorOuting.event_id==event_id))).all():
@@ -728,7 +736,7 @@ async def outings(event_id: str, db=Depends(get_db), actor=Depends(require_event
 
 @router.post('/outings/{outing_id}/close')
 async def outing_close(event_id: str, outing_id: str, db=Depends(get_db), actor=Depends(require_event_member)):
-    await access(event_id,actor,db,roles=['supervisor'])
+    await access(event_id,actor,db,permission='outings')
     outing=await db.scalar(select(JuniorOuting).where(JuniorOuting.id==outing_id,JuniorOuting.event_id==event_id).with_for_update())
     if not outing:raise HTTPException(404,'Outing not found')
     pending=await db.scalar(select(JuniorOutingMember.child_id).where(JuniorOutingMember.outing_id==outing_id,JuniorOutingMember.departed_at.is_not(None),JuniorOutingMember.returned_at.is_(None)).limit(1))
@@ -741,14 +749,14 @@ async def outing_close(event_id: str, outing_id: str, db=Depends(get_db), actor=
 
 @router.get('/notifications')
 async def notifications(event_id: str, db=Depends(get_db), actor=Depends(require_event_member)):
-    await access(event_id,actor,db,roles=['intake','supervisor'],write=False)
+    await access(event_id,actor,db,permission='messages',write=False)
     rows=(await db.scalars(select(JuniorNotification).where(JuniorNotification.event_id==event_id).order_by(JuniorNotification.created_at.desc()).limit(300))).all()
     return [{k:getattr(row,k) for k in ('id','movement_id','channel','recipient','body','status','error','provider_id','created_at')} for row in rows]
 
 
 @router.post('/notifications/{notification_id}/retry')
 async def retry_notice(event_id: str, notification_id: str, db=Depends(get_db), actor=Depends(require_event_member)):
-    event,config,_,_=await access(event_id,actor,db,roles=['intake','supervisor'])
+    event,config,_,_=await access(event_id,actor,db,permission='messages')
     row=await db.scalar(select(JuniorNotification).where(JuniorNotification.id==notification_id,JuniorNotification.event_id==event_id).with_for_update())
     if not row:raise HTTPException(404,'Notification not found')
     if row.status not in ('setup_required','paused') or row.attempted_at:

@@ -63,6 +63,71 @@
         "title": "AccessGrantRequest",
         "type": "object"
       },
+      "AccessIn": {
+        "properties": {
+          "event_user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Event User Ids",
+            "type": "array"
+          },
+          "expected_versions": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Expected Versions",
+            "type": "object"
+          },
+          "notify_email": {
+            "default": true,
+            "title": "Notify Email",
+            "type": "boolean"
+          },
+          "permissions": {
+            "items": {
+              "enum": [
+                "checkin",
+                "children",
+                "support",
+                "outings",
+                "inventory",
+                "messages",
+                "volunteers",
+                "reconcile"
+              ],
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Permissions",
+            "type": "array"
+          },
+          "request_id": {
+            "maxLength": 80,
+            "minLength": 8,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "volunteer"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "event_user_ids",
+          "role",
+          "expected_versions"
+        ],
+        "title": "AccessIn",
+        "type": "object"
+      },
       "AccountMemberOut": {
         "properties": {
           "email": {
@@ -761,6 +826,8 @@
             "anyOf": [
               {
                 "enum": [
+                  "admin",
+                  "volunteer",
                   "scanner",
                   "intake",
                   "support",
@@ -2779,14 +2846,23 @@
           },
           "staff": {
             "additionalProperties": {
-              "enum": [
-                "scanner",
-                "intake",
-                "support",
-                "inventory",
-                "supervisor"
-              ],
-              "type": "string"
+              "anyOf": [
+                {
+                  "enum": [
+                    "admin",
+                    "volunteer",
+                    "scanner",
+                    "intake",
+                    "support",
+                    "inventory",
+                    "supervisor"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/components/schemas/Grant"
+                }
+              ]
             },
             "title": "Staff",
             "type": "object"
@@ -9994,6 +10070,39 @@
           "message"
         ],
         "title": "GateScanResult",
+        "type": "object"
+      },
+      "Grant": {
+        "properties": {
+          "permissions": {
+            "items": {
+              "enum": [
+                "checkin",
+                "children",
+                "support",
+                "outings",
+                "inventory",
+                "messages",
+                "volunteers",
+                "reconcile"
+              ],
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Permissions",
+            "type": "array"
+          },
+          "role": {
+            "default": "volunteer",
+            "enum": [
+              "admin",
+              "volunteer"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "title": "Grant",
         "type": "object"
       },
       "GrantRequest": {
@@ -17778,6 +17887,31 @@
             "title": "Name",
             "type": "string"
           },
+          "permissions": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "checkin",
+                    "children",
+                    "support",
+                    "outings",
+                    "inventory",
+                    "messages",
+                    "volunteers",
+                    "reconcile"
+                  ],
+                  "type": "string"
+                },
+                "maxItems": 8,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Permissions"
+          },
           "phone": {
             "anyOf": [
               {
@@ -17793,6 +17927,8 @@
           "role": {
             "default": "scanner",
             "enum": [
+              "admin",
+              "volunteer",
               "scanner",
               "intake",
               "support",
@@ -45987,6 +46123,61 @@
           }
         ],
         "summary": "Roster",
+        "tags": [
+          "junior-programme"
+        ]
+      }
+    },
+    "/api/events/{event_id}/junior/team/access": {
+      "post": {
+        "operationId": "set_access_api_events__event_id__junior_team_access_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Access",
         "tags": [
           "junior-programme"
         ]

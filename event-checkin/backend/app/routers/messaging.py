@@ -195,12 +195,15 @@ async def signalhouse_status_callback(request: Request) -> Response:
     status, message_id = _signalhouse_extract_status_and_message_id(data)
     error = data.get("errorCode") or data.get("error_code") or data.get("error")
     try:
-        await reconcile_provider_status(
+        matched = await reconcile_provider_status(
             provider="signalhouse",
             provider_message_id=message_id,
             status=status,
             error_code=str(error) if error else None,
         )
+        logger.info("Signal House callback matched=%s status=%s message_id=%s", matched, str(status or '')[:40], str(message_id or '')[:80])
+        if not matched:
+            logger.warning("Unmatched Signal House callback fields=%s", sorted(str(k)[:40] for k in data)[:20])
     except Exception:
         logger.exception("Signal House status callback reconciliation failed")
     return Response(status_code=204)

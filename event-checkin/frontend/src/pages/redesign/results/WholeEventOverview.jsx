@@ -1,3 +1,4 @@
+import {isNCNMO,juniorEventName} from '../../../juniorProgramme.mjs'
 import { useState } from 'react'
 import { eventTime, summaryMetrics } from './resultsSummary.mjs'
 
@@ -20,7 +21,7 @@ export default function WholeEventOverview({ event, data, setActiveTab, setOverv
   const current = data.program?.in_progress?.[0], next = data.program?.up_next, uncertain = data.program?.status_unknown || []
   const denied = summary?.denied_scans, shared = summary?.shared_passes
   return <section className="er-whole-overview">
-    <div className="er-executive-lead"><div><span className="er-section-eyebrow">Whole-event results</span><h2>{event?.name || 'Event'} at a glance</h2><p>Event totals, zone arrivals, seating, communications, and follow-up in one accountable view.</p></div><button type="button" className="er-whole-command" onClick={() => setOverviewLayout('command')}>Open command center →</button></div>
+    <div className="er-executive-lead"><div><span className="er-section-eyebrow">{isNCNMO(event?.id)?'Festio × NCNMO · Platform results':'Whole-event results'}</span><h2>{isNCNMO(event?.id)?juniorEventName(event)+' — Overview':(event?.name||'Event')+' at a glance'}</h2><p>{isNCNMO(event?.id)?'Platform attendance, seating, communications and follow-up in one view.':'Event totals, zone arrivals, seating, communications, and follow-up in one accountable view.'}</p>{isNCNMO(event?.id)&&<a href={'/juniors/?event='+encodeURIComponent(event.id)}>Open JP dashboard →</a>}</div><button type="button" className="er-whole-command" onClick={() => setOverviewLayout('command')}>Open command center →</button></div>
     <div className="er-whole-grid">
       <Card eyebrow="Attendance by zone" title="Where guests arrived" action="Access report" onOpen={() => setActiveTab('attendance')}>
         <label className="er-whole-period">Zone reporting period<select value={allDates ? 'all' : 'event'} onChange={e => setAllDates(e.target.value === 'all')}><option value="event">Configured event dates</option><option value="all">All recorded dates</option></select></label>

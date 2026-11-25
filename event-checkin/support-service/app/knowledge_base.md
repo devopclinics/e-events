@@ -1215,13 +1215,13 @@ Check the result: The correct assigned event appears, and the tools shown match 
 
 If something is wrong: If the event is missing, confirm the exact sign-in email and event assignment with an Admin. Missing tools may require a permission assignment.
 
-### Convention check-in and daily Juniors drop-off
+### Platform check-in and daily JP drop-off
 
-Convention admission and Juniors custody are separate records. Follow the event’s configured JP start date.
+For NCNMO Junior Platform 2026: Day 0 is Platform check-in; from Day 1, daily JP drop-off. Admission and JP custody remain separate records; follow the configured start date.
 
 Go to: Juniors → Children → search or scan → child record
 
-1. Complete convention check-in first. If a separate JP start date is configured, arrival day can be convention admission only; it does not record JP drop-off or screening.
+1. Complete event admission first (Platform check-in for NCNMO). If a separate JP start date is configured, Day 0 can be admission only; it does not record JP drop-off or screening.
 2. Each JP day starts with a fresh drop-off. A linked guardian is prefilled; select the adult actually present, or Another person and record their name, relationship and optional international phone. Verify the handoff in person and verify a sibling is 18+.
 3. Confirm today’s screening and the standard band before saving. Resolve yesterday’s open custody through an authorized lead before a new drop-off.
 
@@ -1236,7 +1236,7 @@ Saved answers prefill; missing or unknown answers must be asked and completed.
 Go to: Child record → drop-off or screening → support desks when required
 
 1. Supported answers from the child’s registration or previous screening prefill Yes/No. Confirm them with the adult today and update anything that changed; never treat missing information as No.
-2. Tick I confirmed both screening answers with the adult today. Physically issue or check the standard screening wristband for every child. A Yes also requires the relevant support desk and additional band.
+2. Tick I confirmed both screening answers with the adult today. Physically issue or check the standard screening wristband for every child before classroom arrival, including when both answers are No. A Yes also requires the relevant support desk and additional band.
 3. Authorized support staff review restricted details, which may prefill from saved information, and clear each required desk. Both needs mean three bands: standard, allergy and accommodation. Confirm classroom arrival only after the required reviews, bands and classroom assignment are complete.
 
 Warning: Saved information does not carry daily clearance or band confirmation forward. Medical details remain restricted and are excluded from guardian transition messages.
@@ -1408,13 +1408,13 @@ Check the result: The correct assigned event appears, and the tools shown match 
 
 If something is wrong: If the event is missing, confirm the exact sign-in email and event assignment with an Admin. Missing tools may require a permission assignment.
 
-### Convention check-in and daily Juniors drop-off
+### Platform check-in and daily JP drop-off
 
-Convention admission and Juniors custody are separate records. Follow the event’s configured JP start date.
+For NCNMO Junior Platform 2026: Day 0 is Platform check-in; from Day 1, daily JP drop-off. Admission and JP custody remain separate records; follow the configured start date.
 
 Go to: Juniors → Children → search or scan → child record
 
-1. Complete convention check-in first. If a separate JP start date is configured, arrival day can be convention admission only; it does not record JP drop-off or screening.
+1. Complete event admission first (Platform check-in for NCNMO). If a separate JP start date is configured, Day 0 can be admission only; it does not record JP drop-off or screening.
 2. Each JP day starts with a fresh drop-off. A linked guardian is prefilled; select the adult actually present, or Another person and record their name, relationship and optional international phone. Verify the handoff in person and verify a sibling is 18+.
 3. Confirm today’s screening and the standard band before saving. Resolve yesterday’s open custody through an authorized lead before a new drop-off.
 
@@ -1429,7 +1429,7 @@ Saved answers prefill; missing or unknown answers must be asked and completed.
 Go to: Child record → drop-off or screening → support desks when required
 
 1. Supported answers from the child’s registration or previous screening prefill Yes/No. Confirm them with the adult today and update anything that changed; never treat missing information as No.
-2. Tick I confirmed both screening answers with the adult today. Physically issue or check the standard screening wristband for every child. A Yes also requires the relevant support desk and additional band.
+2. Tick I confirmed both screening answers with the adult today. Physically issue or check the standard screening wristband for every child before classroom arrival, including when both answers are No. A Yes also requires the relevant support desk and additional band.
 3. Authorized support staff review restricted details, which may prefill from saved information, and clear each required desk. Both needs mean three bands: standard, allergy and accommodation. Confirm classroom arrival only after the required reviews, bands and classroom assignment are complete.
 
 Warning: Saved information does not carry daily clearance or band confirmation forward. Medical details remain restricted and are excluded from guardian transition messages.

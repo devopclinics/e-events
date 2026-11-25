@@ -1,8 +1,8 @@
 {
-  "version": "2026-11-24",
+  "version": "2026-11-24-r3",
   "title": "Festio Juniors Volunteer Guide",
   "tagline": "See it. Record it. Reconcile it.",
-  "introduction": "Staff-only guidance for safe, calm child movements. Use the same Festio account and the event assigned by your Admin. Parents do not operate Festio Juniors.",
+  "introduction": "Staff-only guidance for safe, calm child movements. Volunteers keep every handoff safe and smooth to prevent overcrowding. Use the same Festio account and the event assigned by your Admin. Parents do not operate Festio Juniors.",
   "permissions": [
     "Check-in, pickup & movements",
     "Add/correct children & guardians",
@@ -45,13 +45,13 @@
     {
       "id": "dropoff",
       "role": "Check-in",
-      "title": "Separate convention arrival from daily drop-off",
+      "title": "Separate Platform check-in from daily drop-off",
       "subtitle": "Follow this event's configured JP start date.",
       "tab": "children",
       "icon": "03",
       "steps": [
-        "Complete convention check-in first. When the event has a separate JP start date, arrival day can be convention check-in only; this does not begin JP custody or complete screening.",
-        "Every JP day begins with a fresh drop-off after convention admission. The linked guardian is prefilled; choose the adult actually present. For Another person, record their name, relationship and optional international phone number.",
+        "For NCNMO Junior Platform 2026, Day 0 is Platform check-in; from Day 1, record daily JP drop-off. Follow the configured start date for other events. Platform check-in alone does not begin JP custody or complete screening.",
+        "Every JP day begins with a fresh drop-off after event admission. The linked guardian is prefilled; choose the adult actually present. For Another person, record their name, relationship and optional international phone number.",
         "Verify the drop-off in person. Verify a sibling is 18+. Complete today's screening confirmation and physically issue/check the standard band before confirming drop-off."
       ],
       "check": "Yesterday's unresolved custody must be reconciled by an authorized lead before a new daily drop-off. A drop-off adult is not automatically a pickup-authorized collector; review that authorization separately."
@@ -66,7 +66,7 @@
       "steps": [
         "At drop-off or screening, supported child-specific registration answers or previous screening answers are prefilled. The source is shown. A parent's own answers are not copied to a child, and another event's answers are not used.",
         "Ask and complete any missing or unknown allergy/accommodation answer. Confirm saved answers with the adult today and change anything that is different. Tick I confirmed both screening answers with the adult today.",
-        "Every screened child needs the standard screening wristband. A Yes answer also sends the child to the corresponding support desk; both Yes answers require both reviews."
+        "Every screened child needs the standard screening wristband before classroom arrival, including children with No for both needs. A Yes answer also sends the child to the corresponding support desk; both Yes answers require both reviews."
       ],
       "check": "Saved answers do not mean today's desk reviews or wristbands are complete. Daily clearances and band confirmations do not automatically carry forward. Do not assume a missing answer means No."
     },
@@ -185,7 +185,7 @@
   ],
   "practice": [
     "Find a child without showing the whole roster",
-    "Convention check-in followed by the configured JP start day",
+    "NCNMO Day 0 Platform check-in, followed by daily JP drop-off from Day 1",
     "Prefilled Yes/No and missing screening answers",
     "A child needing all three bands",
     "Admin collector authorization and verified pickup",

@@ -106,7 +106,7 @@ async def receipts(db):
             continue
         if row.channel=='email':
             receipt=await db.scalar(select(EmailDeliveryEvent).where(EmailDeliveryEvent.event_id==row.event_id,
-                EmailDeliveryEvent.message_kind=='junior:'+row.id).order_by(EmailDeliveryEvent.occurred_at.desc()).limit(1))
+                EmailDeliveryEvent.message_kind.in_(['junior:'+row.id,'junior-'+row.id])).order_by(EmailDeliveryEvent.occurred_at.desc()).limit(1))
             if receipt and receipt.provider_email_id:row.provider_id=receipt.provider_email_id
             if receipt and receipt.status in ('delivered','bounced','failed','complained'):
                 row.status='delivered' if receipt.status=='delivered' else 'failed'

@@ -115,13 +115,13 @@ async def snapshot(db,event,classroom=None):
 async def reconcile(db):
     rows=(await db.scalars(select(Message).where(Message.status.in_(['accepted','review_required'])))).all()
     for row in rows:
-        latest=await db.scalar(select(EmailDeliveryEvent).where(EmailDeliveryEvent.event_id==row.event_id,EmailDeliveryEvent.message_kind=='jp-team:'+row.id).order_by(EmailDeliveryEvent.occurred_at.desc()).limit(1))
+        latest=await db.scalar(select(EmailDeliveryEvent).where(EmailDeliveryEvent.event_id==row.event_id,EmailDeliveryEvent.message_kind.in_(['jp-team:'+row.id,'jp-team-'+row.id])).order_by(EmailDeliveryEvent.occurred_at.desc()).limit(1))
         if latest and latest.provider_email_id:
             row.provider_id=latest.provider_email_id
             if row.ledger_id:
                 ledger=await db.get(MessageCreditLedger,row.ledger_id)
                 if ledger and ledger.provider_message_id!=latest.provider_email_id:ledger.provider_message_id=latest.provider_email_id;ledger.status='queued'
-        receipt=await db.scalar(select(EmailDeliveryEvent).where(EmailDeliveryEvent.event_id==row.event_id,EmailDeliveryEvent.message_kind=='jp-team:'+row.id,EmailDeliveryEvent.status.in_(['delivered','bounced','failed','complained'])).order_by(EmailDeliveryEvent.occurred_at.desc()).limit(1))
+        receipt=await db.scalar(select(EmailDeliveryEvent).where(EmailDeliveryEvent.event_id==row.event_id,EmailDeliveryEvent.message_kind.in_(['jp-team:'+row.id,'jp-team-'+row.id]),EmailDeliveryEvent.status.in_(['delivered','bounced','failed','complained'])).order_by(EmailDeliveryEvent.occurred_at.desc()).limit(1))
         if receipt:row.status='delivered' if receipt.status=='delivered' else 'failed';row.provider_id=receipt.provider_email_id;row.error=None if row.status=='delivered' else 'Provider reported '+receipt.status
     await db.commit()
 

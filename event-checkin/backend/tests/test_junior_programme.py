@@ -187,8 +187,9 @@ async def test_readonly_permissions_and_removed_assignment(ctx):
     assert (await ctx.client.get(root+'/children')).status_code==403
 
 
+@pytest.mark.parametrize("separator", [":", "-"])
 @pytest.mark.asyncio
-async def test_notification_worker_acceptance_uncertainty_and_paused_history(ctx,monkeypatch):
+async def test_notification_worker_acceptance_uncertainty_and_paused_history(ctx,monkeypatch,separator):
     root=await setup(ctx);c=await child(ctx,root)
     async with _Session() as db:
         event=await db.get(Event,ctx.ids['event_a']);event.notify_email=True;event.notify_sms=True;event.is_paid=True
@@ -207,7 +208,12 @@ async def test_notification_worker_acceptance_uncertainty_and_paused_history(ctx
         row=await db.get(JuniorNotification,row_id);assert row.status=='accepted'
         # Provider acceptance alone never becomes Delivered.
         await junior_outbox.receipts(db);assert row.status=='accepted'
-        db.add(EmailDeliveryEvent(provider='resend',event_id=ctx.ids['event_a'],message_kind='junior:'+row_id,
+        # A provider-safe tag in another event must not update this child notice.
+        other=Event(org_id=ctx.ids['org_b'],name='Other event',couples_name='Other event',event_date=datetime.utcnow(),checkin_base_url='http://test');db.add(other);await db.flush()
+        db.add(EmailDeliveryEvent(provider='resend',event_id=other.id,message_kind='junior'+separator+row_id,
+            provider_email_id='other-event-provider',event_type='email.delivered',status='delivered',occurred_at=datetime.utcnow()))
+        await db.commit();await junior_outbox.receipts(db);assert row.status=='accepted'
+        db.add(EmailDeliveryEvent(provider='resend',event_id=ctx.ids['event_a'],message_kind='junior'+separator+row_id,
             provider_email_id='provider-123',event_type='email.delivered',status='delivered',occurred_at=datetime.utcnow()))
         await db.commit();await junior_outbox.receipts(db);assert row.status=='delivered'
     assert (await ctx.client.post(root+f'/notifications/{row_id}/retry')).status_code==409

@@ -97,8 +97,9 @@ async def test_paused_expired_removed_team_and_no_consent_do_not_send(ctx):
     async with _Session() as db:assert (await db.get(Notice,email.id)).status=='cancelled'
     assert not calls
 
+@pytest.mark.parametrize("separator", [":", "-"])
 @pytest.mark.asyncio
-async def test_live_identity_once_only_acceptance_receipt_and_uncertain_send(ctx):
+async def test_live_identity_once_only_acceptance_receipt_and_uncertain_send(ctx,separator):
     root,u,eu,s,body=await prepare(ctx)
     async with _Session() as db:
         cfg=await db.get(JuniorConfig,ctx.ids['event_a']);cfg.volunteer_reminders_enabled=True
@@ -111,7 +112,7 @@ async def test_live_identity_once_only_acceptance_receipt_and_uncertain_send(ctx
     assert len(calls)==1 and calls[0][1]=='corrected@example.com' and 'Reception' in calls[0][2]
     async with _Session() as db:
         await service.reconcile(db);assert (await db.get(Notice,rows[0].id)).status=='accepted'
-        db.add(EmailDeliveryEvent(provider='resend',event_id=ctx.ids['event_a'],message_kind='jp-volunteer:'+rows[0].id,provider_email_id='provider-123',status='delivered',event_type='email.delivered'))
+        db.add(EmailDeliveryEvent(provider='resend',event_id=ctx.ids['event_a'],message_kind='jp-volunteer'+separator+rows[0].id,provider_email_id='provider-123',status='delivered',event_type='email.delivered'))
         await db.commit();await service.reconcile(db);assert (await db.get(Notice,rows[0].id)).status=='delivered'
     async def uncertain(row,shift):raise TimeoutError()
     await service.deliver(rows[1].id,_Session,uncertain,now=rows[1].due_at)

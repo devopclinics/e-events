@@ -99,8 +99,9 @@ async def test_practice_never_sends_even_if_queued_and_dashboard_reports(ctx):
     await service.deliver(result['messages'][0]['id'],_Session,sender);assert calls==[]
     dash=(await ctx.client.get(root+'/team/dashboard')).json();assert dash['summary']['email_and_reminder_status']['paused']==1
 
+@pytest.mark.parametrize("separator", [":", "-"])
 @pytest.mark.asyncio
-async def test_email_once_current_identity_receipt_and_uncertain_outcome(ctx):
+async def test_email_once_current_identity_receipt_and_uncertain_outcome(ctx,separator):
     root=await setup(ctx);result,_=await add(ctx,root);mid=result['messages'][0]['id'];uid=(await users(result['event_user_ids']))[0]
     async with _Session() as db:u=await db.get(User,uid.id);u.email='corrected@example.com';await db.commit()
     calls=[]
@@ -108,7 +109,7 @@ async def test_email_once_current_identity_receipt_and_uncertain_outcome(ctx):
     await service.deliver(mid,_Session,sender);await service.deliver(mid,_Session,sender);assert calls==['corrected@example.com']
     async with _Session() as db:
         assert (await db.get(Message,mid)).status=='accepted'
-        db.add(EmailDeliveryEvent(provider='resend',event_id=ctx.ids['event_a'],message_kind='jp-team:'+mid,provider_email_id='receipt1',status='delivered',event_type='email.delivered'));await db.commit();await service.reconcile(db);assert (await db.get(Message,mid)).status=='delivered'
+        db.add(EmailDeliveryEvent(provider='resend',event_id=ctx.ids['event_a'],message_kind='jp-team'+separator+mid,provider_email_id='receipt1',status='delivered',event_type='email.delivered'));await db.commit();await service.reconcile(db);assert (await db.get(Message,mid)).status=='delivered'
     result,_=await add(ctx,root,[person('uncertain@example.com')]);mid=result['messages'][0]['id']
     async def uncertain(*args):raise RuntimeError('network outcome unknown')
     await service.deliver(mid,_Session,uncertain);await service.deliver(mid,_Session,sender)

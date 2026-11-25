@@ -158,7 +158,7 @@ async def reconcile(db,now=None):
             if row.attempted_at and now-row.attempted_at>timedelta(minutes=5):row.status='review_required';row.error='Interrupted send; reconcile before resending'
             continue
         if row.channel=='email':
-            receipt=await db.scalar(select(EmailDeliveryEvent).where(EmailDeliveryEvent.event_id==row.event_id,EmailDeliveryEvent.message_kind=='jp-volunteer:'+row.id).order_by(EmailDeliveryEvent.occurred_at.desc()).limit(1))
+            receipt=await db.scalar(select(EmailDeliveryEvent).where(EmailDeliveryEvent.event_id==row.event_id,EmailDeliveryEvent.message_kind.in_(['jp-volunteer:'+row.id,'jp-volunteer-'+row.id])).order_by(EmailDeliveryEvent.occurred_at.desc()).limit(1))
             if receipt and receipt.provider_email_id:row.provider_id=receipt.provider_email_id
             if receipt and receipt.status in ('delivered','bounced','failed','complained'):
                 row.status='delivered' if receipt.status=='delivered' else 'failed'

@@ -1,5 +1,5 @@
 {
-  "version": "2026-11-24-r3",
+  "version": "2026-11-25-r1",
   "title": "Festio Juniors Volunteer Guide",
   "tagline": "See it. Record it. Reconcile it.",
   "introduction": "Staff-only guidance for safe, calm child movements. Volunteers keep every handoff safe and smooth to prevent overcrowding. Use the same Festio account and the event assigned by your Admin. Parents do not operate Festio Juniors.",
@@ -23,7 +23,7 @@
       "icon": "01",
       "steps": [
         "Open festio.events/juniors/ and sign in with your existing account. New staff create and verify an account using the exact email assigned by the Admin. Choose the correct event.",
-        "Home shows your shift, scanning, search and attention counts. Children opens search; Scan opens the camera; My shift opens your personal assignments. Find Outings, Support desks, Notifications, Inventory and permitted Admin tools under More.",
+        "On desktop use Overview, Children, My classroom, Programme and More. On a phone use Home, Children, Scan, My shift and More. More groups tools under Daily workspace, Child movements, Team & operations, and Help & setup.",
         "Use the theme button for light or dark mode. Open Account & app to install or sign out. On iPhone/iPad use Safari Share → Add to Home Screen; on Android use the browser's Install app option."
       ],
       "check": "Admin is full Juniors access within its assigned scope; Volunteer receives only checked permissions. Existing event/organization Admins inherit the appropriate access. A missing tool may be a permission restriction. Stay online: handoffs are not queued offline."
@@ -181,6 +181,23 @@
         "The incoming volunteer checks in and accepts the current physical count. The outgoing volunteer then finishes the shift. Use Shift planner for reminder timing, repeat intervals, exact times and supported email/SMS/WhatsApp/MMS channels; non-email channels need appropriate contact/consent/provider readiness."
       ],
       "check": "Do not leave children without relief. An overdue shift remains on duty until checkout. Reminders are not attendance, and accepted email is not a delivery receipt. Finish active handovers before changing access or removing classroom assignments."
+    },
+    {
+      "id": "programme",
+      "role": "Admin setup / assigned volunteers",
+      "title": "Programme, classroom and gala sessions",
+      "subtitle": "One timetable; every physical handoff is confirmed separately.",
+      "tab": "programme",
+      "icon": "13",
+      "steps": [
+        "Admin: open Programme → Programme setup. In Groups & rooms, map Guest List age-group values to saved classrooms and save. In Source & sessions, review the linked Experience timetable and custody session hours.",
+        "Resolve the open timetable questions, confirm review decisions under Review & publish, then publish the approved source. Publication uses the existing Experience and Festio Live sync; it does not record attendance or custody.",
+        "Under More → Volunteers, assign roles, permissions, classrooms and shifts. My classroom shows assigned groups, current/next activities, checked-in staff and outstanding returns. More → Supervisor shows group coverage and live headcounts.",
+        "For guardian updates, enable Send guardian email and SMS for new transitions under More → Settings and save. Contacts, SMS permission, provider setup and credits are required. Review delivery under More → Notifications.",
+        "At gala, after daytime pickup, open More → Gala childcare and search the child. Review a fresh drop-off, select the gala session and verify the adult, screening answers and wristbands again. Confirm classroom arrival, movements/returns and final pickup separately.",
+        "When named sessions are enabled, choose the correct current session at drop-off. A child already in custody cannot begin another drop-off. Do not change historical sessions; preserve their audit trail."
+      ],
+      "check": "Draft preview is not publication. A timetable never proves attendance, a reminder never proves shift arrival, and a drop-off never grants pickup authorization."
     }
   ],
   "practice": [

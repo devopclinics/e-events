@@ -1208,7 +1208,7 @@ The staff-only child check-in app uses your existing Festio account. The diagram
 Go to: festio.events/juniors/ → choose event → More → Help & flow
 
 1. An Admin assigns your existing email to the event and selects Admin or Volunteer access. Use the same verified email to sign in; no second account is needed. Admins inherit the appropriate Juniors permissions within their authorized scope; Volunteers receive only selected permissions.
-2. On a phone use Home, Children, Scan, My shift and More. Account & app contains installation instructions and sign out; the theme button switches light and dark mode. An internet connection is required for handoffs.
+2. On desktop use Overview, Children, My classroom, Programme and More. On a phone use Home, Children, Scan, My shift and More. Account & app contains installation instructions and sign out; the theme button switches light and dark mode. An internet connection is required for handoffs.
 3. Open Help & flow for quick answers or Volunteer guide for the full orientation manual. Scanning opens a child record; staff must confirm the next action. Parents do not operate Festio Juniors.
 
 Check the result: The correct assigned event appears, and the tools shown match your permissions.
@@ -1305,9 +1305,9 @@ Check the result: Available and issued totals match the recorded actions and phy
 
 Experience owns one shared schedule. Juniors adds classroom operations and explicit custody sessions.
 
-Go to: More → Programme / My classroom / Supervisor / Gala childcare
+Go to: Programme / My classroom; More → Supervisor / Gala childcare
 
-1. An Admin links a Juniors Experience draft under Programme source, groups & review. Map age-group values and saved classrooms; configure staffing targets rather than guessing them. Save the table before leaving.
+1. Open Programme → Programme setup. Use Groups & rooms to map Guest List age-group values to saved classrooms; set staffing targets when confirmed, then save. Source & sessions contains the shared timetable link and custody hours; Review & publish contains the approval steps.
 2. Programme shows the selected day and age group. My classroom shows assigned rooms, current/next activities, checked-in staff and outstanding returns. Supervisor combines live headcounts with staffing coverage for the selected programme date. Scheduled activities never record a child movement.
 3. Gala childcare uses the same child and guardian identities. Search a child, review a fresh drop-off, select the gala session, verify the adult and confirm screening answers and wristbands. A child still in custody must complete the existing movement or verified pickup before another drop-off. Each return, classroom arrival and final pickup remains staff-confirmed.
 4. Drafts are visible to Admins; ordinary volunteers see the approved programme. An Admin may explicitly enable draft rehearsal in a practice event. Practice never sends guardian or volunteer messages; rehearsal admission hours are relaxed but the selected custody session must still be scheduled for today.
@@ -1415,7 +1415,7 @@ The staff-only child check-in app uses your existing Festio account. The diagram
 Go to: festio.events/juniors/ → choose event → More → Help & flow
 
 1. An Admin assigns your existing email to the event and selects Admin or Volunteer access. Use the same verified email to sign in; no second account is needed. Admins inherit the appropriate Juniors permissions within their authorized scope; Volunteers receive only selected permissions.
-2. On a phone use Home, Children, Scan, My shift and More. Account & app contains installation instructions and sign out; the theme button switches light and dark mode. An internet connection is required for handoffs.
+2. On desktop use Overview, Children, My classroom, Programme and More. On a phone use Home, Children, Scan, My shift and More. Account & app contains installation instructions and sign out; the theme button switches light and dark mode. An internet connection is required for handoffs.
 3. Open Help & flow for quick answers or Volunteer guide for the full orientation manual. Scanning opens a child record; staff must confirm the next action. Parents do not operate Festio Juniors.
 
 Check the result: The correct assigned event appears, and the tools shown match your permissions.
@@ -1512,9 +1512,9 @@ Check the result: Available and issued totals match the recorded actions and phy
 
 Experience owns one shared schedule. Juniors adds classroom operations and explicit custody sessions.
 
-Go to: More → Programme / My classroom / Supervisor / Gala childcare
+Go to: Programme / My classroom; More → Supervisor / Gala childcare
 
-1. An Admin links a Juniors Experience draft under Programme source, groups & review. Map age-group values and saved classrooms; configure staffing targets rather than guessing them. Save the table before leaving.
+1. Open Programme → Programme setup. Use Groups & rooms to map Guest List age-group values to saved classrooms; set staffing targets when confirmed, then save. Source & sessions contains the shared timetable link and custody hours; Review & publish contains the approval steps.
 2. Programme shows the selected day and age group. My classroom shows assigned rooms, current/next activities, checked-in staff and outstanding returns. Supervisor combines live headcounts with staffing coverage for the selected programme date. Scheduled activities never record a child movement.
 3. Gala childcare uses the same child and guardian identities. Search a child, review a fresh drop-off, select the gala session, verify the adult and confirm screening answers and wristbands. A child still in custody must complete the existing movement or verified pickup before another drop-off. Each return, classroom arrival and final pickup remains staff-confirmed.
 4. Drafts are visible to Admins; ordinary volunteers see the approved programme. An Admin may explicitly enable draft rehearsal in a practice event. Practice never sends guardian or volunteer messages; rehearsal admission hours are relaxed but the selected custody session must still be scheduled for today.

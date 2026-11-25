@@ -1,9 +1,11 @@
 """Create an editable reference-style workflow and print/image exports. No event data used."""
+import sys
 from pathlib import Path
 from html import escape
 from PIL import ImageFont
 from playwright.sync_api import sync_playwright
-ROOT=Path(__file__).resolve().parents[1];OUT=ROOT/'public/juniors/guide/2026-11-24-v2';OUT.mkdir(parents=True,exist_ok=True)
+CLIENT='--client' in sys.argv
+ROOT=Path(__file__).resolve().parents[1];OUT=ROOT/('public/juniors/guide/client' if CLIENT else 'public/juniors/guide/2026-11-24-v2');OUT.mkdir(parents=True,exist_ok=True)
 W,H=2400,1700;INK='#281b13';BRONZE='#955126';GREEN='#386e47';LINE='#dcc9b5';PAPER='#fcf7ef';CREAM='#f7eddd';SOFT='#edf2e1';RED='#a42e2c'
 SANS='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';SERIF='/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf'
 def wrap(s,size,width,bold=False,serif=False):
@@ -17,7 +19,10 @@ def wrap(s,size,width,bold=False,serif=False):
   result.append(row)
  return result
 
+CLIENT_COPY={'LIVE WORKFLOW · STAFF TRAINING': 'NCNMO PLATFORM 2026', 'Reusable junior programmes.': 'Junior programme', 'Use the event’s schedule and permissions.': 'Daily arrival to safe collection', 'FIRST ARRIVAL: convention check-in before JP custody. EACH JP DAY: a fresh drop-off from the configured JP start date.': 'DAY 1: Convention check-in. FROM DAY 2: Daily Juniors drop-off.', 'Search name or badge. Scan to open the record. Add or correct missing records at the help desk.': 'Search or scan. The help desk adds or corrects missing records.', 'Guardian details prefill. Verify the adult. If different, record name, relationship and optional phone.': 'Confirm the adult dropping off. Guardian details appear automatically; record another adult if needed.', 'Confirm the assigned room and actual arrival. Finish all required desk reviews and bands first.': 'Confirm the assigned classroom and arrival after screening.', 'Choose Clinic, Other + reason, or Outing. Record the accompanying adult where required.': 'Record departures for Clinic, Other or Outing.', 'Choose an authorized adult. Check identity in person, complete the handoff, then confirm pickup.': 'Verify the authorized adult and record pickup.', 'Allergy? Accommodation? Saved answers prefill.': 'Confirm allergy and accommodation needs.', 'Ask what is missing; confirm both with the adult today.': 'Review both needs at daily drop-off.', 'Desk reviewed': 'Desk cleared', 'Extra band(s) checked': 'Extra wristband(s)', 'Both Yes → both desks; not either/or.': 'Both needs → both desks.', 'STANDARD BAND FOR EVERY SCREENED CHILD · BOTH NEEDS = STANDARD + ALLERGY + ACCOMMODATION (3 BANDS) · CONFIRM DAILY': 'WRISTBANDS: Standard for every child · Extra bands for allergy and accommodation · Confirm daily', 'Every temporary movement has its own complete return cycle': 'Every departure includes a recorded return', 'Record departure + adult': 'Record departure', 'Record departure + adult + reason': 'Record departure + reason', 'Record return to JP': 'Record return to Juniors', 'Classroom arrival / verified pickup': 'Classroom / verified pickup', 'Permission-verified roster': 'Approved group outing', 'Review attendee counts': 'Check every attendee', 'No return = still away': 'Awaiting return stays visible', 'Outstanding returns block closure': 'Account for every child before closing', 'Returning for the rest of the day? Confirm classroom arrival. Leaving for the day? Record return first, then verified pickup.': 'After return: back to the classroom, or verified pickup if leaving for the day.', 'Guardian updates at recorded transitions': 'Guardian updates at every recorded step', 'Email + SMS notices are recorded. Actual sending needs enabled switches,': 'Email and SMS keep guardians informed.', 'contacts, consent, provider readiness and credits. Practice events never send.': 'Staff can review message status.', 'Queued': 'Recorded', 'Accepted': 'Email + SMS', 'Delivered — receipt only': 'Track status', 'Failed / setup required / uncertain → review before retrying': 'Review any messages needing attention.', 'Correct child records and collector authorization.': 'Add or correct child and guardian details.', 'Admin / assigned lead': 'Supervisor', 'Permissions, exceptions and unresolved records.': 'Resolve exceptions and reconcile headcounts.', 'Issue, return, damage or loss; record responsibility.': 'Record items issued, destinations and returns.', 'EVENT OPT-IN  •  REUSABLE FOR FUTURE JUNIOR PROGRAMMES  •  EXISTING EVENT FLOWS PRESERVED': 'VOLUNTEERS KEEP EVERY HANDOFF SAFE AND HELP PREVENT OVERCROWDING'}
+
 def text(x,y,s,size=25,width=1000,color=INK,bold=False,serif=False,leading=None):
+ if CLIENT:s=CLIENT_COPY.get(s,s)
  rows=wrap(s,size,width,bold,serif);line=leading or round(size*1.35)
  return f'<text x="{x}" y="{y}" font-family="'+('DejaVu Serif' if serif else 'DejaVu Sans')+f'" font-size="{size}" font-weight="{700 if bold or serif else 400}" fill="{color}">'+''.join(f'<tspan x="{x}" dy="{0 if i==0 else line}">{escape(v)}</tspan>' for i,v in enumerate(rows))+'</text>'
 def rect(x,y,w,h,fill='white',stroke=LINE,r=24):return f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{r}" fill="{fill}" fill-opacity=".9" stroke="{stroke}" stroke-width="2"/>'
@@ -53,6 +58,7 @@ for i,(x,w) in enumerate(zip(xs,widths),1):
 for i in [0,1,3,4]:svg+=arrow(f'M{xs[i]+widths[i]+2} {y+250}H{xs[i+1]-3}')
 def stage(i,name,title,body,status):
  global svg
+ if CLIENT:body=CLIENT_COPY.get(body,body)
  x=xs[i];w=widths[i];svg+=icon(name,x+w/2-30,y+35,61)+text(x+23,y+153,title,34,w-46,serif=True)
  title_lines=len(wrap(title,34,w-46,serif=True));body_y=y+174+title_lines*43;body_size=23
  while True:
@@ -103,7 +109,7 @@ for xx,name,title,body in [(50,'clipboard','Help desk','Correct child records an
  svg+=rect(xx,1520,744,91,'#fffdf9',LINE,22)+icon(name,xx+25,1541,45,BRONZE)+text(xx+90,1557,title,27,620,serif=True)+text(xx+90,1590,body,20,620)
 svg+=rect(50,1631,2300,52,BRONZE,BRONZE,17)+text(185,1668,'EVENT OPT-IN  •  REUSABLE FOR FUTURE JUNIOR PROGRAMMES  •  EXISTING EVENT FLOWS PRESERVED',26,2050,'white',True)
 svg+='</svg>'
-file='festio-juniors-workflow-overview';(OUT/(file+'.svg')).write_text(svg)
+file='festio-juniors-client-overview' if CLIENT else 'festio-juniors-workflow-overview';(OUT/(file+'.svg')).write_text(svg)
 with sync_playwright() as pw:
  b=pw.chromium.launch();p=b.new_page(viewport={'width':W,'height':H},device_scale_factor=2);p.set_content('<style>html,body{margin:0}svg{display:block}</style>'+svg);p.screenshot(path=str(OUT/(file+'.png')))
  p.set_content('<title>Festio Juniors complete workflow</title><style>@page{size:A3 landscape;margin:0}html,body{margin:0}svg{width:420mm;height:297mm;display:block}</style>'+svg);p.pdf(path=str(OUT/(file+'.pdf')),format='A3',landscape=True,margin={'top':'0','bottom':'0','left':'0','right':'0'},print_background=True,prefer_css_page_size=True);b.close()

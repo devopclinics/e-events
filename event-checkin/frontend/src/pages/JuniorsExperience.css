@@ -41,3 +41,6 @@
 @media(min-width:761px) and (max-width:1050px){.jp-workspace .jp-workspace-nav>button{padding:12px;font-size:11px;gap:7px}.jp-workspace .jp-workspace-nav>.jp-workspace-more{max-width:180px;min-width:88px}}
 @media(max-width:760px){.jp-workspace-nav{display:none}.jp-more-tools .jp-tool-group h3{font-size:11px}.jp-workspace .jp-tool-group>button{min-height:54px;font-size:14px}}
 @media(min-width:761px) and (max-width:1000px){.jp-phone-experience .jp-work-grid{grid-template-columns:minmax(0,1fr)}.jp-phone-experience .jp-side-rail{grid-template-columns:repeat(2,minmax(0,1fr));min-width:0}.jp-phone-experience .jp-rail-footnote{min-width:0}}
+/* Staff navigation must remain reachable beneath the global contact widgets. */
+body:has(.jp-phone-experience) :is(.fwc-launch,.festio-chat){z-index:35}
+@media(max-width:760px){body:has(.jp-phone-experience) .fwc-launch{top:auto!important;left:auto!important;right:16px!important;bottom:calc(96px + env(safe-area-inset-bottom))!important}body:has(.jp-phone-experience) .fwc-move{display:none}body:has(.jp-phone-experience) .festio-chat{right:16px;bottom:calc(96px + env(safe-area-inset-bottom))}}

@@ -53,6 +53,7 @@ function Topic({ t, open, onToggle, query }) {
       {open && (
         <div className="px-5 pb-5 pt-1 space-y-4">
           {t.intro && <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{t.intro}</p>}
+          {t.links?.length>0&&<div className="flex flex-wrap gap-3">{t.links.map(link=><a className="text-teal-700 dark:text-teal-300 underline" key={link.href} href={link.href} target={link.newTab?'_blank':undefined} rel={link.newTab?'noreferrer':undefined} download={link.download||undefined}>{link.label}</a>)}</div>}
           {t.path && <p className="text-sm"><b>Go to:</b> {hl(t.path)}</p>}
           {t.before && <p className="text-sm"><b>Before you start:</b> {hl(t.before)}</p>}
           {tipBadge}
@@ -71,7 +72,7 @@ function Topic({ t, open, onToggle, query }) {
             <div className={`grid gap-3 ${images.length > 1 ? 'sm:grid-cols-2' : ''}`}>
               {images.map((src) => (
                 <a key={src} href={src} target="_blank" rel="noopener noreferrer" className="block">
-                  <img src={src} alt={t.title} loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none' }}
+                  <img src={src} alt={t.imageAlt || t.title} loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none' }}
                     className="rounded-xl border border-slate-200 dark:border-slate-700 w-full hover:opacity-95 transition-opacity" />
                 </a>
               ))}

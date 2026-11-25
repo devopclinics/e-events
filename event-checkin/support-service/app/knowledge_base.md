@@ -1,5 +1,5 @@
 # Festio product documentation
-Revised 2026-10-19
+Revised 2026-11-24
 
 Generated from frontend/src/guideContent.mjs — do not edit by hand, run
 support-service/scripts/build_knowledge_base.mjs to regenerate.
@@ -1201,6 +1201,106 @@ Common issues and how to fix them.
 10. RSVP deadline passed but guests are still submitting: the deadline blocks new RSVPs from the public invite page. You can still add or approve guests manually from Event Setup.
 11. Guests don't see "Join Festio Live" on their ticket page: confirm Festio Live is turned on (Guest Communication → Features &amp; messaging) and that an activity is actually set to Live, not Draft. Share the festio.events/live/join code as a fallback.
 
+### Festio Juniors: access, installation and the workflow
+
+The staff-only child check-in app uses your existing Festio account. The diagram shows the live workflow, not a proposed design.
+
+Go to: festio.events/juniors/ → choose event → More → Help & flow
+
+1. An Admin assigns your existing email to the event and selects Admin or Volunteer access. Use the same verified email to sign in; no second account is needed. Admins inherit the appropriate Juniors permissions within their authorized scope; Volunteers receive only selected permissions.
+2. On a phone use Home, Children, Scan, My shift and More. Account & app contains installation instructions and sign out; the theme button switches light and dark mode. An internet connection is required for handoffs.
+3. Open Help & flow for quick answers or Volunteer guide for the full orientation manual. Scanning opens a child record; staff must confirm the next action. Parents do not operate Festio Juniors.
+
+Check the result: The correct assigned event appears, and the tools shown match your permissions.
+
+If something is wrong: If the event is missing, confirm the exact sign-in email and event assignment with an Admin. Missing tools may require a permission assignment.
+
+### Convention check-in and daily Juniors drop-off
+
+Convention admission and Juniors custody are separate records. Follow the event’s configured JP start date.
+
+Go to: Juniors → Children → search or scan → child record
+
+1. Complete convention check-in first. If a separate JP start date is configured, arrival day can be convention admission only; it does not record JP drop-off or screening.
+2. Each JP day starts with a fresh drop-off. A linked guardian is prefilled; select the adult actually present, or Another person and record their name, relationship and optional international phone. Verify the handoff in person and verify a sibling is 18+.
+3. Confirm today’s screening and the standard band before saving. Resolve yesterday’s open custody through an authorized lead before a new drop-off.
+
+Check the result: Today’s drop-off, actor and location are recorded separately from convention admission.
+
+Warning: The drop-off record does not automatically authorize pickup. A missing collector blocks final release, not drop-off or screening.
+
+### Allergy, accommodation and wristband checks
+
+Saved answers prefill; missing or unknown answers must be asked and completed.
+
+Go to: Child record → drop-off or screening → support desks when required
+
+1. Supported answers from the child’s registration or previous screening prefill Yes/No. Confirm them with the adult today and update anything that changed; never treat missing information as No.
+2. Tick I confirmed both screening answers with the adult today. Physically issue or check the standard screening wristband for every child. A Yes also requires the relevant support desk and additional band.
+3. Authorized support staff review restricted details, which may prefill from saved information, and clear each required desk. Both needs mean three bands: standard, allergy and accommodation. Confirm classroom arrival only after the required reviews, bands and classroom assignment are complete.
+
+Warning: Saved information does not carry daily clearance or band confirmation forward. Medical details remain restricted and are excluded from guardian transition messages.
+
+### Resolve No authorized adult collector and confirm pickup
+
+This warning concerns final pickup; arrival, screening and classroom steps may continue.
+
+Go to: Child record → Review collector authorization / Add authorized collector
+
+1. An Admin already has Add/correct children & guardians permission. To delegate it: More → Volunteers → Volunteers tab → select people → Set role & permissions → check Add/correct children & guardians → Save.
+2. Use Review collector authorization beside the warning, or Add authorized collector when no contact exists. Review the correct adult, verify adulthood and mark Authorized to collect this child; save.
+3. At pickup select the authorized, adult-verified collector, check identity in person and confirm the actual handoff. If a different person is not already authorized, refer them for authorized staff review before release.
+
+Warning: A typed name, badge or drop-off record alone does not authorize collection. Return a child from Clinic, Other or Outing before final pickup.
+
+### Clinic, Other and Outing: record every return
+
+Each temporary departure needs its own return; children remain shown as away until the return is recorded.
+
+Go to: Child record → movement confirmation; More → Outings for outing rosters
+
+1. Clinic: record departure and accompanying adult → physically return to JP → record Return from clinic / other → confirm classroom arrival if resuming class. Other uses the same cycle and also requires an internal reason.
+2. Outing coordinators create a named, dated, permission-verified roster. A volunteer with movement permission confirms departure for each child from class on the scheduled date. Review Not departed, Awaiting return, Returned and All attendees; scan/find opens confirmation for that outing.
+3. When physically back, confirm each outing return into JP reception, then classroom arrival if resuming. If leaving for the day instead, record the return first and complete verified pickup. Outing closure remains blocked while any departed child lacks a return.
+
+Warning: Scanning does not move a child automatically. Never assume a return or use final release for a clinic visit.
+
+### Volunteer accounts, classes, reminders and handover
+
+Two roles, bulk table entry, real shift attendance and a physical transfer of responsibility.
+
+Go to: More → Volunteers → Volunteers / My shifts / Shift planner / Coverage & messages
+
+1. Admins add names, emails and optional phones in table rows, choose Admin or Volunteer permissions, and save. Select one or several volunteers to assign classrooms and shifts; requested access/assignment emails have their own delivery reporting.
+2. Volunteers open My shift and check in only when physically at the station. At handover, count the children together and review Clinic, Other, Outing and unresolved movements. The outgoing volunteer offers to the assigned incoming person; the incoming person checks in and accepts the current physical count before the outgoing person finishes the shift.
+3. Configure reminder offsets, exact times or repeat intervals and supported email/SMS/WhatsApp/MMS channels in Shift planner. Provider readiness, contact details and appropriate consent are required. Coverage & messages reports duty, missing cover, handovers and communication outcomes.
+
+Warning: A reminder is not attendance. If relief is late, alert the lead and remain with the children. Finish active handovers before changing permissions or removing classroom assignments.
+
+### Guardian updates: queued, accepted and delivered
+
+Saving the movement and delivering its notices are separate outcomes.
+
+Go to: More → Notifications; volunteer messages under Coverage & messages
+
+1. Guardian email/SMS notices are recorded for transitions. Actual sending depends on the event sending switch, designated contacts, SMS permission, provider setup and credits. Practice events never send guardian or volunteer messages.
+2. Queued means waiting; Accepted means the provider accepted the message; Delivered requires a receipt. Review failed, missing-setup or uncertain outcomes before retrying.
+3. Authorized staff can view a child’s linked guardian contacts. Call/Email shortcuts open the device’s phone or email app; they are not an in-app multichannel messaging composer.
+
+Warning: Do not claim delivery from a saved movement or an Accepted status. Do not copy medical details into guardian messages.
+
+### Juniors inventory: responsible person, destination and returns
+
+Keep stock and the named handover trail accurate.
+
+Go to: More → Inventory → open item
+
+1. Record the action, quantity and responsible volunteer for each issue. Put the classroom or destination and handover detail in Note.
+2. Record good-condition returns, damaged returns and lost issued items separately. Review the issue/return history and reconcile with physical stock.
+3. Only record a return when items are physically received. Keep clear destination/responsibility notes; overall stock totals do not prove a specific classroom returned its allocation.
+
+Check the result: Available and issued totals match the recorded actions and physical stock.
+
 ## Staff / Check-in
 
 Check guests in at the door. No app needed — runs in your phone browser.
@@ -1293,6 +1393,106 @@ If the organizer has set up an Experience workflow, check-in is just the first s
 6. Guests who can't find their QR: ask them to check their confirmation email/SMS/WhatsApp. If still missing, direct them to the organiser desk for lookup in Guests.
 7. Manual lookup: ask the organiser to use Guests or the ticket code lookup to confirm the guest before entry.
 8. Noisy lighting (direct sunlight, flashing lights): tilt the guest's screen slightly towards you or ask them to cup their hand over it to reduce glare.
+
+### Festio Juniors: access, installation and the workflow
+
+The staff-only child check-in app uses your existing Festio account. The diagram shows the live workflow, not a proposed design.
+
+Go to: festio.events/juniors/ → choose event → More → Help & flow
+
+1. An Admin assigns your existing email to the event and selects Admin or Volunteer access. Use the same verified email to sign in; no second account is needed. Admins inherit the appropriate Juniors permissions within their authorized scope; Volunteers receive only selected permissions.
+2. On a phone use Home, Children, Scan, My shift and More. Account & app contains installation instructions and sign out; the theme button switches light and dark mode. An internet connection is required for handoffs.
+3. Open Help & flow for quick answers or Volunteer guide for the full orientation manual. Scanning opens a child record; staff must confirm the next action. Parents do not operate Festio Juniors.
+
+Check the result: The correct assigned event appears, and the tools shown match your permissions.
+
+If something is wrong: If the event is missing, confirm the exact sign-in email and event assignment with an Admin. Missing tools may require a permission assignment.
+
+### Convention check-in and daily Juniors drop-off
+
+Convention admission and Juniors custody are separate records. Follow the event’s configured JP start date.
+
+Go to: Juniors → Children → search or scan → child record
+
+1. Complete convention check-in first. If a separate JP start date is configured, arrival day can be convention admission only; it does not record JP drop-off or screening.
+2. Each JP day starts with a fresh drop-off. A linked guardian is prefilled; select the adult actually present, or Another person and record their name, relationship and optional international phone. Verify the handoff in person and verify a sibling is 18+.
+3. Confirm today’s screening and the standard band before saving. Resolve yesterday’s open custody through an authorized lead before a new drop-off.
+
+Check the result: Today’s drop-off, actor and location are recorded separately from convention admission.
+
+Warning: The drop-off record does not automatically authorize pickup. A missing collector blocks final release, not drop-off or screening.
+
+### Allergy, accommodation and wristband checks
+
+Saved answers prefill; missing or unknown answers must be asked and completed.
+
+Go to: Child record → drop-off or screening → support desks when required
+
+1. Supported answers from the child’s registration or previous screening prefill Yes/No. Confirm them with the adult today and update anything that changed; never treat missing information as No.
+2. Tick I confirmed both screening answers with the adult today. Physically issue or check the standard screening wristband for every child. A Yes also requires the relevant support desk and additional band.
+3. Authorized support staff review restricted details, which may prefill from saved information, and clear each required desk. Both needs mean three bands: standard, allergy and accommodation. Confirm classroom arrival only after the required reviews, bands and classroom assignment are complete.
+
+Warning: Saved information does not carry daily clearance or band confirmation forward. Medical details remain restricted and are excluded from guardian transition messages.
+
+### Resolve No authorized adult collector and confirm pickup
+
+This warning concerns final pickup; arrival, screening and classroom steps may continue.
+
+Go to: Child record → Review collector authorization / Add authorized collector
+
+1. An Admin already has Add/correct children & guardians permission. To delegate it: More → Volunteers → Volunteers tab → select people → Set role & permissions → check Add/correct children & guardians → Save.
+2. Use Review collector authorization beside the warning, or Add authorized collector when no contact exists. Review the correct adult, verify adulthood and mark Authorized to collect this child; save.
+3. At pickup select the authorized, adult-verified collector, check identity in person and confirm the actual handoff. If a different person is not already authorized, refer them for authorized staff review before release.
+
+Warning: A typed name, badge or drop-off record alone does not authorize collection. Return a child from Clinic, Other or Outing before final pickup.
+
+### Clinic, Other and Outing: record every return
+
+Each temporary departure needs its own return; children remain shown as away until the return is recorded.
+
+Go to: Child record → movement confirmation; More → Outings for outing rosters
+
+1. Clinic: record departure and accompanying adult → physically return to JP → record Return from clinic / other → confirm classroom arrival if resuming class. Other uses the same cycle and also requires an internal reason.
+2. Outing coordinators create a named, dated, permission-verified roster. A volunteer with movement permission confirms departure for each child from class on the scheduled date. Review Not departed, Awaiting return, Returned and All attendees; scan/find opens confirmation for that outing.
+3. When physically back, confirm each outing return into JP reception, then classroom arrival if resuming. If leaving for the day instead, record the return first and complete verified pickup. Outing closure remains blocked while any departed child lacks a return.
+
+Warning: Scanning does not move a child automatically. Never assume a return or use final release for a clinic visit.
+
+### Volunteer accounts, classes, reminders and handover
+
+Two roles, bulk table entry, real shift attendance and a physical transfer of responsibility.
+
+Go to: More → Volunteers → Volunteers / My shifts / Shift planner / Coverage & messages
+
+1. Admins add names, emails and optional phones in table rows, choose Admin or Volunteer permissions, and save. Select one or several volunteers to assign classrooms and shifts; requested access/assignment emails have their own delivery reporting.
+2. Volunteers open My shift and check in only when physically at the station. At handover, count the children together and review Clinic, Other, Outing and unresolved movements. The outgoing volunteer offers to the assigned incoming person; the incoming person checks in and accepts the current physical count before the outgoing person finishes the shift.
+3. Configure reminder offsets, exact times or repeat intervals and supported email/SMS/WhatsApp/MMS channels in Shift planner. Provider readiness, contact details and appropriate consent are required. Coverage & messages reports duty, missing cover, handovers and communication outcomes.
+
+Warning: A reminder is not attendance. If relief is late, alert the lead and remain with the children. Finish active handovers before changing permissions or removing classroom assignments.
+
+### Guardian updates: queued, accepted and delivered
+
+Saving the movement and delivering its notices are separate outcomes.
+
+Go to: More → Notifications; volunteer messages under Coverage & messages
+
+1. Guardian email/SMS notices are recorded for transitions. Actual sending depends on the event sending switch, designated contacts, SMS permission, provider setup and credits. Practice events never send guardian or volunteer messages.
+2. Queued means waiting; Accepted means the provider accepted the message; Delivered requires a receipt. Review failed, missing-setup or uncertain outcomes before retrying.
+3. Authorized staff can view a child’s linked guardian contacts. Call/Email shortcuts open the device’s phone or email app; they are not an in-app multichannel messaging composer.
+
+Warning: Do not claim delivery from a saved movement or an Accepted status. Do not copy medical details into guardian messages.
+
+### Juniors inventory: responsible person, destination and returns
+
+Keep stock and the named handover trail accurate.
+
+Go to: More → Inventory → open item
+
+1. Record the action, quantity and responsible volunteer for each issue. Put the classroom or destination and handover detail in Note.
+2. Record good-condition returns, damaged returns and lost issued items separately. Review the issue/return history and reconcile with physical stock.
+3. Only record a return when items are physically received. Keep clear destination/responsibility notes; overall stock totals do not prove a specific classroom returned its allocation.
+
+Check the result: Available and issued totals match the recorded actions and physical stock.
 
 ## Guest
 

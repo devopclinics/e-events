@@ -92,3 +92,5 @@
   .hp-layout { grid-template-columns: 1fr; }
   .hp-toc { position: static; flex-direction: row; flex-wrap: wrap; }
 }
+
+.hp-topic-links{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}.hp-topic-links a{display:inline-flex;align-items:center;min-height:44px;padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);color:var(--teal);font-size:13px;text-decoration:none}.hp-topic-links a:focus-visible{outline:3px solid var(--teal);outline-offset:2px}

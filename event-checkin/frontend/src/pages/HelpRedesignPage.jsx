@@ -58,9 +58,10 @@ function TopicAccordion({ topic, query }) {
         <div className="rd-path-body-inner">
           {topic.image && (
             <a className="hp-shot" href={topic.image} target="_blank" rel="noreferrer">
-              <img src={topic.image} alt={`${topic.title} screenshot`} loading="lazy" />
+              <img src={topic.image} alt={topic.imageAlt || `${topic.title} screenshot`} loading="lazy" />
             </a>
           )}
+          {topic.links?.length>0&&<div className="hp-topic-links">{topic.links.map(link=><a key={link.href} href={link.href} target={link.newTab?'_blank':undefined} rel={link.newTab?'noreferrer':undefined} download={link.download||undefined}>{link.label}</a>)}</div>}
           {topic.path && <p><strong>Go to:</strong> {highlight(topic.path, query)}</p>}
           {topic.before && <p><strong>Before you start:</strong> {highlight(topic.before, query)}</p>}
           {hasBoth && <div className="hp-eyebrow">Setup <span>— follow in order</span></div>}
@@ -145,6 +146,8 @@ export default function HelpRedesignPage() {
         tip: t.tip,
         warn: t.warn,
         image: t.img || (t.imgs && t.imgs[0]) || null,
+        imageAlt: t.imageAlt,
+        links: t.links,
       })),
     }]
   }, [data, role])

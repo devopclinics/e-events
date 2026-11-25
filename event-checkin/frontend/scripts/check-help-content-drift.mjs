@@ -28,8 +28,8 @@ const BANNED_STRING_ALLOWLIST = new Set([
 const problems = []
 
 function checkMediaFileExists(relHref, sourceDescription) {
-  if (!relHref.startsWith('/media/')) return
-  const filePath = path.join(mediaDir, relHref.slice('/media/'.length))
+  if (!relHref.startsWith('/media/') && !relHref.startsWith('/juniors/guide/')) return
+  const filePath = path.join(frontendRoot, 'public', relHref)
   if (!existsSync(filePath)) {
     problems.push(`Broken media reference: ${relHref} (from ${sourceDescription}) has no matching file in public/media/`)
   }
@@ -39,6 +39,7 @@ function checkMediaFileExists(relHref, sourceDescription) {
 const { CONTENT } = await import(path.join(frontendRoot, 'src', 'guideContent.mjs'))
 for (const [roleKey, role] of Object.entries(CONTENT)) {
   for (const topic of role.topics || []) {
+    for (const link of topic.links || []) checkMediaFileExists(link.href, `guideContent.mjs topic ${roleKey}.${topic.id}`)
     const imgs = topic.imgs || (topic.img ? [topic.img] : [])
     for (const img of imgs) {
       checkMediaFileExists(img, `guideContent.mjs topic "${roleKey}.${topic.id}"`)

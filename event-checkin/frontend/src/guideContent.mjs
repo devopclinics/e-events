@@ -1,6 +1,7 @@
+import { JUNIOR_HELP_TOPICS } from './juniorHelpContent.mjs'
 // Shared source for in-app Help, public guide and support knowledge.
 // Updated from the 48 reviewed service recipes; preserve topic IDs for links.
-export const GUIDE_REVISED_AT = '2026-10-19'
+export const GUIDE_REVISED_AT = '2026-11-24'
 
 export const CONTENT = {
   "organizer": {
@@ -1581,4 +1582,10 @@ export const CONTENT = {
       }
     ]
   }
+}
+
+// Reuse identical Juniors instructions across organizer and staff Help.
+for (const role of ['organizer','staff']) {
+  const prefix=role==='organizer'?'org':'staff'
+  CONTENT[role].topics.push(...JUNIOR_HELP_TOPICS.map(topic=>({...topic,id:`${prefix}-${topic.id}`})))
 }

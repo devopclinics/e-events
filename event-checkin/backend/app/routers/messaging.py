@@ -87,7 +87,7 @@ def _signalhouse_extract_status_and_message_id(data: dict) -> tuple[str | None, 
     """Extract status + message id from Signal House callback payloads.
 
     Signal House callbacks can arrive in multiple shapes. We support:
-    - flat: status/messageStatus + messageId/message_id/id
+    - flat: status/messageStatus + messageId/message_id/id/_id (live delivered callback)
     - nested message object
     - insertedMessages[0].status + insertedMessages[0].statusHistory[-1]._id
     """
@@ -95,8 +95,8 @@ def _signalhouse_extract_status_and_message_id(data: dict) -> tuple[str | None, 
 
     status = data.get("status") or data.get("messageStatus") or message.get("status")
     message_id = (
-        data.get("messageId") or data.get("message_id") or data.get("id")
-        or message.get("messageId") or message.get("message_id") or message.get("id")
+        data.get("messageId") or data.get("message_id") or data.get("id") or data.get("_id")
+        or message.get("messageId") or message.get("message_id") or message.get("id") or message.get("_id")
     )
 
     inserted = data.get("insertedMessages")

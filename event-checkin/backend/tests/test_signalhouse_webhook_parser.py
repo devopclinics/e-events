@@ -73,3 +73,15 @@ def test_signalhouse_extract_returns_none_when_missing_fields():
     status, message_id = _signalhouse_extract_status_and_message_id({})
     assert status is None
     assert message_id is None
+
+
+def test_signalhouse_live_final_receipt_uses_flat_document_id():
+    status, message_id = _signalhouse_extract_status_and_message_id({
+        "_id": "6b0727d10606a69b21dd06b4", "status": "DELIVERED",
+        "groupId": "shared-campaign-id", "statusHistory": [{"_id": "transient-history-id", "status": "DELIVERED"}],
+    })
+    assert (status, message_id) == ("DELIVERED", "6b0727d10606a69b21dd06b4")
+
+
+def test_signalhouse_nested_document_id_is_stable():
+    assert _signalhouse_extract_status_and_message_id({"message": {"_id": "message-document", "status": "DELIVERED"}}) == ("DELIVERED", "message-document")

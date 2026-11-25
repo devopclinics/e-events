@@ -1329,6 +1329,9 @@ async def delete_workflow(
     workflow = await _load_scoped_workflow(event_id, workflow_id, db)
     if workflow.status != "draft":
         raise HTTPException(409, "Only draft workflows can be deleted. Archive published or historical workflows instead.")
+    from ..junior_models import JuniorMovement
+    if await db.scalar(select(JuniorMovement.id).join(ExperienceStep,ExperienceStep.id==JuniorMovement.session_id).where(ExperienceStep.workflow_id==workflow.id).limit(1)):
+        raise HTTPException(409,'This draft has Juniors custody history. Archive it instead of deleting it.')
     await db.execute(delete(GuestExperienceProgress).where(GuestExperienceProgress.workflow_id == workflow.id))
     await db.execute(delete(ExperienceEvent).where(ExperienceEvent.workflow_id == workflow.id))
     await db.delete(workflow)
@@ -1423,6 +1426,9 @@ async def update_step(
     step = await db.get(ExperienceStep, step_id)
     if not step or step.workflow_id != workflow.id:
         raise HTTPException(404, "Step not found")
+    from ..junior_models import JuniorMovement
+    if await db.scalar(select(JuniorMovement.id).where(JuniorMovement.session_id==step.id).limit(1)):
+        raise HTTPException(409,'This session has custody history. Add a new session instead of editing it.')
     payload = data.model_dump(exclude_unset=True)
     if "key" in payload and await _step_key_exists(workflow.id, payload["key"], db, exclude_step_id=step.id):
         raise HTTPException(409, "A step with this key already exists in the workflow")
@@ -1439,6 +1445,10 @@ async def delete_step_cascade(event_id: str, workflow: ExperienceWorkflow, step_
     id/key out of any other step's dependency config, then removes its
     progress/audit rows. Caller has already loaded `workflow` (with .steps)
     and confirmed it's a draft. Returns False if the step isn't in it."""
+    from ..junior_models import JuniorMovement
+    if await db.scalar(select(JuniorMovement.id).where(JuniorMovement.session_id==step_id,JuniorMovement.event_id==event_id).limit(1)):
+        raise HTTPException(409,'This session has custody history. Archive its workflow instead of deleting it.')
+
     step = await db.get(ExperienceStep, step_id)
     if not step or step.workflow_id != workflow.id:
         return False
@@ -1533,6 +1543,14 @@ async def publish(
         raise HTTPException(409, "Only draft workflows can be published")
     if not any(step.enabled for step in workflow.steps):
         raise HTTPException(400, "A workflow must have at least one enabled step before publishing")
+    from ..services.junior_programme import metadata as junior_metadata
+    if any(junior_metadata(s) for s in workflow.steps):
+        from ..services.junior_programme import settings as junior_programme_settings
+        jp=junior_programme_settings(event)
+        if jp.get('workflow_id')!=workflow.id or not jp.get('groups') or any(not g.get('classrooms') for g in jp['groups']):
+            raise HTTPException(409,'Link this Juniors draft and assign classrooms to each group before publishing')
+    if any(junior_metadata(s).get('review_notes') for s in workflow.steps):
+        raise HTTPException(409,'Resolve the Juniors schedule review notes in the draft before publishing')
     existing_published = await db.scalar(
         select(ExperienceWorkflow)
         .where(
@@ -1993,8 +2011,9 @@ async def my_experience(
     # repeating all of them in the activity checklist buried the few actionable
     # steps under dozens of agenda cards (and inflated "N/M done").
     hide_segments = bool(event.live_program_enabled)
+    from ..services.junior_programme import metadata as junior_metadata
     steps_sorted = sorted(
-        (s for s in loaded.steps if s.enabled and not (hide_segments and s.is_segment)),
+        (s for s in loaded.steps if s.enabled and not (hide_segments and s.is_segment) and junior_metadata(s).get('kind')!='custody_session'),
         key=lambda s: (s.sort_order, s.title),
     )
     steps_out = [_guest_step_out(step, progress_by_step.get(step.id)) for step in steps_sorted]

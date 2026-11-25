@@ -1,0 +1,4717 @@
+{
+  "name": "NCNMO Junior Platform 2026 · JP programme",
+  "source_file": "Draft JP Program Skeleton - Junior Platform 2026.xlsx",
+  "source_sha256": "1894b5969a68dcfd21b7a475aa7057ad778aae6f2d7a6df39dc042b41bf28474",
+  "groups": [
+    {
+      "key": "A",
+      "label": "Group A (2 yrs)",
+      "age_groups": [
+        "Group A (2 yrs)",
+        "Group A"
+      ],
+      "classrooms": [],
+      "required_staff": null
+    },
+    {
+      "key": "B",
+      "label": "Group B (3-4 yrs)",
+      "age_groups": [
+        "Group B (3-4 yrs)",
+        "Group B"
+      ],
+      "classrooms": [],
+      "required_staff": null
+    },
+    {
+      "key": "C",
+      "label": "Group C (5-6 yrs)",
+      "age_groups": [
+        "Group C (5-6 yrs)",
+        "Group C"
+      ],
+      "classrooms": [],
+      "required_staff": null
+    },
+    {
+      "key": "D",
+      "label": "Group D (7-8 yrs)",
+      "age_groups": [
+        "Group D (7-8 yrs)",
+        "Group D"
+      ],
+      "classrooms": [],
+      "required_staff": null
+    },
+    {
+      "key": "E",
+      "label": "Group E (9 yrs)",
+      "age_groups": [
+        "Group E (9 yrs)",
+        "Group E"
+      ],
+      "classrooms": [],
+      "required_staff": null
+    }
+  ],
+  "issues": [
+    "Confirm Group C outing participation: public hours include C but its group timetable remains onsite.",
+    "Confirm outing check-in, bus departure and actual hotel arrival: grid 9am–5pm; notes say departure 10am and return journey starts 4pm.",
+    "Confirm gala pickup window: group sheets show 10:30pm; public operating hours close at 11pm.",
+    "Confirm Friday lunch for Groups A/B around Jumuah.",
+    "Confirm the duration of single-cell activities: the draft currently uses the workbook’s 30-minute grid.",
+    "Confirm physical classrooms, activity locations, staffing targets and the unfilled activity periods."
+  ],
+  "steps": [
+    {
+      "key": "jp-2026-12-25-A-0830-check-in",
+      "type": "custom",
+      "title": "Group A · Check-in",
+      "description": "Group A · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group A (2 yrs)",
+          "Group A"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "08:30",
+          "end_time": "09:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "A",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group A (2 yrs)!B7"
+          }
+        }
+      },
+      "sort_order": 10
+    },
+    {
+      "key": "jp-2026-12-25-A-1030-snack-time",
+      "type": "custom",
+      "title": "Group A · Snack Time",
+      "description": "Group A · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group A (2 yrs)",
+          "Group A"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "10:30",
+          "end_time": "11:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "A",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group A (2 yrs)!B11"
+          }
+        }
+      },
+      "sort_order": 20
+    },
+    {
+      "key": "jp-2026-12-25-A-1300-lunch",
+      "type": "custom",
+      "title": "Group A · Lunch",
+      "description": "Group A · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group A (2 yrs)",
+          "Group A"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "13:00",
+          "end_time": "14:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "A",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group A (2 yrs)!B16"
+          }
+        }
+      },
+      "sort_order": 30
+    },
+    {
+      "key": "jp-2026-12-25-A-1400-nap-time-quiet-time",
+      "type": "custom",
+      "title": "Group A · Nap Time / Quiet Time",
+      "description": "Group A · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group A (2 yrs)",
+          "Group A"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "14:00",
+          "end_time": "15:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "A",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group A (2 yrs)!B18"
+          }
+        }
+      },
+      "sort_order": 40
+    },
+    {
+      "key": "jp-2026-12-25-A-1530-snack-time",
+      "type": "custom",
+      "title": "Group A · Snack Time",
+      "description": "Group A · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group A (2 yrs)",
+          "Group A"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "15:30",
+          "end_time": "16:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "A",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group A (2 yrs)!B21"
+          }
+        }
+      },
+      "sort_order": 50
+    },
+    {
+      "key": "jp-2026-12-25-A-1800-dinner",
+      "type": "custom",
+      "title": "Group A · Dinner",
+      "description": "Group A · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group A (2 yrs)",
+          "Group A"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "18:00",
+          "end_time": "19:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "A",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group A (2 yrs)!B26"
+          }
+        }
+      },
+      "sort_order": 60
+    },
+    {
+      "key": "jp-2026-12-25-A-1900-pick-up",
+      "type": "custom",
+      "title": "Group A · Pick up",
+      "description": "Group A · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group A (2 yrs)",
+          "Group A"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "19:00",
+          "end_time": "19:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "A",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group A (2 yrs)!B28"
+          }
+        }
+      },
+      "sort_order": 70
+    },
+    {
+      "key": "jp-2026-12-26-A-0830-check-in",
+      "type": "custom",
+      "title": "Group A · Check-in",
+      "description": "Group A · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group A (2 yrs)",
+          "Group A"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "08:30",
+          "end_time": "09:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "A",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group A (2 yrs)!C7"
+          }
+        }
+      },
+      "sort_order": 80
+    },
+    {
+      "key": "jp-2026-12-26-A-1030-snack-time",
+      "type": "custom",
+      "title": "Group A · Snack Time",
+      "description": "Group A · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group A (2 yrs)",
+          "Group A"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "10:30",
+          "end_time": "11:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "A",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group A (2 yrs)!C11"
+          }
+        }
+      },
+      "sort_order": 90
+    },
+    {
+      "key": "jp-2026-12-26-A-1300-lunch",
+      "type": "custom",
+      "title": "Group A · Lunch",
+      "description": "Group A · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group A (2 yrs)",
+          "Group A"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "13:00",
+          "end_time": "14:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "A",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group A (2 yrs)!C16"
+          }
+        }
+      },
+      "sort_order": 100
+    },
+    {
+      "key": "jp-2026-12-26-A-1400-nap-time-quiet-time",
+      "type": "custom",
+      "title": "Group A · Nap Time / Quiet Time",
+      "description": "Group A · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group A (2 yrs)",
+          "Group A"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "14:00",
+          "end_time": "15:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "A",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group A (2 yrs)!C18"
+          }
+        }
+      },
+      "sort_order": 110
+    },
+    {
+      "key": "jp-2026-12-26-A-1530-snack-time",
+      "type": "custom",
+      "title": "Group A · Snack Time",
+      "description": "Group A · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group A (2 yrs)",
+          "Group A"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "15:30",
+          "end_time": "16:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "A",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group A (2 yrs)!C21"
+          }
+        }
+      },
+      "sort_order": 120
+    },
+    {
+      "key": "jp-2026-12-26-A-1800-pick-up-dinner-to-go",
+      "type": "custom",
+      "title": "Group A · Pick up + Dinner to Go",
+      "description": "Group A · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group A (2 yrs)",
+          "Group A"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "18:00",
+          "end_time": "18:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "A",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group A (2 yrs)!C26"
+          }
+        }
+      },
+      "sort_order": 130
+    },
+    {
+      "key": "jp-2026-12-26-A-1930-gala-night-check-in",
+      "type": "custom",
+      "title": "Group A · Gala Night Check-in",
+      "description": "Group A · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group A (2 yrs)",
+          "Group A"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "19:30",
+          "end_time": "20:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "A",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:gala",
+            "source_cell": "Group A (2 yrs)!C29"
+          }
+        }
+      },
+      "sort_order": 140
+    },
+    {
+      "key": "jp-2026-12-26-A-2000-movie-time-games-sleep",
+      "type": "custom",
+      "title": "Group A · Movie Time/ Games/ Sleep",
+      "description": "Group A · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group A (2 yrs)",
+          "Group A"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "20:00",
+          "end_time": "22:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "A",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:gala",
+            "source_cell": "Group A (2 yrs)!C30"
+          }
+        }
+      },
+      "sort_order": 150
+    },
+    {
+      "key": "jp-2026-12-26-A-2230-gala-night-pick-up",
+      "type": "custom",
+      "title": "Group A · Gala Night Pick up",
+      "description": "Group A · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group A (2 yrs)",
+          "Group A"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "22:30",
+          "end_time": "23:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "A",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:gala",
+            "source_cell": "Group A (2 yrs)!C35"
+          }
+        }
+      },
+      "sort_order": 160
+    },
+    {
+      "key": "jp-2026-12-27-A-0900-check-in",
+      "type": "custom",
+      "title": "Group A · Check-in",
+      "description": "Group A · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group A (2 yrs)",
+          "Group A"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "09:00",
+          "end_time": "09:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "A",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group A (2 yrs)!D8"
+          }
+        }
+      },
+      "sort_order": 170
+    },
+    {
+      "key": "jp-2026-12-27-A-1030-snack-time",
+      "type": "custom",
+      "title": "Group A · Snack Time",
+      "description": "Group A · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group A (2 yrs)",
+          "Group A"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "10:30",
+          "end_time": "11:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "A",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group A (2 yrs)!D11"
+          }
+        }
+      },
+      "sort_order": 180
+    },
+    {
+      "key": "jp-2026-12-27-A-1300-lunch",
+      "type": "custom",
+      "title": "Group A · Lunch",
+      "description": "Group A · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group A (2 yrs)",
+          "Group A"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "13:00",
+          "end_time": "14:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "A",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group A (2 yrs)!D16"
+          }
+        }
+      },
+      "sort_order": 190
+    },
+    {
+      "key": "jp-2026-12-27-A-1400-nap-time-quiet-time",
+      "type": "custom",
+      "title": "Group A · Nap Time / Quiet Time",
+      "description": "Group A · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group A (2 yrs)",
+          "Group A"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "14:00",
+          "end_time": "15:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "A",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group A (2 yrs)!D18"
+          }
+        }
+      },
+      "sort_order": 200
+    },
+    {
+      "key": "jp-2026-12-27-A-1530-snack-time",
+      "type": "custom",
+      "title": "Group A · Snack Time",
+      "description": "Group A · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group A (2 yrs)",
+          "Group A"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "15:30",
+          "end_time": "16:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "A",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group A (2 yrs)!D21"
+          }
+        }
+      },
+      "sort_order": 210
+    },
+    {
+      "key": "jp-2026-12-27-A-1800-dinner",
+      "type": "custom",
+      "title": "Group A · Dinner",
+      "description": "Group A · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group A (2 yrs)",
+          "Group A"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "18:00",
+          "end_time": "19:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "A",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group A (2 yrs)!D26"
+          }
+        }
+      },
+      "sort_order": 220
+    },
+    {
+      "key": "jp-2026-12-27-A-1900-pick-up",
+      "type": "custom",
+      "title": "Group A · Pick up",
+      "description": "Group A · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group A (2 yrs)",
+          "Group A"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "19:00",
+          "end_time": "19:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "A",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group A (2 yrs)!D28"
+          }
+        }
+      },
+      "sort_order": 230
+    },
+    {
+      "key": "jp-2026-12-25-B-0830-check-in",
+      "type": "custom",
+      "title": "Group B · Check-in",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "08:30",
+          "end_time": "09:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group B (3-4 yrs)!B7"
+          }
+        }
+      },
+      "sort_order": 240
+    },
+    {
+      "key": "jp-2026-12-25-B-1030-snack-time",
+      "type": "custom",
+      "title": "Group B · Snack Time",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "10:30",
+          "end_time": "11:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group B (3-4 yrs)!B11"
+          }
+        }
+      },
+      "sort_order": 250
+    },
+    {
+      "key": "jp-2026-12-25-B-1300-lunch",
+      "type": "custom",
+      "title": "Group B · Lunch",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "13:00",
+          "end_time": "14:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group B (3-4 yrs)!B16"
+          }
+        }
+      },
+      "sort_order": 260
+    },
+    {
+      "key": "jp-2026-12-25-B-1400-nap-time-quiet-time",
+      "type": "custom",
+      "title": "Group B · Nap Time / Quiet Time",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "14:00",
+          "end_time": "15:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group B (3-4 yrs)!B18"
+          }
+        }
+      },
+      "sort_order": 270
+    },
+    {
+      "key": "jp-2026-12-25-B-1530-snack-time",
+      "type": "custom",
+      "title": "Group B · Snack Time",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "15:30",
+          "end_time": "16:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group B (3-4 yrs)!B21"
+          }
+        }
+      },
+      "sort_order": 280
+    },
+    {
+      "key": "jp-2026-12-25-B-1730-clean-up-time",
+      "type": "custom",
+      "title": "Group B · Clean-up Time",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "17:30",
+          "end_time": "18:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group B (3-4 yrs)!B25"
+          }
+        }
+      },
+      "sort_order": 290
+    },
+    {
+      "key": "jp-2026-12-25-B-1800-dinner",
+      "type": "custom",
+      "title": "Group B · Dinner",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "18:00",
+          "end_time": "19:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group B (3-4 yrs)!B26"
+          }
+        }
+      },
+      "sort_order": 300
+    },
+    {
+      "key": "jp-2026-12-25-B-1900-pick-up",
+      "type": "custom",
+      "title": "Group B · Pick up",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "19:00",
+          "end_time": "19:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group B (3-4 yrs)!B28"
+          }
+        }
+      },
+      "sort_order": 310
+    },
+    {
+      "key": "jp-2026-12-26-B-0830-check-in",
+      "type": "custom",
+      "title": "Group B · Check-in",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "08:30",
+          "end_time": "09:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group B (3-4 yrs)!C7"
+          }
+        }
+      },
+      "sort_order": 320
+    },
+    {
+      "key": "jp-2026-12-26-B-1030-snack-time",
+      "type": "custom",
+      "title": "Group B · Snack Time",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "10:30",
+          "end_time": "11:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group B (3-4 yrs)!C11"
+          }
+        }
+      },
+      "sort_order": 330
+    },
+    {
+      "key": "jp-2026-12-26-B-1300-lunch",
+      "type": "custom",
+      "title": "Group B · Lunch",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "13:00",
+          "end_time": "14:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group B (3-4 yrs)!C16"
+          }
+        }
+      },
+      "sort_order": 340
+    },
+    {
+      "key": "jp-2026-12-26-B-1400-nap-time-quiet-time",
+      "type": "custom",
+      "title": "Group B · Nap Time / Quiet Time",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "14:00",
+          "end_time": "15:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group B (3-4 yrs)!C18"
+          }
+        }
+      },
+      "sort_order": 350
+    },
+    {
+      "key": "jp-2026-12-26-B-1530-snack-time",
+      "type": "custom",
+      "title": "Group B · Snack Time",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "15:30",
+          "end_time": "16:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group B (3-4 yrs)!C21"
+          }
+        }
+      },
+      "sort_order": 360
+    },
+    {
+      "key": "jp-2026-12-26-B-1730-clean-up-time",
+      "type": "custom",
+      "title": "Group B · Clean-up Time",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "17:30",
+          "end_time": "18:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group B (3-4 yrs)!C25"
+          }
+        }
+      },
+      "sort_order": 370
+    },
+    {
+      "key": "jp-2026-12-26-B-1800-pick-up-dinner-to-go",
+      "type": "custom",
+      "title": "Group B · Pick up + Dinner to Go",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "18:00",
+          "end_time": "18:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group B (3-4 yrs)!C26"
+          }
+        }
+      },
+      "sort_order": 380
+    },
+    {
+      "key": "jp-2026-12-26-B-1930-gala-night-check-in",
+      "type": "custom",
+      "title": "Group B · Gala Night Check-in",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "19:30",
+          "end_time": "20:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:gala",
+            "source_cell": "Group B (3-4 yrs)!C29"
+          }
+        }
+      },
+      "sort_order": 390
+    },
+    {
+      "key": "jp-2026-12-26-B-2000-movie-time-games-sleep",
+      "type": "custom",
+      "title": "Group B · Movie Time/ Games/ Sleep",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "20:00",
+          "end_time": "22:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:gala",
+            "source_cell": "Group B (3-4 yrs)!C30"
+          }
+        }
+      },
+      "sort_order": 400
+    },
+    {
+      "key": "jp-2026-12-26-B-2230-gala-night-pick-up",
+      "type": "custom",
+      "title": "Group B · Gala Night Pick up",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "22:30",
+          "end_time": "23:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:gala",
+            "source_cell": "Group B (3-4 yrs)!C35"
+          }
+        }
+      },
+      "sort_order": 410
+    },
+    {
+      "key": "jp-2026-12-27-B-0900-check-in",
+      "type": "custom",
+      "title": "Group B · Check-in",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "09:00",
+          "end_time": "09:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group B (3-4 yrs)!D8"
+          }
+        }
+      },
+      "sort_order": 420
+    },
+    {
+      "key": "jp-2026-12-27-B-1030-snack-time",
+      "type": "custom",
+      "title": "Group B · Snack Time",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "10:30",
+          "end_time": "11:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group B (3-4 yrs)!D11"
+          }
+        }
+      },
+      "sort_order": 430
+    },
+    {
+      "key": "jp-2026-12-27-B-1300-lunch",
+      "type": "custom",
+      "title": "Group B · Lunch",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "13:00",
+          "end_time": "14:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group B (3-4 yrs)!D16"
+          }
+        }
+      },
+      "sort_order": 440
+    },
+    {
+      "key": "jp-2026-12-27-B-1400-nap-time-quiet-time",
+      "type": "custom",
+      "title": "Group B · Nap Time / Quiet Time",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "14:00",
+          "end_time": "15:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group B (3-4 yrs)!D18"
+          }
+        }
+      },
+      "sort_order": 450
+    },
+    {
+      "key": "jp-2026-12-27-B-1530-snack-time",
+      "type": "custom",
+      "title": "Group B · Snack Time",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "15:30",
+          "end_time": "16:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group B (3-4 yrs)!D21"
+          }
+        }
+      },
+      "sort_order": 460
+    },
+    {
+      "key": "jp-2026-12-27-B-1730-clean-up-time",
+      "type": "custom",
+      "title": "Group B · Clean-up Time",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "17:30",
+          "end_time": "18:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group B (3-4 yrs)!D25"
+          }
+        }
+      },
+      "sort_order": 470
+    },
+    {
+      "key": "jp-2026-12-27-B-1800-dinner",
+      "type": "custom",
+      "title": "Group B · Dinner",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "18:00",
+          "end_time": "19:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group B (3-4 yrs)!D26"
+          }
+        }
+      },
+      "sort_order": 480
+    },
+    {
+      "key": "jp-2026-12-27-B-1900-pick-up",
+      "type": "custom",
+      "title": "Group B · Pick up",
+      "description": "Group B · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group B (3-4 yrs)",
+          "Group B"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "19:00",
+          "end_time": "19:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "B",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group B (3-4 yrs)!D28"
+          }
+        }
+      },
+      "sort_order": 490
+    },
+    {
+      "key": "jp-2026-12-25-C-0830-check-in",
+      "type": "custom",
+      "title": "Group C · Check-in",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "08:30",
+          "end_time": "09:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group C (5-6 yrs)!B7"
+          }
+        }
+      },
+      "sort_order": 500
+    },
+    {
+      "key": "jp-2026-12-25-C-1230-wudu-and-line-up-for-prayer",
+      "type": "custom",
+      "title": "Group C · Wudu and Line up for Prayer",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "12:30",
+          "end_time": "13:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group C (5-6 yrs)!B15"
+          }
+        }
+      },
+      "sort_order": 510
+    },
+    {
+      "key": "jp-2026-12-25-C-1300-junior-platform-jumuah-asr-for-travelers",
+      "type": "custom",
+      "title": "Group C · Junior Platform Jumuah / Asr for Travelers",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "13:00",
+          "end_time": "14:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group C (5-6 yrs)!B16"
+          }
+        }
+      },
+      "sort_order": 520
+    },
+    {
+      "key": "jp-2026-12-25-C-1400-lunch",
+      "type": "custom",
+      "title": "Group C · Lunch",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "14:00",
+          "end_time": "15:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group C (5-6 yrs)!B18"
+          }
+        }
+      },
+      "sort_order": 530
+    },
+    {
+      "key": "jp-2026-12-25-C-1700-wudu-and-line-up-for-prayer",
+      "type": "custom",
+      "title": "Group C · Wudu and Line up for Prayer",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "17:00",
+          "end_time": "17:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group C (5-6 yrs)!B24"
+          }
+        }
+      },
+      "sort_order": 540
+    },
+    {
+      "key": "jp-2026-12-25-C-1730-maghrib-isha",
+      "type": "custom",
+      "title": "Group C · Maghrib/Isha",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "17:30",
+          "end_time": "18:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group C (5-6 yrs)!B25"
+          }
+        }
+      },
+      "sort_order": 550
+    },
+    {
+      "key": "jp-2026-12-25-C-1800-dinner",
+      "type": "custom",
+      "title": "Group C · Dinner",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "18:00",
+          "end_time": "19:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group C (5-6 yrs)!B26"
+          }
+        }
+      },
+      "sort_order": 560
+    },
+    {
+      "key": "jp-2026-12-25-C-1900-pick-up",
+      "type": "custom",
+      "title": "Group C · Pick up",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "19:00",
+          "end_time": "19:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group C (5-6 yrs)!B28"
+          }
+        }
+      },
+      "sort_order": 570
+    },
+    {
+      "key": "jp-2026-12-26-C-0830-check-in",
+      "type": "custom",
+      "title": "Group C · Check-in",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "08:30",
+          "end_time": "09:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group C (5-6 yrs)!C7"
+          }
+        }
+      },
+      "sort_order": 580
+    },
+    {
+      "key": "jp-2026-12-26-C-1230-wudu-and-line-up-for-prayer",
+      "type": "custom",
+      "title": "Group C · Wudu and Line up for Prayer",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "12:30",
+          "end_time": "13:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group C (5-6 yrs)!C15"
+          }
+        }
+      },
+      "sort_order": 590
+    },
+    {
+      "key": "jp-2026-12-26-C-1300-dhur-asr",
+      "type": "custom",
+      "title": "Group C · Dhur/Asr",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "13:00",
+          "end_time": "13:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group C (5-6 yrs)!C16"
+          }
+        }
+      },
+      "sort_order": 600
+    },
+    {
+      "key": "jp-2026-12-26-C-1330-lunch",
+      "type": "custom",
+      "title": "Group C · Lunch",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "13:30",
+          "end_time": "14:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group C (5-6 yrs)!C17"
+          }
+        }
+      },
+      "sort_order": 610
+    },
+    {
+      "key": "jp-2026-12-26-C-1700-wudu-and-line-up-for-prayer",
+      "type": "custom",
+      "title": "Group C · Wudu and Line up for Prayer",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "17:00",
+          "end_time": "17:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group C (5-6 yrs)!C24"
+          }
+        }
+      },
+      "sort_order": 620
+    },
+    {
+      "key": "jp-2026-12-26-C-1730-maghrib-isha",
+      "type": "custom",
+      "title": "Group C · Maghrib/Isha",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "17:30",
+          "end_time": "18:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group C (5-6 yrs)!C25"
+          }
+        }
+      },
+      "sort_order": 630
+    },
+    {
+      "key": "jp-2026-12-26-C-1800-pick-up-dinner-to-go",
+      "type": "custom",
+      "title": "Group C · Pick up + Dinner to Go",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "18:00",
+          "end_time": "18:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group C (5-6 yrs)!C26"
+          }
+        }
+      },
+      "sort_order": 640
+    },
+    {
+      "key": "jp-2026-12-26-C-1930-gala-night-check-in",
+      "type": "custom",
+      "title": "Group C · Gala Night Check-in",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "19:30",
+          "end_time": "20:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:gala",
+            "source_cell": "Group C (5-6 yrs)!C29"
+          }
+        }
+      },
+      "sort_order": 650
+    },
+    {
+      "key": "jp-2026-12-26-C-2000-movie-time-games-sleep",
+      "type": "custom",
+      "title": "Group C · Movie Time/ Games/ Sleep",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "20:00",
+          "end_time": "22:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:gala",
+            "source_cell": "Group C (5-6 yrs)!C30"
+          }
+        }
+      },
+      "sort_order": 660
+    },
+    {
+      "key": "jp-2026-12-26-C-2230-gala-night-pick-up",
+      "type": "custom",
+      "title": "Group C · Gala Night Pick up",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "22:30",
+          "end_time": "23:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:gala",
+            "source_cell": "Group C (5-6 yrs)!C35"
+          }
+        }
+      },
+      "sort_order": 670
+    },
+    {
+      "key": "jp-2026-12-27-C-0900-check-in",
+      "type": "custom",
+      "title": "Group C · Check-in",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "09:00",
+          "end_time": "09:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group C (5-6 yrs)!D8"
+          }
+        }
+      },
+      "sort_order": 680
+    },
+    {
+      "key": "jp-2026-12-27-C-1200-jp-feedback-session",
+      "type": "custom",
+      "title": "Group C · JP Feedback Session",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "12:00",
+          "end_time": "12:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group C (5-6 yrs)!D14"
+          }
+        }
+      },
+      "sort_order": 690
+    },
+    {
+      "key": "jp-2026-12-27-C-1230-wudu-and-line-up-for-prayer",
+      "type": "custom",
+      "title": "Group C · Wudu and Line up for Prayer",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "12:30",
+          "end_time": "13:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group C (5-6 yrs)!D15"
+          }
+        }
+      },
+      "sort_order": 700
+    },
+    {
+      "key": "jp-2026-12-27-C-1300-dhur-asr",
+      "type": "custom",
+      "title": "Group C · Dhur/Asr",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "13:00",
+          "end_time": "13:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group C (5-6 yrs)!D16"
+          }
+        }
+      },
+      "sort_order": 710
+    },
+    {
+      "key": "jp-2026-12-27-C-1330-lunch",
+      "type": "custom",
+      "title": "Group C · Lunch",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "13:30",
+          "end_time": "14:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group C (5-6 yrs)!D17"
+          }
+        }
+      },
+      "sort_order": 720
+    },
+    {
+      "key": "jp-2026-12-27-C-1430-jp-party",
+      "type": "custom",
+      "title": "Group C · JP Party",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "14:30",
+          "end_time": "17:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group C (5-6 yrs)!D19"
+          }
+        }
+      },
+      "sort_order": 730
+    },
+    {
+      "key": "jp-2026-12-27-C-1700-wudu-and-line-up-for-prayer",
+      "type": "custom",
+      "title": "Group C · Wudu and Line up for Prayer",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "17:00",
+          "end_time": "17:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group C (5-6 yrs)!D24"
+          }
+        }
+      },
+      "sort_order": 740
+    },
+    {
+      "key": "jp-2026-12-27-C-1730-maghrib-isha",
+      "type": "custom",
+      "title": "Group C · Maghrib/Isha",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "17:30",
+          "end_time": "18:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group C (5-6 yrs)!D25"
+          }
+        }
+      },
+      "sort_order": 750
+    },
+    {
+      "key": "jp-2026-12-27-C-1800-dinner",
+      "type": "custom",
+      "title": "Group C · Dinner",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "18:00",
+          "end_time": "19:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group C (5-6 yrs)!D26"
+          }
+        }
+      },
+      "sort_order": 760
+    },
+    {
+      "key": "jp-2026-12-27-C-1900-pick-up",
+      "type": "custom",
+      "title": "Group C · Pick up",
+      "description": "Group C · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group C (5-6 yrs)",
+          "Group C"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "19:00",
+          "end_time": "19:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "C",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group C (5-6 yrs)!D28"
+          }
+        }
+      },
+      "sort_order": 770
+    },
+    {
+      "key": "jp-2026-12-25-D-0830-check-in",
+      "type": "custom",
+      "title": "Group D · Check-in",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "08:30",
+          "end_time": "09:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group D (7-8 yrs)!B7"
+          }
+        }
+      },
+      "sort_order": 780
+    },
+    {
+      "key": "jp-2026-12-25-D-1230-wudu-and-line-up-for-prayer",
+      "type": "custom",
+      "title": "Group D · Wudu and Line up for Prayer",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "12:30",
+          "end_time": "13:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group D (7-8 yrs)!B15"
+          }
+        }
+      },
+      "sort_order": 790
+    },
+    {
+      "key": "jp-2026-12-25-D-1300-junior-platform-jumuah-asr-for-travelers",
+      "type": "custom",
+      "title": "Group D · Junior Platform Jumuah / Asr for Travelers",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "13:00",
+          "end_time": "14:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group D (7-8 yrs)!B16"
+          }
+        }
+      },
+      "sort_order": 800
+    },
+    {
+      "key": "jp-2026-12-25-D-1400-lunch",
+      "type": "custom",
+      "title": "Group D · Lunch",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "14:00",
+          "end_time": "15:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group D (7-8 yrs)!B18"
+          }
+        }
+      },
+      "sort_order": 810
+    },
+    {
+      "key": "jp-2026-12-25-D-1700-wudu-and-line-up-for-prayer",
+      "type": "custom",
+      "title": "Group D · Wudu and Line up for Prayer",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "17:00",
+          "end_time": "17:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group D (7-8 yrs)!B24"
+          }
+        }
+      },
+      "sort_order": 820
+    },
+    {
+      "key": "jp-2026-12-25-D-1730-maghrib-isha",
+      "type": "custom",
+      "title": "Group D · Maghrib/Isha",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "17:30",
+          "end_time": "18:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group D (7-8 yrs)!B25"
+          }
+        }
+      },
+      "sort_order": 830
+    },
+    {
+      "key": "jp-2026-12-25-D-1800-dinner",
+      "type": "custom",
+      "title": "Group D · Dinner",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "18:00",
+          "end_time": "19:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group D (7-8 yrs)!B26"
+          }
+        }
+      },
+      "sort_order": 840
+    },
+    {
+      "key": "jp-2026-12-25-D-1900-pick-up",
+      "type": "custom",
+      "title": "Group D · Pick up",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "19:00",
+          "end_time": "19:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group D (7-8 yrs)!B28"
+          }
+        }
+      },
+      "sort_order": 850
+    },
+    {
+      "key": "jp-2026-12-26-D-0830-jp-outing-check-in",
+      "type": "custom",
+      "title": "Group D · JP Outing Check-in",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "08:30",
+          "end_time": "09:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group D (7-8 yrs)!C7"
+          }
+        }
+      },
+      "sort_order": 860
+    },
+    {
+      "key": "jp-2026-12-26-D-0900-jp-outing",
+      "type": "custom",
+      "title": "Group D · JP Outing",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "09:00",
+          "end_time": "17:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group D (7-8 yrs)!C8"
+          }
+        }
+      },
+      "sort_order": 870
+    },
+    {
+      "key": "jp-2026-12-26-D-1700-wudu-and-line-up-for-prayer",
+      "type": "custom",
+      "title": "Group D · Wudu and Line up for Prayer",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "17:00",
+          "end_time": "17:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group D (7-8 yrs)!C24"
+          }
+        }
+      },
+      "sort_order": 880
+    },
+    {
+      "key": "jp-2026-12-26-D-1730-maghrib-isha",
+      "type": "custom",
+      "title": "Group D · Maghrib/Isha",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "17:30",
+          "end_time": "18:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group D (7-8 yrs)!C25"
+          }
+        }
+      },
+      "sort_order": 890
+    },
+    {
+      "key": "jp-2026-12-26-D-1800-pick-up-dinner-to-go",
+      "type": "custom",
+      "title": "Group D · Pick up + Dinner to Go",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "18:00",
+          "end_time": "18:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group D (7-8 yrs)!C26"
+          }
+        }
+      },
+      "sort_order": 900
+    },
+    {
+      "key": "jp-2026-12-26-D-1930-gala-night-check-in",
+      "type": "custom",
+      "title": "Group D · Gala Night Check-in",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "19:30",
+          "end_time": "20:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:gala",
+            "source_cell": "Group D (7-8 yrs)!C29"
+          }
+        }
+      },
+      "sort_order": 910
+    },
+    {
+      "key": "jp-2026-12-26-D-2000-movie-time-games-sleep",
+      "type": "custom",
+      "title": "Group D · Movie Time/ Games/ Sleep",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "20:00",
+          "end_time": "22:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:gala",
+            "source_cell": "Group D (7-8 yrs)!C30"
+          }
+        }
+      },
+      "sort_order": 920
+    },
+    {
+      "key": "jp-2026-12-26-D-2230-gala-night-pick-up",
+      "type": "custom",
+      "title": "Group D · Gala Night Pick up",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "22:30",
+          "end_time": "23:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:gala",
+            "source_cell": "Group D (7-8 yrs)!C35"
+          }
+        }
+      },
+      "sort_order": 930
+    },
+    {
+      "key": "jp-2026-12-27-D-0900-check-in",
+      "type": "custom",
+      "title": "Group D · Check-in",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "09:00",
+          "end_time": "09:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group D (7-8 yrs)!D8"
+          }
+        }
+      },
+      "sort_order": 940
+    },
+    {
+      "key": "jp-2026-12-27-D-1200-jp-feedback-session",
+      "type": "custom",
+      "title": "Group D · JP Feedback Session",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "12:00",
+          "end_time": "12:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group D (7-8 yrs)!D14"
+          }
+        }
+      },
+      "sort_order": 950
+    },
+    {
+      "key": "jp-2026-12-27-D-1230-wudu-and-line-up-for-prayer",
+      "type": "custom",
+      "title": "Group D · Wudu and Line up for Prayer",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "12:30",
+          "end_time": "13:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group D (7-8 yrs)!D15"
+          }
+        }
+      },
+      "sort_order": 960
+    },
+    {
+      "key": "jp-2026-12-27-D-1300-dhur-asr",
+      "type": "custom",
+      "title": "Group D · Dhur/Asr",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "13:00",
+          "end_time": "13:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group D (7-8 yrs)!D16"
+          }
+        }
+      },
+      "sort_order": 970
+    },
+    {
+      "key": "jp-2026-12-27-D-1330-lunch",
+      "type": "custom",
+      "title": "Group D · Lunch",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "13:30",
+          "end_time": "14:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group D (7-8 yrs)!D17"
+          }
+        }
+      },
+      "sort_order": 980
+    },
+    {
+      "key": "jp-2026-12-27-D-1430-jp-party",
+      "type": "custom",
+      "title": "Group D · JP Party",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "14:30",
+          "end_time": "17:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group D (7-8 yrs)!D19"
+          }
+        }
+      },
+      "sort_order": 990
+    },
+    {
+      "key": "jp-2026-12-27-D-1700-wudu-and-line-up-for-prayer",
+      "type": "custom",
+      "title": "Group D · Wudu and Line up for Prayer",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "17:00",
+          "end_time": "17:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group D (7-8 yrs)!D24"
+          }
+        }
+      },
+      "sort_order": 1000
+    },
+    {
+      "key": "jp-2026-12-27-D-1730-maghrib-isha",
+      "type": "custom",
+      "title": "Group D · Maghrib/Isha",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "17:30",
+          "end_time": "18:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group D (7-8 yrs)!D25"
+          }
+        }
+      },
+      "sort_order": 1010
+    },
+    {
+      "key": "jp-2026-12-27-D-1800-dinner",
+      "type": "custom",
+      "title": "Group D · Dinner",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "18:00",
+          "end_time": "19:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group D (7-8 yrs)!D26"
+          }
+        }
+      },
+      "sort_order": 1020
+    },
+    {
+      "key": "jp-2026-12-27-D-1900-pick-up",
+      "type": "custom",
+      "title": "Group D · Pick up",
+      "description": "Group D · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group D (7-8 yrs)",
+          "Group D"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "19:00",
+          "end_time": "19:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "D",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group D (7-8 yrs)!D28"
+          }
+        }
+      },
+      "sort_order": 1030
+    },
+    {
+      "key": "jp-2026-12-25-E-0830-check-in",
+      "type": "custom",
+      "title": "Group E · Check-in",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "08:30",
+          "end_time": "09:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group E (9 yrs)!B7"
+          }
+        }
+      },
+      "sort_order": 1040
+    },
+    {
+      "key": "jp-2026-12-25-E-1230-wudu-and-line-up-for-prayer",
+      "type": "custom",
+      "title": "Group E · Wudu and Line up for Prayer",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "12:30",
+          "end_time": "13:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group E (9 yrs)!B15"
+          }
+        }
+      },
+      "sort_order": 1050
+    },
+    {
+      "key": "jp-2026-12-25-E-1300-junior-platform-jumuah-asr-for-travelers",
+      "type": "custom",
+      "title": "Group E · Junior Platform Jumuah / Asr for Travelers",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "13:00",
+          "end_time": "14:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group E (9 yrs)!B16"
+          }
+        }
+      },
+      "sort_order": 1060
+    },
+    {
+      "key": "jp-2026-12-25-E-1400-lunch",
+      "type": "custom",
+      "title": "Group E · Lunch",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "14:00",
+          "end_time": "15:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group E (9 yrs)!B18"
+          }
+        }
+      },
+      "sort_order": 1070
+    },
+    {
+      "key": "jp-2026-12-25-E-1700-wudu-and-line-up-for-prayer",
+      "type": "custom",
+      "title": "Group E · Wudu and Line up for Prayer",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "17:00",
+          "end_time": "17:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group E (9 yrs)!B24"
+          }
+        }
+      },
+      "sort_order": 1080
+    },
+    {
+      "key": "jp-2026-12-25-E-1730-maghrib-isha",
+      "type": "custom",
+      "title": "Group E · Maghrib/Isha",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "17:30",
+          "end_time": "18:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group E (9 yrs)!B25"
+          }
+        }
+      },
+      "sort_order": 1090
+    },
+    {
+      "key": "jp-2026-12-25-E-1800-dinner",
+      "type": "custom",
+      "title": "Group E · Dinner",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "18:00",
+          "end_time": "19:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group E (9 yrs)!B26"
+          }
+        }
+      },
+      "sort_order": 1100
+    },
+    {
+      "key": "jp-2026-12-25-E-1900-pick-up",
+      "type": "custom",
+      "title": "Group E · Pick up",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "19:00",
+          "end_time": "19:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-25",
+            "session_key": "2026-12-25:daytime",
+            "source_cell": "Group E (9 yrs)!B28"
+          }
+        }
+      },
+      "sort_order": 1110
+    },
+    {
+      "key": "jp-2026-12-26-E-0830-jp-outing-check-in",
+      "type": "custom",
+      "title": "Group E · JP Outing Check-in",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "08:30",
+          "end_time": "09:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group E (9 yrs)!C7"
+          }
+        }
+      },
+      "sort_order": 1120
+    },
+    {
+      "key": "jp-2026-12-26-E-0900-jp-outing",
+      "type": "custom",
+      "title": "Group E · JP Outing",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "09:00",
+          "end_time": "17:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group E (9 yrs)!C8"
+          }
+        }
+      },
+      "sort_order": 1130
+    },
+    {
+      "key": "jp-2026-12-26-E-1700-wudu-and-line-up-for-prayer",
+      "type": "custom",
+      "title": "Group E · Wudu and Line up for Prayer",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "17:00",
+          "end_time": "17:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group E (9 yrs)!C24"
+          }
+        }
+      },
+      "sort_order": 1140
+    },
+    {
+      "key": "jp-2026-12-26-E-1730-maghrib-isha",
+      "type": "custom",
+      "title": "Group E · Maghrib/Isha",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "17:30",
+          "end_time": "18:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group E (9 yrs)!C25"
+          }
+        }
+      },
+      "sort_order": 1150
+    },
+    {
+      "key": "jp-2026-12-26-E-1800-pick-up-dinner-to-go",
+      "type": "custom",
+      "title": "Group E · Pick up + Dinner to Go",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "18:00",
+          "end_time": "18:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:daytime",
+            "source_cell": "Group E (9 yrs)!C26"
+          }
+        }
+      },
+      "sort_order": 1160
+    },
+    {
+      "key": "jp-2026-12-26-E-1930-gala-night-check-in",
+      "type": "custom",
+      "title": "Group E · Gala Night Check-in",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "19:30",
+          "end_time": "20:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:gala",
+            "source_cell": "Group E (9 yrs)!C29"
+          }
+        }
+      },
+      "sort_order": 1170
+    },
+    {
+      "key": "jp-2026-12-26-E-2000-movie-time-games-sleep",
+      "type": "custom",
+      "title": "Group E · Movie Time/ Games/ Sleep",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "20:00",
+          "end_time": "22:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:gala",
+            "source_cell": "Group E (9 yrs)!C30"
+          }
+        }
+      },
+      "sort_order": 1180
+    },
+    {
+      "key": "jp-2026-12-26-E-2230-gala-night-pick-up",
+      "type": "custom",
+      "title": "Group E · Gala Night Pick up",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "22:30",
+          "end_time": "23:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-26",
+            "session_key": "2026-12-26:gala",
+            "source_cell": "Group E (9 yrs)!C35"
+          }
+        }
+      },
+      "sort_order": 1190
+    },
+    {
+      "key": "jp-2026-12-27-E-0900-check-in",
+      "type": "custom",
+      "title": "Group E · Check-in",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "09:00",
+          "end_time": "09:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group E (9 yrs)!D8"
+          }
+        }
+      },
+      "sort_order": 1200
+    },
+    {
+      "key": "jp-2026-12-27-E-1200-jp-feedback-session",
+      "type": "custom",
+      "title": "Group E · JP Feedback Session",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "12:00",
+          "end_time": "12:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group E (9 yrs)!D14"
+          }
+        }
+      },
+      "sort_order": 1210
+    },
+    {
+      "key": "jp-2026-12-27-E-1230-wudu-and-line-up-for-prayer",
+      "type": "custom",
+      "title": "Group E · Wudu and Line up for Prayer",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "12:30",
+          "end_time": "13:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group E (9 yrs)!D15"
+          }
+        }
+      },
+      "sort_order": 1220
+    },
+    {
+      "key": "jp-2026-12-27-E-1300-dhur-asr",
+      "type": "custom",
+      "title": "Group E · Dhur/Asr",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "13:00",
+          "end_time": "13:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group E (9 yrs)!D16"
+          }
+        }
+      },
+      "sort_order": 1230
+    },
+    {
+      "key": "jp-2026-12-27-E-1330-lunch",
+      "type": "custom",
+      "title": "Group E · Lunch",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "13:30",
+          "end_time": "14:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group E (9 yrs)!D17"
+          }
+        }
+      },
+      "sort_order": 1240
+    },
+    {
+      "key": "jp-2026-12-27-E-1430-jp-party",
+      "type": "custom",
+      "title": "Group E · JP Party",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "14:30",
+          "end_time": "17:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group E (9 yrs)!D19"
+          }
+        }
+      },
+      "sort_order": 1250
+    },
+    {
+      "key": "jp-2026-12-27-E-1700-wudu-and-line-up-for-prayer",
+      "type": "custom",
+      "title": "Group E · Wudu and Line up for Prayer",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "17:00",
+          "end_time": "17:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group E (9 yrs)!D24"
+          }
+        }
+      },
+      "sort_order": 1260
+    },
+    {
+      "key": "jp-2026-12-27-E-1730-maghrib-isha",
+      "type": "custom",
+      "title": "Group E · Maghrib/Isha",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "17:30",
+          "end_time": "18:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group E (9 yrs)!D25"
+          }
+        }
+      },
+      "sort_order": 1270
+    },
+    {
+      "key": "jp-2026-12-27-E-1800-dinner",
+      "type": "custom",
+      "title": "Group E · Dinner",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "18:00",
+          "end_time": "19:00",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group E (9 yrs)!D26"
+          }
+        }
+      },
+      "sort_order": 1280
+    },
+    {
+      "key": "jp-2026-12-27-E-1900-pick-up",
+      "type": "custom",
+      "title": "Group E · Pick up",
+      "description": "Group E · JP programme",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": true,
+      "conditions": {
+        "age_groups_include": [
+          "Group E (9 yrs)",
+          "Group E"
+        ]
+      },
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "19:00",
+          "end_time": "19:30",
+          "room": ""
+        },
+        "program": {
+          "category": "JP programme",
+          "junior": {
+            "kind": "activity",
+            "group": "E",
+            "date": "2026-12-27",
+            "session_key": "2026-12-27:daytime",
+            "source_cell": "Group E (9 yrs)!D28"
+          }
+        }
+      },
+      "sort_order": 1290
+    },
+    {
+      "key": "jp-session-2026-12-25-daytime",
+      "type": "custom",
+      "title": "Daytime JP",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": false,
+      "config": {
+        "session": {
+          "date": "2026-12-25",
+          "start_time": "08:30",
+          "end_time": "19:30"
+        },
+        "program": {
+          "junior": {
+            "kind": "custody_session",
+            "date": "2026-12-25",
+            "groups": [
+              "A",
+              "B",
+              "C",
+              "D",
+              "E"
+            ],
+            "session_key": "2026-12-25:daytime",
+            "review_notes": [
+              "Confirm Group C outing participation: public hours include C but its group timetable remains onsite.",
+              "Confirm outing check-in, bus departure and actual hotel arrival: grid 9am–5pm; notes say departure 10am and return journey starts 4pm.",
+              "Confirm gala pickup window: group sheets show 10:30pm; public operating hours close at 11pm.",
+              "Confirm Friday lunch for Groups A/B around Jumuah.",
+              "Confirm the duration of single-cell activities: the draft currently uses the workbook’s 30-minute grid.",
+              "Confirm physical classrooms, activity locations, staffing targets and the unfilled activity periods."
+            ]
+          }
+        }
+      },
+      "sort_order": 1300
+    },
+    {
+      "key": "jp-session-2026-12-26-daytime",
+      "type": "custom",
+      "title": "Daytime JP",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": false,
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "08:30",
+          "end_time": "18:30"
+        },
+        "program": {
+          "junior": {
+            "kind": "custody_session",
+            "date": "2026-12-26",
+            "groups": [
+              "A",
+              "B",
+              "C",
+              "D",
+              "E"
+            ],
+            "session_key": "2026-12-26:daytime",
+            "review_notes": []
+          }
+        }
+      },
+      "sort_order": 1310
+    },
+    {
+      "key": "jp-session-2026-12-27-daytime",
+      "type": "custom",
+      "title": "Daytime JP",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": false,
+      "config": {
+        "session": {
+          "date": "2026-12-27",
+          "start_time": "09:00",
+          "end_time": "19:30"
+        },
+        "program": {
+          "junior": {
+            "kind": "custody_session",
+            "date": "2026-12-27",
+            "groups": [
+              "A",
+              "B",
+              "C",
+              "D",
+              "E"
+            ],
+            "session_key": "2026-12-27:daytime",
+            "review_notes": []
+          }
+        }
+      },
+      "sort_order": 1320
+    },
+    {
+      "key": "jp-session-2026-12-26-gala",
+      "type": "custom",
+      "title": "Gala childcare",
+      "required": false,
+      "blocks_checkin": false,
+      "enabled": true,
+      "is_segment": false,
+      "config": {
+        "session": {
+          "date": "2026-12-26",
+          "start_time": "19:30",
+          "end_time": "23:00"
+        },
+        "program": {
+          "junior": {
+            "kind": "custody_session",
+            "date": "2026-12-26",
+            "groups": [
+              "A",
+              "B",
+              "C",
+              "D",
+              "E"
+            ],
+            "session_key": "2026-12-26:gala",
+            "review_notes": []
+          }
+        }
+      },
+      "sort_order": 1330
+    }
+  ]
+}

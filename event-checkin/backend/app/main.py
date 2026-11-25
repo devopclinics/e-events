@@ -44,7 +44,7 @@ from .routers import meetings as meetings_router
 from .services import meeting_outbox
 from .models import ApiKeyRequestLog
 from . import junior_models  # Register additive tables before migration/test metadata creation.
-from .routers import junior
+from .routers import junior, junior_programme
 from .services import junior_outbox
 
 # Override with UPLOADS_DIR for local/test runs; defaults to the in-container path.
@@ -278,6 +278,7 @@ app.include_router(invoice_library.router, prefix="/api/media/invoices", tags=["
 app.include_router(auth_router.router, prefix="/api/auth",   tags=["auth"])
 app.include_router(events.router,      prefix="/api/events", tags=["events"])
 app.include_router(junior.router, prefix="/api/events", tags=["junior-programme"])
+app.include_router(junior_programme.router, prefix="/api/events", tags=["junior-programme"])
 app.include_router(public_sites.router, prefix="/api/events", tags=["event-websites"])
 app.include_router(live_content.router, prefix="/api/events", tags=["certificates-presenter-materials"])
 app.include_router(live_content.public_router, prefix="/api/certificates", tags=["certificates-public"])

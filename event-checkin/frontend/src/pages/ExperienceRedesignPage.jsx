@@ -1037,7 +1037,8 @@ export default function ExperienceRedesignPage() {
         config.feedback = { step_key: stepForm.program_feedback_step_key, opens_on: 'segment_end', window_seconds: feedbackWindow }
       }
     } else {
-      delete config.program
+      if(config.program?.junior)config.program={junior:config.program.junior}
+      else delete config.program
       delete config.announce
     }
 

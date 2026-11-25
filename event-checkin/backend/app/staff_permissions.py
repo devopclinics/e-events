@@ -66,7 +66,7 @@ async def enforce_staff_features(request: Request, user: User = Depends(get_curr
     if path in ('/api/events/{event_id}', '/{event_id}') and not write: return
     # Juniors has its own event-local role/permission checks on every handler.
     # Its staff do not need wider event Settings, Team or Guest List grants.
-    if route.endpoint.__module__.rsplit('.',1)[-1] in ('junior','junior_team','junior_volunteers'):
+    if route.endpoint.__module__.rsplit('.',1)[-1] in ('junior','junior_team','junior_volunteers','junior_programme'):
         return
     if eu.event_role == 'manager' and (eu.access_level or 'edit') == 'view' and write:
         # Token exchange is a read operation even though transported by POST.

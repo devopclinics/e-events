@@ -253,6 +253,8 @@ async def step_applies_to_guest(step: ExperienceStep, guest: Guest, db: AsyncSes
     Unknown keys are ignored so older drafts do not break when new condition
     fields are introduced later.
     """
+    from .junior_programme import metadata as junior_metadata
+    if junior_metadata(step).get('kind')=='custody_session':return False
     conditions = step.conditions or {}
     if not isinstance(conditions, dict) or not conditions:
         return True

@@ -1301,6 +1301,20 @@ Go to: More → Inventory → open item
 
 Check the result: Available and issued totals match the recorded actions and physical stock.
 
+### Programme, My classroom and gala sessions
+
+Experience owns one shared schedule. Juniors adds classroom operations and explicit custody sessions.
+
+Go to: More → Programme / My classroom / Supervisor / Gala childcare
+
+1. An Admin links a Juniors Experience draft under Programme source, groups & review. Map age-group values and saved classrooms; configure staffing targets rather than guessing them. Save the table before leaving.
+2. Programme shows the selected day and age group. My classroom shows assigned rooms, current/next activities, checked-in staff and outstanding returns. Supervisor combines live headcounts with staffing coverage for the selected programme date. Scheduled activities never record a child movement.
+3. Gala childcare uses the same child and guardian identities. Search a child, review a fresh drop-off, select the gala session, verify the adult and confirm screening answers and wristbands. A child still in custody must complete the existing movement or verified pickup before another drop-off. Each return, classroom arrival and final pickup remains staff-confirmed.
+4. Drafts are visible to Admins; ordinary volunteers see the approved programme. An Admin may explicitly enable draft rehearsal in a practice event. Practice never sends guardian or volunteer messages; rehearsal admission hours are relaxed but the selected custody session must still be scheduled for today.
+5. Resolve the timetable questions in the Experience draft, confirm the selected review notes in Juniors, assign classrooms to every group and then publish through Experience. The existing sync updates Festio Live. Session custody does not become Experience attendance progress.
+
+Warning: Saved timetables are plans, not evidence of physical attendance. A session with custody history cannot be deleted or edited; preserve it and add a replacement. Publishing a different Experience must not replace an active programme without explicit review.
+
 ## Staff / Check-in
 
 Check guests in at the door. No app needed — runs in your phone browser.
@@ -1493,6 +1507,20 @@ Go to: More → Inventory → open item
 3. Only record a return when items are physically received. Keep clear destination/responsibility notes; overall stock totals do not prove a specific classroom returned its allocation.
 
 Check the result: Available and issued totals match the recorded actions and physical stock.
+
+### Programme, My classroom and gala sessions
+
+Experience owns one shared schedule. Juniors adds classroom operations and explicit custody sessions.
+
+Go to: More → Programme / My classroom / Supervisor / Gala childcare
+
+1. An Admin links a Juniors Experience draft under Programme source, groups & review. Map age-group values and saved classrooms; configure staffing targets rather than guessing them. Save the table before leaving.
+2. Programme shows the selected day and age group. My classroom shows assigned rooms, current/next activities, checked-in staff and outstanding returns. Supervisor combines live headcounts with staffing coverage for the selected programme date. Scheduled activities never record a child movement.
+3. Gala childcare uses the same child and guardian identities. Search a child, review a fresh drop-off, select the gala session, verify the adult and confirm screening answers and wristbands. A child still in custody must complete the existing movement or verified pickup before another drop-off. Each return, classroom arrival and final pickup remains staff-confirmed.
+4. Drafts are visible to Admins; ordinary volunteers see the approved programme. An Admin may explicitly enable draft rehearsal in a practice event. Practice never sends guardian or volunteer messages; rehearsal admission hours are relaxed but the selected custody session must still be scheduled for today.
+5. Resolve the timetable questions in the Experience draft, confirm the selected review notes in Juniors, assign classrooms to every group and then publish through Experience. The existing sync updates Festio Live. Session custody does not become Experience attendance progress.
+
+Warning: Saved timetables are plans, not evidence of physical attendance. A session with custody history cannot be deleted or edited; preserve it and add a replacement. Publishing a different Experience must not replace an active programme without explicit review.
 
 ## Guest
 

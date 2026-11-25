@@ -1252,6 +1252,22 @@
       "url": "/guide.html#org-juniors-inventory"
     },
     {
+      "id": "org-juniors-programme",
+      "role": "organizer",
+      "title": "Programme, My classroom and gala sessions",
+      "intro": "Experience owns one shared schedule. Juniors adds classroom operations and explicit custody sessions.",
+      "before": "",
+      "steps": [
+        "An Admin links a Juniors Experience draft under Programme source, groups & review. Map age-group values and saved classrooms; configure staffing targets rather than guessing them. Save the table before leaving.",
+        "Programme shows the selected day and age group. My classroom shows assigned rooms, current/next activities, checked-in staff and outstanding returns. Supervisor combines live headcounts with staffing coverage for the selected programme date. Scheduled activities never record a child movement.",
+        "Gala childcare uses the same child and guardian identities. Search a child, review a fresh drop-off, select the gala session, verify the adult and confirm screening answers and wristbands. A child still in custody must complete the existing movement or verified pickup before another drop-off. Each return, classroom arrival and final pickup remains staff-confirmed.",
+        "Drafts are visible to Admins; ordinary volunteers see the approved programme. An Admin may explicitly enable draft rehearsal in a practice event. Practice never sends guardian or volunteer messages; rehearsal admission hours are relaxed but the selected custody session must still be scheduled for today.",
+        "Resolve the timetable questions in the Experience draft, confirm the selected review notes in Juniors, assign classrooms to every group and then publish through Experience. The existing sync updates Festio Live. Session custody does not become Experience attendance progress."
+      ],
+      "check": "",
+      "url": "/guide.html#org-juniors-programme"
+    },
+    {
       "id": "staff-join",
       "role": "staff",
       "title": "Get set up before the event",
@@ -1491,6 +1507,22 @@
       ],
       "check": "Available and issued totals match the recorded actions and physical stock.",
       "url": "/guide.html#staff-juniors-inventory"
+    },
+    {
+      "id": "staff-juniors-programme",
+      "role": "staff",
+      "title": "Programme, My classroom and gala sessions",
+      "intro": "Experience owns one shared schedule. Juniors adds classroom operations and explicit custody sessions.",
+      "before": "",
+      "steps": [
+        "An Admin links a Juniors Experience draft under Programme source, groups & review. Map age-group values and saved classrooms; configure staffing targets rather than guessing them. Save the table before leaving.",
+        "Programme shows the selected day and age group. My classroom shows assigned rooms, current/next activities, checked-in staff and outstanding returns. Supervisor combines live headcounts with staffing coverage for the selected programme date. Scheduled activities never record a child movement.",
+        "Gala childcare uses the same child and guardian identities. Search a child, review a fresh drop-off, select the gala session, verify the adult and confirm screening answers and wristbands. A child still in custody must complete the existing movement or verified pickup before another drop-off. Each return, classroom arrival and final pickup remains staff-confirmed.",
+        "Drafts are visible to Admins; ordinary volunteers see the approved programme. An Admin may explicitly enable draft rehearsal in a practice event. Practice never sends guardian or volunteer messages; rehearsal admission hours are relaxed but the selected custody session must still be scheduled for today.",
+        "Resolve the timetable questions in the Experience draft, confirm the selected review notes in Juniors, assign classrooms to every group and then publish through Experience. The existing sync updates Festio Live. Session custody does not become Experience attendance progress."
+      ],
+      "check": "",
+      "url": "/guide.html#staff-juniors-programme"
     },
     {
       "id": "guest-open",

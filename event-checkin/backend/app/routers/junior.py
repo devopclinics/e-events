@@ -10,6 +10,7 @@ from ..auth import require_event_member, _org_role
 from ..models import Event, EventUser, User, Guest
 from ..services import junior_guests as shared
 from ..services import junior_days as days
+from ..services import junior_programme as programme
 from ..services import junior_permissions as permissions
 from ..services.junior_permissions import can, Role, Grant
 from ..services.junior_practice import is_practice
@@ -43,7 +44,7 @@ async def access(event_id, actor, db, *, roles=None, enabled=True, write=True, p
 
 def output_child(child, role):
     keys = ('id','guest_id','name','reference','age_group','classroom','location','allergy','accommodation',
-            'allergy_cleared','accommodation_cleared','screening_wristband_assigned','version','updated_at')
+            'allergy_cleared','accommodation_cleared','screening_wristband_assigned','version','updated_at','session_id')
     result = {k: getattr(child,k) for k in keys}
     result.update(days.view(child))
     result['convention_admitted']=bool(getattr(child,'_convention_admitted',False))
@@ -82,7 +83,7 @@ def tick(child):
 async def audit(db, event, child, actor, action, *, request_id, before=None, **details):
     await shared.refresh_contacts(event,child,db)
     movement = JuniorMovement(event_id=event.id, child_id=child.id, request_id=request_id,
-        action=action, from_location=before or child.location, to_location=child.location,
+        action=action, session_id=child.session_id if action not in ('intake','correction','contact','convention_checkin') else None, from_location=before or child.location, to_location=child.location,
         actor_id=actor.id, occurred_at=days.utcnow(),programme_date=(child.programme_date if action not in ('intake','correction','contact','convention_checkin') else None) or days.day(event),wristbands={'screening':bool(child.screening_wristband_assigned),'allergy':bool(child.allergy and child.allergy_cleared),'accommodation':bool(child.accommodation and child.accommodation_cleared)}, **details)
     db.add(movement)
     await db.flush()
@@ -102,6 +103,10 @@ async def audit(db, event, child, actor, action, *, request_id, before=None, **d
     body = f'{event.name} / Festio Juniors: {child.name}. {labels.get(action, action)}. {local:%b %d, %I:%M %p %Z}.'
     if movement.programme_date!=local.date().isoformat():
         body=f'{event.name} / Festio Juniors: {child.name}. Prior programme day {movement.programme_date} reconciled: {labels.get(action, action)}. Recorded {local:%b %d, %I:%M %p %Z}.'
+    if movement.session_id:
+        from ..models import ExperienceStep
+        session=await db.get(ExperienceStep,movement.session_id)
+        if session and programme.metadata(session).get('kind')=='custody_session':body += f' Session: {session.title}.'
     if action == 'classroom':
         body += f' Classroom: {child.classroom}.'
     if action == 'release':
@@ -153,7 +158,7 @@ async def config_get(event_id: str, db=Depends(get_db), actor=Depends(require_ev
         'classrooms':config.classrooms if config else [],
         'staff':config.staff if config and admin else {},
         'notifications_enabled':bool(config and config.notifications_enabled),'today':days.day(event),
-        'dropoff_start_date':config.dropoff_start_date if config else None,
+        'dropoff_start_date':config.dropoff_start_date if config else None,'programme_configured':bool(programme.settings(event).get('workflow_id')),'sessions_required':bool(programme.settings(event).get('sessions_required')),
         'available_staff':[{'id':u.id,'name':u.name,'view_only':eu.access_level=='view'} for eu,u in
             (await db.execute(select(EventUser,User).join(User,User.id==EventUser.user_id).where(EventUser.event_id==event_id))).all()] if admin else []}
 
@@ -422,7 +427,12 @@ async def child_detail(event_id: str, child_id: str, db=Depends(get_db), actor=D
             guardian=await db.get(Guest,contact.guardian_guest_id) if contact.guardian_guest_id else None
             entry['guardian_updated_at']=guardian.updated_at if guardian else None
     history=(await db.scalars(select(JuniorMovement).where(JuniorMovement.child_id==child_id).order_by(JuniorMovement.occurred_at.desc()).limit(100))).all()
-    result['history']=[{k:getattr(m,k) for k in ('id','action','from_location','to_location','adult_name','relationship','actor_id','occurred_at','wristbands','programme_date')} for m in history]
+    result['history']=[{k:getattr(m,k) for k in ('id','action','from_location','to_location','adult_name','relationship','actor_id','occurred_at','wristbands','programme_date','session_id')} for m in history]
+    from ..models import ExperienceStep,ExperienceWorkflow
+    session_ids={m.session_id for m in history if m.session_id}|({child.session_id} if child.session_id else set())
+    titles=dict((await db.execute(select(ExperienceStep.id,ExperienceStep.title).join(ExperienceWorkflow).where(ExperienceStep.id.in_(session_ids),ExperienceWorkflow.event_id==event_id))).all()) if session_ids else {}
+    result['session_name']=titles.get(child.session_id)
+    for entry in result['history']:entry['session_name']=titles.get(entry.get('session_id'))
     actor_ids={m.actor_id for m in history}
     names={u.id:u.name for u in (await db.scalars(select(User).where(User.id.in_(actor_ids)))).all()}
     for entry,m in zip(result['history'],history):
@@ -537,6 +547,7 @@ class ActionIn(BaseModel):
     notes: str | None = Field(default=None,max_length=2000)
     wristband_assigned: bool = False
     screening_wristband_assigned: bool = False
+    session_id: str | None = Field(default=None,max_length=36)
     outing_id: str | None = None
     programme_date: str | None = Field(default=None,pattern=r'^\d{4}-\d{2}-\d{2}$')
 
@@ -550,6 +561,7 @@ async def action(event_id: str, child_id: str, body: ActionIn, background_tasks:
     if prior:
         if prior.child_id!=child_id or prior.action!=body.action:
             raise HTTPException(409,'Request ID was already used for another operation')
+        if body.action=='dropoff' and prior.session_id!=body.session_id:raise HTTPException(409,'This request belongs to a different session. Refresh before continuing.')
         if body.action=='dropoff' and (prior.programme_date or days.day(event,prior.occurred_at))!=days.day(event):
             raise HTTPException(409,'That drop-off request belongs to a previous day. Refresh and record a new drop-off for today.')
         return output_child(child,role)
@@ -560,6 +572,11 @@ async def action(event_id: str, child_id: str, body: ActionIn, background_tasks:
     today=days.day(event)
     if days.view(child,event)['prior_day_unresolved'] and not can(role,'reconcile'):
         raise HTTPException(409,'Previous-day custody is still open. Ask a supervisor to reconcile it before today’s drop-off.')
+    selected_session=None
+    if a=='dropoff':
+        if programme.settings(event).get('sessions_required') and not body.session_id:raise HTTPException(409,'Choose the programme session for this drop-off')
+        if body.session_id:selected_session=await programme.validate_session(event,child,body.session_id,db)
+    elif body.session_id and body.session_id!=child.session_id:raise HTTPException(409,'This child is in a different custody session')
     newly_admitted=False
     if a in ('dropoff','convention_checkin'):
         guest=await db.get(Guest,child.guest_id)
@@ -609,6 +626,7 @@ async def action(event_id: str, child_id: str, body: ActionIn, background_tasks:
                 if not await db.scalar(select(AttendanceRecord.id).where(AttendanceRecord.event_id==event_id,AttendanceRecord.guest_id==guest.id,AttendanceRecord.scope=='daily',AttendanceRecord.scope_key==today)):raise
         child._convention_admitted=True
         if a=='dropoff':
+            child.session_id=selected_session.id if selected_session else None
             child.programme_date=today
             child._programme_today=today
             child.screening_wristband_assigned=body.screening_wristband_assigned

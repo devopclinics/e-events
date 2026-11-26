@@ -44,3 +44,5 @@
 /* Staff navigation must remain reachable beneath the global contact widgets. */
 body:has(.jp-phone-experience) :is(.fwc-launch,.festio-chat){z-index:35}
 @media(max-width:760px){body:has(.jp-phone-experience) .fwc-launch{top:auto!important;left:auto!important;right:16px!important;bottom:calc(96px + env(safe-area-inset-bottom))!important}body:has(.jp-phone-experience) .fwc-move{display:none}body:has(.jp-phone-experience) .festio-chat{right:16px;bottom:calc(96px + env(safe-area-inset-bottom))}}
+
+.jp-detail .jp-released-summary{padding:20px;border:1px solid var(--jp-accent);border-radius:16px;background:var(--jp-accent-soft);color:var(--ink);margin:16px 0}.jp-released-summary h3{display:flex;align-items:center;gap:10px;font-size:24px;color:var(--jp-accent);margin:8px 0}.jp-released-summary time{font-weight:650}

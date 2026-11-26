@@ -164,3 +164,16 @@ async def test_custody_sessions_are_staff_only_and_new_sessions_use_same_source(
     after=(await ctx.client.get(root+'/programme')).json();assert len(after['sessions'])==3 and after['source']['id']==data['source']['id']
     assert (await ctx.client.post(root+'/programme/sessions',json=body)).status_code==409
     r=await ctx.client.post(root+'/programme/sessions',json={**body,'expected_revision':2,'groups':[]});assert r.status_code==422
+
+@pytest.mark.asyncio
+async def test_session_attendance_event_wide_while_classroom_counts_remain_assigned(ctx):
+    from test_junior_permissions import invite
+    root=await setup(ctx);c=await child(ctx,root);data=await source(ctx,root)
+    gala=next(s for s in data['sessions'] if s['session_key'].endswith(':gala'))
+    c=await act(ctx,root,c,'dropoff',session_id=gala['id'],adult_name='Test parent',relationship='parent',identity_checked=True,allergy=False,accommodation=False,screening_wristband_assigned=True)
+    contact=(await ctx.client.get(root+'/children/'+c['id'])).json()['contacts'][0]['id']
+    await act(ctx,root,c,'release',contact_id=contact,identity_checked=True)
+    user,euid=await invite(ctx,root,permissions=['checkin']);ctx.login(user)
+    d=(await ctx.client.get(root+'/programme')).json();assert not d['my_groups'] and not d['can_supervise'];assert not d['group_counts'].get('B') and not d['totals']
+    session=next(s for s in d['sessions'] if s['id']==gala['id']);assert session['counts']['arrivals']==1 and session['counts']['pickups']==1 and session['counts']['outstanding']==0
+    assert (await ctx.client.put(root+'/programme/settings',json={'expected_revision':1,'groups':[]})).status_code==403

@@ -25,7 +25,7 @@ export default function JuniorProgramme({view='programme',call,config,children:r
  const coverage=data?.coverage.find(c=>c.group===selectedGroup)
  const sessions=data?.sessions||[],galaSessions=sessions.filter(s=>s.session_key?.endsWith(':gala'))
  const session=galaSessions.find(s=>s.id===sessionId)||galaSessions[0]
- const found=query.trim()&&session?roster.filter(c=>`${c.name} ${c.reference||''}`.toLowerCase().includes(query.trim().toLowerCase())&&session.groups?.includes(groupOf(c,data.groups))&&(data.can_supervise||mine.includes(groupOf(c,data.groups)))):[]
+ const found=query.trim()&&session&&data.can_view_children?roster.filter(c=>`${c.name} ${c.reference||''}`.toLowerCase().includes(query.trim().toLowerCase())&&session.groups?.includes(groupOf(c,data.groups))):[]
  async function saveSettings(e){e.preventDefault();setWorking(true);setError('');try{await call('/programme/settings','PUT',{workflow_id:settings.workflow_id||null,expected_revision:settings.revision||0,groups:(settings.groups||[]).map(({age_group_text,...g})=>({...g,age_groups:(age_group_text??(g.age_groups||[]).join(',')).split(',').map(x=>x.trim()).filter(Boolean)})),practice_preview:!!settings.practice_preview,sessions_required:!!settings.sessions_required});await load()}catch(e){setError(e.message)}finally{setWorking(false)}}
  const editSettings=fn=>{dirty.current=true;setSettings(fn)}
  const startEdit=x=>{if(dirty.current){setError('Save your group and source changes before editing an activity.');return}const hh=v=>new Date(v).toLocaleTimeString('en-GB',{timeZone:data.timezone,hour:'2-digit',minute:'2-digit',hour12:false});setEditing({...x,start_time:hh(x.starts_at),end_time:hh(x.ends_at)});setError('')}

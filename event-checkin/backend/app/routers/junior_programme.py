@@ -90,11 +90,12 @@ async def programme(event_id:str,on:date|None=None,group:str|None=None,db=Depend
     for c in children:
         state=days.view(c,event);key=service.group_for(c,groups);location=state['location']
         if not key:unmapped+=1
+        # Custody sessions use the same event-wide child access as reception/Gala.
+        if c.session_id in session_counts and c.programme_date==selected:session_counts[c.session_id][location]=session_counts[c.session_id].get(location,0)+1
         if not supervisor and key not in mine:continue
         totals[location]=totals.get(location,0)+1
         if key:
             group_counts[key][location]=group_counts[key].get(location,0)+1
-        if c.session_id in session_counts and c.programme_date==selected:session_counts[c.session_id][location]=session_counts[c.session_id].get(location,0)+1
         if location in ('clinic','other','outing'):
             away.append({'id':c.id,'name':c.name,'location':location,'group':key,'session_id':c.session_id,'prior_day_unresolved':state['prior_day_unresolved']})
     if sessions and can(role,'view_children'):
@@ -103,7 +104,7 @@ async def programme(event_id:str,on:date|None=None,group:str|None=None,db=Depend
         latest={};arrivals={s['id']:set() for s in sessions}
         for m in movements:
             c=by_id.get(m.child_id)
-            if not c or (not supervisor and service.group_for(c,groups) not in mine):continue
+            if not c:continue
             latest[(m.session_id,m.child_id)]=m
             if m.action=='dropoff':arrivals[m.session_id].add(m.child_id)
         for session in sessions:

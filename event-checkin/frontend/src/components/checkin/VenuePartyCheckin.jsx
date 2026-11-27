@@ -41,6 +41,10 @@ export default function VenuePartyCheckin({ code, info }) {
   const [error, setError] = useState('')
   const [results, setResults] = useState(null)
 
+  const checkedInMembers = party?.members.filter(member => member.admitted) || []
+  const everyoneCheckedIn = !!party?.members.length && checkedInMembers.length === party.members.length
+  const viewerCheckedIn = checkedInMembers.some(member => member.id === party?.viewer_id)
+
   async function load(value) {
     const credential = value.startsWith('lookup.') ? value : invitationToken(value)
     if (!credential) { setError('Paste your personal invitation link from your confirmation message.'); return }
@@ -110,18 +114,24 @@ export default function VenuePartyCheckin({ code, info }) {
       <button className="ki-btn" disabled={!!busy || !entry.trim()}>Find my registration</button>
     </form>}
     {party && <>
-      <p className="ki-subtitle">Select only the guests who have arrived. Guests arriving later can check in later.</p>
+      {checkedInMembers.length > 0 && <div className="vp-attendance-summary" role="status">
+        <span className="vp-attendance-icon" aria-hidden="true">✓</span>
+        <div><strong>{everyoneCheckedIn ? 'Everyone in your party is already checked in.' : viewerCheckedIn ? 'You’re already checked in.' : `${checkedInMembers.length} ${checkedInMembers.length === 1 ? 'guest is' : 'guests are'} already checked in.`}</strong>
+          <p>{everyoneCheckedIn ? 'Your arrivals are recorded. Enjoy the event!' : `${checkedInMembers.length} of ${party.members.length} guests in your RSVP party are checked in. Select only the remaining guests who have arrived.`}</p>
+        </div>
+      </div>}
+      {!everyoneCheckedIn && <p className="ki-subtitle">Select only the guests who have arrived. Guests arriving later can check in later.</p>}
       <fieldset className="vp-members" disabled={!!busy}>
         <legend>Who has arrived?</legend>
-        {party.members.map(member => <label className="vp-member" key={member.id}>
-          <input type="checkbox" checked={selected.includes(member.id)} disabled={member.admitted} onChange={e => {
+        {party.members.map(member => <label className={`vp-member${member.admitted ? ' is-admitted' : ''}`} key={member.id}>
+          <input type="checkbox" checked={member.admitted || selected.includes(member.id)} disabled={member.admitted} onChange={e => {
             setSelected(ids => e.target.checked ? [...ids, member.id] : ids.filter(id => id !== member.id)); setConfirmed(false)
           }}/>
-          <span><strong>{member.name}{member.id === party.viewer_id ? ' (You)' : ''}</strong><small>{member.admitted ? 'Already checked in' : 'Not checked in'}</small></span>
+          <span className="vp-person-info"><strong>{member.name}{member.id === party.viewer_id ? ' (You)' : ''}</strong>{member.admitted ? <span className="vp-checked-badge"><span aria-hidden="true">✓</span> Already checked in</span> : <small>Not checked in</small>}</span>
         </label>)}
       </fieldset>
-      <label className="vp-confirm"><input type="checkbox" checked={confirmed} disabled={!!busy} onChange={e => setConfirmed(e.target.checked)}/>I confirm everyone selected is here with me at the venue.</label>
-      <button className="ki-btn" disabled={!!busy || !confirmed || !selected.length} onClick={checkin}>Check in {selected.length || ''} {selected.length === 1 ? 'guest' : 'guests'}</button>
+      {!everyoneCheckedIn && <><label className="vp-confirm"><input type="checkbox" checked={confirmed} disabled={!!busy} onChange={e => setConfirmed(e.target.checked)}/>I confirm everyone selected is here with me at the venue.</label>
+      <button className="ki-btn" disabled={!!busy || !confirmed || !selected.length} onClick={checkin}>Check in {selected.length || ''} {selected.length === 1 ? 'guest' : 'guests'}</button></>}
       <button className="vp-reload" disabled={!!busy} onClick={() => load(token)}>Refresh registration</button>
       {info.lookup_enabled && <button className="vp-reload" disabled={!!busy} onClick={restartSearch}>Find another registration</button>}
     </>}

@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test'
 const TOKEN = 'synthetic-personal-token-for-venue'
-async function fixture(page, rejectLocation = false, lookup = false, code = 'QA2026') {
+async function fixture(page, rejectLocation = false, lookup = false, code = 'QA2026', already = []) {
   const rows = [{ id: 'lead', name: 'Primary Attendee', admitted: false }, { id: 'arrived', name: 'Arrived Companion', admitted: false }, { id: 'later', name: 'Later Companion', admitted: false }]
+  rows.forEach(member => { if (already.includes(member.id)) member.admitted = true })
   const submissions = [], errors = [], searches = []
   page.on('pageerror', error => errors.push(error.message))
   await page.route('**/api/**', async route => {
@@ -141,4 +142,30 @@ test('Ilorin welcome is branded, readable and keeps the arrival flow working', a
   await expect(page.getByRole('checkbox', { name: /Later Companion/ })).toBeEnabled()
   expect(errors).toEqual([])
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+
+
+test('existing arrivals are unmistakable and only remaining guests can check in', async ({ page }, testInfo) => {
+  const { submissions } = await fixture(page, false, true, 'iedpu26', ['lead', 'arrived'])
+  await page.goto('/e/iedpu26')
+  await page.getByRole('textbox', { name: 'Name, phone number or email' }).fill('Primary Attendee')
+  await page.getByRole('button', { name: 'Find my registration' }).click()
+  await page.getByRole('button', { name: 'Primary Attendee', exact: true }).click()
+  await expect(page.getByRole('status')).toContainText('You’re already checked in.')
+  await expect(page.getByRole('status')).toContainText('2 of 3 guests')
+  for (const name of [/Primary Attendee/, /Arrived Companion/]) {
+    await expect(page.getByRole('checkbox', { name })).toBeChecked()
+    await expect(page.getByRole('checkbox', { name })).toBeDisabled()
+  }
+  await expect(page.locator('.vp-checked-badge')).toHaveCount(2)
+  await expect(page.locator('.vp-member.is-admitted')).toHaveCount(2)
+  await page.screenshot({ path: testInfo.outputPath('already-checked-in.png'), fullPage: true })
+  await page.getByRole('checkbox', { name: /Later Companion/ }).check()
+  await page.getByRole('checkbox', { name: /I confirm everyone selected/ }).check()
+  await page.getByRole('button', { name: 'Check in 1 guest', exact: true }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Everyone in your party is already checked in.' })).toBeVisible()
+  await expect(page.locator('.vp-checked-badge')).toHaveCount(3)
+  expect(submissions[0].guest_ids).toEqual(['later'])
+  await expect(page.getByRole('checkbox', { name: /I confirm everyone selected/ })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /Check in [0-9]/ })).toHaveCount(0)
 })

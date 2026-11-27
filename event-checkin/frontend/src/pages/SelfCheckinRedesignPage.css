@@ -173,3 +173,14 @@
 .vp-result { padding: 12px 0; border-bottom: 1px solid #e5e7eb; }
 .vp-result p { margin-top: 6px; line-height: 1.5; }
 @media(max-width: 540px) { .ki-kiosk:has(.vp-card) { padding: 12px; justify-content: flex-start; } .vp-card { padding: 28px 20px; } }
+
+/* Recorded attendance is explicit even before selecting any new arrivals. */
+.vp-attendance-summary { display: flex; align-items: flex-start; gap: 12px; margin: 20px 0 8px; padding: 16px; border: 1px solid #9cc7a0; border-radius: 14px; background: #e9f5e9; color: #17482c; }
+.vp-attendance-summary strong { display: block; font-size: 15px; line-height: 1.45; }
+.vp-attendance-summary p { margin: 6px 0 0; font-size: 12px; line-height: 1.65; color: #31573b; }
+.vp-attendance-icon { display: grid; place-items: center; flex: 0 0 28px; height: 28px; border-radius: 50%; background: #24603b; color: #fff; font-size: 17px; font-weight: 800; }
+.vp-person-info { min-width: 0; }
+.vp-person-info>strong { display: block; }
+.vp-members .vp-member.is-admitted { margin: 8px 0; padding: 14px 12px; border: 1px solid #bdd9b8; border-radius: 12px; background: #eef7e9; }
+.vp-members .vp-member.is-admitted input { opacity: 1; accent-color: #24603b; }
+.vp-checked-badge { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; padding: 5px 9px; border-radius: 6px; background: #d3e9ca; color: #174329; font-size: 12px; line-height: 1.35; font-weight: 800; }

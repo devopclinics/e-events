@@ -197,12 +197,15 @@ class EventSourceUpdate(BaseModel):
 class SelfCheckinConfig(BaseModel):
     geofence_enabled: bool = False
     party_enabled: bool = False
+    lookup_enabled: bool = False
     latitude: Optional[float] = Field(default=None, ge=-90, le=90, allow_inf_nan=False)
     longitude: Optional[float] = Field(default=None, ge=-180, le=180, allow_inf_nan=False)
     radius_m: int = Field(default=150, ge=25, le=1000)
 
     @model_validator(mode="after")
     def require_venue(self):
+        if self.lookup_enabled and not self.geofence_enabled:
+            raise ValueError("Venue-only check-in must be enabled for name, phone or email lookup")
         if self.geofence_enabled and (self.latitude is None or self.longitude is None):
             raise ValueError("Set the venue latitude and longitude before enabling venue-only check-in")
         return self
@@ -1643,7 +1646,7 @@ class SelfCheckinRequest(BaseModel):
 
 
 class SelfCheckinPartyRequest(SelfCheckinRequest):
-    token: str = Field(min_length=16, max_length=200)
+    token: str = Field(min_length=16, max_length=300)
     guest_ids: list[str] = Field(default_factory=list, max_length=100)
     confirm_arrived: bool = False
 
@@ -1663,6 +1666,16 @@ class SelfCheckinSearch(SelfCheckinRequest):
     query: str
 
 
+class SelfCheckinLookupMatch(BaseModel):
+    name: str
+    lookup_token: str
+
+
+class SelfCheckinLookupOut(BaseModel):
+    matches: list[SelfCheckinLookupMatch] = Field(default_factory=list)
+    message: Optional[str] = None
+
+
 class SelfCheckinGuest(BaseModel):
     id: str
     name: str            # full name only — no phone/email exposed publicly
@@ -1674,6 +1687,7 @@ class SelfCheckinResult(BaseModel):
     name: Optional[str] = None            # event name (info call)
     location_required: bool = False
     party_enabled: bool = False
+    lookup_enabled: bool = False
     personal_link_required: bool = False
     venue_name: Optional[str] = None
     guests: list[SelfCheckinGuest] = []   # search results

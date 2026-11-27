@@ -1141,6 +1141,7 @@ export const api = {
   setEventCode: (eventId, eventCode) => req('PATCH', `/events/${eventId}/event-code`, { event_code: eventCode }),
 
   setSelfCheckinConfig: (eventId, config) => req('PATCH', `/events/${eventId}/self-checkin-config`, config),
+  selfCheckinLookup: (code, body) => guestRead(`/e/${encodeURIComponent(code)}/lookup`, 'Registration search could not be completed.', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
   selfCheckinParty: (code, body) => guestRead(`/e/${encodeURIComponent(code)}/party`, 'Registration could not be loaded.', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
   selfCheckinPartyAdmit: (code, body) => guestRead(`/e/${encodeURIComponent(code)}/party/checkin`, 'Check-in could not be recorded.', { signal: AbortSignal.timeout(60000), method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
 

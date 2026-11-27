@@ -8,6 +8,10 @@ list can't be browsed. Admission reuses the exact QR/manual admission flow.
 """
 from datetime import datetime, timezone
 import math
+import hashlib
+import hmac
+import re
+import time
 from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, Body
 from fastapi.responses import Response
 from sqlalchemy import select, func, or_
@@ -18,7 +22,7 @@ from ..models import Event, Guest
 from ..ratelimit import rate_limit
 from ..seating_terms import seating_term as _seating_term, seat_term as _seat_term
 from ..schemas import (SelfCheckinSearch, SelfCheckinResult, SelfCheckinGuest,
-    SelfCheckinRequest, SelfCheckinPartyRequest, SelfCheckinPartyOut, SelfCheckinConfig)
+    SelfCheckinRequest, SelfCheckinPartyRequest, SelfCheckinPartyOut, SelfCheckinConfig, SelfCheckinLookupOut)
 from .scanner import perform_admission
 from services.qr_service import generate_qr_for_url
 
@@ -28,6 +32,8 @@ router = APIRouter()
 # sharing that venue's public IP), keyed per event_code so one busy event can't
 # starve another and a whole venue isn't throttled as a single client.
 _search_limit = rate_limit(limit=60, window=60, scope="selfcheckin_search")
+_lookup_limit = rate_limit(limit=600, window=60, scope="selfcheckin_lookup")
+_party_limit = rate_limit(limit=600, window=60, scope="selfcheckin_party")
 _admit_limit = rate_limit(limit=120, window=60, scope="selfcheckin_admit")
 
 
@@ -54,7 +60,8 @@ async def self_checkin_info(event_code: str, db: AsyncSession = Depends(get_db))
     config = SelfCheckinConfig.model_validate(ev.self_checkin_config or {})
     return SelfCheckinResult(status="ok", name=ev.name,
         location_required=config.geofence_enabled, party_enabled=config.party_enabled,
-        personal_link_required=config.party_enabled, venue_name=ev.venue_name)
+        lookup_enabled=config.lookup_enabled,
+        personal_link_required=config.party_enabled and not config.lookup_enabled, venue_name=ev.venue_name)
 
 
 @router.post("/{event_code}/search", response_model=SelfCheckinResult, dependencies=[Depends(_search_limit)])
@@ -168,10 +175,13 @@ async def _party_context(event_code, token, db):
     ev = await _event_by_code(event_code, db)
     if not ev or not ev.self_checkin_enabled or not _live(ev):
         raise HTTPException(403, "Self check-in is not open. Please visit the check-in desk.")
-    from .invite import _get_guest_by_token
-    viewer, token_event = await _get_guest_by_token(token, db)
-    if token_event.id != ev.id:
-        raise HTTPException(404, "This invitation does not belong to this event.")
+    if token.startswith("lookup."):
+        viewer = await _lookup_viewer(ev, token, db)
+    else:
+        from .invite import _get_guest_by_token
+        viewer, token_event = await _get_guest_by_token(token, db)
+        if token_event.id != ev.id:
+            raise HTTPException(404, "This invitation does not belong to this event.")
     scopes = [Guest.id == viewer.id]
     config = SelfCheckinConfig.model_validate(ev.self_checkin_config or {})
     # Only the person who registered companions can check them in. A dependant's
@@ -184,7 +194,7 @@ async def _party_context(event_code, token, db):
     return ev, viewer, members
 
 
-@router.post("/{event_code}/party", response_model=SelfCheckinPartyOut, dependencies=[Depends(_search_limit)])
+@router.post("/{event_code}/party", response_model=SelfCheckinPartyOut, dependencies=[Depends(_party_limit)])
 async def self_checkin_party(event_code: str, body: SelfCheckinPartyRequest,
                             response: Response, db: AsyncSession = Depends(get_db)):
     ev, viewer, members = await _party_context(event_code, body.token, db)
@@ -219,3 +229,75 @@ async def self_checkin_party_admit(event_code: str, body: SelfCheckinPartyReques
         result.admitted_guest = f"{guest.first_name} {guest.last_name}".strip()
         results.append(result)
     return results
+
+
+def _lookup_signature(event_id, guest, expires):
+    # Use the guest's existing private pass as a per-guest signing secret, never
+    # return it. The short-lived lookup credential works across all replicas.
+    payload = f"self-checkin-lookup:v1:{event_id}:{guest.id}:{expires}"
+    return hmac.new(guest.qr_token.encode(), payload.encode(), hashlib.sha256).hexdigest()
+
+
+def _lookup_token(event_id, guest):
+    expires = int(time.time()) + 600
+    return f"lookup.{guest.id}.{expires}.{_lookup_signature(event_id, guest, expires)}"
+
+
+async def _lookup_viewer(event, token, db):
+    denied = HTTPException(403, "Your registration selection has expired. Please search again.")
+    if not (event.self_checkin_config or {}).get("lookup_enabled"):
+        raise denied
+    try:
+        prefix, guest_id, expiry, signature = token.split(".")
+        expires = int(expiry)
+        if prefix != "lookup" or expires < int(time.time()):
+            raise ValueError()
+    except (ValueError, TypeError):
+        raise denied
+    guest = await db.get(Guest, guest_id)
+    if not guest or guest.event_id != event.id or not guest.qr_token:
+        raise denied
+    if not hmac.compare_digest(signature, _lookup_signature(event.id, guest, expires)):
+        raise denied
+    from ..services.public_event_policy import require_public_invitation
+    await require_public_invitation(event, db)
+    return guest
+
+
+@router.post("/{event_code}/lookup", response_model=SelfCheckinLookupOut, dependencies=[Depends(_lookup_limit)])
+async def self_checkin_lookup(event_code: str, body: SelfCheckinSearch,
+                             response: Response, db: AsyncSession = Depends(get_db)):
+    ev = await _event_by_code(event_code, db)
+    if not ev or not ev.self_checkin_enabled or not _live(ev) or not (ev.self_checkin_config or {}).get("lookup_enabled"):
+        raise HTTPException(403, "Registration search is not available. Please visit the check-in desk.")
+    from ..services.public_event_policy import require_public_invitation
+    await require_public_invitation(ev, db)
+    _require_location(ev, body.location)
+    response.headers["Cache-Control"] = "no-store, private"
+    query = " ".join((body.query or "").strip().lower().split())
+    if len(query) < 3 or len(query) > 200:
+        return SelfCheckinLookupOut(message="Enter at least 3 letters of your name, or your full phone number or email.")
+    if "@" in query:
+        criterion = func.lower(func.trim(Guest.email)) == query
+    elif re.fullmatch(r"[+() .0-9-]+", query):
+        digits = re.sub(r"\D", "", query)
+        if len(digits) < 7:
+            return SelfCheckinLookupOut(message="Enter your full phone number, including the area code.")
+        phone = func.coalesce(Guest.phone, "")
+        for char in ("+", " ", "(", ")", "-", "."):
+            phone = func.replace(phone, char, "")
+        variants = {digits}
+        if len(digits) == 10: variants.add("1" + digits)
+        if digits.startswith("00"): variants.add(digits[2:])
+        criterion = phone.in_(variants)
+    else:
+        criterion = or_(func.lower(Guest.first_name).contains(query, autoescape=True),
+                        func.lower(Guest.last_name).contains(query, autoescape=True),
+                        func.lower(func.trim(Guest.first_name + " " + Guest.last_name)).contains(query, autoescape=True))
+    rows = (await db.scalars(select(Guest).where(Guest.event_id == ev.id, criterion,
+                       Guest.qr_token.is_not(None), Guest.qr_token != "").order_by(Guest.last_name, Guest.first_name).limit(6))).all()
+    if len(rows) > 5:
+        return SelfCheckinLookupOut(message="Several registrations match. Enter your full name, phone number or email to narrow the search.")
+    return SelfCheckinLookupOut(matches=[{"name": f"{g.first_name} {g.last_name}".strip(),
+                                        "lookup_token": _lookup_token(ev.id, g)} for g in rows],
+                               message=None if rows else "No matching registration found. Try another name, phone number or email, or visit the check-in desk.")

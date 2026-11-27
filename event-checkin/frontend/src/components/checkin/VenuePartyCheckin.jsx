@@ -28,6 +28,9 @@ function currentLocation() {
 export default function VenuePartyCheckin({ code, info }) {
   const initialToken = new URLSearchParams(window.location.hash.slice(1)).get('token') || new URLSearchParams(window.location.search).get('token') || ''
   const [entry, setEntry] = useState(initialToken)
+  const [query, setQuery] = useState('')
+  const [matches, setMatches] = useState([])
+  const [lookupMessage, setLookupMessage] = useState('')
   const [token, setToken] = useState('')
   const [party, setParty] = useState(null)
   const [selected, setSelected] = useState([])
@@ -37,7 +40,7 @@ export default function VenuePartyCheckin({ code, info }) {
   const [results, setResults] = useState(null)
 
   async function load(value) {
-    const credential = invitationToken(value)
+    const credential = value.startsWith('lookup.') ? value : invitationToken(value)
     if (!credential) { setError('Paste your personal invitation link from your confirmation message.'); return }
     setBusy('Loading your registration…'); setError(''); setResults(null); setParty(null); setSelected([]); setConfirmed(false)
     try {
@@ -48,6 +51,24 @@ export default function VenuePartyCheckin({ code, info }) {
     finally { setBusy('') }
   }
   useEffect(() => { if (initialToken) load(initialToken) }, [code]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function search() {
+    if (busy || query.trim().length < 3) return
+    setBusy(info.location_required ? 'Verifying your location…' : 'Finding your registration…')
+    setError(''); setMatches([]); setLookupMessage('')
+    try {
+      const location = info.location_required ? await currentLocation() : undefined
+      setBusy('Finding your registration…')
+      const data = await api.selfCheckinLookup(code, { query: query.trim(), location })
+      setMatches(data.matches || []); setLookupMessage(data.message || '')
+    } catch (err) { setError(err.message || 'Your registration could not be found. Please try again.') }
+    finally { setBusy('') }
+  }
+
+  function restartSearch() {
+    setParty(null); setToken(''); setSelected([]); setConfirmed(false)
+    setMatches([]); setResults(null); setError(''); setLookupMessage('')
+  }
 
   async function checkin() {
     if (busy || !confirmed || !selected.length) return
@@ -72,7 +93,15 @@ export default function VenuePartyCheckin({ code, info }) {
     <h1 className="ki-title">{info.name}</h1>
     <h2 className="vp-heading">{info.party_enabled ? 'Check in your RSVP party' : 'Self check-in'}</h2>
     {info.location_required && <p className="ki-subtitle">Check in when you arrive at {info.venue_name || 'the venue'}. Allow location access to verify you are nearby.</p>}
-    {!party && <form className="ki-form" onSubmit={e => { e.preventDefault(); load(entry) }}>
+    {!party && info.lookup_enabled && <form className="ki-form" onSubmit={e => { e.preventDefault(); search() }}>
+      <label htmlFor="registration-query">Name, phone number or email</label>
+      <input id="registration-query" className="ki-input" value={query} onChange={e => { setQuery(e.target.value); setMatches([]); setLookupMessage('') }} autoComplete="off" placeholder="Enter your name, phone number or email"/>
+      <p className="vp-note">Enter your name or the full phone number or email used for your RSVP. Select your registration, then choose who has arrived.</p>
+      <button className="ki-btn" disabled={!!busy || query.trim().length < 3}>Find my registration</button>
+      {lookupMessage && <p className="vp-note" role="status">{lookupMessage}</p>}
+      {matches.length > 0 && <div className="ki-results"><p className="ki-results-label">Select your registration</p>{matches.map(match => <button type="button" className="ki-result-row" disabled={!!busy} key={match.lookup_token} onClick={() => load(match.lookup_token)}>{match.name}<span aria-hidden="true"> →</span></button>)}</div>}
+    </form>}
+    {!party && !info.lookup_enabled && <form className="ki-form" onSubmit={e => { e.preventDefault(); load(entry) }}>
       <label htmlFor="personal-invitation">Your personal invitation link</label>
       <input id="personal-invitation" className="ki-input" value={entry} onChange={e => setEntry(e.target.value)} autoComplete="off" placeholder="Paste the link from your invitation"/>
       <p className="vp-note">Use the invitation or GuestHub link sent to you. Only you and guests you registered will appear. The check-in desk can help if you cannot find your link.</p>
@@ -92,6 +121,7 @@ export default function VenuePartyCheckin({ code, info }) {
       <label className="vp-confirm"><input type="checkbox" checked={confirmed} disabled={!!busy} onChange={e => setConfirmed(e.target.checked)}/>I confirm everyone selected is here with me at the venue.</label>
       <button className="ki-btn" disabled={!!busy || !confirmed || !selected.length} onClick={checkin}>Check in {selected.length || ''} {selected.length === 1 ? 'guest' : 'guests'}</button>
       <button className="vp-reload" disabled={!!busy} onClick={() => load(token)}>Refresh registration</button>
+      {info.lookup_enabled && <button className="vp-reload" disabled={!!busy} onClick={restartSearch}>Find another registration</button>}
     </>}
     {busy && <p role="status" className="vp-note">{busy}</p>}
     {error && <p role="alert" className="vp-error">{error}</p>}

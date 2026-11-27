@@ -1,14 +1,18 @@
 import { test, expect } from '@playwright/test'
 const TOKEN = 'synthetic-personal-token-for-venue'
-async function fixture(page, rejectLocation = false) {
+async function fixture(page, rejectLocation = false, lookup = false) {
   const rows = [{ id: 'lead', name: 'Primary Attendee', admitted: false }, { id: 'arrived', name: 'Arrived Companion', admitted: false }, { id: 'later', name: 'Later Companion', admitted: false }]
-  const submissions = [], errors = []
+  const submissions = [], errors = [], searches = []
   page.on('pageerror', error => errors.push(error.message))
   await page.route('**/api/**', async route => {
     const path = new URL(route.request().url()).pathname
-    if (path === '/api/e/QA2026') return route.fulfill({ json: { status: 'ok', name: 'QA Venue Event', location_required: true, party_enabled: true, personal_link_required: true, venue_name: 'QA Hotel' } })
+    if (path === '/api/e/QA2026') return route.fulfill({ json: { status: 'ok', name: 'QA Venue Event', location_required: true, party_enabled: true, personal_link_required: !lookup, lookup_enabled: lookup, venue_name: 'QA Hotel' } })
+    if (path === '/api/e/QA2026/lookup') {
+      const body = route.request().postDataJSON(); searches.push(body)
+      return route.fulfill({ json: { matches: body.query === 'Nobody' ? [] : [{ name: 'Primary Attendee', lookup_token: 'lookup.fixture.9999999999.signature' }], message: body.query === 'Nobody' ? 'No matching registration found. Try another name, phone number or email.' : null } })
+    }
     if (path === '/api/e/QA2026/party') {
-      expect(route.request().postDataJSON().token).toBe(TOKEN)
+      expect(route.request().postDataJSON().token).toBe(lookup ? 'lookup.fixture.9999999999.signature' : TOKEN)
       return route.fulfill({ json: { viewer_id: 'lead', members: rows } })
     }
     if (path === '/api/e/QA2026/party/checkin') {
@@ -19,7 +23,7 @@ async function fixture(page, rejectLocation = false) {
     }
     return route.fulfill({ status: 404, json: { detail: 'Fixture has no such endpoint' } })
   })
-  return { submissions, errors }
+  return { submissions, errors, searches }
 }
 for (const path of ['/e/QA2026', '/selfcheckin-redesign/QA2026']) {
   test(`selected arrivals and fresh location on ${path}`, async ({ page }) => {
@@ -72,4 +76,42 @@ test('venue QR needs personal invitation before exposing party', async ({ page }
   await page.getByRole('button', { name: 'Find my registration' }).click()
   await expect(page.getByRole('checkbox', { name: /Primary Attendee/ })).toBeVisible()
   expect(submissions).toHaveLength(0)
+})
+
+for (const query of ['Primary Attendee', '(832) 555-0123', 'primary@example.test']) {
+  test(`find registration using ${query} without personal link`, async ({ page }) => {
+    const { searches, submissions } = await fixture(page, false, true)
+    await page.goto('/e/QA2026')
+    await expect(page.getByRole('textbox', { name: 'Your personal invitation link' })).toHaveCount(0)
+    await page.getByRole('textbox', { name: 'Name, phone number or email' }).fill(query)
+    await page.getByRole('button', { name: 'Find my registration' }).click()
+    await page.getByRole('button', { name: 'Primary Attendee', exact: true }).click()
+    await expect(page.getByRole('group', { name: 'Who has arrived?' })).toBeVisible()
+    expect(searches).toHaveLength(1)
+    expect(searches[0].query).toBe(query)
+    expect(searches[0].location.latitude).toBeCloseTo(32.835620)
+    await page.getByRole('checkbox', { name: /I confirm everyone selected/ }).check()
+    await page.getByRole('button', { name: 'Check in 1 guest', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'Check-in results' })).toBeVisible()
+    expect(submissions[0].token).toBe('lookup.fixture.9999999999.signature')
+    await page.getByRole('button', { name: 'Find another registration' }).click()
+    await expect(page.getByRole('textbox', { name: 'Name, phone number or email' })).toBeVisible()
+  })
+}
+test('location denial stops lookup before names are returned', async ({ page }) => {
+  const { searches } = await fixture(page, false, true)
+  await page.addInitScript(() => { navigator.geolocation.getCurrentPosition = (_ok, fail) => fail({ code: 1 }) })
+  await page.goto('/e/QA2026')
+  await page.getByRole('textbox', { name: 'Name, phone number or email' }).fill('Primary')
+  await page.getByRole('button', { name: 'Find my registration' }).click()
+  await expect(page.getByRole('alert')).toContainText('Allow location access')
+  expect(searches).toHaveLength(0)
+})
+test('no match provides a clear recovery message', async ({ page }) => {
+  await fixture(page, false, true)
+  await page.goto('/e/QA2026')
+  await page.getByRole('textbox', { name: 'Name, phone number or email' }).fill('Nobody')
+  await page.getByRole('button', { name: 'Find my registration' }).click()
+  await expect(page.getByRole('status')).toContainText('No matching registration found')
+  await expect(page.getByRole('group', { name: 'Who has arrived?' })).toHaveCount(0)
 })

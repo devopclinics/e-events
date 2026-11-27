@@ -98,3 +98,32 @@ async def test_lookup_needs_geofence_and_admin_configuration(ctx):
     url=f'/api/events/{ev}/self-checkin-config'
     response = await ctx.client.patch(url, json={'lookup_enabled': True})
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_shared_family_contact_returns_registering_guest_once(ctx):
+    ev, lead, arrived, later, other, _ = await prepare(ctx)
+    async with _Session() as db:
+        for i in range(8):
+            db.add(Guest(event_id=ev, first_name=f'Family{i}', last_name='Companion',
+                         email='primary@example.test', phone='+18325550123', rsvp_submitter_guest_id=lead['id']))
+        await db.commit()
+    for query in ['primary@example.test', '8325550123']:
+        result = await lookup(ctx, query)
+        assert len(result.json()['matches']) == 1
+        match = result.json()['matches'][0]
+        assert match['name'] == 'Primary Attendee'
+        party = (await ctx.client.post('/api/e/RHOEDA25/party', json={'token': match['lookup_token']})).json()
+        assert party['viewer_id'] == lead['id'] and len(party['members']) == 11
+
+
+@pytest.mark.asyncio
+async def test_companions_own_contact_does_not_authorize_parent_or_siblings(ctx):
+    ev, lead, arrived, later, other, _ = await prepare(ctx)
+    async with _Session() as db:
+        child = await db.get(Guest, arrived['id'])
+        child.email = 'companion@example.test'
+        await db.commit()
+    token = (await lookup(ctx, 'companion@example.test')).json()['matches'][0]['lookup_token']
+    party = (await ctx.client.post('/api/e/RHOEDA25/party', json={'token': token})).json()
+    assert [m['id'] for m in party['members']] == [arrived['id']]

@@ -277,9 +277,12 @@ async def self_checkin_lookup(event_code: str, body: SelfCheckinSearch,
     query = " ".join((body.query or "").strip().lower().split())
     if len(query) < 3 or len(query) > 200:
         return SelfCheckinLookupOut(message="Enter at least 3 letters of your name, or your full phone number or email.")
+    contact_search = False
     if "@" in query:
+        contact_search = True
         criterion = func.lower(func.trim(Guest.email)) == query
     elif re.fullmatch(r"[+() .0-9-]+", query):
+        contact_search = True
         digits = re.sub(r"\D", "", query)
         if len(digits) < 7:
             return SelfCheckinLookupOut(message="Enter your full phone number, including the area code.")
@@ -294,8 +297,23 @@ async def self_checkin_lookup(event_code: str, body: SelfCheckinSearch,
         criterion = or_(func.lower(Guest.first_name).contains(query, autoescape=True),
                         func.lower(Guest.last_name).contains(query, autoescape=True),
                         func.lower(func.trim(Guest.first_name + " " + Guest.last_name)).contains(query, autoescape=True))
-    rows = (await db.scalars(select(Guest).where(Guest.event_id == ev.id, criterion,
-                       Guest.qr_token.is_not(None), Guest.qr_token != "").order_by(Guest.last_name, Guest.first_name).limit(6))).all()
+    statement = select(Guest).where(Guest.event_id == ev.id, criterion,
+        Guest.qr_token.is_not(None), Guest.qr_token != "").order_by(Guest.last_name, Guest.first_name)
+    if contact_search:
+        # Families can share an email/phone. Offer the registering guest once
+        # when their own contact matched; never promote a companion-only match
+        # to the registering guest's wider party permissions.
+        rows = list((await db.scalars(statement.where(or_(
+            Guest.rsvp_submitter_guest_id.is_(None), Guest.rsvp_submitter_guest_id == Guest.id
+        )).limit(6))).all())
+        primary_ids = [guest.id for guest in rows]
+        if len(rows) < 6:
+            rows.extend((await db.scalars(statement.where(
+                Guest.id.not_in(primary_ids),
+                or_(Guest.rsvp_submitter_guest_id.is_(None), Guest.rsvp_submitter_guest_id.not_in(primary_ids))
+            ).limit(6 - len(rows)))).all())
+    else:
+        rows = list((await db.scalars(statement.limit(6))).all())
     if len(rows) > 5:
         return SelfCheckinLookupOut(message="Several registrations match. Enter your full name, phone number or email to narrow the search.")
     return SelfCheckinLookupOut(matches=[{"name": f"{g.first_name} {g.last_name}".strip(),

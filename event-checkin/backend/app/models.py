@@ -713,6 +713,8 @@ class Event(Base):
     # Self check-in: guests admit themselves via a public page found by a short
     # event_code (no login). Off by default; code generated on enable/create.
     self_checkin_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Optional event-specific venue boundary and RSVP-party self-service policy.
+    self_checkin_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Check-out: when on, staff can scan a guest's ticket/checkout QR to record
     # their exit (a ScanEvent with direction="out"), and the scanner shows the
     # Check-out mode. Off by default.

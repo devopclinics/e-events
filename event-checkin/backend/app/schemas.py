@@ -194,6 +194,20 @@ class EventSourceUpdate(BaseModel):
     source_sync_enabled: Optional[bool] = None
 
 
+class SelfCheckinConfig(BaseModel):
+    geofence_enabled: bool = False
+    party_enabled: bool = False
+    latitude: Optional[float] = Field(default=None, ge=-90, le=90, allow_inf_nan=False)
+    longitude: Optional[float] = Field(default=None, ge=-180, le=180, allow_inf_nan=False)
+    radius_m: int = Field(default=150, ge=25, le=1000)
+
+    @model_validator(mode="after")
+    def require_venue(self):
+        if self.geofence_enabled and (self.latitude is None or self.longitude is None):
+            raise ValueError("Set the venue latitude and longitude before enabling venue-only check-in")
+        return self
+
+
 class EventOut(BaseModel):
     junior_program_enabled: bool = False
     my_feature_permissions: dict[str, str] | None = None
@@ -281,6 +295,7 @@ class EventOut(BaseModel):
     manual_checkin_enabled: bool = False
     daily_checkin_enabled: bool = False
     self_checkin_enabled: bool = False
+    self_checkin_config: Optional[SelfCheckinConfig] = None
     checkout_enabled: bool = False
     junior_guardian_handoff_enabled: bool = False
     separate_admission_access_enabled: bool = False
@@ -1616,7 +1631,35 @@ class TemplateTestSendRequest(MessageTemplateSave):
 
 # ── Public self check-in (event code) ───────────────────────────────────────────
 
-class SelfCheckinSearch(BaseModel):
+class SelfCheckinLocation(BaseModel):
+    latitude: float = Field(ge=-90, le=90, allow_inf_nan=False)
+    longitude: float = Field(ge=-180, le=180, allow_inf_nan=False)
+    accuracy_m: float = Field(gt=0, le=10000, allow_inf_nan=False)
+    captured_at: datetime
+
+
+class SelfCheckinRequest(BaseModel):
+    location: Optional[SelfCheckinLocation] = None
+
+
+class SelfCheckinPartyRequest(SelfCheckinRequest):
+    token: str = Field(min_length=16, max_length=200)
+    guest_ids: list[str] = Field(default_factory=list, max_length=100)
+    confirm_arrived: bool = False
+
+
+class SelfCheckinPartyMember(BaseModel):
+    id: str
+    name: str
+    admitted: bool
+
+
+class SelfCheckinPartyOut(BaseModel):
+    members: list[SelfCheckinPartyMember]
+    viewer_id: str
+
+
+class SelfCheckinSearch(SelfCheckinRequest):
     query: str
 
 
@@ -1629,6 +1672,10 @@ class SelfCheckinResult(BaseModel):
     status: str          # ok | not_active | invalid | admitted | already_admitted | denied | no_seat_available
     message: Optional[str] = None
     name: Optional[str] = None            # event name (info call)
+    location_required: bool = False
+    party_enabled: bool = False
+    personal_link_required: bool = False
+    venue_name: Optional[str] = None
     guests: list[SelfCheckinGuest] = []   # search results
     admitted_guest: Optional[str] = None  # full name on a successful check-in
     table_name: Optional[str] = None
@@ -2873,6 +2920,8 @@ class InvitePageOut(BaseModel):
     organizer_phones: list[str] = Field(default_factory=list, max_length=5)
     external_website_url: Optional[str] = Field(default=None, max_length=2000)
     event_type: Optional[str] = None
+    self_checkin_enabled: bool = False
+    event_code: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
     id: str

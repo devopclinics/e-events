@@ -1,3 +1,4 @@
+import GuestSelfCheckinLink from '../components/checkin/GuestSelfCheckinLink'
 import ConventionGuestHub, { ConventionRegistration } from '../components/convention/ConventionReview'
 import { ConventionCreative } from '../components/convention/ConventionCreative'
 import PassLabels from '../components/PassLabels'
@@ -2279,6 +2280,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
             </div>
           )}
 
+          <GuestSelfCheckinLink event={event} token={accessToken} preview={previewMock}/>
           {/* Next step — primary tier */}
           <div className="mt-3 flex items-start gap-3 rounded-2xl border p-4" style={{ background: nextStep.urgent ? `${tone.accent}18` : tone.panel, borderColor: nextStep.urgent ? tone.accent : tone.border }}>
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-base" style={{ background: tone.accent, color: tone.background }} aria-hidden="true">{nextStep.icon}</span>
@@ -2641,6 +2643,8 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
               ))}
           </div>
         )}
+
+        <GuestSelfCheckinLink event={event} token={accessToken} preview={previewMock}/>
 
         {tabActive('resources') && !!(guestContent.materials?.length || guestContent.certificates?.length) && (
           <div className="mt-6 grid gap-4">

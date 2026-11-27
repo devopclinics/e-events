@@ -1,3 +1,4 @@
+import SelfCheckinSettings from '../components/checkin/SelfCheckinSettings'
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import RedesignShell, { Icon, Modal, ConfirmDialog } from './redesign/RedesignShell'
@@ -671,6 +672,7 @@ export default function AdminRedesignPage() {
               <span className="track"/><span className="knob"/>
             </label>
           </div>
+          <SelfCheckinSettings event={event} onSaved={setEvent}/>
           {event?.self_checkin_enabled && event?.event_code && (
             <div className="rd-path-body-inner" style={{ marginTop: 12, display: 'grid', gap: 12, gridTemplateColumns: '1fr auto' }}>
               <div style={{ minWidth: 0 }}>

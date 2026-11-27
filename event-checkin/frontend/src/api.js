@@ -26,8 +26,8 @@ async function getToken() {
 
 // Public guest links use their own pass, not the organizer's Firebase session.
 // Preserve HTTP status for recovery and never redirect a guest to admin sign-in.
-async function guestRead(path, fallback) {
-  const response = await fetch(`${BASE}${path}`, { cache: 'no-store', signal: AbortSignal.timeout(15000) })
+async function guestRead(path, fallback, options = {}) {
+  const response = await fetch(`${BASE}${path}`, { cache: 'no-store', signal: AbortSignal.timeout(15000), ...options })
   if (!response.ok) {
     const data = await response.json().catch(() => ({}))
     const error = new Error(typeof data.detail === 'string' ? data.detail : fallback)
@@ -1139,6 +1139,10 @@ export const api = {
   adminSetMms: (eventId, active) => req('PATCH', `/admin/events/${eventId}/mms`, { active }),
   setSelfCheckin: (eventId, active) => req('PATCH', `/events/${eventId}/self-checkin`, { active }),
   setEventCode: (eventId, eventCode) => req('PATCH', `/events/${eventId}/event-code`, { event_code: eventCode }),
+
+  setSelfCheckinConfig: (eventId, config) => req('PATCH', `/events/${eventId}/self-checkin-config`, config),
+  selfCheckinParty: (code, body) => guestRead(`/e/${encodeURIComponent(code)}/party`, 'Registration could not be loaded.', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+  selfCheckinPartyAdmit: (code, body) => guestRead(`/e/${encodeURIComponent(code)}/party/checkin`, 'Check-in could not be recorded.', { signal: AbortSignal.timeout(60000), method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
 
   // Public self check-in
   selfCheckinInfo: (code) => fetch(`${BASE}/e/${encodeURIComponent(code)}`).then((r) => r.json()),

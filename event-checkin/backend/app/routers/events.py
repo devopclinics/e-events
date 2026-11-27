@@ -16,6 +16,7 @@ from sqlalchemy import delete, func, or_, select, update
 from ..database import get_db
 from ..models import BroadcastLog, Event, EventUser, EventUserSection, ExperienceStep, ExperienceWorkflow, FestioMeOutbox, Guest, MenuCategory, MenuItem, Membership, MessageTemplate, Organization, Payment, PlatformSettings, PricingPlan, RSVPQuestion, TableGroup, TicketType, User
 from ..schemas import (
+    SelfCheckinConfig,
     EventCreate, EventDuplicateIn, EventUpdate, EventOut, EventMemberOut, AssignUserRequest,
     OrgMemberInvite, OrgMemberOut, MemberRoleUpdate, UserOut, EventSourceUpdate,
     InviteSettingsUpdate, RSVPQuestionCreate, RSVPQuestionUpdate, RSVPQuestionOut,
@@ -422,7 +423,7 @@ _DUPLICATE_TEMPLATE_FIELDS = [
     "venue_access_enabled", "experience_enabled", "live_program_enabled", "planner_enabled", "engagement_enabled",
     "festiome_addon_enabled", "partner_pairing_enabled", "speaker_enabled", "partner_enabled", "reminders_enabled",
     "enforce_table_groups", "seating_term", "seat_term", "seat_assignment_order", "section_mode_enabled",
-    "manual_checkin_enabled", "self_checkin_enabled", "checkout_enabled", "walk_in_enabled",
+    "manual_checkin_enabled", "self_checkin_enabled", "self_checkin_config", "checkout_enabled", "walk_in_enabled",
     # notifications — includes platform-superadmin blocks, which must carry
     # over so duplication can't be used to dodge a compliance/abuse block
     "notify_email", "notify_mms", "notify_consent_prompt_enabled", "channel_policy",
@@ -2357,3 +2358,19 @@ async def delete_logo(
         await db.commit()
         await db.refresh(event)
     return await _event_balance_out(event, db)
+
+
+@router.patch("/{event_id}/self-checkin-config", response_model=EventOut)
+async def configure_self_checkin(
+    event_id: str,
+    body: SelfCheckinConfig,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_event_admin),
+):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    event.self_checkin_config = body.model_dump()
+    await db.commit()
+    await db.refresh(event)
+    return event

@@ -227,6 +227,7 @@ async def _invite_page_out(event: Event, db: AsyncSession) -> InvitePageOut:
     )).scalars().all()
     count = await _rsvp_count(event.id, db)
     return InvitePageOut(
+        self_checkin_enabled=event.self_checkin_enabled, event_code=event.event_code,
         id=event.id,
         external_website_url=event.external_website_url,
         external_registration_url=_external_registration_url(event),

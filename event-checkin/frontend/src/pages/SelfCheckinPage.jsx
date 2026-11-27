@@ -1,3 +1,4 @@
+import VenuePartyCheckin from '../components/checkin/VenuePartyCheckin'
 import FestioLogo from '../components/branding/FestioLogo'
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
@@ -27,6 +28,7 @@ function formatTime(value) {
 
 export default function SelfCheckinPage() {
   const { code } = useParams()
+  const [info, setInfo] = useState(null)
   const [eventName, setEventName] = useState('')
   const [pageStatus, setPageStatus] = useState('loading')
   const [message, setMessage] = useState('')
@@ -41,6 +43,7 @@ export default function SelfCheckinPage() {
     api.selfCheckinInfo(code)
       .then((res) => {
         if (!active) return
+        setInfo(res)
         setPageStatus(res.status)
         setEventName(res.name || '')
         setMessage(res.message || '')
@@ -96,6 +99,8 @@ export default function SelfCheckinPage() {
       setSearching(false)
     }
   }
+
+  if (info?.status === 'ok' && (info.location_required || info.party_enabled)) return <VenuePartyCheckin code={code} info={info}/>
 
   let body
   if (pageStatus === 'loading') {

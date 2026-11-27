@@ -1,3 +1,4 @@
+import VenuePartyCheckin from '../components/checkin/VenuePartyCheckin'
 import FestioLogo from '../components/branding/FestioLogo'
 import { useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
@@ -112,6 +113,8 @@ export default function SelfCheckinRedesignPage() {
   }
 
   function reset() { setPending(null); setResult(null); setAdmitError('') }
+
+  if (bootstrap?.status === 'ok' && (bootstrap.location_required || bootstrap.party_enabled)) return <VenuePartyCheckin code={code} info={bootstrap}/>
 
   return <div className="ki-kiosk"><div className="ki-card">
     {bootstrapError ? <PublicError title="Connection problem" message={bootstrapError} onRetry={load}/> :

@@ -1,3 +1,4 @@
+import CheckinWelcome, { hasIlorinWelcome } from './CheckinWelcome'
 import { useEffect, useState } from 'react'
 import { api } from '../../api'
 import '../../pages/SelfCheckinRedesignPage.css'
@@ -26,6 +27,7 @@ function currentLocation() {
 }
 
 export default function VenuePartyCheckin({ code, info }) {
+  const heritage = hasIlorinWelcome(code)
   const initialToken = new URLSearchParams(window.location.hash.slice(1)).get('token') || new URLSearchParams(window.location.search).get('token') || ''
   const [entry, setEntry] = useState(initialToken)
   const [query, setQuery] = useState('')
@@ -88,9 +90,9 @@ export default function VenuePartyCheckin({ code, info }) {
     finally { setBusy('') }
   }
 
-  return <main className="ki-kiosk"><section className="ki-card vp-card">
-    <div className="ki-logo" aria-hidden="true">F</div>
-    <h1 className="ki-title">{info.name}</h1>
+  return <CheckinWelcome code={code} info={info} step={results ? 3 : party ? 2 : 1}>
+    {!heritage && <div className="ki-logo" aria-hidden="true">F</div>}
+    <h1 className="ki-title">{heritage ? (party ? 'A welcome for everyone.' : 'Welcome to Dallas ’26.') : info.name}</h1>
     <h2 className="vp-heading">{info.party_enabled ? 'Check in your RSVP party' : 'Self check-in'}</h2>
     {info.location_required && <p className="ki-subtitle">Check in when you arrive at {info.venue_name || 'the venue'}. Allow location access to verify you are nearby.</p>}
     {!party && info.lookup_enabled && <form className="ki-form" onSubmit={e => { e.preventDefault(); search() }}>
@@ -129,6 +131,6 @@ export default function VenuePartyCheckin({ code, info }) {
       <strong>{result.admitted_guest}</strong><p>{result.message || (result.status === 'admitted' ? 'Checked in. Welcome!' : 'Please visit the check-in desk.')}</p>
       {(result.table_name || result.seat_number) && <p>{result.table_name && `${result.seating_term || 'Table'} ${result.table_name} `}{result.seat_number && `${result.seat_term || 'Seat'} ${result.seat_number}`}</p>}
     </div>)}</section>}
-    <p className="vp-note">Having trouble? Staff can check you in at the check-in desk.</p>
-  </section></main>
+    {heritage ? <div className="vp-help"><span aria-hidden="true">?</span><p><strong>A little help, a warmer welcome.</strong><br/>Our welcome team can help you check in at the desk.</p></div> : <p className="vp-note">Having trouble? Staff can check you in at the check-in desk.</p>}
+  </CheckinWelcome>
 }

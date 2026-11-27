@@ -1,21 +1,21 @@
 import { test, expect } from '@playwright/test'
 const TOKEN = 'synthetic-personal-token-for-venue'
-async function fixture(page, rejectLocation = false, lookup = false) {
+async function fixture(page, rejectLocation = false, lookup = false, code = 'QA2026') {
   const rows = [{ id: 'lead', name: 'Primary Attendee', admitted: false }, { id: 'arrived', name: 'Arrived Companion', admitted: false }, { id: 'later', name: 'Later Companion', admitted: false }]
   const submissions = [], errors = [], searches = []
   page.on('pageerror', error => errors.push(error.message))
   await page.route('**/api/**', async route => {
     const path = new URL(route.request().url()).pathname
-    if (path === '/api/e/QA2026') return route.fulfill({ json: { status: 'ok', name: 'QA Venue Event', location_required: true, party_enabled: true, personal_link_required: !lookup, lookup_enabled: lookup, venue_name: 'QA Hotel' } })
-    if (path === '/api/e/QA2026/lookup') {
+    if (path === `/api/e/${code}`) return route.fulfill({ json: { status: 'ok', name: code === 'iedpu26' ? 'IEDPU USA 3rd Biennial Convention' : 'QA Venue Event', location_required: true, party_enabled: true, personal_link_required: !lookup, lookup_enabled: lookup, venue_name: 'QA Hotel' } })
+    if (path === `/api/e/${code}/lookup`) {
       const body = route.request().postDataJSON(); searches.push(body)
       return route.fulfill({ json: { matches: body.query === 'Nobody' ? [] : [{ name: 'Primary Attendee', lookup_token: 'lookup.fixture.9999999999.signature' }], message: body.query === 'Nobody' ? 'No matching registration found. Try another name, phone number or email.' : null } })
     }
-    if (path === '/api/e/QA2026/party') {
+    if (path === `/api/e/${code}/party`) {
       expect(route.request().postDataJSON().token).toBe(lookup ? 'lookup.fixture.9999999999.signature' : TOKEN)
       return route.fulfill({ json: { viewer_id: 'lead', members: rows } })
     }
-    if (path === '/api/e/QA2026/party/checkin') {
+    if (path === `/api/e/${code}/party/checkin`) {
       const body = route.request().postDataJSON(); submissions.push(body)
       if (rejectLocation) return route.fulfill({ status: 403, json: { detail: 'You need to be at the venue to check in.' } })
       rows.forEach(m => { if (body.guest_ids.includes(m.id)) m.admitted = true })
@@ -114,4 +114,31 @@ test('no match provides a clear recovery message', async ({ page }) => {
   await page.getByRole('button', { name: 'Find my registration' }).click()
   await expect(page.getByRole('status')).toContainText('No matching registration found')
   await expect(page.getByRole('group', { name: 'Who has arrived?' })).toHaveCount(0)
+})
+
+
+test('Ilorin welcome is branded, readable and keeps the arrival flow working', async ({ page }, testInfo) => {
+  const { submissions, errors } = await fixture(page, false, true, 'iedpu26')
+  await page.goto('/e/iedpu26')
+  await expect(page.getByRole('heading', { name: 'Welcome to Dallas ’26.' })).toBeVisible()
+  const photo = page.getByRole('img', { name: 'The golden domes and minarets of Ilorin Central Mosque' })
+  await expect(photo).toBeVisible()
+  await expect.poll(() => photo.evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true)
+  await expect(page.getByRole('img', { name: 'IEDPU USA', exact: true })).toBeVisible()
+  await expect(page.getByRole('list', { name: 'Check-in progress' })).toContainText('Find registration')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  expect(await page.getByRole('textbox', { name: 'Name, phone number or email' }).evaluate(el => getComputedStyle(el).fontSize)).toBe('16px')
+  await page.screenshot({ path: testInfo.outputPath('ilorin-welcome.png'), fullPage: true })
+  await page.getByRole('textbox', { name: 'Name, phone number or email' }).fill('Primary Attendee')
+  await page.getByRole('button', { name: 'Find my registration' }).click()
+  await page.getByRole('button', { name: 'Primary Attendee', exact: true }).click()
+  await page.getByRole('checkbox', { name: /Arrived Companion/ }).check()
+  await page.getByRole('checkbox', { name: /I confirm everyone selected/ }).check()
+  await page.screenshot({ path: testInfo.outputPath('ilorin-party.png'), fullPage: true })
+  await page.getByRole('button', { name: 'Check in 2 guests' }).click()
+  await expect(page.getByRole('heading', { name: 'Check-in results' })).toBeVisible()
+  expect(submissions[0].guest_ids).toEqual(['lead', 'arrived'])
+  await expect(page.getByRole('checkbox', { name: /Later Companion/ })).toBeEnabled()
+  expect(errors).toEqual([])
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })

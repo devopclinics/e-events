@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import './WorkflowSceneRenderer.css'
 import './WorkflowRuntimePolish.css'
+import './ProgrammeScene.css'
 
 const COLORS = ['#1fd4c7', '#ff477e', '#ffb627', '#7557e8', '#38a9ff', '#62d66f', '#ff7452']
 const TICKING_TYPES = new Set(['countdown', 'game'])
@@ -161,6 +162,7 @@ export default function WorkflowSceneRenderer({ step, mode = 'display', eventId 
   const showingResults = step.display_phase === 'results' && ['poll', 'multi_select', 'rating', 'ranking'].includes(type)
   const options = config.options || responseData?.options || []
   const title = config.title || step.title
+  const programme = type === 'custom_message' && config.presentation_style === 'programme'
   const bg = config.background_image_url
   // 'horizon' is for wide, short banner art (a skyline strip) that would
   // blur badly under background-size:cover — it's shown at natural width,
@@ -172,7 +174,7 @@ export default function WorkflowSceneRenderer({ step, mode = 'display', eventId 
   const joinHost = typeof window !== 'undefined' ? window.location.host : 'festio.events'
   const preset = String(step.theme?.preset || 'festio_dark').toLowerCase().replace(/[^a-z0-9_-]/g, '')
 
-  return <section className={`wf-scene wf-${type} wf-${mode} wf-theme-${preset}`} style={{ '--wf-accent': config.accent || step.theme?.accent || '#20d2c2', '--wf-gold': step.theme?.gold || '#e7bd68' }}>
+  return <section className={`wf-scene wf-${type} wf-${mode} wf-theme-${preset}${programme ? ' wf-programme' : ''}`} style={{ '--wf-accent': config.accent || step.theme?.accent || '#20d2c2', '--wf-gold': step.theme?.gold || '#e7bd68' }}>
     {bg && <div className={`wf-bg ${bgFit}`} style={{ backgroundImage: `url("${bg}")` }}/>}
     {/* Generic, asset-free cinematic depth for any scene without configured
         photo art — a CSS-only starfield, not tied to any organizer's imagery. */}
@@ -181,7 +183,8 @@ export default function WorkflowSceneRenderer({ step, mode = 'display', eventId 
     <div className="wf-glow one"/><div className="wf-glow two"/>
     <header><span>{config.eyebrow || type.replaceAll('_', ' ')}</span>{config.logo ? <img src={config.logo} alt=""/> : <b className="wf-brandmark">festio.events™</b>}</header>
     <main>
-      {['hero', 'closing', 'custom_message'].includes(type) && <><h1>{title}</h1>{step.subtitle && <p>{step.subtitle}</p>}{config.lines?.length > 0 && <div className="wf-keywords">{config.lines.map((line) => <b key={line}>{line}</b>)}</div>}</>}
+      {programme && <><div className="wf-programme-rule"/><h1 className={title.length > 55 ? 'wf-programme-long' : ''}>{title}</h1>{config.programme_people?.length > 0 ? <div className={`wf-programme-people ${config.programme_people.length > 1 ? 'wf-programme-panel' : ''}`}>{config.programme_people.map((person, index) => <div key={index}><h2>{person.name}</h2>{person.role && <p>{person.role}</p>}</div>)}</div> : step.subtitle && <p className="wf-programme-description">{step.subtitle}</p>}{config.lines?.length > 0 && <div className="wf-keywords">{config.lines.map(line => <b key={line}>{line}</b>)}</div>}</>}
+      {!programme && ['hero', 'closing', 'custom_message'].includes(type) && <><h1>{title}</h1>{step.subtitle && <p>{step.subtitle}</p>}{config.lines?.length > 0 && <div className="wf-keywords">{config.lines.map((line) => <b key={line}>{line}</b>)}</div>}</>}
       {['poll', 'multi_select', 'rating'].includes(type) && !showingResults && <><h2>{title}</h2><p className="wf-poll-instruction">{step.subtitle || (type === 'multi_select' ? `Choose up to ${config.max_selections || 3}` : 'Choose one response')}</p><div className="wf-options">{options.map((option, index) => <div key={option.id || option.label || option} style={{ '--option': COLORS[index % COLORS.length] }}><i className="wf-option-icon">{option.icon || optionIcon(option.label || option, index)}</i><b>{option.label || option}</b></div>)}</div></>}
       {(['poll_results'].includes(type) || showingResults) && <><span className="wf-results-label">LIVE RESULTS</span><h2>{title}</h2><ResultsView results={responseData?.results || config.results || []} style={config.result_style || 'bars'}/></>}
       {['quote', 'scripture'].includes(type) && <blockquote>{config.speaker_label && <span className="wf-pill">{config.speaker_label}</span>}<i className="wf-ornament" aria-hidden="true"/><strong dir={config.direction || 'auto'}>{config.original_text || config.quote || title}</strong>{config.translation && <p>{config.translation}</p>}<cite>{config.source_reference || config.attribution}</cite></blockquote>}
